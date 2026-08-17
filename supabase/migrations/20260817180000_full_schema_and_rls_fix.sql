@@ -630,12 +630,14 @@ CREATE POLICY "Usuários autenticados gerenciam remessas de faturamento" ON reme
 -- 17. TABELA: documentos_padroes
 CREATE TABLE IF NOT EXISTS documentos_padroes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id TEXT NOT NULL,
+  tenant_id TEXT,
   empresa_id TEXT,
   nome TEXT NOT NULL,
   descricao TEXT,
   tipo TEXT NOT NULL,
+  conteudo TEXT,
   conteudo_html TEXT,
+  arquivo_url TEXT,
   cabecalho_html TEXT,
   rodape_html TEXT,
   margens JSONB,
@@ -645,10 +647,18 @@ CREATE TABLE IF NOT EXISTS documentos_padroes (
   padrao BOOLEAN DEFAULT false,
   variaveis_disponiveis JSONB,
   deleted_at TIMESTAMPTZ,
+  criado_em TIMESTAMPTZ DEFAULT NOW(),
+  atualizado_em TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE documentos_padroes ADD COLUMN IF NOT EXISTS tenant_id TEXT;
 ALTER TABLE documentos_padroes ADD COLUMN IF NOT EXISTS empresa_id TEXT;
+ALTER TABLE documentos_padroes ADD COLUMN IF NOT EXISTS conteudo TEXT;
+ALTER TABLE documentos_padroes ADD COLUMN IF NOT EXISTS conteudo_html TEXT;
+ALTER TABLE documentos_padroes ADD COLUMN IF NOT EXISTS arquivo_url TEXT;
+ALTER TABLE documentos_padroes ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE documentos_padroes ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE documentos_padroes ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 ALTER TABLE documentos_padroes ENABLE ROW LEVEL SECURITY;
