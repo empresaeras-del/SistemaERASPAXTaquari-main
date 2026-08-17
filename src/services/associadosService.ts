@@ -54,7 +54,7 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
 
   if (isOnline) {
     try {
-      let query = supabase.from('associados').select('*').eq('deleted_at', null);
+      let query = supabase.from('associados').select('*').is('deleted_at', null);
       if (tenantId && tenantId !== 'all') {
         query = query.eq('tenant_id', tenantId);
       }

@@ -21,7 +21,7 @@ export const getNotificacoes = async (isOnline: boolean, usuarioId: string, tena
 
   if (isOnline) {
     try {
-      let query = supabase.from('notificacoes').select('*').eq('deleted_at', null);
+      let query = supabase.from('notificacoes').select('*').is('deleted_at', null);
       if (tenantId && tenantId !== 'all') {
          query = query.eq('tenant_id', tenantId);
       }

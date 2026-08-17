@@ -21,7 +21,7 @@ export const getPlanos = async (isOnline: boolean, tenantId?: string | null): Pr
 
   if (isOnline) {
     try {
-      let query = supabase.from('planos').select('*').eq('deleted_at', null);
+      let query = supabase.from('planos').select('*').is('deleted_at', null);
       if (tenantId && tenantId !== 'all') {
         query = query.eq('tenant_id', tenantId);
       }

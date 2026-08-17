@@ -69,7 +69,7 @@ export const getDashboardStats = async (isOnline: boolean, tenantId: string | nu
     let allPlanos: any[] = [];
     if (isOnline) {
       try {
-        let query = supabase.from('planos_pax').select('*').eq('deleted_at', null);
+        let query = supabase.from('planos_pax').select('*').is('deleted_at', null);
         if (tenantId && tenantId !== 'all') {
            query = query.eq('tenant_id', tenantId);
         }
@@ -161,7 +161,7 @@ export const getDashboardStats = async (isOnline: boolean, tenantId: string | nu
     let atendimentosData: any[] = [];
     if (isOnline) {
       try {
-        let query = supabase.from('atendimentos').select('*').eq('deleted_at', null);
+        let query = supabase.from('atendimentos').select('*').is('deleted_at', null);
         if (tenantId && tenantId !== 'all') {
            query = query.eq('tenant_id', tenantId);
         }

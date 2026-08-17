@@ -41,7 +41,7 @@ export const getEmpresaById = async (id: string | undefined | null, isOnline: bo
 export const getEmpresas = async (isOnline: boolean): Promise<Empresa[]> => {
   if (isOnline) {
     try {
-      const { data, error } = await supabase.from('tenants').select('*').eq('deleted_at', null);
+      const { data, error } = await supabase.from('tenants').select('*').is('deleted_at', null);
       if (error) throw error;
       
       // Update local cache
