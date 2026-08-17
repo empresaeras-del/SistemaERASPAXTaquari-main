@@ -88,14 +88,28 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
 export const saveAssociado = async (associado: Associado, isOnline: boolean): Promise<void> => {
   const existing = await getFromIDB<Associado>(STORE_NAME, associado.id);
   
+  // Extrai dependentes para não enviar à tabela associados (pois é uma tabela separada)
+  const { dependentes, ...associadoData } = associado;
+  
   if (isOnline) {
     try {
       const { error } = await supabase
         .from('associados')
-        .upsert(associado);
+        .upsert(associadoData);
             
       if (error) {
         console.warn('Supabase save failed, proceeding with IDB only.', error);
+      } else if (dependentes) {
+        // Exclui dependentes antigos e insere os novos
+        await supabase.from('dependentes').delete().eq('associado_id', associado.id);
+        if (dependentes.length > 0) {
+          const depsToInsert = dependentes.map(d => ({
+            ...d,
+            associado_id: associado.id,
+            tenant_id: associado.tenant_id
+          }));
+          await supabase.from('dependentes').insert(depsToInsert);
+        }
       }
     } catch (err) {
       console.warn('Supabase save threw error, proceeding with IDB only.', err);
