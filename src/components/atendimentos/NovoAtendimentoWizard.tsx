@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { generateUUID } from '../../utils/uuid';
 import { useAppContext } from '../../context/AppContext';
-import { getAssociados, Associado } from '../../services/associadosService';
+import { getAssociados, saveAssociado, Associado, Dependente } from '../../services/associadosService';
 import { useItensFunerarios } from '../../hooks/useItensFunerarios';
 import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { saveAtendimento } from '../../services/atendimentosService';
 import { salvarReceita } from '../../services/financeiroService';
 import { registrarAuditoria } from '../../lib/supabase';
-import { X, Search, FileText, CheckCircle2, ChevronRight, User, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { X, Search, FileText, CheckCircle2, ChevronRight, User, AlertTriangle, Plus, Trash2, UserX, UserMinus, HelpCircle } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { format } from 'date-fns';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
@@ -20,11 +20,19 @@ export const NovoAtendimentoWizard: React.FC<{
   const toast = useToast();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [inactivating, setInactivating] = useState(false);
   
   // Associados & Planos & Itens
   const [associados, setAssociados] = useState<Associado[]>([]);
   const { planos } = usePlanosPax();
   const { itens } = useItensFunerarios();
+
+  // Modal / Etapa de Questionamento de Status pós-atendimento
+  const [statusQuestionData, setStatusQuestionData] = useState<{
+    associado: Associado;
+    isTitular: boolean;
+    dependente?: Dependente;
+  } | null>(null);
 
   useEffect(() => {
     getAssociados(state.isOnline, state.empresaSelecionada).then(setAssociados);
@@ -232,13 +240,94 @@ export const NovoAtendimentoWizard: React.FC<{
       }
 
       toast.success("Atendimento registrado com sucesso!");
-      onSuccess();
+
+      // Regra Global: Questionamento sobre status do associado ou dependente atendido
+      if (tipoCliente === 'associado' && selectedAssociado) {
+        const isTitular = falecidoId === 'associado';
+        const dep = !isTitular ? selectedAssociado.dependentes?.find(d => d.id === falecidoId) : undefined;
+        setStatusQuestionData({
+          associado: selectedAssociado,
+          isTitular,
+          dependente: dep
+        });
+      } else {
+        onSuccess();
+      }
     } catch (e) {
       console.error(e);
       toast.error("Erro ao registrar atendimento");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Função para inativar Titular
+  const handleInativarTitular = async () => {
+    if (!statusQuestionData?.associado) return;
+    setInactivating(true);
+    try {
+      const assoc = statusQuestionData.associado;
+      const updatedAssociado: Associado = {
+        ...assoc,
+        status: 'inativo'
+      };
+      await saveAssociado(updatedAssociado, state.isOnline);
+      await registrarAuditoria('INATIVACAO_ASSOCIADO_OBITO', {
+        associado_id: assoc.id,
+        associado_nome: assoc.nome,
+        status_anterior: assoc.status,
+        status_novo: 'inativo',
+        motivo: 'Inativação por falecimento / Atendimento funerário finalizado'
+      });
+      toast.success(`Titular "${assoc.nome}" foi inativado com sucesso.`);
+      setStatusQuestionData(null);
+      onSuccess();
+    } catch (err) {
+      console.error('Erro ao inativar titular:', err);
+      toast.error('Falha ao inativar associado.');
+    } finally {
+      setInactivating(false);
+    }
+  };
+
+  // Função para inativar / remover Dependente
+  const handleInativarDependente = async () => {
+    if (!statusQuestionData?.associado || !statusQuestionData.dependente) return;
+    setInactivating(true);
+    try {
+      const assoc = statusQuestionData.associado;
+      const dep = statusQuestionData.dependente;
+      const novosDeps = (assoc.dependentes || []).filter(d => d.id !== dep.id);
+      const novasVidas = Math.max(1, (assoc.n_vidas || (assoc.dependentes?.length || 0) + 1) - 1);
+
+      const updatedAssociado: Associado = {
+        ...assoc,
+        dependentes: novosDeps,
+        n_vidas: novasVidas
+      };
+      await saveAssociado(updatedAssociado, state.isOnline);
+      await registrarAuditoria('INATIVACAO_DEPENDENTE_OBITO', {
+        dependente_id: dep.id,
+        dependente_nome: dep.nome,
+        titular_id: assoc.id,
+        titular_nome: assoc.nome,
+        motivo: 'Inativação/exclusão por falecimento / Atendimento funerário finalizado'
+      });
+      toast.success(`Dependente "${dep.nome}" inativado do cadastro com sucesso.`);
+      setStatusQuestionData(null);
+      onSuccess();
+    } catch (err) {
+      console.error('Erro ao inativar dependente:', err);
+      toast.error('Falha ao inativar dependente.');
+    } finally {
+      setInactivating(false);
+    }
+  };
+
+  // Pular alteração de status e manter como está
+  const handleManterStatus = () => {
+    setStatusQuestionData(null);
+    onSuccess();
   };
 
   return (
@@ -539,6 +628,94 @@ export const NovoAtendimentoWizard: React.FC<{
           )}
         </div>
       </div>
+
+      {/* MODAL DE QUESTIONAMENTO DE STATUS DO ASSOCIADO / DEPENDENTE */}
+      {statusQuestionData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-bg-surface border border-border-default rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col p-6 space-y-6">
+            
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl shrink-0 border border-amber-500/20">
+                {statusQuestionData.isTitular ? (
+                  <UserX className="w-8 h-8" />
+                ) : (
+                  <UserMinus className="w-8 h-8" />
+                )}
+              </div>
+              <div className="space-y-1">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  {statusQuestionData.isTitular ? 'Associado Titular' : 'Dependente do Plano'}
+                </span>
+                <h3 className="text-xl font-bold text-text-base tracking-tight">
+                  {statusQuestionData.isTitular
+                    ? 'Inativar Cadastro do Titular?'
+                    : 'Inativar / Remover Dependente?'}
+                </h3>
+                <p className="text-xs text-text-subtle">
+                  Regra Global de Atendimento Funerário
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-bg-subtle/70 rounded-2xl p-4 border border-border-default/60 space-y-3">
+              <p className="text-sm text-text-base leading-relaxed">
+                {statusQuestionData.isTitular ? (
+                  <>
+                    O atendimento funerário foi finalizado com sucesso para o associado titular{' '}
+                    <strong className="text-primary font-bold">{statusQuestionData.associado.nome}</strong>{' '}
+                    (CPF: {statusQuestionData.associado.cpf || 'Não informado'}).
+                  </>
+                ) : (
+                  <>
+                    O atendimento funerário foi finalizado com sucesso para o dependente{' '}
+                    <strong className="text-primary font-bold">{statusQuestionData.dependente?.nome}</strong>{' '}
+                    {statusQuestionData.dependente?.parentesco && `(${statusQuestionData.dependente.parentesco})`}{' '}
+                    vinculado ao titular{' '}
+                    <strong className="text-text-base font-semibold">{statusQuestionData.associado.nome}</strong>.
+                  </>
+                )}
+              </p>
+
+              <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-400/90 leading-relaxed flex items-start gap-2">
+                <HelpCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                <span>
+                  {statusQuestionData.isTitular
+                    ? 'Deseja inativar o cadastro deste associado (Status: INATIVO) no banco de dados para refletir o encerramento por óbito?'
+                    : 'Deseja inativar/remover este dependente do cadastro e recalcular a contagem de vidas do contrato?'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                type="button"
+                onClick={statusQuestionData.isTitular ? handleInativarTitular : handleInativarDependente}
+                disabled={inactivating}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white rounded-xl font-bold shadow-lg shadow-rose-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {inactivating ? (
+                  'Atualizando...'
+                ) : (
+                  <>
+                    <UserX className="w-4 h-4" />
+                    {statusQuestionData.isTitular ? 'Sim, Inativar Titular' : 'Sim, Inativar Dependente'}
+                  </>
+                )}
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleManterStatus}
+                disabled={inactivating}
+                className="px-4 py-3 bg-bg-hover hover:bg-[#64748B] text-text-muted hover:text-text-base border border-border-default rounded-xl font-semibold transition-colors disabled:opacity-50"
+              >
+                Manter Como Está
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 };
