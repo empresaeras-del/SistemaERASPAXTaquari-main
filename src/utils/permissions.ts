@@ -43,6 +43,7 @@ export const canEditEmpresa = (
 /**
  * Regra: Permitir somente ao usuário Super Admin editar usuários do mesmo nível (Super Admin e Admin).
  * Admin só pode gerenciar usuários de nível inferior (Gerente e Funcionário) pertencentes à sua empresa.
+ * O próprio usuário autenticado pode editar seus dados de perfil e alterar sua senha.
  */
 export const canEditUser = (
   currentUser: Usuario | null | undefined,
@@ -52,6 +53,10 @@ export const canEditUser = (
   if (currentUser.nivel === 'super_admin') {
     return true;
   }
+  // O próprio usuário pode editar seu perfil
+  if (targetUser.id && currentUser.id === targetUser.id) {
+    return true;
+  }
   if (currentUser.nivel === 'admin') {
     if (targetUser.nivel === 'super_admin' || targetUser.nivel === 'admin') {
       return false;
@@ -59,6 +64,26 @@ export const canEditUser = (
     if (currentUser.tenant_id && targetUser.tenant_id) {
       return currentUser.tenant_id === targetUser.tenant_id || targetUser.tenant_id === 'all';
     }
+    return true;
+  }
+  return false;
+};
+
+/**
+ * Regra: Permitir ao respectivo usuário a edição da senha atual registrada.
+ * Permitir ao usuário Super Admin realizar a alteração de senha de qualquer usuário independente do nível.
+ */
+export const canChangeUserPassword = (
+  currentUser: Usuario | null | undefined,
+  targetUser: { id?: string; nivel?: NivelAcesso; tenant_id?: string } | null | undefined
+): boolean => {
+  if (!currentUser || !targetUser) return false;
+  // Super admin pode alterar senha de qualquer usuário independente do nível
+  if (currentUser.nivel === 'super_admin') return true;
+  // O próprio usuário pode alterar sua própria senha
+  if (targetUser.id && currentUser.id === targetUser.id) return true;
+  // Admin pode alterar senha de usuários subordinados pertencentes à sua empresa
+  if (currentUser.nivel === 'admin' && targetUser.nivel !== 'super_admin' && targetUser.nivel !== 'admin') {
     return true;
   }
   return false;

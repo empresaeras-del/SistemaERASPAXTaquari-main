@@ -77,7 +77,8 @@ export const getUsuarios = async (
 export const saveUsuario = async (
   usuario: UsuarioCadastro,
   isOnline: boolean,
-  password?: string
+  password?: string,
+  currentUser?: { id?: string; nivel?: string }
 ): Promise<void> => {
   if (!isOnline) {
     throw new Error("Não é possível salvar enquanto estiver offline.");
@@ -116,6 +117,47 @@ export const saveUsuario = async (
     if (authData.user?.id) {
       finalUserId = authData.user.id;
     }
+  } else if (!isNew && password && password.trim().length > 0) {
+    // Alteração de senha em usuário existente
+    const cleanPassword = password.trim();
+    if (cleanPassword.length < 6) {
+      throw new Error('A nova senha deve conter no mínimo 6 caracteres.');
+    }
+
+    // Caso A: O próprio usuário logado alterando sua própria senha
+    if (currentUser?.id === usuario.id) {
+      const { error: updateAuthErr } = await supabase.auth.updateUser({
+        password: cleanPassword
+      });
+      if (updateAuthErr) {
+        console.error("Erro ao atualizar senha no Supabase Auth:", updateAuthErr);
+        throw new Error(`Erro ao atualizar senha: ${updateAuthErr.message}`);
+      }
+    } else if (currentUser?.nivel === 'super_admin' || currentUser?.nivel === 'admin') {
+      // Caso B: Super Admin (ou Admin) alterando senha de outro usuário via RPC com search_path seguro
+      try {
+        const { error: rpcError } = await supabase.rpc('admin_alterar_senha_usuario', {
+          target_user_id: usuario.id,
+          new_password: cleanPassword
+        });
+
+        if (rpcError) {
+          console.warn("RPC admin_alterar_senha_usuario erro:", rpcError);
+          // Se for o próprio usuário, fallback para updateUser
+          if (currentUser?.id === usuario.id) {
+            const { error: fallbackErr } = await supabase.auth.updateUser({
+              password: cleanPassword
+            });
+            if (fallbackErr) throw fallbackErr;
+          } else {
+            throw new Error(`Erro ao alterar senha do usuário: ${rpcError.message}`);
+          }
+        }
+      } catch (err: any) {
+        console.error("Falha ao atualizar senha do usuário no Supabase:", err);
+        throw new Error(err.message || 'Erro ao alterar a senha do usuário no Supabase.');
+      }
+    }
   }
 
   const usuarioToSave: UsuarioCadastro = {
@@ -146,7 +188,8 @@ export const saveUsuario = async (
     id: usuarioToSave.id,
     email: usuarioToSave.email,
     nivel: usuarioToSave.nivel,
-    tenant_id: usuarioToSave.tenant_id
+    tenant_id: usuarioToSave.tenant_id,
+    senha_alterada: Boolean(password && password.trim().length > 0)
   });
 };
 

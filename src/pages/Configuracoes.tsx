@@ -19,7 +19,8 @@ import {
   canEditUser,
   canDeleteUser,
   canDelete,
-  getAvailableNiveisForUser
+  getAvailableNiveisForUser,
+  canChangeUserPassword
 } from "../utils/permissions";
 import {
   getUsuarios,
@@ -314,7 +315,7 @@ export const ConfiguracoesPage: React.FC = () => {
         toast.error("Administradores só podem criar usuários de nível Gerente ou Funcionário.");
         return;
       }
-      if (!senhaUsuario || senhaUsuario.length < 6) {
+      if (!senhaUsuario || senhaUsuario.trim().length < 6) {
         toast.error("Para cadastrar um novo usuário no Supabase, a senha deve ter pelo menos 6 caracteres.");
         return;
       }
@@ -323,14 +324,23 @@ export const ConfiguracoesPage: React.FC = () => {
         toast.error("Você não tem permissão para editar usuários deste nível.");
         return;
       }
+      if (senhaUsuario && senhaUsuario.trim().length > 0 && senhaUsuario.trim().length < 6) {
+        toast.error("Para alterar a senha, informe no mínimo 6 caracteres (requisito Supabase Auth).");
+        return;
+      }
     }
 
     try {
       const novoUsuario = editingUsuario as UsuarioCadastro;
-      await saveUsuario(novoUsuario, state.isOnline, senhaUsuario || undefined);
+      const senhaLimpa = senhaUsuario ? senhaUsuario.trim() : undefined;
+      await saveUsuario(novoUsuario, state.isOnline, senhaLimpa, state.user || undefined);
       await loadData();
       handleCloseUsuarioModal();
-      toast.success(isNew ? "Usuário criado com sucesso no Supabase!" : "Usuário atualizado com sucesso!");
+      toast.success(
+        isNew 
+          ? "Usuário criado com sucesso no Supabase!" 
+          : (senhaLimpa ? "Usuário e senha atualizados com sucesso no Supabase!" : "Usuário atualizado com sucesso!")
+      );
     } catch (error: any) {
       console.error("Erro ao salvar usuário", error);
       toast.error(error?.message || "Erro ao salvar usuário. Verifique sua conexão.");
@@ -1251,7 +1261,8 @@ export const ConfiguracoesPage: React.FC = () => {
                   />
                 </div>
 
-                {!usuarios.some(u => u.id === editingUsuario.id) && (
+                {/* CAMPO DE SENHA (NOVO CADASTRO OU EDIÇÃO COM PERMISSÃO) */}
+                {!usuarios.some(u => u.id === editingUsuario.id) ? (
                   <div>
                     <label className="block text-sm font-semibold text-slate-400 mb-1">
                       Senha Inicial de Acesso (Supabase Auth) *
@@ -1277,7 +1288,34 @@ export const ConfiguracoesPage: React.FC = () => {
                       Esta senha será usada pelo colaborador para entrar no sistema.
                     </span>
                   </div>
-                )}
+                ) : canChangeUserPassword(state.user, editingUsuario) ? (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-400 mb-1">
+                      Alterar Senha de Acesso (Supabase Auth)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showSenhaUsuario ? "text" : "password"}
+                        placeholder="Deixe em branco para manter a atual (mínimo 6 caracteres)"
+                        value={senhaUsuario}
+                        onChange={(e) => setSenhaUsuario(e.target.value)}
+                        className="w-full px-4 py-2.5 pr-10 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSenhaUsuario(!showSenhaUsuario)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      >
+                        {showSenhaUsuario ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <span className="text-xs text-slate-500 mt-1 block">
+                      {state.user?.nivel === 'super_admin' && state.user?.id !== editingUsuario.id
+                        ? "Como Super Admin, você pode redefinir a senha deste usuário (mínimo 6 caracteres)."
+                        : "Preencha para redefinir sua senha de acesso ao sistema (mínimo 6 caracteres)."}
+                    </span>
+                  </div>
+                ) : null}
                 
                 {state.user?.nivel === 'super_admin' && (
                   <div>
