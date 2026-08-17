@@ -5,7 +5,9 @@ import { getEmpresas, Empresa } from '../../services/empresasService';
 import { NotificationCenter } from './NotificationCenter';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
-import { RefreshCw, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, CheckCircle2, LogOut } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { useConfirm } from '../../context/ConfirmContext';
 
 export const Topbar: React.FC = () => {
   const { state, dispatch } = useAppContext();
@@ -14,6 +16,21 @@ export const Topbar: React.FC = () => {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const { totalAlertsCount } = useNotifications();
   const { pendingCount, isSyncing } = useSyncStatus();
+  const { signOut } = useAuth();
+  const { confirm } = useConfirm();
+
+  const handleLogout = () => {
+    confirm({
+      title: 'Sair do Sistema',
+      message: 'Tem certeza que deseja encerrar sua sessão agora?',
+      confirmText: 'Sair',
+      cancelText: 'Cancelar',
+      danger: true,
+      onConfirm: async () => {
+        await signOut();
+      }
+    });
+  };
 
   useEffect(() => {
     const loadEmpresas = async () => {
@@ -137,15 +154,19 @@ export const Topbar: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-3 pl-6 border-l border-border-default">
+        <button 
+          onClick={handleLogout}
+          className="flex items-center gap-3 pl-6 border-l border-border-default hover:opacity-80 transition-opacity cursor-pointer group"
+          title="Sair do sistema"
+        >
           <div className="flex flex-col items-end">
-            <span className="text-sm font-semibold text-text-base">{state.user?.nome}</span>
+            <span className="text-sm font-semibold text-text-base group-hover:text-rose-500 transition-colors">{state.user?.nome}</span>
             <span className="text-xs text-text-subtle capitalize">{state.user?.nivel}</span>
           </div>
-          <div className="w-9 h-9 bg-gradient-to-tr from-[#3B82F6] to-[#60A5FA] rounded-full flex items-center justify-center text-white shadow-lg">
-            <User className="w-5 h-5" />
+          <div className="w-9 h-9 bg-gradient-to-tr from-[#3B82F6] to-[#60A5FA] group-hover:from-rose-500 group-hover:to-rose-400 rounded-full flex items-center justify-center text-white shadow-lg transition-all duration-300">
+            <LogOut className="w-4 h-4 translate-x-0.5" />
           </div>
-        </div>
+        </button>
       </div>
     </header>
   );
