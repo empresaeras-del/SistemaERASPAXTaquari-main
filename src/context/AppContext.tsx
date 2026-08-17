@@ -2,9 +2,10 @@ import React, { createContext, useReducer, useContext, useEffect } from 'react';
 import { AppState, AppAction, Usuario } from '../types';
 import { get, set } from '../lib/idb-safe';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 const initialState: AppState = {
-  user: null, // Pode ser preenchido por padrão em dev ou após auth
+  user: null,
   isOnline: navigator.onLine && isSupabaseConfigured,
   isLoading: false,
   empresaSelecionada: null,
@@ -41,8 +42,14 @@ const AppContext = createContext<{
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const { user } = useAuth();
 
-  // Initialize selected tenant from idb
+  // Sincroniza o usuário autenticado com o AppState
+  useEffect(() => {
+    dispatch({ type: 'SET_USER', payload: user });
+  }, [user]);
+
+  // Inicializa preferências do IDB
   useEffect(() => {
     get('tenant_id').then((tenantId) => {
       if (tenantId) {
@@ -61,11 +68,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, []);
 
-  // Persist and apply theme
+  // Persiste e aplica o layout
   useEffect(() => {
     set('layout', state.layout);
   }, [state.layout]);
 
+  // Persiste e aplica o tema
   useEffect(() => {
     set('theme', state.theme);
     if (state.theme === 'dark') {
@@ -75,27 +83,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [state.theme]);
 
-  // Persist selected tenant on change
+  // Persiste o tenant selecionado
   useEffect(() => {
     if (state.empresaSelecionada) {
       set('tenant_id', state.empresaSelecionada).catch(console.error);
     }
   }, [state.empresaSelecionada]);
 
+  // Monitor de conectividade
   useEffect(() => {
     const handleOnline = () => dispatch({ type: 'SET_ONLINE_STATUS', payload: true && isSupabaseConfigured });
     const handleOffline = () => dispatch({ type: 'SET_ONLINE_STATUS', payload: false });
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    // TODO: Supabase auth listener para SET_USER
-
-    // Stub temporário para dev UI
-    dispatch({ 
-      type: 'SET_USER', 
-      payload: { id: '1', nome: 'Super Admin', email: 'superadmin@eras.com', nivel: 'super_admin', modulos_permitidos: ['*'] } 
-    });
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -111,4 +112,3 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 };
 
 export const useAppContext = () => useContext(AppContext);
-
