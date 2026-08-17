@@ -1,0 +1,1180 @@
+import { useColumnVisibility } from '../hooks/useColumnVisibility';
+import React, { useState, useEffect, useMemo } from 'react';
+import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
+import { useAppContext } from '../context/AppContext';
+import { getContasBancariasAtivas } from '../services/contasBancariasService';
+import { ContaBancaria } from '../types/contasBancarias';
+import { useConfirm } from '../context/ConfirmContext';
+import {
+  getParcelasPagar,
+  ParcelaPagar,
+  registrarPagamento,
+  excluirParcelaPagar,
+  excluirDespesa,
+  getDespesaById,
+  Despesa
+} from '../services/financeiroService';
+import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
+import { LoteCaixa } from '../types/caixas';
+import {
+  Search,
+  Plus,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  X,
+  Eye,
+  Pencil,
+  Trash2,
+  DollarSign,
+  FileText,
+  Building2,
+  CreditCard,
+  User,
+  Calendar,
+  AlertTriangle,
+  Lock,
+  Wallet,
+  ArrowRight,
+  ShieldAlert
+, ChevronUp, ChevronDown, Printer } from "lucide-react";
+import { format, isPast, isToday } from 'date-fns';
+import { useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
+
+export const ContasPagarPage: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { state } = useAppContext();
+  const { confirm } = useConfirm();
+
+
+  const [parcelas, setParcelas] = useState<ParcelaPagar[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    if (parcelas.length > 0 && location.state?.openDetails) {
+      const p = parcelas.find((x: any) => x.id === location.state.openDetails);
+      if (p) {
+        setParcelaDetalhes(p);
+        setShowDetalhesModal(true);
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    }
+  }, [parcelas, location.state, navigate, location.pathname]);
+
+  const { visibleColumns, isVisible, setVisibleColumns } = useColumnVisibility(['credor', 'descricao', 'vencimento', 'valor', 'status', 'acoes']);
+  const columns = [
+    { id: 'credor', label: 'Credor / Fornecedor' },
+    { id: 'descricao', label: 'Descrição' },
+    { id: 'vencimento', label: 'Vencimento' },
+    { id: 'valor', label: 'Valor' },
+    { id: 'status', label: 'Status' },
+    { id: 'acoes', label: 'Ações' }
+  ];
+  const [statusFilter, setStatusFilter] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [dataInicial, setDataInicial] = useState('');
+  const [dataFinal, setDataFinal] = useState('');
+  const [formaPagamentoFilter, setFormaPagamentoFilter] = useState('');
+  const [sortField, setSortField] = useState<'credor' | 'vencimento' | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Modal de Baixa/Pagamento
+  const [showBaixaModal, setShowBaixaModal] = useState(false);
+  const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaPagar | null>(null);
+  const [dataPagamento, setDataPagamento] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [valorPago, setValorPago] = useState<number>(0);
+  const [formaPagamentoEfetiva, setFormaPagamentoEfetiva] = useState<string>('pix');
+  const [observacaoPagamento, setObservacaoPagamento] = useState<string>('');
+  const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
+  const [contaBancariaId, setContaBancariaId] = useState<string>('');
+
+  // Verificação e fluxo do Lote de Caixa
+  const [modalStage, setModalStage] = useState<'form' | 'confirmacao' | 'bloqueio'>('form');
+  const [loteAberto, setLoteAberto] = useState<LoteCaixa | null>(null);
+  const [checkingLote, setCheckingLote] = useState(false);
+  const [submittingBaixa, setSubmittingBaixa] = useState(false);
+
+  // Modal de Detalhes
+  const [showDetalhesModal, setShowDetalhesModal] = useState(false);
+  const [parcelaDetalhes, setParcelaDetalhes] = useState<ParcelaPagar | null>(null);
+  const [despesaPai, setDespesaPai] = useState<Despesa | null>(null);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      if (state.empresaSelecionada) {
+        const contas = await getContasBancariasAtivas(state.empresaSelecionada, state.isOnline);
+        setContasBancarias(contas);
+      }
+      const data = await getParcelasPagar(state.isOnline, state.empresaSelecionada);
+      setParcelas(data);
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao carregar parcelas a pagar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [state.isOnline, state.empresaSelecionada]);
+
+  const filteredParcelas = useMemo(() => {
+    return parcelas.filter(p => {
+      const matchesSearch = (p.credor_nome || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (p.descricao || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (p.credor_cpf_cnpj || '').includes(searchTerm);
+      const matchesStatus = statusFilter ? p.status === statusFilter : true;
+      const matchesForma = formaPagamentoFilter ? p.forma_pagamento === formaPagamentoFilter : true;
+      
+      let matchesData = true;
+      if (dataInicial || dataFinal) {
+        const pDate = new Date(p.data_vencimento);
+        if (dataInicial && new Date(dataInicial) > pDate) matchesData = false;
+        if (dataFinal && new Date(dataFinal) < pDate) matchesData = false;
+      }
+      
+      return matchesSearch && matchesStatus && matchesForma && matchesData;
+    });
+  }, [parcelas, searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal]);
+
+  const sortedParcelas = useMemo(() => {
+    if (!sortField) return filteredParcelas;
+    return [...filteredParcelas].sort((a, b) => {
+      if (sortField === 'credor') {
+        const nameA = a.credor_nome || '';
+        const nameB = b.credor_nome || '';
+        return sortDirection === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+      }
+      if (sortField === 'vencimento') {
+        const dateA = new Date(a.data_vencimento).getTime();
+        const dateB = new Date(b.data_vencimento).getTime();
+        return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+      }
+      return 0;
+    });
+  }, [filteredParcelas, sortField, sortDirection]);
+
+  const totais = useMemo(() => {
+    return parcelas.reduce((acc, p) => {
+      if (p.status === 'pendente') {
+        acc.aPagar += p.valor;
+        if (isPast(new Date(p.data_vencimento)) && !isToday(new Date(p.data_vencimento))) {
+          acc.vencidas += p.valor;
+        } else if (isToday(new Date(p.data_vencimento))) {
+          acc.venceHoje += p.valor;
+        }
+      } else if (p.status === 'pago') {
+        acc.pagas += p.valor_pago || p.valor;
+      }
+      return acc;
+    }, { aPagar: 0, vencidas: 0, venceHoje: 0, pagas: 0 });
+  }, [parcelas]);
+
+  const openBaixaModal = (parcela: ParcelaPagar) => {
+    setParcelaSelecionada(parcela);
+    setDataPagamento(format(new Date(), 'yyyy-MM-dd'));
+    setValorPago(parcela.valor);
+    setFormaPagamentoEfetiva(parcela.forma_pagamento || 'pix');
+    setContaBancariaId(parcela.conta_bancaria_id || (contasBancarias.length > 0 ? contasBancarias[0].id : ''));
+    setObservacaoPagamento('');
+    setLoteAberto(null);
+    setModalStage('form');
+    setShowBaixaModal(true);
+  };
+
+  const handleBaixa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!parcelaSelecionada) return;
+
+    setCheckingLote(true);
+    try {
+      const activeLote = await getLoteAbertoAtivo(state.isOnline, state.empresaSelecionada || 'tenant-default');
+      if (!activeLote) {
+        setLoteAberto(null);
+        setModalStage('bloqueio');
+      } else {
+        setLoteAberto(activeLote);
+        setModalStage('confirmacao');
+      }
+    } catch (err) {
+      console.error('Erro ao verificar lote de caixa:', err);
+      toast.error('Erro ao verificar status do Lote de Caixa');
+    } finally {
+      setCheckingLote(false);
+    }
+  };
+
+  const handleEfetivarPagamento = async () => {
+    if (!parcelaSelecionada || !loteAberto) return;
+
+    setSubmittingBaixa(true);
+    try {
+      await registrarPagamento(state.isOnline, parcelaSelecionada.id, {
+        data_pagamento: dataPagamento ? new Date(dataPagamento + "T12:00:00").toISOString() : new Date().toISOString(),
+        valor_pago: Number(valorPago) || parcelaSelecionada.valor,
+        forma_pagamento_efetivo: formaPagamentoEfetiva,
+        conta_bancaria_id: formaPagamentoEfetiva !== 'dinheiro' ? contaBancariaId : null,
+        pago_por: state.user?.nome || 'Sistema',
+        observacao: observacaoPagamento
+      });
+
+      // Registra a movimentação financeira diretamente no Lote de Caixa Aberto
+      await registrarMovimentacao(state.isOnline, {
+        tenant_id: state.empresaSelecionada || 'tenant-default',
+        lote_id: loteAberto.id,
+        tipo: 'saida',
+        origem: 'contas_pagar',
+        categoria: 'Despesa / Pagamento',
+        descricao: `Pagamento: ${parcelaSelecionada.credor_nome} - ${parcelaSelecionada.descricao}`,
+        valor: Number(valorPago) || parcelaSelecionada.valor,
+        forma_pagamento: formaPagamentoEfetiva as any,
+        data_movimentacao: dataPagamento ? new Date(dataPagamento + "T12:00:00").toISOString() : new Date().toISOString(),
+        referencia_id: parcelaSelecionada.id,
+        documento_ref: `Parc. ${parcelaSelecionada.numero_parcela}/${parcelaSelecionada.total_parcelas || 1}`,
+        operador_nome: state.user?.nome || loteAberto.operador_nome || 'Sistema',
+        observacao: observacaoPagamento
+      });
+
+      toast.success(`Pagamento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
+      setShowBaixaModal(false);
+      loadData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao efetivar pagamento');
+    } finally {
+      setSubmittingBaixa(false);
+    }
+  };
+
+  const openDetalhes = async (parcela: ParcelaPagar) => {
+    setParcelaDetalhes(parcela);
+    setShowDetalhesModal(true);
+    if (parcela.despesa_id) {
+      const parent = await getDespesaById(state.isOnline, parcela.despesa_id);
+      setDespesaPai(parent);
+    } else {
+      setDespesaPai(null);
+    }
+  };
+
+  const handleExcluirParcela = (parcela: ParcelaPagar) => {
+    confirm({
+      title: 'Excluir Parcela',
+      message: `Deseja realmente excluir a parcela ${parcela.numero_parcela}/${parcela.total_parcelas} de R$ ${parcela.valor.toFixed(2)} (${parcela.credor_nome})?`,
+      confirmText: 'Excluir Parcela',
+      cancelText: 'Cancelar',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await excluirParcelaPagar(state.isOnline, parcela.id);
+          toast.success('Parcela excluída com sucesso!');
+          loadData();
+        } catch (e) {
+          toast.error('Erro ao excluir parcela');
+        }
+      }
+    });
+  };
+
+  const handleExcluirDespesaCompleta = (despesaId: string, descricao: string) => {
+    confirm({
+      title: 'Excluir Despesa Inteira',
+      message: `Atenção: Esta ação excluirá permanentemente a despesa "${descricao}" e TODAS as suas parcelas vinculadas. Deseja continuar?`,
+      confirmText: 'Excluir Tudo',
+      cancelText: 'Cancelar',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await excluirDespesa(state.isOnline, despesaId);
+          toast.success('Despesa e parcelas excluídas com sucesso!');
+          if (showDetalhesModal) setShowDetalhesModal(false);
+          loadData();
+        } catch (e) {
+          toast.error('Erro ao excluir despesa');
+        }
+      }
+    });
+  };
+
+  const getStatusBadge = (status: string, vencimento: string) => {
+    if (status === 'pago') return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-500">Pago</span>;
+    if (status === 'cancelado') return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-text-subtle">Cancelado</span>;
+
+    if (isPast(new Date(vencimento)) && !isToday(new Date(vencimento))) {
+      return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-rose-500/10 text-rose-500">Vencido</span>;
+    }
+    return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500">Pendente</span>;
+  };
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto flex flex-col h-full overflow-hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 print:hidden">
+        <div>
+          <h1 className="text-2xl font-bold text-text-base">Contas a Pagar</h1>
+          <p className="text-text-subtle mt-1">Gestão de despesas e pagamentos</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors"
+            title="Exportar listagem para PDF"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Exportar PDF</span>
+          </button>
+          <button onClick={() => navigate('/financeiro/contas-a-pagar/nova')} className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-medium transition-colors shadow-lg shadow-emerald-500/20">
+          <Plus className="w-5 h-5" />
+          Nova Despesa
+        </button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 print:hidden">
+        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-text-subtle font-medium">Total a Pagar</span>
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+              <Clock className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-text-base">
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.aPagar)}
+          </div>
+        </div>
+        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-text-subtle font-medium">Vencidas</span>
+            <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-text-base">
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.vencidas)}
+          </div>
+        </div>
+        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-text-subtle font-medium">Vence Hoje</span>
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+              <Clock className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-text-base">
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.venceHoje)}
+          </div>
+        </div>
+        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-text-subtle font-medium">Pagas</span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-text-base">
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.pagas)}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-bg-subtle border border-border-default rounded-2xl flex-1 flex flex-col overflow-hidden print:hidden">
+        <div className="p-4 border-b border-border-default">
+          <div className="p-4 border-b border-border-default">
+          <AdvancedFilterBar
+            pageKey="contas-pagar"
+            showFilters={showFilters}
+            setShowFilters={setShowFilters}
+            currentFilters={{ searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal }}
+            onApplyFilters={(filters) => {
+              setSearchTerm(filters.searchTerm || '');
+              setStatusFilter(filters.statusFilter || '');
+              setFormaPagamentoFilter(filters.formaPagamentoFilter || '');
+              setDataInicial(filters.dataInicial || '');
+              setDataFinal(filters.dataFinal || '');
+            }}
+            onClearFilters={() => {
+              setSearchTerm('');
+              setStatusFilter('');
+              setFormaPagamentoFilter('');
+              setDataInicial('');
+              setDataFinal('');
+            }}
+          >
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-text-subtle">Busca Rápida</label>
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle" />
+                <input
+                  type="text"
+                  placeholder="Credor, documento ou descrição..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-text-subtle">Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+              >
+                <option value="">Todos os Status</option>
+                <option value="pendente">Pendente</option>
+                <option value="pago">Pago</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-text-subtle">Forma de Pagamento</label>
+              <select
+                value={formaPagamentoFilter}
+                onChange={(e) => setFormaPagamentoFilter(e.target.value)}
+                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+              >
+                <option value="">Todas</option>
+                <option value="pix">PIX</option>                <option value="dinheiro">Dinheiro</option>                <option value="cartao_credito">Cartão de Crédito</option>                <option value="cartao_debito">Cartão de Débito</option>                <option value="boleto">Boleto</option>                <option value="transferencia">Transferência</option>              </select>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-text-subtle">Período Vencimento (Inicial)</label>
+              <input
+                type="date"
+                value={dataInicial}
+                onChange={(e) => setDataInicial(e.target.value)}
+                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+              />
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-text-subtle">Período Vencimento (Final)</label>
+              <input
+                type="date"
+                value={dataFinal}
+                onChange={(e) => setDataFinal(e.target.value)}
+                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+              />
+            </div>
+          </AdvancedFilterBar>
+        </div>
+        </div>
+
+        <div className="flex-1 overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-bg-surface border-b border-border-default text-xs uppercase tracking-wider text-text-subtle font-semibold">
+                <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-bg-hover transition-colors"
+                  onClick={() => {
+                    if (sortField === 'credor') {
+                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                    } else {
+                      setSortField('credor');
+                      setSortDirection('asc');
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    Credor
+                    {sortField === 'credor' && (
+                      sortDirection === 'asc' ? <ChevronUp className="w-4 h-4 text-blue-400" /> : <ChevronDown className="w-4 h-4 text-blue-400" />
+                    )}
+                  </div>
+                </th>
+                {isVisible('descricao') && <th className="px-6 py-4">Descrição</th>}
+                <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-bg-hover transition-colors"
+                  onClick={() => {
+                    if (sortField === 'vencimento') {
+                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                    } else {
+                      setSortField('vencimento');
+                      setSortDirection('asc');
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    Vencimento
+                    {sortField === 'vencimento' && (
+                      sortDirection === 'asc' ? <ChevronUp className="w-4 h-4 text-blue-400" /> : <ChevronDown className="w-4 h-4 text-blue-400" />
+                    )}
+                  </div>
+                </th>
+                {isVisible('valor') && <th className="px-6 py-4 text-right">Valor</th>}
+                {isVisible('status') && <th className="px-6 py-4">Status</th>}
+                {isVisible('acoes') && <th className="px-6 py-4 text-center">Ações</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#475569]">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-text-subtle">
+                    <div className="w-8 h-8 border-2 border-[#3B82F6] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    Carregando parcelas...
+                  </td>
+                </tr>
+              ) : sortedParcelas.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-text-subtle">
+                    Nenhuma parcela encontrada.
+                  </td>
+                </tr>
+              ) : (
+                sortedParcelas.map((parcela) => (
+                  <tr key={parcela.id} className="hover:bg-[#1A1D36] transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-text-base">{parcela.credor_nome || 'Não informado'}</div>
+                      <div className="text-sm text-text-subtle">{(parcela.tipo_credor || 'fornecedor').replace('_', ' ').toUpperCase()}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-text-base">{parcela.descricao}</div>
+                      <div className="text-sm text-text-subtle">Parc. {parcela.numero_parcela}/{parcela.total_parcelas || 1}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {parcela.data_vencimento ? format(new Date(parcela.data_vencimento), "dd/MM/yyyy") : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-right font-medium text-text-base">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela.valor)}
+                    </td>
+                    <td className="px-6 py-4">
+                      {getStatusBadge(parcela.status, parcela.data_vencimento)}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        {/* Ver Detalhes */}
+                        <button
+                          onClick={() => openDetalhes(parcela)}
+                          title="Ver Detalhes"
+                          className="p-1.5 rounded-lg bg-bg-surface hover:bg-bg-hover text-text-subtle hover:text-text-base border border-border-default transition-colors"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+
+                        {/* Editar */}
+                        <button
+                          onClick={() => navigate(`/financeiro/contas-a-pagar/${parcela.despesa_id || parcela.id}/editar?parcela=${parcela.id}`)}
+                          title="Editar Despesa"
+                          disabled={parcela.status === 'pago'}
+                          className={`p-1.5 rounded-lg transition-colors ${parcela.status === 'pago' ? 'bg-bg-hover text-text-subtle cursor-not-allowed opacity-50' : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400'}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+
+                        {/* Excluir Parcela */}
+                        <button
+                          onClick={() => handleExcluirParcela(parcela)}
+                          title="Excluir Parcela"
+                          disabled={parcela.status === 'pago'}
+                          className={`p-1.5 rounded-lg transition-colors ${parcela.status === 'pago' ? 'bg-bg-hover text-text-subtle cursor-not-allowed opacity-50' : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400'}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+
+                        {/* Botão Pagar */}
+                        {(parcela.status === 'pendente' || parcela.status === 'atrasado') && (
+                          <button
+                            onClick={() => openBaixaModal(parcela)}
+                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ml-1"
+                          >
+                            <DollarSign className="w-3.5 h-3.5" />
+                            Pagar
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* MODAL DE BAIXA / PAGAMENTO */}
+      {showBaixaModal && parcelaSelecionada && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm print:static print:bg-transparent print:p-0 print:block">
+          <div className="bg-bg-subtle border border-border-default rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            
+            {/* ETAPA 1: FORMULÁRIO DE PAGAMENTO */}
+            {modalStage === 'form' && (
+              <>
+                <div className="flex items-center justify-between p-6 border-b border-border-default">
+                  <h3 className="text-xl font-bold text-text-base flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-emerald-500" />
+                    Registrar Pagamento
+                  </h3>
+                  <button
+                    onClick={() => setShowBaixaModal(false)}
+                    className="text-text-subtle hover:text-text-base transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <form onSubmit={handleBaixa} className="p-6 space-y-4">
+                  <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-1">
+                    <p className="text-xs text-text-subtle uppercase tracking-wider">Parcela {parcelaSelecionada.numero_parcela}/{parcelaSelecionada.total_parcelas || 1}</p>
+                    <p className="text-lg font-bold text-text-base">{parcelaSelecionada.descricao}</p>
+                    <p className="text-sm text-text-subtle">Credor: <span className="text-text-base font-medium">{parcelaSelecionada.credor_nome}</span></p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-subtle mb-1">Data do Pagamento *</label>
+                    <input
+                      type="date"
+                      value={dataPagamento}
+                      onChange={(e) => setDataPagamento(e.target.value)}
+                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-subtle mb-1">Valor Pago (R$) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={valorPago}
+                      onChange={(e) => setValorPago(Number(e.target.value))}
+                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-subtle mb-1">Forma de Pagamento Efetiva *</label>
+                    <select
+                      value={formaPagamentoEfetiva}
+                      onChange={(e) => setFormaPagamentoEfetiva(e.target.value)}
+                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
+                    >
+                      <option value="pix">PIX</option>
+                      <option value="boleto">Boleto</option>
+                      <option value="cartao_credito">Cartão de Crédito</option>
+                      <option value="cartao_debito">Cartão de Débito</option>
+                      <option value="transferencia">Transferência</option>
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="cheque">Cheque</option>
+                      <option value="outro">Outro</option>
+                    </select>
+                  </div>
+
+                  {formaPagamentoEfetiva !== 'dinheiro' && (
+                  <div>
+                    <label className="block text-sm font-medium text-text-subtle mb-1">Conta Bancária Referencial *</label>
+                    <select
+                      value={contaBancariaId}
+                      onChange={(e) => setContaBancariaId(e.target.value)}
+                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
+                    >
+                      {contasBancarias.map(conta => (
+                        <option key={conta.id} value={conta.id}>{conta.nome} ({conta.banco})</option>
+                      ))}
+                    </select>
+                  </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-subtle mb-1">Observações do Pagamento</label>
+                    <textarea
+                      rows={2}
+                      value={observacaoPagamento}
+                      onChange={(e) => setObservacaoPagamento(e.target.value)}
+                      placeholder="Ex: Pago via PIX pelo App do Banco"
+                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none text-sm"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-border-default">
+                    <button
+                      type="button"
+                      onClick={() => setShowBaixaModal(false)}
+                      className="px-5 py-2.5 rounded-xl text-text-muted hover:text-text-base hover:bg-bg-hover transition-colors font-medium"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={checkingLote}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-medium transition-colors shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                    >
+                      {checkingLote ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Verificando Caixa...
+                        </>
+                      ) : (
+                        'Confirmar Pagamento'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {/* ETAPA 2: TELA DE BLOQUEIO (SEM LOTE DE CAIXA ABERTO) */}
+            {modalStage === 'bloqueio' && (
+              <div className="p-6 space-y-6">
+                <div className="flex items-start justify-between border-b border-border-default pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 shrink-0">
+                      <Lock className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-text-base">Operação Bloqueada</h3>
+                      <p className="text-xs text-rose-400 font-semibold">Nenhum Lote de Caixa Aberto Encontrado</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowBaixaModal(false)}
+                    className="text-text-subtle hover:text-text-base transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl space-y-2">
+                    <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
+                      <AlertTriangle className="w-5 h-5 shrink-0" />
+                      Não é possível registrar o pagamento
+                    </div>
+                    <p className="text-sm text-text-subtle leading-relaxed">
+                      Para efetivar este pagamento de despesa, o sistema exige que exista um <strong>Lote de Caixa aberto</strong> ativo para registrar a saída de caixa.
+                    </p>
+                  </div>
+
+                  <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-2">
+                    <p className="text-sm font-semibold text-text-base flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-[#3B82F6]" />
+                      Orientação ao Usuário:
+                    </p>
+                    <p className="text-xs text-text-subtle leading-relaxed">
+                      Por favor, acesse o módulo de <strong>Caixas / Lotes</strong> e realize a abertura de um novo lote de caixa antes de realizar este pagamento.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-default">
+                  <button
+                    type="button"
+                    onClick={() => setModalStage('form')}
+                    className="px-5 py-2.5 rounded-xl text-text-muted hover:text-text-base hover:bg-bg-hover transition-colors font-medium text-sm"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBaixaModal(false);
+                      navigate('/financeiro/caixas');
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-[#3B82F6] hover:bg-blue-600 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-500/20 flex items-center gap-2"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    Abrir Lote de Caixa
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ETAPA 3: TELA DE CONFIRMAÇÃO DE REGISTRO NO LOTE */}
+            {modalStage === 'confirmacao' && loteAberto && (
+              <div className="p-6 space-y-5">
+                <div className="flex items-center justify-between border-b border-border-default pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-text-base">Confirmação de Registro no Lote</h3>
+                      <p className="text-xs text-text-subtle">Confira as informações do Lote de Caixa antes de efetivar</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowBaixaModal(false)}
+                    className="text-text-subtle hover:text-text-base transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* INFO DO LOTE DE CAIXA */}
+                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1.5">
+                      <Wallet className="w-4 h-4" /> Lote de Caixa Origem
+                    </span>
+                    <span className="px-2.5 py-1 text-xs font-bold bg-emerald-500/20 text-emerald-300 rounded-lg border border-emerald-500/30">
+                      {loteAberto.codigo_lote}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs text-text-subtle pt-2 border-t border-emerald-500/20">
+                    <div>
+                      <span className="block text-text-muted">Terminal / Caixa:</span>
+                      <strong className="text-text-base font-semibold">{loteAberto.terminal_caixa}</strong>
+                    </div>
+                    <div>
+                      <span className="block text-text-muted">Operador Responsável:</span>
+                      <strong className="text-text-base font-semibold">{loteAberto.operador_nome}</strong>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="block text-text-muted">Data/Hora de Abertura:</span>
+                      <strong className="text-text-base font-semibold">
+                        {format(new Date(loteAberto.data_abertura), "dd/MM/yyyy 'às' HH:mm")}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RESUMO DA TRANSAÇÃO */}
+                <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-2.5 text-sm">
+                  <p className="text-xs text-text-subtle uppercase tracking-wider font-semibold">Resumo do Pagamento</p>
+                  
+                  <div className="flex justify-between items-center py-1 border-b border-border-default">
+                    <span className="text-text-subtle text-xs">Credor:</span>
+                    <span className="font-semibold text-text-base text-xs">{parcelaSelecionada.credor_nome}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-1 border-b border-border-default">
+                    <span className="text-text-subtle text-xs">Descrição / Parcela:</span>
+                    <span className="font-medium text-text-base text-xs">
+                      {parcelaSelecionada.descricao} ({parcelaSelecionada.numero_parcela}/{parcelaSelecionada.total_parcelas || 1})
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-1 border-b border-border-default">
+                    <span className="text-text-subtle text-xs">Forma de Pagamento:</span>
+                    <span className="uppercase font-bold text-xs text-[#3B82F6] bg-blue-500/10 px-2 py-0.5 rounded">
+                      {formaPagamentoEfetiva}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-text-subtle font-medium text-sm">Valor a Efetivar (Débito):</span>
+                    <span className="text-xl font-bold text-rose-400">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorPago)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-default">
+                  <button
+                    type="button"
+                    onClick={() => setModalStage('form')}
+                    className="px-5 py-2.5 rounded-xl text-text-muted hover:text-text-base hover:bg-bg-hover transition-colors font-medium text-sm"
+                  >
+                    Ajustar Dados
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEfetivarPagamento}
+                    disabled={submittingBaixa}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-medium text-sm transition-colors shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                  >
+                    {submittingBaixa ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Efetivando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Confirmar e Registrar no Lote
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE DETALHES DO REGISTRO */}
+      {showDetalhesModal && parcelaDetalhes && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm print:static print:bg-transparent print:p-0 print:block">
+          <div className="bg-bg-subtle border border-border-default rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] print:max-w-none print:max-h-none print:border-none print:shadow-none print:rounded-none print:bg-transparent">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-border-default bg-bg-surface/50 print:hidden">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-text-base">Detalhes da Contas a Pagar</h3>
+                  <p className="text-sm text-text-subtle">Parcela {parcelaDetalhes.numero_parcela} de {parcelaDetalhes.total_parcelas || 1}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDetalhesModal(false)}
+                className="p-2 rounded-xl text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 print:hidden">
+              
+              {/* Credor Info */}
+              <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-3">
+                <div className="flex items-center gap-2 text-text-subtle text-xs font-semibold uppercase tracking-wider border-b border-border-default pb-2">
+                  <Building2 className="w-4 h-4 text-indigo-400" />
+                  Informações do Credor / Beneficiário
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-text-subtle block">Nome / Razão Social</span>
+                    <span className="font-semibold text-text-base">{parcelaDetalhes.credor_nome || 'Não informado'}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-subtle block">CPF / CNPJ</span>
+                    <span className="font-semibold text-text-base">{parcelaDetalhes.credor_cpf_cnpj || 'Não informado'}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-subtle block">Tipo de Credor</span>
+                    <span className="font-semibold text-text-base capitalize">{(parcelaDetalhes.tipo_credor || 'fornecedor').replace('_', ' ')}</span>
+                  </div>
+                  {despesaPai?.centro_custo && (
+                    <div>
+                      <span className="text-text-subtle block">Centro de Custo</span>
+                      <span className="font-semibold text-indigo-400">{despesaPai.centro_custo}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Parcela & Despesa Info */}
+              <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-3">
+                <div className="flex items-center gap-2 text-text-subtle text-xs font-semibold uppercase tracking-wider border-b border-border-default pb-2">
+                  <CreditCard className="w-4 h-4 text-amber-400" />
+                  Dados da Parcela & Despesa
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-text-subtle block">Descrição</span>
+                    <span className="font-semibold text-text-base">{parcelaDetalhes.descricao}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-subtle block">Categoria</span>
+                    <span className="font-semibold text-text-base capitalize">{despesaPai?.categoria || 'Não informada'}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-subtle block">Valor da Parcela</span>
+                    <span className="text-lg font-bold text-indigo-400">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcelaDetalhes.valor)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-text-subtle block">Status</span>
+                    <div className="mt-1">{getStatusBadge(parcelaDetalhes.status, parcelaDetalhes.data_vencimento)}</div>
+                  </div>
+                  <div>
+                    <span className="text-text-subtle block">Data de Vencimento</span>
+                    <span className="font-semibold text-text-base">
+                      {parcelaDetalhes.data_vencimento ? format(new Date(parcelaDetalhes.data_vencimento), "dd/MM/yyyy") : '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-text-subtle block">Forma de Pagamento Prevista</span>
+                    <span className="font-semibold text-text-base uppercase">{parcelaDetalhes.forma_pagamento || 'pix'}</span>
+                  </div>
+                  {despesaPai && (
+                    <div>
+                      <span className="text-text-subtle block">Valor Total da Despesa</span>
+                      <span className="font-semibold text-text-base">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(despesaPai.valor_total)} ({despesaPai.qtd_parcelas}x)
+                      </span>
+                    </div>
+                  )}
+                  {despesaPai?.codigo_barras && (
+                    <div className="md:col-span-2">
+                      <span className="text-text-subtle block">Código de Barras / Linha Digitável</span>
+                      <span className="font-mono text-xs bg-bg-base p-2 rounded block border border-border-default text-text-base select-all overflow-x-auto">
+                        {despesaPai.codigo_barras}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Status do Pagamento (Se Pago) */}
+              {parcelaDetalhes.status === 'pago' && (
+                <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold uppercase tracking-wider border-b border-emerald-500/20 pb-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Informações do Pagamento Efetivado
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-text-subtle block">Data do Pagamento</span>
+                      <span className="font-semibold text-text-base">
+                        {parcelaDetalhes.data_pagamento ? format(new Date(parcelaDetalhes.data_pagamento), "dd/MM/yyyy HH:mm") : '-'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-text-subtle block">Valor Pago</span>
+                      <span className="font-bold text-emerald-400">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcelaDetalhes.valor_pago || parcelaDetalhes.valor)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-text-subtle block">Forma Efetiva</span>
+                      <span className="font-semibold text-text-base uppercase">{parcelaDetalhes.forma_pagamento_efetivo || 'pix'}</span>
+                    </div>
+                    <div>
+                      <span className="text-text-subtle block">Pago Por</span>
+                      <span className="font-semibold text-text-base">{parcelaDetalhes.pago_por || 'Sistema'}</span>
+                    </div>
+                    {parcelaDetalhes.observacao_pagamento && (
+                      <div className="md:col-span-2">
+                        <span className="text-text-subtle block">Observação do Pagamento</span>
+                        <span className="font-medium text-text-base">{parcelaDetalhes.observacao_pagamento}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Observações da despesa */}
+              {despesaPai?.observacoes && (
+                <div className="bg-bg-surface p-4 rounded-xl border border-border-default">
+                  <span className="text-text-subtle text-xs font-semibold uppercase tracking-wider block mb-1">Observações da Despesa</span>
+                  <p className="text-sm text-text-base">{despesaPai.observacoes}</p>
+                </div>
+              )}
+
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="p-6 border-t border-border-default bg-bg-surface/50 flex flex-wrap items-center justify-between gap-3 print:hidden">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setShowDetalhesModal(false);
+                    navigate(`/financeiro/contas-a-pagar/${parcelaDetalhes.despesa_id || parcelaDetalhes.id}/editar?parcela=${parcelaDetalhes.id}`);
+                  }}
+                  disabled={parcelaDetalhes.status === 'pago'}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors ${parcelaDetalhes.status === 'pago' ? 'bg-bg-hover text-text-subtle cursor-not-allowed opacity-50' : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400'}`}
+                >
+                  <Pencil className="w-4 h-4" />
+                  Editar Despesa
+                </button>
+                <button
+                  onClick={() => {
+                    if (parcelaDetalhes.despesa_id) {
+                      handleExcluirDespesaCompleta(parcelaDetalhes.despesa_id, parcelaDetalhes.descricao);
+                    } else {
+                      handleExcluirParcela(parcelaDetalhes);
+                      setShowDetalhesModal(false);
+                    }
+                  }}
+                  disabled={parcelaDetalhes.status === 'pago'}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors ${parcelaDetalhes.status === 'pago' ? 'bg-bg-hover text-text-subtle cursor-not-allowed opacity-50' : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400'}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Excluir Despesa
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {(parcelaDetalhes.status === 'pendente' || parcelaDetalhes.status === 'atrasado') && (
+                  <button
+                    onClick={() => {
+                      setShowDetalhesModal(false);
+                      openBaixaModal(parcelaDetalhes);
+                    }}
+                    className="flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm transition-colors"
+                  >
+                    <DollarSign className="w-4 h-4" />
+                    Pagar
+                  </button>
+                )}
+                {parcelaDetalhes.status === 'pago' && (
+                  <button
+                    onClick={() => {
+                      setTimeout(() => {
+                        window.print();
+                      }, 100);
+                    }}
+                    className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-medium text-sm transition-colors"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Imprimir Recibo
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowDetalhesModal(false)}
+                  className="px-5 py-2 rounded-xl bg-bg-surface border border-border-default text-text-muted hover:text-text-base transition-colors font-medium text-sm"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            {/* Comprovante de Pagamento - Somente Impressão */}
+            <div className="hidden print:block p-8 font-sans bg-white text-black print:!bg-white print:!text-black">
+              <div className="text-center border-b-2 border-black pb-4 mb-6">
+                <h1 className="text-3xl font-bold uppercase tracking-wider mb-2">Comprovante de Pagamento</h1>
+                <p className="text-gray-600">Nº {parcelaDetalhes.id.split('-')[0].toUpperCase()}</p>
+              </div>
+
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <p className="text-gray-600 text-sm uppercase font-bold">Data de Emissão</p>
+                  <p className="font-medium text-lg">{format(new Date(), "dd/MM/yyyy")}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-gray-600 text-sm uppercase font-bold">Valor Pago</p>
+                  <p className="font-bold text-2xl">
+                    {Number(parcelaDetalhes.valor_pago || parcelaDetalhes.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <p className="text-gray-600 text-sm uppercase font-bold mb-1">Pago para:</p>
+                  <div className="border border-gray-300 p-4 rounded-lg bg-gray-50">
+                    <p className="font-bold text-lg">{parcelaDetalhes.credor_nome || 'Credor'}</p>
+                    <p className="text-gray-700">CPF/CNPJ: {parcelaDetalhes.credor_cpf_cnpj || 'Não informado'}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-gray-600 text-sm uppercase font-bold mb-1">Referente a:</p>
+                  <div className="border border-gray-300 p-4 rounded-lg bg-gray-50">
+                    <p className="font-medium text-lg">{parcelaDetalhes.descricao || 'Despesa'}</p>
+                    <p className="text-gray-700">Parcela: {parcelaDetalhes.numero_parcela} de {parcelaDetalhes.total_parcelas || 1}</p>
+                    <p className="text-gray-700">Forma Efetiva: {parcelaDetalhes.forma_pagamento_efetivo || 'Não informado'}</p>
+                    <p className="text-gray-700">Data Efetiva: {parcelaDetalhes.data_pagamento ? format(new Date(parcelaDetalhes.data_pagamento), "dd/MM/yyyy") : 'Não informado'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-20 pt-8 border-t-2 border-black flex flex-col items-center">
+                <div className="w-64 border-b border-black mb-2"></div>
+                <p className="text-sm font-bold uppercase tracking-wider">Assinatura / Carimbo</p>
+                <p className="text-xs text-gray-500 mt-1">Este recibo comprova o pagamento do valor especificado acima.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+

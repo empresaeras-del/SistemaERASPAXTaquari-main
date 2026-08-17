@@ -1,0 +1,287 @@
+  1:  0 import React, { useState } from 'react';
+  2:  0 import { useAppContext } from '../context/AppContext';
+  3:  0 import { useToast } from '../context/ToastContext';
+  4:  0 import { useConfirm } from '../context/ConfirmContext';
+  5:  0 import { Plus, Search, Filter, CheckCircle, Clock, XCircle, Edit2, X } from 'lucide-react';
+  6:  0 
+  7:  1 interface Atendimento {
+  8:  1   id: string;
+  9:  1   titular: string;
+ 10:  1   falecido: string;
+ 11:  1   data: string;
+ 12:  1   status: 'aberto' | 'processamento' | 'finalizado' | 'cancelado';
+ 13:  1   responsavel: string;
+ 14:  0 }
+ 15:  0 
+ 16:  1 export const AtendimentosPage: React.FC = () => {
+ 17:  1   const { state } = useAppContext();
+ 18:  1   const toast = useToast();
+ 19:  1   const { confirm } = useConfirm();
+ 20:  1   const [searchTerm, setSearchTerm] = useState('');
+ 21:  1   const [statusFilter, setStatusFilter] = useState('');
+ 22:  1   const [showFilters, setShowFilters] = useState(false);
+ 23:  1 
+ 24:  1 
+ 25:  1   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([
+ 26:  1     { id: '1001', titular: 'João da Silva', falecido: 'Maria da Silva', data: '2023-10-24', status: 'aberto', responsavel: 'Admin ERAS' },
+ 27:  1     { id: '1002', titular: 'Carlos Souza', falecido: 'Carlos Souza', data: '2023-10-23', status: 'processamento', responsavel: 'Admin ERAS' },
+ 28:  1     { id: '1003', titular: 'Ana Costa', falecido: 'José Costa', data: '2023-10-20', status: 'finalizado', responsavel: 'Admin ERAS' },
+ 29:  1   ]);
+ 30:  1 
+ 31:  2   const filtered = atendimentos.filter(a => {
+ 32:  2     const matchesSearch = a.titular.toLowerCase().includes(searchTerm.toLowerCase()) || a.falecido.toLowerCase().includes(searchTerm.toLowerCase());
+ 33:  2     const matchesStatus = statusFilter ? a.status === statusFilter : true;
+ 34:  2     return matchesSearch && matchesStatus;
+ 35:  1   });
+ 36:  1   const [isModalOpen, setIsModalOpen] = useState(false);
+ 37:  1   const [editingAtendimento, setEditingAtendimento] = useState<Partial<Atendimento> | null>(null);
+ 38:  1 
+ 39:  2   const handleOpenModal = (atd?: Atendimento) => {
+ 40:  3     if (atd) {
+ 41:  3       setEditingAtendimento({ ...atd });
+ 42:  3     } else {
+ 43:  4       setEditingAtendimento({
+ 44:  4         id: Math.floor(1000 + Math.random() * 9000).toString(),
+ 45:  4         status: 'aberto',
+ 46:  4         data: new Date().toISOString().split('T')[0],
+ 47:  4         responsavel: state.user?.nome || 'Admin'
+ 48:  3       });
+ 49:  2     }
+ 50:  2     setIsModalOpen(true);
+ 51:  1   };
+ 52:  2   const handleCloseModal = () => {
+ 53:  2     setIsModalOpen(false);
+ 54:  2     setEditingAtendimento(null);
+ 55:  1   };
+ 56:  1 
+ 57:  2   const handleSave = (e: React.FormEvent) => {
+ 58:  2     e.preventDefault();
+ 59:  2     if (!editingAtendimento || !editingAtendimento.id) return;
+ 60:  2 
+ 61:  2     const novoAtd = editingAtendimento as Atendimento;
+ 62:  2 
+ 63:  3     setAtendimentos(current => {
+ 64:  3       const exists = current.find(a => a.id === novoAtd.id);
+ 65:  4       if (exists) {
+ 66:  4         return current.map(a => a.id === novoAtd.id ? novoAtd : a);
+ 67:  3       }
+ 68:  3       return [novoAtd, ...current];
+ 69:  2     });
+ 70:  2 
+ 71:  2     handleCloseModal();
+ 72:  2     toast.success("Atendimento salvo com sucesso!");
+ 73:  1   };
+ 74:  1 
+ 75:  2   const handleCancel = (id: string) => {
+ 76:  3     confirm({
+ 77:  3       title: "Cancelar Atendimento",
+ 78:  3       message: "Tem certeza que deseja cancelar este atendimento? Esta ação não pode ser desfeita.",
+ 79:  3       danger: true,
+ 80:  3       confirmText: "Cancelar",
+ 81:  4       onConfirm: async () => {
+ 82:  5         try {
+ 83:  5           setAtendimentos(current => current.map(a => a.id === id ? { ...a, status: 'cancelado' } : a));
+ 84:  5           toast.success("Atendimento cancelado com sucesso!");
+ 85:  5         } catch (error) {
+ 86:  5           console.error("Erro ao cancelar", error);
+ 87:  5           toast.error("Erro ao cancelar atendimento.");
+ 88:  4         }
+ 89:  3       }
+ 90:  2     });
+ 91:  1   };
+ 92:  1 
+ 93:  1 
+ 94:  1   return (
+ 95:  1     <div className="space-y-6">
+ 96:  1       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+ 97:  1         <div>
+ 98:  1           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Atendimentos Funerários</h2>
+ 99:  1           <p className="text-slate-500 mt-1">Coordenação e acompanhamento de óbitos e serviços.</p>
+100:  1         </div>
+101:  1 
+102:  1         <button
+103:  1           onClick={() => handleOpenModal()}
+104:  1           className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#7E4CF3]/25 disabled:opacity-50 disabled:cursor-not-allowed"
+105:  1         >
+106:  1           <Plus className="w-5 h-5" />
+107:  1           Novo Atendimento
+108:  1         </button>
+109:  1       </div>
+110:  1 
+111:  1       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+112:  1         <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+113:  1           <div className="relative max-w-md w-full">
+114:  1             <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+115:  1             <input
+116:  1               type="text"
+117:  1               placeholder="Buscar por titular ou falecido..."
+118:  1               value={searchTerm}
+119:  1               onChange={(e) => setSearchTerm(e.target.value)}
+120:  1               className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+121:  1             />
+122:  1           </div>
+123:  1 
+124:  1           <button className="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition-colors">
+125:  1             <Filter className="w-4 h-4" />
+126:  1             Filtros
+127:  1           </button>
+128:  1         </div>
+129:  1 
+130:  1         <div className="overflow-x-auto">
+131:  1           <table className="w-full text-left text-sm text-slate-600">
+132:  1             <thead className="bg-slate-50 text-slate-700 font-medium border-b border-slate-200">
+133:  1               <tr>
+134:  1                 <th className="px-6 py-4">Protocolo</th>
+135:  1                 <th className="px-6 py-4">Titular Responsável</th>
+136:  1                 <th className="px-6 py-4">Nome do Falecido</th>
+137:  1                 <th className="px-6 py-4">Data/Hora</th>
+138:  1                 <th className="px-6 py-4">Status</th>
+139:  1                 <th className="px-6 py-4 text-right">Ações</th>
+140:  1               </tr>
+141:  1             </thead>
+142:  1             <tbody className="divide-y divide-slate-200">
+143:  2               {filtered.map((atd) => (
+144:  2                 <tr key={atd.id} className="hover:bg-slate-50 transition-colors">
+145:  2                   <td className="px-6 py-4 font-medium text-slate-900">#{atd.id}</td>
+146:  2                   <td className="px-6 py-4">{atd.titular}</td>
+147:  2                   <td className="px-6 py-4">{atd.falecido}</td>
+148:  2                   <td className="px-6 py-4">{new Date(atd.data).toLocaleDateString('pt-BR')}</td>
+149:  2                   <td className="px-6 py-4">
+150:  4                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+151:  4                       atd.status === 'aberto' ? 'bg-rose-100 text-rose-800' :
+152:  4                       atd.status === 'processamento' ? 'bg-amber-100 text-amber-800' :
+153:  4                       atd.status === 'cancelado' ? 'bg-slate-100 text-slate-800' :
+154:  4                       'bg-emerald-100 text-emerald-800'
+155:  2                     }`}>
+156:  2                       {atd.status === 'aberto' && <Clock className="w-3.5 h-3.5" />}
+157:  2                       {atd.status === 'processamento' && <Clock className="w-3.5 h-3.5" />}
+158:  2                       {atd.status === 'finalizado' && <CheckCircle className="w-3.5 h-3.5" />}
+159:  2                       {atd.status === 'cancelado' && <XCircle className="w-3.5 h-3.5" />}
+160:  2                       <span className="capitalize">{atd.status}</span>
+161:  2                     </span>
+162:  2                   </td>
+163:  2                   <td className="px-6 py-4 text-right">
+164:  2                     <div className="flex justify-end gap-2">
+165:  2                       <button
+166:  2                         onClick={() => handleOpenModal(atd)}
+167:  2                         className="p-1 text-slate-400 hover:text-blue-600 transition-colors"
+168:  2                         title="Editar"
+169:  2                       >
+170:  2                         <Edit2 className="w-4 h-4" />
+171:  2                       </button>
+172:  3                       {atd.status !== 'cancelado' && (
+173:  3                         <button
+174:  3                           onClick={() => handleCancel(atd.id)}
+175:  3                           className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+176:  3                           title="Cancelar"
+177:  3                         >
+178:  3                           <XCircle className="w-4 h-4" />
+179:  3                         </button>
+180:  2                       )}
+181:  2                     </div>
+182:  2                   </td>
+183:  2                 </tr>
+184:  1               ))}
+185:  1             </tbody>
+186:  1           </table>
+187:  1         </div>
+188:  1       </div>
+189:  1 
+190:  2       {isModalOpen && editingAtendimento && (
+191:  2         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0C16]/80 backdrop-blur-md p-4">
+192:  2           <div className="bg-[#181B34] rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-[#262A45]">
+193:  2             <div className="px-6 py-4 border-b border-[#262A45] flex items-center justify-between shrink-0">
+194:  2               <h3 className="text-xl font-bold text-white tracking-tight">
+195:  2                 {editingAtendimento.titular ? 'Editar Atendimento' : 'Novo Atendimento'}
+196:  2               </h3>
+197:  2               <button onClick={handleCloseModal} className="text-slate-400 hover:text-white transition-colors">
+198:  2                 <X className="w-5 h-5" />
+199:  2               </button>
+200:  2             </div>
+201:  2 
+202:  2             <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6">
+203:  2               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+204:  2                 <div className="space-y-1">
+205:  2                   <label className="block text-sm font-semibold text-slate-400 mb-1">Titular Responsável</label>
+206:  2                   <input
+207:  2                     required
+208:  2                     type="text"
+209:  2                     value={editingAtendimento.titular || ''}
+210:  2                     onChange={(e) => setEditingAtendimento({ ...editingAtendimento, titular: e.target.value })}
+211:  2                     className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+212:  2                     placeholder="Ex: João da Silva"
+213:  2                   />
+214:  2                 </div>
+215:  2 
+216:  2                 <div className="space-y-1">
+217:  2                   <label className="block text-sm font-semibold text-slate-400 mb-1">Nome do Falecido</label>
+218:  2                   <input
+219:  2                     required
+220:  2                     type="text"
+221:  2                     value={editingAtendimento.falecido || ''}
+222:  2                     onChange={(e) => setEditingAtendimento({ ...editingAtendimento, falecido: e.target.value })}
+223:  2                     className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+224:  2                     placeholder="Ex: Maria da Silva"
+225:  2                   />
+226:  2                 </div>
+227:  2 
+228:  2                 <div className="space-y-1">
+229:  2                   <label className="block text-sm font-semibold text-slate-400 mb-1">Data/Hora</label>
+230:  2                   <input
+231:  2                     required
+232:  2                     type="date"
+233:  2                     value={editingAtendimento.data || ''}
+234:  2                     onChange={(e) => setEditingAtendimento({ ...editingAtendimento, data: e.target.value })}
+235:  2                     className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+236:  2                   />
+237:  2                 </div>
+238:  2 
+239:  2                 <div className="space-y-1">
+240:  2                   <label className="block text-sm font-semibold text-slate-400 mb-1">Responsável (Atendente)</label>
+241:  2                   <input
+242:  2                     required
+243:  2                     type="text"
+244:  2                     value={editingAtendimento.responsavel || ''}
+245:  2                     onChange={(e) => setEditingAtendimento({ ...editingAtendimento, responsavel: e.target.value })}
+246:  2                     className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+247:  2                   />
+248:  2                 </div>
+249:  2 
+250:  2                 <div className="space-y-1 md:col-span-2">
+251:  2                   <label className="block text-sm font-semibold text-slate-400 mb-1">Status</label>
+252:  2                   <select
+253:  2                     required
+254:  2                     value={editingAtendimento.status || 'aberto'}
+255:  2                     onChange={(e) => setEditingAtendimento({ ...editingAtendimento, status: e.target.value as Atendimento['status'] })}
+256:  2                     className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+257:  2                   >
+258:  2                     <option value="aberto">Aberto</option>
+259:  2                     <option value="processamento">Em Processamento</option>
+260:  2                     <option value="finalizado">Finalizado</option>
+261:  2                     <option value="cancelado">Cancelado</option>
+262:  2                   </select>
+263:  2                 </div>
+264:  2               </div>
+265:  2 
+266:  2               <div className="pt-4 mt-6 border-t border-[#262A45] flex justify-end gap-3 shrink-0">
+267:  2                 <button
+268:  2                   type="button"
+269:  2                   onClick={handleCloseModal}
+270:  2                   className="px-4 py-2 bg-[#222542] border border-[#2A2D48] text-slate-300 rounded-xl font-medium hover:bg-[#2A2D48] hover:text-white transition-colors"
+271:  2                 >
+272:  2                   Cancelar
+273:  2                 </button>
+274:  2                 <button
+275:  2                   type="submit"
+276:  2                   className="px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#7E4CF3]/25"
+277:  2                 >
+278:  2                   Salvar
+279:  2                 </button>
+280:  2               </div>
+281:  2             </form>
+282:  2           </div>
+283:  2         </div>
+284:  1       )}
+285:  1     </div>
+286:  1   );
+287:  0 };

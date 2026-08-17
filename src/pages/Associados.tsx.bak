@@ -1,0 +1,1325 @@
+import { useToast } from "../context/ToastContext";
+import { useConfirm } from "../context/ConfirmContext";
+import React, { useState, useEffect } from "react";
+import { useAppContext } from "../context/AppContext";
+import {
+  getAssociados,
+  saveAssociado,
+  softDeleteAssociado,
+  Associado,
+} from "../services/associadosService";
+import { usePlanosPax } from "../hooks/usePlanosPax";
+import { Plus, Search, Filter, Edit2, Trash2, X } from "lucide-react";
+import { PlanoPaxSelect } from "../components/planos-pax/PlanoPaxSelect";
+import { contratoSchema } from "../schemas/contratoSchema";
+
+export const AssociadosPage: React.FC = () => {
+  const { state } = useAppContext();
+  const toast = useToast();
+  const { confirm } = useConfirm();
+  const { planosAtivos: planos } = usePlanosPax();
+
+  const [associados, setAssociados] = useState<Associado[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [previewAssociado, setPreviewAssociado] = useState<Associado | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [planoFilter, setPlanoFilter] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const filtered = associados.filter((a) => {
+    const matchesSearch =
+      a.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.cpf.includes(searchTerm);
+    const matchesStatus = statusFilter ? a.status === statusFilter : true;
+    const matchesPlano = planoFilter ? a.plano_pax_id === planoFilter : true;
+    return matchesSearch && matchesStatus && matchesPlano;
+  });
+
+  const [activeTab, setActiveTab] = useState<
+    "principal" | "dependentes" | "contratos" | "documentos"
+  >("principal");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAssociado, setEditingAssociado] =
+    useState<Partial<Associado> | null>(null);
+  const [isEditingMode, setIsEditingMode] = useState(false);
+
+  
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const data = await getAssociados(
+        state.isOnline,
+        state.empresaSelecionada,
+      );
+      if (data.length === 0 && state.empresaSelecionada) {
+        setAssociados([
+          {
+            id: "1",
+            tenant_id: state.empresaSelecionada,
+            nome: "João da Silva",
+            cpf: "111.222.333-44",
+            plano_nome: "Familiar",
+            status: "ativo",
+            data_adesao: "2023-01-15",
+            dependentes: [],
+          },
+          {
+            id: "2",
+            tenant_id: state.empresaSelecionada,
+            nome: "Maria Oliveira",
+            cpf: "555.666.777-88",
+            plano_nome: "Individual",
+            status: "inadimplente",
+            data_adesao: "2023-05-20",
+            dependentes: [],
+          },
+          {
+            id: "3",
+            tenant_id: state.empresaSelecionada,
+            nome: "Carlos Souza",
+            cpf: "999.888.777-66",
+            plano_nome: "Coletivo",
+            status: "ativo",
+            data_adesao: "2024-02-10",
+            dependentes: [],
+          },
+        ]);
+      } else {
+        setAssociados(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [state.isOnline, state.empresaSelecionada]);
+
+  const handleOpenModal = (associado?: Associado) => {
+    if (associado) {
+      setEditingAssociado({ ...associado });
+      setIsEditingMode(true);
+    } else {
+      setEditingAssociado({
+        id: Math.random().toString(36).substring(7),
+        tenant_id: state.empresaSelecionada || "",
+        status: "ativo",
+        plano: "individual",
+        data_adesao: new Date().toISOString().split("T")[0],
+        dependentes: [],
+      });
+      setIsEditingMode(false);
+    }
+    setActiveTab("principal");
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingAssociado(null);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAssociado || !editingAssociado.id) return;
+    try {
+      if (!state.empresaSelecionada) {
+        toast.error("Selecione uma empresa antes de salvar.");
+        return;
+      }
+      
+      // Validação do contrato se o plano foi selecionado
+      if (editingAssociado.plano_pax_id) {
+        const contratoResult = contratoSchema.safeParse({
+          plano_pax_id: editingAssociado.plano_pax_id,
+          tipo_plano: planos.find(p => p.id === editingAssociado.plano_pax_id)?.tipo_plano,
+          n_vidas: editingAssociado.n_vidas
+        });
+        
+        if (!contratoResult.success) {
+          toast.error(contratoResult.error.issues[0].message);
+          return;
+        }
+      }
+      const novoAssociado = {
+        ...editingAssociado,
+        tenant_id: state.empresaSelecionada,
+      } as Associado;
+      await saveAssociado(novoAssociado, state.isOnline);
+      await loadData();
+      handleCloseModal();
+      toast.success("Associado salvo com sucesso!");
+    } catch (error) {
+      console.error("Erro ao salvar associado", error);
+      toast.error("Erro ao salvar associado. Verifique se você está online.");
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    confirm({
+      title: "Excluir Associado",
+      message:
+        "Tem certeza que deseja excluir este associado? Esta ação moverá o registro para a lixeira.",
+      danger: true,
+      confirmText: "Excluir",
+      onConfirm: async () => {
+        try {
+          await softDeleteAssociado(id, state.isOnline);
+          setAssociados((current) => current.filter((a) => a.id !== id));
+          toast.success("Associado excluído com sucesso!");
+        } catch (error) {
+          console.error("Erro ao excluir", error);
+          toast.error(
+            "Erro ao excluir associado. Verifique se você está online.",
+          );
+        }
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto pb-12 h-full flex flex-col">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-white">
+            Associados
+          </h2>
+          <p className="text-slate-400 mt-1">
+            Gerenciamento de titulares e dependentes.
+          </p>
+        </div>
+
+        <button
+          disabled={
+            !state.isOnline ||
+            !state.empresaSelecionada ||
+            state.empresaSelecionada === "all"
+          }
+          onClick={() => handleOpenModal()}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#7E4CF3] hover:bg-[#6A3DE8] text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Plus className="w-5 h-5" />
+          Novo Associado
+        </button>
+      </div>
+
+      <div className="flex gap-6 flex-1 min-h-0">
+      <div className={`bg-[#181B34] border border-[#262A45] rounded-2xl overflow-hidden shadow-sm flex-1 flex flex-col ${previewAssociado ? 'hidden lg:flex' : 'flex'}`}>
+        <div className="p-4 border-b border-[#262A45] bg-[#101223]/50">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+            <div className="relative max-w-md w-full">
+              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar por nome ou CPF..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-[#101223] border border-[#262A45] rounded-xl pl-10 pr-4 py-2 text-white focus:outline-none focus:border-[#7E4CF3]"
+              />
+            </div>
+
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`inline-flex items-center gap-2 px-4 py-2 border rounded-xl font-medium transition-colors ${showFilters ? "bg-[#7E4CF3]/10 text-[#7E4CF3] border-[#7E4CF3]/30" : "bg-transparent border-[#262A45] text-slate-300 hover:bg-white/5"}`}
+            >
+              <Filter className="w-4 h-4" />
+              Filtros Avançados
+            </button>
+          </div>
+
+          {showFilters && (
+            <div className="mt-4 pt-4 border-t border-[#262A45] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Status
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#101223] border border-[#262A45] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3]"
+                >
+                  <option value="">Todos</option>
+                  <option value="ativo">Ativo</option>
+                  <option value="inativo">Inativo</option>
+                  <option value="inadimplente">Inadimplente</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Plano
+                </label>
+                <select
+                  value={planoFilter}
+                  onChange={(e) => setPlanoFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#101223] border border-[#262A45] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3]"
+                >
+                  <option value="">Todos os Planos</option>
+                  {planos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="overflow-x-auto flex-1">
+          <table className="w-full text-left text-sm text-slate-300">
+            <thead className="bg-[#101223]/30 border-b border-[#262A45]">
+              <tr>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Nome</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">CPF</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Plano</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Adesão</th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#262A45]">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
+                    Carregando associados...
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
+                    Nenhum associado encontrado.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((associado) => (
+                  <tr
+                    key={associado.id}
+                    className="hover:bg-[#101223]/30 transition-colors cursor-pointer"
+                    onClick={() => setPreviewAssociado(associado)}
+                  >
+                    <td className="px-6 py-4 font-medium text-white">
+                      {associado.nome}
+                    </td>
+                    <td className="px-6 py-4">{associado.cpf}</td>
+                    <td className="px-6 py-4 capitalize">
+                      {associado.plano_nome}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
+                          associado.status === "ativo"
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : associado.status === "inadimplente"
+                              ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                              : "bg-slate-500/10 text-slate-400 border-slate-500/20"
+                        }`}
+                      >
+                        {associado.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {new Date(associado.data_adesao).toLocaleDateString(
+                        "pt-BR",
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleOpenModal(associado); }}
+                          className="p-1 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          disabled={!state.isOnline}
+                          onClick={(e) => { e.stopPropagation(); handleDelete(associado.id); }}
+                          className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      </div>
+      {isModalOpen && editingAssociado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0C16]/80 backdrop-blur-sm p-4">
+          <div className="bg-[#181B34] rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col border border-[#262A45] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#262A45] flex items-center justify-between shrink-0 bg-[#101223]/50">
+              <h3 className="text-xl font-bold text-white tracking-tight">
+                {editingAssociado.nome ? "Editar Associado" : "Novo Associado"}
+              </h3>
+              <button
+                onClick={handleCloseModal}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div
+              className={`flex flex-1 overflow-hidden ${isEditingMode ? "flex-row" : "flex-col"}`}
+            >
+              {isEditingMode ? (
+                <div className="w-64 border-r border-[#262A45] bg-[#101223]/30 flex flex-col py-4 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("principal")}
+                    className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 ${
+                      activeTab === "principal"
+                        ? "border-[#7E4CF3] text-[#7E4CF3] bg-[#7E4CF3]/10"
+                        : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                    }`}
+                  >
+                    Dados Principais
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("dependentes")}
+                    className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 ${
+                      activeTab === "dependentes"
+                        ? "border-[#7E4CF3] text-[#7E4CF3] bg-[#7E4CF3]/10"
+                        : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                    }`}
+                  >
+                    Dependentes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("contratos")}
+                    className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 ${
+                      activeTab === "contratos"
+                        ? "border-[#7E4CF3] text-[#7E4CF3] bg-[#7E4CF3]/10"
+                        : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                    }`}
+                  >
+                    Contratos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("documentos")}
+                    className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 ${
+                      activeTab === "documentos"
+                        ? "border-[#7E4CF3] text-[#7E4CF3] bg-[#7E4CF3]/10"
+                        : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                    }`}
+                  >
+                    Documentos
+                  </button>
+                </div>
+              ) : (
+                <div className="px-8 py-5 border-b border-[#262A45] bg-[#101223]/30">
+                  <div className="flex items-center justify-between max-w-2xl mx-auto">
+                    {/* Step 1 */}
+                    <div
+                      className={`flex flex-col items-center flex-1 ${activeTab === "principal" || activeTab === "dependentes" || activeTab === "contratos" || activeTab === "documentos" ? "text-[#7E4CF3]" : "text-slate-500"}`}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold mb-2 transition-colors ${activeTab === "principal" || activeTab === "dependentes" || activeTab === "contratos" || activeTab === "documentos" ? "bg-[#7E4CF3] text-white shadow-[0_0_10px_rgba(126,76,243,0.5)]" : "bg-[#222542] text-slate-400"}`}
+                      >
+                        1
+                      </div>
+                      <span className="text-xs font-medium">Dados Básicos</span>
+                    </div>
+
+                    <div
+                      className={`w-16 h-0.5 mx-2 ${activeTab === "dependentes" || activeTab === "contratos" || activeTab === "documentos" ? "bg-[#7E4CF3]" : "bg-[#262A45]"}`}
+                    ></div>
+
+                    {/* Step 2 */}
+                    <div
+                      className={`flex flex-col items-center flex-1 ${activeTab === "dependentes" || activeTab === "contratos" || activeTab === "documentos" ? "text-[#7E4CF3]" : "text-slate-500"}`}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold mb-2 transition-colors ${activeTab === "dependentes" || activeTab === "contratos" || activeTab === "documentos" ? "bg-[#7E4CF3] text-white shadow-[0_0_10px_rgba(126,76,243,0.5)]" : "bg-[#222542] text-slate-400"}`}
+                      >
+                        2
+                      </div>
+                      <span className="text-xs font-medium">Dependentes</span>
+                    </div>
+
+                    <div
+                      className={`w-16 h-0.5 mx-2 ${activeTab === "contratos" || activeTab === "documentos" ? "bg-[#7E4CF3]" : "bg-[#262A45]"}`}
+                    ></div>
+
+                    {/* Step 3 */}
+                    <div
+                      className={`flex flex-col items-center flex-1 ${activeTab === "contratos" || activeTab === "documentos" ? "text-[#7E4CF3]" : "text-slate-500"}`}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold mb-2 transition-colors ${activeTab === "contratos" || activeTab === "documentos" ? "bg-[#7E4CF3] text-white shadow-[0_0_10px_rgba(126,76,243,0.5)]" : "bg-[#222542] text-slate-400"}`}
+                      >
+                        3
+                      </div>
+                      <span className="text-xs font-medium">Contrato</span>
+                    </div>
+
+                    <div
+                      className={`w-16 h-0.5 mx-2 ${activeTab === "documentos" ? "bg-[#7E4CF3]" : "bg-[#262A45]"}`}
+                    ></div>
+
+                    {/* Step 4 */}
+                    <div
+                      className={`flex flex-col items-center flex-1 ${activeTab === "documentos" ? "text-[#7E4CF3]" : "text-slate-500"}`}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold mb-2 transition-colors ${activeTab === "documentos" ? "bg-[#7E4CF3] text-white shadow-[0_0_10px_rgba(126,76,243,0.5)]" : "bg-[#222542] text-slate-400"}`}
+                      >
+                        4
+                      </div>
+                      <span className="text-xs font-medium">Documentos</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Form Content */}
+              <form
+                id="associado-form"
+                onSubmit={handleSave}
+                className="flex-1 flex flex-col overflow-hidden"
+              >
+                <div className="flex-1 overflow-y-auto p-8">
+                  {activeTab === "principal" ? (
+                    <div className="space-y-8">
+                      {/* Section: Informações Básicas */}
+                      <div>
+                        <h4 className="text-white font-medium mb-4 pb-2 border-b border-[#262A45]">
+                          Informações Básicas
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Nome Completo
+                            </label>
+                            <input
+                              required
+                              type="text"
+                              value={editingAssociado.nome || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  nome: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              CPF
+                            </label>
+                            <input
+                              required
+                              type="text"
+                              value={editingAssociado.cpf || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  cpf: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              RG
+                            </label>
+                            <input
+                              type="text"
+                              value={editingAssociado.rg || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  rg: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Data de Nascimento
+                            </label>
+                            <input
+                              type="date"
+                              value={editingAssociado.data_nascimento || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  data_nascimento: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Sexo
+                            </label>
+                            <select
+                              value={editingAssociado.sexo || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  sexo: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            >
+                              <option value="">Selecione</option>
+                              <option value="M">Masculino</option>
+                              <option value="F">Feminino</option>
+                              <option value="O">Outro</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section: Filiação */}
+                      <div>
+                        <h4 className="text-white font-medium mb-4 pb-2 border-b border-[#262A45]">
+                          Filiação
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Nome da Mãe
+                            </label>
+                            <input
+                              type="text"
+                              value={editingAssociado.nome_mae || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  nome_mae: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Nome do Pai
+                            </label>
+                            <input
+                              type="text"
+                              value={editingAssociado.nome_pai || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  nome_pai: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section: Contato */}
+                      <div>
+                        <h4 className="text-white font-medium mb-4 pb-2 border-b border-[#262A45]">
+                          Contato
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Telefone
+                            </label>
+                            <input
+                              type="tel"
+                              value={editingAssociado.telefone || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  telefone: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              E-mail
+                            </label>
+                            <input
+                              type="email"
+                              value={editingAssociado.email || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  email: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section: Endereço */}
+                      <div>
+                        <h4 className="text-white font-medium mb-4 pb-2 border-b border-[#262A45]">
+                          Endereço
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                          <div className="space-y-1 md:col-span-3">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              CEP
+                            </label>
+                            <input
+                              type="text"
+                              value={editingAssociado.endereco_cep || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  endereco_cep: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1 md:col-span-7">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Logradouro
+                            </label>
+                            <input
+                              type="text"
+                              value={editingAssociado.endereco_logradouro || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  endereco_logradouro: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1 md:col-span-2">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Número
+                            </label>
+                            <input
+                              type="text"
+                              value={editingAssociado.endereco_numero || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  endereco_numero: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1 md:col-span-6">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Bairro
+                            </label>
+                            <input
+                              type="text"
+                              value={editingAssociado.endereco_bairro || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  endereco_bairro: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+                          <div className="space-y-1 md:col-span-6">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Cidade / UF
+                            </label>
+                            <input
+                              type="text"
+                              value={editingAssociado.endereco_cidade || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  endereco_cidade: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section: Sistema */}
+                      <div>
+                        <h4 className="text-white font-medium mb-4 pb-2 border-b border-[#262A45]">
+                          Informações do Sistema
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Data de Adesão
+                            </label>
+                            <input
+                              required
+                              type="date"
+                              value={editingAssociado.data_adesao || ""}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  data_adesao: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Status
+                            </label>
+                            <select
+                              required
+                              value={editingAssociado.status || "ativo"}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  status: e.target.value as Associado["status"],
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            >
+                              <option value="ativo">Ativo</option>
+                              <option value="inadimplente">Inadimplente</option>
+                              <option value="inativo">Inativo</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : activeTab === "dependentes" ? (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-white font-medium">Dependentes</h4>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingAssociado({
+                              ...editingAssociado,
+                              dependentes: [
+                                ...(editingAssociado.dependentes || []),
+                                {
+                                  id: Math.random().toString(36).substring(7),
+                                  nome: "",
+                                  cpf: "",
+                                  data_nascimento: "",
+                                  parentesco: "",
+                                },
+                              ],
+                            });
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#222542] border border-[#2A2D48] text-white rounded-lg text-sm font-medium hover:bg-[#2A2D48] transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Adicionar
+                        </button>
+                      </div>
+
+                      {!editingAssociado.dependentes ||
+                      editingAssociado.dependentes.length === 0 ? (
+                        <div className="text-center py-12 border border-dashed border-[#262A45] rounded-xl">
+                          <p className="text-slate-400 text-sm">
+                            Nenhum dependente cadastrado.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {editingAssociado.dependentes.map((dep, index) => (
+                            <div
+                              key={dep.id}
+                              className="p-5 bg-[#101223] border border-[#262A45] rounded-xl relative group"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const novosDeps = [
+                                    ...editingAssociado.dependentes!,
+                                  ];
+                                  novosDeps.splice(index, 1);
+                                  setEditingAssociado({
+                                    ...editingAssociado,
+                                    dependentes: novosDeps,
+                                  });
+                                }}
+                                className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity bg-[#181B34] rounded-md border border-[#262A45]"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1 md:col-span-2">
+                                  <label className="block text-xs font-semibold text-slate-400">
+                                    Nome Completo
+                                  </label>
+                                  <input
+                                    required
+                                    type="text"
+                                    value={dep.nome}
+                                    onChange={(e) => {
+                                      const novosDeps = [
+                                        ...editingAssociado.dependentes!,
+                                      ];
+                                      novosDeps[index] = {
+                                        ...dep,
+                                        nome: e.target.value,
+                                      };
+                                      setEditingAssociado({
+                                        ...editingAssociado,
+                                        dependentes: novosDeps,
+                                      });
+                                    }}
+                                    className="w-full px-3 py-2 bg-[#181B34] border border-[#262A45] rounded-lg text-white text-sm focus:outline-none focus:border-[#7E4CF3]"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-semibold text-slate-400">
+                                    CPF
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={dep.cpf || ""}
+                                    onChange={(e) => {
+                                      const novosDeps = [
+                                        ...editingAssociado.dependentes!,
+                                      ];
+                                      novosDeps[index] = {
+                                        ...dep,
+                                        cpf: e.target.value,
+                                      };
+                                      setEditingAssociado({
+                                        ...editingAssociado,
+                                        dependentes: novosDeps,
+                                      });
+                                    }}
+                                    className="w-full px-3 py-2 bg-[#181B34] border border-[#262A45] rounded-lg text-white text-sm focus:outline-none focus:border-[#7E4CF3]"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="block text-xs font-semibold text-slate-400">
+                                    Data Nasc.
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={dep.data_nascimento || ""}
+                                    onChange={(e) => {
+                                      const novosDeps = [
+                                        ...editingAssociado.dependentes!,
+                                      ];
+                                      novosDeps[index] = {
+                                        ...dep,
+                                        data_nascimento: e.target.value,
+                                      };
+                                      setEditingAssociado({
+                                        ...editingAssociado,
+                                        dependentes: novosDeps,
+                                      });
+                                    }}
+                                    className="w-full px-3 py-2 bg-[#181B34] border border-[#262A45] rounded-lg text-white text-sm focus:outline-none focus:border-[#7E4CF3]"
+                                  />
+                                </div>
+                                <div className="space-y-1 md:col-span-2">
+                                  <label className="block text-xs font-semibold text-slate-400">
+                                    Parentesco
+                                  </label>
+                                  <input
+                                    required
+                                    type="text"
+                                    value={dep.parentesco}
+                                    onChange={(e) => {
+                                      const novosDeps = [
+                                        ...editingAssociado.dependentes!,
+                                      ];
+                                      novosDeps[index] = {
+                                        ...dep,
+                                        parentesco: e.target.value,
+                                      };
+                                      setEditingAssociado({
+                                        ...editingAssociado,
+                                        dependentes: novosDeps,
+                                      });
+                                    }}
+                                    className="w-full px-3 py-2 bg-[#181B34] border border-[#262A45] rounded-lg text-white text-sm focus:outline-none focus:border-[#7E4CF3]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : activeTab === "contratos" ? (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between border-b border-[#262A45] pb-4">
+                        <h4 className="text-white font-medium">
+                          Contratos do Associado
+                        </h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <h5 className="text-sm font-semibold text-slate-400">
+                            Dados do Contrato
+                          </h5>
+
+                          <div className="space-y-1">
+                                                        <PlanoPaxSelect
+                              value={editingAssociado.plano_pax_id || ""}
+                              onChange={(id) => {
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  plano_pax_id: id,
+                                });
+                              }}
+                              nVidas={editingAssociado.n_vidas}
+                              idadesDependentes={editingAssociado.dependentes?.filter(d => d.data_nascimento).map(d => {
+                                const ageDifMs = Date.now() - new Date(d.data_nascimento).getTime();
+                                const ageDate = new Date(ageDifMs);
+                                return Math.abs(ageDate.getUTCFullYear() - 1970);
+                              }) || []}
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-sm font-semibold text-slate-400 mb-1">
+                              Número de Vidas
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={editingAssociado.n_vidas || 1}
+                              onChange={(e) =>
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  n_vidas: parseInt(e.target.value) || 1,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                            />
+                          </div>
+                          
+
+
+                          <div className="p-4 bg-[#101223] border border-[#262A45] rounded-xl mt-4">
+                            <p className="text-sm text-slate-400">
+                              Quantidade de Dependentes Vinculados
+                            </p>
+                            <p className="text-2xl font-bold text-white mt-1">
+                              {editingAssociado.dependentes?.length || 0}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <h5 className="text-sm font-semibold text-slate-400">
+                            Histórico de Alterações
+                          </h5>
+
+                          <div className="bg-[#101223] border border-[#262A45] rounded-xl p-4 overflow-y-auto max-h-[300px]">
+                            <div className="space-y-4">
+                              <div className="flex gap-4">
+                                <div className="mt-1">
+                                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                                  <div className="w-0.5 h-full bg-[#262A45] mx-auto mt-1"></div>
+                                </div>
+                                <div className="pb-4">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 mb-1 border border-emerald-500/20">
+                                    Contrato Ativo
+                                  </span>
+                                  <p className="text-sm text-white font-medium capitalize">
+                                    Plano{" "}
+                                    {editingAssociado.plano_nome || "Nenhum"}
+                                  </p>
+                                  {editingAssociado.valor_plano && (
+                                    <p className="text-xs text-slate-300 mt-0.5">
+                                      Valor: R${" "}
+                                      {editingAssociado.valor_plano
+                                        .toFixed(2)
+                                        .replace(".", ",")}
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    Desde{" "}
+                                    {editingAssociado.data_adesao
+                                      ? new Date(
+                                          editingAssociado.data_adesao,
+                                        ).toLocaleDateString("pt-BR")
+                                      : "Data não definida"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {editingAssociado.historico_contratos &&
+                                editingAssociado.historico_contratos.map(
+                                  (hist) => (
+                                    <div className="flex gap-4" key={hist.id}>
+                                      <div className="mt-1">
+                                        <div className="w-2 h-2 rounded-full bg-[#4A88E9]"></div>
+                                        <div className="w-0.5 h-full bg-[#262A45] mx-auto mt-1"></div>
+                                      </div>
+                                      <div className="pb-4">
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-[#4A88E9]/10 text-[#4A88E9] mb-1 border border-[#4A88E9]/20">
+                                          Anterior
+                                        </span>
+                                        <p className="text-sm text-white font-medium capitalize">
+                                          Plano {hist.plano}
+                                        </p>
+                                        <p className="text-xs text-slate-300 mt-0.5">
+                                          Valor: R${" "}
+                                          {hist.valor
+                                            .toFixed(2)
+                                            .replace(".", ",")}
+                                        </p>
+                                        <p className="text-xs text-slate-400 mt-1">
+                                          {new Date(
+                                            hist.data_inicio,
+                                          ).toLocaleDateString("pt-BR")}{" "}
+                                          {hist.data_fim
+                                            ? `até ${new Date(hist.data_fim).toLocaleDateString("pt-BR")}`
+                                            : ""}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ),
+                                )}
+
+                              <div className="flex gap-4">
+                                <div className="mt-1">
+                                  <div className="w-2 h-2 rounded-full bg-slate-600"></div>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-slate-400 font-medium">
+                                    Adesão Inicial
+                                  </p>
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    {editingAssociado.data_adesao
+                                      ? new Date(
+                                          editingAssociado.data_adesao,
+                                        ).toLocaleDateString("pt-BR")
+                                      : "Data não definida"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between border-b border-[#262A45] pb-4">
+                        <h4 className="text-white font-medium">
+                          Documentos do Associado
+                        </h4>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="border-2 border-dashed border-[#262A45] rounded-xl p-8 flex flex-col items-center justify-center bg-[#101223]/50">
+                          <input
+                            type="file"
+                            id="upload-doc"
+                            className="hidden"
+                            accept=".pdf,image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                // Simulate an upload by just adding to local list
+                                const novoDoc = {
+                                  id: Math.random().toString(36).substring(7),
+                                  nome: file.name,
+                                  url: URL.createObjectURL(file), // Temp URL for preview
+                                  tipo: file.type,
+                                  tamanho: file.size,
+                                  data_upload: new Date().toISOString(),
+                                };
+                                setEditingAssociado({
+                                  ...editingAssociado,
+                                  documentos: [
+                                    ...(editingAssociado.documentos || []),
+                                    novoDoc,
+                                  ],
+                                });
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor="upload-doc"
+                            className="cursor-pointer flex flex-col items-center"
+                          >
+                            <div className="w-12 h-12 bg-[#222542] rounded-full flex items-center justify-center mb-3">
+                              <Plus className="w-6 h-6 text-[#7E4CF3]" />
+                            </div>
+                            <p className="text-sm font-medium text-white mb-1">
+                              Clique para enviar um documento
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              PDF, JPG, PNG (máx. 5MB)
+                            </p>
+                          </label>
+                        </div>
+
+                        {editingAssociado.documentos &&
+                          editingAssociado.documentos.length > 0 && (
+                            <div className="space-y-3 mt-6">
+                              <h5 className="text-sm font-semibold text-slate-400">
+                                Arquivos Salvos
+                              </h5>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {editingAssociado.documentos.map((doc, idx) => (
+                                  <div
+                                    key={doc.id}
+                                    className="flex items-center justify-between p-3 bg-[#101223] border border-[#262A45] rounded-lg group"
+                                  >
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                      <div className="w-10 h-10 bg-[#181B34] rounded flex items-center justify-center shrink-0">
+                                        <span className="text-xs font-bold text-slate-400 uppercase">
+                                          {doc.nome.split(".").pop()}
+                                        </span>
+                                      </div>
+                                      <div className="overflow-hidden">
+                                        <p className="text-sm text-white font-medium truncate">
+                                          {doc.nome}
+                                        </p>
+                                        <p className="text-xs text-slate-500">
+                                          {(doc.tamanho / 1024).toFixed(1)} KB •{" "}
+                                          {new Date(
+                                            doc.data_upload,
+                                          ).toLocaleDateString("pt-BR")}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <a
+                                        href={doc.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors"
+                                      >
+                                        <Search className="w-4 h-4" />
+                                      </a>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const novosDocs = [
+                                            ...editingAssociado.documentos!,
+                                          ];
+                                          novosDocs.splice(idx, 1);
+                                          setEditingAssociado({
+                                            ...editingAssociado,
+                                            documentos: novosDocs,
+                                          });
+                                        }}
+                                        className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="p-6 border-t border-[#262A45] bg-[#101223]/50 flex items-center justify-between shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="px-4 py-2 bg-[#222542] border border-[#2A2D48] text-slate-300 rounded-xl font-medium hover:bg-[#2A2D48] hover:text-white transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <div className="flex gap-3">
+                    {isEditingMode ? (
+                      <button
+                        type="submit"
+                        disabled={!state.isOnline}
+                        className="px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#7E4CF3]/25 disabled:opacity-50"
+                      >
+                        Salvar Alterações
+                      </button>
+                    ) : (
+                      <>
+                        {activeTab !== "principal" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (activeTab === "documentos")
+                                setActiveTab("contratos");
+                              else if (activeTab === "contratos")
+                                setActiveTab("dependentes");
+                              else if (activeTab === "dependentes")
+                                setActiveTab("principal");
+                            }}
+                            className="px-4 py-2 bg-[#222542] border border-[#2A2D48] text-slate-300 rounded-xl font-medium hover:bg-[#2A2D48] hover:text-white transition-colors"
+                          >
+                            Voltar
+                          </button>
+                        )}
+
+                        {activeTab !== "documentos" ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const form = document.getElementById(
+                                "associado-form",
+                              ) as HTMLFormElement;
+                              if (form && !form.checkValidity()) {
+                                form.reportValidity();
+                                return;
+                              }
+                              if (activeTab === "principal")
+                                setActiveTab("dependentes");
+                              else if (activeTab === "dependentes")
+                                setActiveTab("contratos");
+                              else if (activeTab === "contratos")
+                                setActiveTab("documentos");
+                            }}
+                            className="px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#7E4CF3]/25"
+                          >
+                            Próximo
+                          </button>
+                        ) : (
+                          <button
+                            type="submit"
+                            disabled={!state.isOnline}
+                            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-emerald-500/25 disabled:opacity-50"
+                          >
+                            Finalizar Cadastro
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

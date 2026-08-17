@@ -1,0 +1,3 @@
+ALTER TABLE procedimentos 
+ADD COLUMN IF NOT EXISTS coparticipacao DECIMAL(10,2) DEFAULT 0,
+ADD COLUMN IF NOT EXISTS valor_total_associado DECIMAL(10,2) DEFAULT 0;

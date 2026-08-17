@@ -1,0 +1,1 @@
+ALTER TABLE planos_pax ADD COLUMN IF NOT EXISTS minimo_vidas_calculo INTEGER DEFAULT 0;

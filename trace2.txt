@@ -1,0 +1,924 @@
+  1:  0 import { useToast } from "../context/ToastContext";
+  2:  0 import { useConfirm } from "../context/ConfirmContext";
+  3:  0 import React, { useState, useEffect } from 'react';
+  4:  0 import { useAppContext } from '../context/AppContext';
+  5:  0 import { getAssociados, saveAssociado, softDeleteAssociado, Associado } from '../services/associadosService';
+  6:  0 import { getPlanos, Plano } from '../services/planosService';
+  7:  0 import { Plus, Search, Filter, Edit2, Trash2, X } from 'lucide-react';
+  8:  0 
+  9:  1 export const AssociadosPage: React.FC = () => {
+ 10:  1   const { state } = useAppContext();
+ 11:  1   const toast = useToast();
+ 12:  1   const { confirm } = useConfirm();
+ 13:  1 
+ 14:  1   const [associados, setAssociados] = useState<Associado[]>([]);
+ 15:  1   const [loading, setLoading] = useState(true);
+ 16:  1   const [searchTerm, setSearchTerm] = useState('');
+ 17:  1   const [statusFilter, setStatusFilter] = useState('');
+ 18:  1   const [planoFilter, setPlanoFilter] = useState('');
+ 19:  1   const [showFilters, setShowFilters] = useState(false);
+ 20:  1 
+ 21:  2   const filtered = associados.filter(a => {
+ 22:  2     const matchesSearch = a.nome.toLowerCase().includes(searchTerm.toLowerCase()) || a.cpf.includes(searchTerm);
+ 23:  2     const matchesStatus = statusFilter ? a.status === statusFilter : true;
+ 24:  2     const matchesPlano = planoFilter ? a.plano_id === planoFilter : true;
+ 25:  2     return matchesSearch && matchesStatus && matchesPlano;
+ 26:  1   });
+ 27:  1 
+ 28:  1   const [activeTab, setActiveTab] = useState<"principal" | "dependentes" | "contratos" | "documentos">("principal");
+ 29:  1   const [isModalOpen, setIsModalOpen] = useState(false);
+ 30:  1   const [editingAssociado, setEditingAssociado] = useState<Partial<Associado> | null>(null);
+ 31:  1   const [isEditingMode, setIsEditingMode] = useState(false);
+ 32:  1 
+ 33:  1   const [planos, setPlanos] = useState<Plano[]>([]);
+ 34:  1 
+ 35:  2   const loadData = async () => {
+ 36:  2     setLoading(true);
+ 37:  3     try {
+ 38:  3       const dataPlanos = await getPlanos(state.isOnline, state.empresaSelecionada);
+ 39:  3       setPlanos(dataPlanos);
+ 40:  3       const data = await getAssociados(state.isOnline, state.empresaSelecionada);
+ 41:  4       if (data.length === 0 && state.empresaSelecionada) {
+ 42:  4         setAssociados([
+ 43:  4           { id: '1', tenant_id: state.empresaSelecionada, nome: 'João da Silva', cpf: '111.222.333-44', plano_nome: 'Familiar', status: 'ativo', data_adesao: '2023-01-15', dependentes: [] },
+ 44:  4           { id: '2', tenant_id: state.empresaSelecionada, nome: 'Maria Oliveira', cpf: '555.666.777-88', plano_nome: 'Individual', status: 'inadimplente', data_adesao: '2023-05-20', dependentes: [] },
+ 45:  4           { id: '3', tenant_id: state.empresaSelecionada, nome: 'Carlos Souza', cpf: '999.888.777-66', plano_nome: 'Coletivo', status: 'ativo', data_adesao: '2024-02-10', dependentes: [] }
+ 46:  4         ]);
+ 47:  4       } else {
+ 48:  4         setAssociados(data);
+ 49:  3       }
+ 50:  3     } catch (e) {
+ 51:  3       console.error(e);
+ 52:  3     } finally {
+ 53:  3       setLoading(false);
+ 54:  2     }
+ 55:  1   };
+ 56:  1 
+ 57:  2   useEffect(() => {
+ 58:  2     loadData();
+ 59:  1   }, [state.isOnline, state.empresaSelecionada]);
+ 60:  1 
+ 61:  2   const handleOpenModal = (associado?: Associado) => {
+ 62:  3     if (associado) {
+ 63:  3       setEditingAssociado({ ...associado });
+ 64:  3       setIsEditingMode(true);
+ 65:  3     } else {
+ 66:  4       setEditingAssociado({
+ 67:  4         id: Math.random().toString(36).substring(7),
+ 68:  4         tenant_id: state.empresaSelecionada || '',
+ 69:  4         status: 'ativo',
+ 70:  4         plano: 'individual',
+ 71:  4         data_adesao: new Date().toISOString().split('T')[0],
+ 72:  4         dependentes: []
+ 73:  3       });
+ 74:  3       setIsEditingMode(false);
+ 75:  2     }
+ 76:  2     setActiveTab("principal");
+ 77:  2     setIsModalOpen(true);
+ 78:  1   };
+ 79:  1 
+ 80:  2   const handleCloseModal = () => {
+ 81:  2     setIsModalOpen(false);
+ 82:  2     setEditingAssociado(null);
+ 83:  1   };
+ 84:  1 
+ 85:  2   const handleSave = async (e: React.FormEvent) => {
+ 86:  2     e.preventDefault();
+ 87:  2     if (!editingAssociado || !editingAssociado.id) return;
+ 88:  3     try {
+ 89:  4       if (!state.empresaSelecionada) {
+ 90:  4         toast.error("Selecione uma empresa antes de salvar.");
+ 91:  4         return;
+ 92:  3       }
+ 93:  3       const novoAssociado = { ...editingAssociado, tenant_id: state.empresaSelecionada } as Associado;
+ 94:  3       await saveAssociado(novoAssociado, state.isOnline);
+ 95:  3       await loadData();
+ 96:  3       handleCloseModal();
+ 97:  3       toast.success("Associado salvo com sucesso!");
+ 98:  3     } catch (error) {
+ 99:  3       console.error("Erro ao salvar associado", error);
+100:  3       toast.error("Erro ao salvar associado. Verifique se você está online.");
+101:  2     }
+102:  1   };
+103:  1 
+104:  2   const handleDelete = (id: string) => {
+105:  3     confirm({
+106:  3       title: "Excluir Associado",
+107:  3       message: "Tem certeza que deseja excluir este associado? Esta ação moverá o registro para a lixeira.",
+108:  3       danger: true,
+109:  3       confirmText: "Excluir",
+110:  4       onConfirm: async () => {
+111:  5         try {
+112:  5           await softDeleteAssociado(id, state.isOnline);
+113:  5           setAssociados(current => current.filter(a => a.id !== id));
+114:  5           toast.success("Associado excluído com sucesso!");
+115:  5         } catch (error) {
+116:  5           console.error("Erro ao excluir", error);
+117:  5           toast.error("Erro ao excluir associado. Verifique se você está online.");
+118:  4         }
+119:  3       }
+120:  2     });
+121:  1   };
+122:  1 
+123:  1   return (
+124:  1     <div className="space-y-6">
+125:  1       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+126:  1         <div>
+127:  1           <h2 className="text-2xl font-bold tracking-tight text-slate-900">Associados</h2>
+128:  1           <p className="text-slate-500 mt-1">Gerenciamento de titulares e dependentes.</p>
+129:  1         </div>
+130:  1 
+131:  1         <button
+132:  1           disabled={!state.isOnline || !state.empresaSelecionada || state.empresaSelecionada === 'all'}
+133:  1           onClick={() => handleOpenModal()}
+134:  1           className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#7E4CF3]/25 disabled:opacity-50 disabled:cursor-not-allowed"
+135:  1         >
+136:  1           <Plus className="w-5 h-5" />
+137:  1           Novo Associado
+138:  1         </button>
+139:  1       </div>
+140:  1 
+141:  1       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+142:  1         <div className="p-4 border-b border-slate-200">
+143:  1           <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+144:  1             <div className="relative max-w-md w-full">
+145:  1               <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+146:  1               <input
+147:  1                 type="text"
+148:  1                 placeholder="Buscar por nome ou CPF..."
+149:  1                 value={searchTerm}
+150:  1                 onChange={(e) => setSearchTerm(e.target.value)}
+151:  1                 className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+152:  1               />
+153:  1             </div>
+154:  1 
+155:  1             <button
+156:  1               onClick={() => setShowFilters(!showFilters)}
+157:  1               className={`inline-flex items-center gap-2 px-4 py-2 border rounded-xl font-medium transition-colors ${showFilters ? 'bg-[#7E4CF3]/10 text-[#7E4CF3] border-[#7E4CF3]/30' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+158:  1             >
+159:  1               <Filter className="w-4 h-4" />
+160:  1               Filtros Avançados
+161:  1             </button>
+162:  1           </div>
+163:  1 
+164:  2           {showFilters && (
+165:  2             <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+166:  2               <div>
+167:  2                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Status</label>
+168:  2                 <select
+169:  2                   value={statusFilter}
+170:  2                   onChange={(e) => setStatusFilter(e.target.value)}
+171:  2                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3]"
+172:  2                 >
+173:  2                   <option value="">Todos</option>
+174:  2                   <option value="ativo">Ativo</option>
+175:  2                   <option value="inativo">Inativo</option>
+176:  2                   <option value="inadimplente">Inadimplente</option>
+177:  2                 </select>
+178:  2               </div>
+179:  2               <div>
+180:  2                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Plano</label>
+181:  2                 <select
+182:  2                   value={planoFilter}
+183:  2                   onChange={(e) => setPlanoFilter(e.target.value)}
+184:  2                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3]"
+185:  2                 >
+186:  2                   <option value="">Todos os Planos</option>
+187:  3                   {planos.map(p => (
+188:  3                     <option key={p.id} value={p.id}>{p.nome}</option>
+189:  2                   ))}
+190:  2                 </select>
+191:  2               </div>
+192:  2             </div>
+193:  1           )}
+194:  1         </div>
+195:  1 
+196:  1         <div className="overflow-x-auto">
+197:  1           <table className="w-full text-left text-sm text-slate-600">
+198:  1             <thead className="bg-slate-50 text-slate-700 font-medium border-b border-slate-200">
+199:  1               <tr>
+200:  1                 <th className="px-6 py-4">Nome</th>
+201:  1                 <th className="px-6 py-4">CPF</th>
+202:  1                 <th className="px-6 py-4">Plano</th>
+203:  1                 <th className="px-6 py-4">Status</th>
+204:  1                 <th className="px-6 py-4">Adesão</th>
+205:  1                 <th className="px-6 py-4 text-right">Ações</th>
+206:  1               </tr>
+207:  1             </thead>
+208:  1             <tbody className="divide-y divide-slate-200">
+209:  2               {loading ? (
+210:  2                 <tr>
+211:  2                   <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+212:  2                     Carregando associados...
+213:  2                   </td>
+214:  2                 </tr>
+215:  2               ) : filtered.length === 0 ? (
+216:  2                 <tr>
+217:  2                   <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+218:  2                     Nenhum associado encontrado.
+219:  2                   </td>
+220:  2                 </tr>
+221:  2               ) : (
+222:  2                 filtered.map((associado) => (
+223:  2                   <tr key={associado.id} className="hover:bg-slate-50 transition-colors">
+224:  2                     <td className="px-6 py-4 font-medium text-slate-900">{associado.nome}</td>
+225:  2                     <td className="px-6 py-4">{associado.cpf}</td>
+226:  2                     <td className="px-6 py-4 capitalize">{associado.plano_nome}</td>
+227:  2                     <td className="px-6 py-4">
+228:  4                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+229:  4                         associado.status === 'ativo' ? 'bg-emerald-100 text-emerald-800' :
+230:  4                         associado.status === 'inadimplente' ? 'bg-rose-100 text-rose-800' :
+231:  4                         'bg-slate-100 text-slate-800'
+232:  2                       }`}>
+233:  2                         {associado.status}
+234:  2                       </span>
+235:  2                     </td>
+236:  2                     <td className="px-6 py-4">{new Date(associado.data_adesao).toLocaleDateString('pt-BR')}</td>
+237:  2                     <td className="px-6 py-4 text-right">
+238:  2                       <div className="flex items-center justify-end gap-2">
+239:  2                         <button
+240:  2                           onClick={() => handleOpenModal(associado)}
+241:  2                           className="p-1 text-slate-400 hover:text-blue-600 transition-colors"
+242:  2                         >
+243:  2                           <Edit2 className="w-4 h-4" />
+244:  2                         </button>
+245:  2                         <button
+246:  2                           disabled={!state.isOnline}
+247:  2                           onClick={() => handleDelete(associado.id)}
+248:  2                           className="p-1 text-slate-400 hover:text-rose-600 transition-colors disabled:opacity-50"
+249:  2                         >
+250:  2                           <Trash2 className="w-4 h-4" />
+251:  2                         </button>
+252:  2                       </div>
+253:  2                     </td>
+254:  2                   </tr>
+255:  2                 ))
+256:  1               )}
+257:  1             </tbody>
+258:  1           </table>
+259:  1         </div>
+260:  1       </div>
+261:  1 
+262:  2       {isModalOpen && editingAssociado && (
+263:  2         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0C16]/80 backdrop-blur-md p-4">
+264:  2           <div className="bg-[#181B34] rounded-3xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col border border-[#262A45] overflow-hidden">
+265:  2             <div className="px-6 py-4 border-b border-[#262A45] flex items-center justify-between shrink-0 bg-[#101223]/50">
+266:  2               <h3 className="text-xl font-bold text-white tracking-tight">
+267:  2                 {editingAssociado.nome ? 'Editar Associado' : 'Novo Associado'}
+268:  2               </h3>
+269:  2               <button onClick={handleCloseModal} className="text-slate-400 hover:text-white transition-colors">
+270:  2                 <X className="w-5 h-5" />
+271:  2               </button>
+272:  2             </div>
+273:  2             <div className={`flex flex-1 overflow-hidden ${isEditingMode ? 'flex-row' : 'flex-col'}`}>
+274:  3               {isEditingMode ? (
+275:  3                  <div className="w-64 border-r border-[#262A45] bg-[#101223]/30 flex flex-col py-4 shrink-0">
+276:  3                   <button
+277:  3                     type="button"
+278:  3                     onClick={() => setActiveTab("principal")}
+279:  5                     className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 ${
+280:  5                       activeTab === "principal"
+281:  5                         ? "border-[#7E4CF3] text-[#7E4CF3] bg-[#7E4CF3]/10"
+282:  5                         : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5"
+283:  3                     }`}
+284:  3                   >
+285:  3                     Dados Principais
+286:  3                   </button>
+287:  3                   <button
+288:  3                     type="button"
+289:  3                     onClick={() => setActiveTab("dependentes")}
+290:  5                     className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 ${
+291:  5                       activeTab === "dependentes"
+292:  5                         ? "border-[#7E4CF3] text-[#7E4CF3] bg-[#7E4CF3]/10"
+293:  5                         : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5"
+294:  3                     }`}
+295:  3                   >
+296:  3                     Dependentes
+297:  3                   </button>
+298:  3                   <button
+299:  3                     type="button"
+300:  3                     onClick={() => setActiveTab("contratos")}
+301:  5                     className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 ${
+302:  5                       activeTab === "contratos"
+303:  5                         ? "border-[#7E4CF3] text-[#7E4CF3] bg-[#7E4CF3]/10"
+304:  5                         : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5"
+305:  3                     }`}
+306:  3                   >
+307:  3                     Contratos
+308:  3                   </button>
+309:  3                   <button
+310:  3                     type="button"
+311:  3                     onClick={() => setActiveTab("documentos")}
+312:  5                     className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 ${
+313:  5                       activeTab === "documentos"
+314:  5                         ? "border-[#7E4CF3] text-[#7E4CF3] bg-[#7E4CF3]/10"
+315:  5                         : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5"
+316:  3                     }`}
+317:  3                   >
+318:  3                     Documentos
+319:  3                   </button>
+320:  3                 </div>
+321:  3               ) : (
+322:  3                 <div className="px-8 py-5 border-b border-[#262A45] bg-[#101223]/30">
+323:  3                   <div className="flex items-center justify-between max-w-2xl mx-auto">
+324:  3                     {/* Step 1 */}
+325:  3                     <div className={`flex flex-col items-center flex-1 ${activeTab === 'principal' || activeTab === 'dependentes' || activeTab === 'contratos' || activeTab === 'documentos' ? 'text-[#7E4CF3]' : 'text-slate-500'}`}>
+326:  3                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold mb-2 transition-colors ${activeTab === 'principal' || activeTab === 'dependentes' || activeTab === 'contratos' || activeTab === 'documentos' ? 'bg-[#7E4CF3] text-white shadow-[0_0_10px_rgba(126,76,243,0.5)]' : 'bg-[#222542] text-slate-400'}`}>1</div>
+327:  3                       <span className="text-xs font-medium">Dados Básicos</span>
+328:  3                     </div>
+329:  3 
+330:  3                     <div className={`w-16 h-0.5 mx-2 ${activeTab === 'dependentes' || activeTab === 'contratos' || activeTab === 'documentos' ? 'bg-[#7E4CF3]' : 'bg-[#262A45]'}`}></div>
+331:  3 
+332:  3                     {/* Step 2 */}
+333:  3                     <div className={`flex flex-col items-center flex-1 ${activeTab === 'dependentes' || activeTab === 'contratos' || activeTab === 'documentos' ? 'text-[#7E4CF3]' : 'text-slate-500'}`}>
+334:  3                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold mb-2 transition-colors ${activeTab === 'dependentes' || activeTab === 'contratos' || activeTab === 'documentos' ? 'bg-[#7E4CF3] text-white shadow-[0_0_10px_rgba(126,76,243,0.5)]' : 'bg-[#222542] text-slate-400'}`}>2</div>
+335:  3                       <span className="text-xs font-medium">Dependentes</span>
+336:  3                     </div>
+337:  3 
+338:  3                     <div className={`w-16 h-0.5 mx-2 ${activeTab === 'contratos' || activeTab === 'documentos' ? 'bg-[#7E4CF3]' : 'bg-[#262A45]'}`}></div>
+339:  3 
+340:  3                     {/* Step 3 */}
+341:  3                     <div className={`flex flex-col items-center flex-1 ${activeTab === 'contratos' || activeTab === 'documentos' ? 'text-[#7E4CF3]' : 'text-slate-500'}`}>
+342:  3                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold mb-2 transition-colors ${activeTab === 'contratos' || activeTab === 'documentos' ? 'bg-[#7E4CF3] text-white shadow-[0_0_10px_rgba(126,76,243,0.5)]' : 'bg-[#222542] text-slate-400'}`}>3</div>
+343:  3                       <span className="text-xs font-medium">Contrato</span>
+344:  3                     </div>
+345:  3 
+346:  3                     <div className={`w-16 h-0.5 mx-2 ${activeTab === 'documentos' ? 'bg-[#7E4CF3]' : 'bg-[#262A45]'}`}></div>
+347:  3 
+348:  3                     {/* Step 4 */}
+349:  3                     <div className={`flex flex-col items-center flex-1 ${activeTab === 'documentos' ? 'text-[#7E4CF3]' : 'text-slate-500'}`}>
+350:  3                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold mb-2 transition-colors ${activeTab === 'documentos' ? 'bg-[#7E4CF3] text-white shadow-[0_0_10px_rgba(126,76,243,0.5)]' : 'bg-[#222542] text-slate-400'}`}>4</div>
+351:  3                       <span className="text-xs font-medium">Documentos</span>
+352:  3                     </div>
+353:  3                   </div>
+354:  3                 </div>
+355:  2               )}
+356:  2 
+357:  2               {/* Form Content */}
+358:  2               <form id="associado-form" onSubmit={handleSave} className="flex-1 flex flex-col overflow-hidden">
+359:  2                 <div className="flex-1 overflow-y-auto p-8">
+360:  3                   {activeTab === 'principal' ? (
+361:  3                     <div className="space-y-8">
+362:  3                       {/* Section: Informações Básicas */}
+363:  3                       <div>
+364:  3                         <h4 className="text-white font-medium mb-4 pb-2 border-b border-[#262A45]">Informações Básicas</h4>
+365:  3                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+366:  3                           <div className="space-y-1">
+367:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Nome Completo</label>
+368:  3                             <input
+369:  3                               required
+370:  3                               type="text"
+371:  3                               value={editingAssociado.nome || ''}
+372:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, nome: e.target.value })}
+373:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+374:  3                             />
+375:  3                           </div>
+376:  3 
+377:  3                           <div className="space-y-1">
+378:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">CPF</label>
+379:  3                             <input
+380:  3                               required
+381:  3                               type="text"
+382:  3                               value={editingAssociado.cpf || ''}
+383:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, cpf: e.target.value })}
+384:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+385:  3                             />
+386:  3                           </div>
+387:  3 
+388:  3                           <div className="space-y-1">
+389:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">RG</label>
+390:  3                             <input
+391:  3                               type="text"
+392:  3                               value={editingAssociado.rg || ''}
+393:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, rg: e.target.value })}
+394:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+395:  3                             />
+396:  3                           </div>
+397:  3 
+398:  3                           <div className="space-y-1">
+399:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Data de Nascimento</label>
+400:  3                             <input
+401:  3                               type="date"
+402:  3                               value={editingAssociado.data_nascimento || ''}
+403:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, data_nascimento: e.target.value })}
+404:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+405:  3                             />
+406:  3                           </div>
+407:  3 
+408:  3                           <div className="space-y-1">
+409:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Sexo</label>
+410:  3                             <select
+411:  3                               value={editingAssociado.sexo || ''}
+412:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, sexo: e.target.value })}
+413:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+414:  3                             >
+415:  3                               <option value="">Selecione</option>
+416:  3                               <option value="M">Masculino</option>
+417:  3                               <option value="F">Feminino</option>
+418:  3                               <option value="O">Outro</option>
+419:  3                             </select>
+420:  3                           </div>
+421:  3                         </div>
+422:  3                       </div>
+423:  3 
+424:  3                       {/* Section: Filiação */}
+425:  3                       <div>
+426:  3                         <h4 className="text-white font-medium mb-4 pb-2 border-b border-[#262A45]">Filiação</h4>
+427:  3                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+428:  3                           <div className="space-y-1">
+429:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Nome da Mãe</label>
+430:  3                             <input
+431:  3                               type="text"
+432:  3                               value={editingAssociado.nome_mae || ''}
+433:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, nome_mae: e.target.value })}
+434:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+435:  3                             />
+436:  3                           </div>
+437:  3                           <div className="space-y-1">
+438:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Nome do Pai</label>
+439:  3                             <input
+440:  3                               type="text"
+441:  3                               value={editingAssociado.nome_pai || ''}
+442:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, nome_pai: e.target.value })}
+443:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+444:  3                             />
+445:  3                           </div>
+446:  3                         </div>
+447:  3                       </div>
+448:  3 
+449:  3                       {/* Section: Contato */}
+450:  3                       <div>
+451:  3                         <h4 className="text-white font-medium mb-4 pb-2 border-b border-[#262A45]">Contato</h4>
+452:  3                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+453:  3                           <div className="space-y-1">
+454:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Telefone</label>
+455:  3                             <input
+456:  3                               type="tel"
+457:  3                               value={editingAssociado.telefone || ''}
+458:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, telefone: e.target.value })}
+459:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+460:  3                             />
+461:  3                           </div>
+462:  3                           <div className="space-y-1">
+463:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">E-mail</label>
+464:  3                             <input
+465:  3                               type="email"
+466:  3                               value={editingAssociado.email || ''}
+467:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, email: e.target.value })}
+468:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+469:  3                             />
+470:  3                           </div>
+471:  3                         </div>
+472:  3                       </div>
+473:  3 
+474:  3                       {/* Section: Endereço */}
+475:  3                       <div>
+476:  3                         <h4 className="text-white font-medium mb-4 pb-2 border-b border-[#262A45]">Endereço</h4>
+477:  3                         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+478:  3                           <div className="space-y-1 md:col-span-3">
+479:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">CEP</label>
+480:  3                             <input
+481:  3                               type="text"
+482:  3                               value={editingAssociado.endereco_cep || ''}
+483:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, endereco_cep: e.target.value })}
+484:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+485:  3                             />
+486:  3                           </div>
+487:  3                           <div className="space-y-1 md:col-span-7">
+488:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Logradouro</label>
+489:  3                             <input
+490:  3                               type="text"
+491:  3                               value={editingAssociado.endereco_logradouro || ''}
+492:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, endereco_logradouro: e.target.value })}
+493:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+494:  3                             />
+495:  3                           </div>
+496:  3                           <div className="space-y-1 md:col-span-2">
+497:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Número</label>
+498:  3                             <input
+499:  3                               type="text"
+500:  3                               value={editingAssociado.endereco_numero || ''}
+501:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, endereco_numero: e.target.value })}
+502:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+503:  3                             />
+504:  3                           </div>
+505:  3                           <div className="space-y-1 md:col-span-6">
+506:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Bairro</label>
+507:  3                             <input
+508:  3                               type="text"
+509:  3                               value={editingAssociado.endereco_bairro || ''}
+510:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, endereco_bairro: e.target.value })}
+511:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+512:  3                             />
+513:  3                           </div>
+514:  3                           <div className="space-y-1 md:col-span-6">
+515:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Cidade / UF</label>
+516:  3                             <input
+517:  3                               type="text"
+518:  3                               value={editingAssociado.endereco_cidade || ''}
+519:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, endereco_cidade: e.target.value })}
+520:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+521:  3                             />
+522:  3                           </div>
+523:  3                         </div>
+524:  3                       </div>
+525:  3 
+526:  3                       {/* Section: Sistema */}
+527:  3                       <div>
+528:  3                         <h4 className="text-white font-medium mb-4 pb-2 border-b border-[#262A45]">Informações do Sistema</h4>
+529:  3                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+530:  3                           <div className="space-y-1">
+531:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Data de Adesão</label>
+532:  3                             <input
+533:  3                               required
+534:  3                               type="date"
+535:  3                               value={editingAssociado.data_adesao || ''}
+536:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, data_adesao: e.target.value })}
+537:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+538:  3                             />
+539:  3                           </div>
+540:  3 
+541:  3                           <div className="space-y-1">
+542:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Status</label>
+543:  3                             <select
+544:  3                               required
+545:  3                               value={editingAssociado.status || 'ativo'}
+546:  3                               onChange={(e) => setEditingAssociado({ ...editingAssociado, status: e.target.value as Associado['status'] })}
+547:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+548:  3                             >
+549:  3                               <option value="ativo">Ativo</option>
+550:  3                               <option value="inadimplente">Inadimplente</option>
+551:  3                               <option value="inativo">Inativo</option>
+552:  3                             </select>
+553:  3                           </div>
+554:  3                         </div>
+555:  3                       </div>
+556:  3 
+557:  3                     </div>
+558:  3                   ) : activeTab === 'dependentes' ? (
+559:  3                     <div className="space-y-6">
+560:  3                       <div className="flex items-center justify-between">
+561:  3                         <h4 className="text-white font-medium">Dependentes</h4>
+562:  3                         <button
+563:  3                           type="button"
+564:  5                           onClick={() => {
+565:  6                             setEditingAssociado({
+566:  6                               ...editingAssociado,
+567:  6                               dependentes: [
+568:  6                                 ...(editingAssociado.dependentes || []),
+569:  6                                 { id: Math.random().toString(36).substring(7), nome: '', cpf: '', data_nascimento: '', parentesco: '' }
+570:  6                               ]
+571:  5                             });
+572:  3                           }}
+573:  3                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#222542] border border-[#2A2D48] text-white rounded-lg text-sm font-medium hover:bg-[#2A2D48] transition-colors"
+574:  3                         >
+575:  3                           <Plus className="w-4 h-4" />
+576:  3                           Adicionar
+577:  3                         </button>
+578:  3                       </div>
+579:  3 
+580:  4                       {(!editingAssociado.dependentes || editingAssociado.dependentes.length === 0) ? (
+581:  4                         <div className="text-center py-12 border border-dashed border-[#262A45] rounded-xl">
+582:  4                           <p className="text-slate-400 text-sm">Nenhum dependente cadastrado.</p>
+583:  4                         </div>
+584:  4                       ) : (
+585:  4                         <div className="space-y-4">
+586:  5                           {editingAssociado.dependentes.map((dep, index) => (
+587:  5                             <div key={dep.id} className="p-5 bg-[#101223] border border-[#262A45] rounded-xl relative group">
+588:  5                               <button
+589:  5                                 type="button"
+590:  7                                 onClick={() => {
+591:  7                                   const novosDeps = [...editingAssociado.dependentes!];
+592:  7                                   novosDeps.splice(index, 1);
+593:  7                                   setEditingAssociado({ ...editingAssociado, dependentes: novosDeps });
+594:  5                                 }}
+595:  5                                 className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity bg-[#181B34] rounded-md border border-[#262A45]"
+596:  5                               >
+597:  5                                 <Trash2 className="w-4 h-4" />
+598:  5                               </button>
+599:  5                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+600:  5                                 <div className="space-y-1 md:col-span-2">
+601:  5                                   <label className="block text-xs font-semibold text-slate-400">Nome Completo</label>
+602:  5                                   <input
+603:  5                                     required
+604:  5                                     type="text"
+605:  5                                     value={dep.nome}
+606:  7                                     onChange={(e) => {
+607:  7                                       const novosDeps = [...editingAssociado.dependentes!];
+608:  7                                       novosDeps[index] = { ...dep, nome: e.target.value };
+609:  7                                       setEditingAssociado({ ...editingAssociado, dependentes: novosDeps });
+610:  5                                     }}
+611:  5                                     className="w-full px-3 py-2 bg-[#181B34] border border-[#262A45] rounded-lg text-white text-sm focus:outline-none focus:border-[#7E4CF3]"
+612:  5                                   />
+613:  5                                 </div>
+614:  5                                 <div className="space-y-1">
+615:  5                                   <label className="block text-xs font-semibold text-slate-400">CPF</label>
+616:  5                                   <input
+617:  5                                     type="text"
+618:  5                                     value={dep.cpf || ''}
+619:  7                                     onChange={(e) => {
+620:  7                                       const novosDeps = [...editingAssociado.dependentes!];
+621:  7                                       novosDeps[index] = { ...dep, cpf: e.target.value };
+622:  7                                       setEditingAssociado({ ...editingAssociado, dependentes: novosDeps });
+623:  5                                     }}
+624:  5                                     className="w-full px-3 py-2 bg-[#181B34] border border-[#262A45] rounded-lg text-white text-sm focus:outline-none focus:border-[#7E4CF3]"
+625:  5                                   />
+626:  5                                 </div>
+627:  5                                 <div className="space-y-1">
+628:  5                                   <label className="block text-xs font-semibold text-slate-400">Data Nasc.</label>
+629:  5                                   <input
+630:  5                                     type="date"
+631:  5                                     value={dep.data_nascimento || ''}
+632:  7                                     onChange={(e) => {
+633:  7                                       const novosDeps = [...editingAssociado.dependentes!];
+634:  7                                       novosDeps[index] = { ...dep, data_nascimento: e.target.value };
+635:  7                                       setEditingAssociado({ ...editingAssociado, dependentes: novosDeps });
+636:  5                                     }}
+637:  5                                     className="w-full px-3 py-2 bg-[#181B34] border border-[#262A45] rounded-lg text-white text-sm focus:outline-none focus:border-[#7E4CF3]"
+638:  5                                   />
+639:  5                                 </div>
+640:  5                                 <div className="space-y-1 md:col-span-2">
+641:  5                                   <label className="block text-xs font-semibold text-slate-400">Parentesco</label>
+642:  5                                   <input
+643:  5                                     required
+644:  5                                     type="text"
+645:  5                                     value={dep.parentesco}
+646:  7                                     onChange={(e) => {
+647:  7                                       const novosDeps = [...editingAssociado.dependentes!];
+648:  7                                       novosDeps[index] = { ...dep, parentesco: e.target.value };
+649:  7                                       setEditingAssociado({ ...editingAssociado, dependentes: novosDeps });
+650:  5                                     }}
+651:  5                                     className="w-full px-3 py-2 bg-[#181B34] border border-[#262A45] rounded-lg text-white text-sm focus:outline-none focus:border-[#7E4CF3]"
+652:  5                                   />
+653:  5                                 </div>
+654:  5                               </div>
+655:  5                             </div>
+656:  4                           ))}
+657:  4                         </div>
+658:  3                       )}
+659:  3                     </div>
+660:  3                   ) : activeTab === 'contratos' ? (
+661:  3                     <div className="space-y-6">
+662:  3                       <div className="flex items-center justify-between border-b border-[#262A45] pb-4">
+663:  3                         <h4 className="text-white font-medium">Contratos do Associado</h4>
+664:  3                       </div>
+665:  3 
+666:  3                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+667:  3                         <div className="space-y-4">
+668:  3                           <h5 className="text-sm font-semibold text-slate-400">Dados do Contrato</h5>
+669:  3 
+670:  3                           <div className="space-y-1">
+671:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Plano</label>
+672:  3                             <select
+673:  3                               required
+674:  3                               value={editingAssociado.plano_id || ''}
+675:  5                               onChange={(e) => {
+676:  5                                 const selectedPlano = planos.find(p => p.id === e.target.value);
+677:  6                                 setEditingAssociado({
+678:  6                                   ...editingAssociado,
+679:  6                                   plano_id: e.target.value,
+680:  6                                   plano_nome: selectedPlano ? selectedPlano.nome : '',
+681:  6                                   valor_plano: selectedPlano ? selectedPlano.preco : undefined
+682:  5                                 });
+683:  3                               }}
+684:  3                               className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+685:  3                             >
+686:  3                               <option value="">Selecione um plano</option>
+687:  4                               {planos.map(plano => (
+688:  4                                 <option key={plano.id} value={plano.id}>{plano.nome}</option>
+689:  3                               ))}
+690:  3                             </select>
+691:  3                           </div>
+692:  3 
+693:  3                           <div className="space-y-1">
+694:  3                             <label className="block text-sm font-semibold text-slate-400 mb-1">Valor (R$)</label>
+695:  3                             <input
+696:  3                               type="number"
+697:  3                               step="0.01"
+698:  3                               readOnly
+699:  3                               value={editingAssociado.valor_plano || ''}
+700:  3                               className="w-full px-4 py-2.5 bg-[#181B34] border border-[#262A45] rounded-xl text-slate-400 focus:outline-none opacity-80 cursor-not-allowed"
+701:  3                               placeholder="0,00"
+702:  3                             />
+703:  4                             {planos.find(p => p.id === editingAssociado.plano_id) && (
+704:  4                               <p className="text-xs text-slate-500 mt-1">
+705:  4                                 Periodicidade: <span className="capitalize">{planos.find(p => p.id === editingAssociado.plano_id)?.periodicidade}</span>
+706:  4                               </p>
+707:  3                             )}
+708:  3                           </div>
+709:  3 
+710:  3                           <div className="p-4 bg-[#101223] border border-[#262A45] rounded-xl mt-4">
+711:  3                             <p className="text-sm text-slate-400">Quantidade de Dependentes Vinculados</p>
+712:  3                             <p className="text-2xl font-bold text-white mt-1">{editingAssociado.dependentes?.length || 0}</p>
+713:  3                           </div>
+714:  3                         </div>
+715:  3 
+716:  3                         <div className="space-y-4">
+717:  3                           <h5 className="text-sm font-semibold text-slate-400">Histórico de Alterações</h5>
+718:  3 
+719:  3                           <div className="bg-[#101223] border border-[#262A45] rounded-xl p-4 overflow-y-auto max-h-[300px]">
+720:  3                             <div className="space-y-4">
+721:  3                               <div className="flex gap-4">
+722:  3                                 <div className="mt-1">
+723:  3                                   <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+724:  3                                   <div className="w-0.5 h-full bg-[#262A45] mx-auto mt-1"></div>
+725:  3                                 </div>
+726:  3                                 <div className="pb-4">
+727:  3                                   <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 mb-1 border border-emerald-500/20">
+728:  3                                     Contrato Ativo
+729:  3                                   </span>
+730:  3                                   <p className="text-sm text-white font-medium capitalize">Plano {editingAssociado.plano_nome || 'Nenhum'}</p>
+731:  4                                   {editingAssociado.valor_plano && (
+732:  4                                     <p className="text-xs text-slate-300 mt-0.5">Valor: R$ {editingAssociado.valor_plano.toFixed(2).replace('.', ',')}</p>
+733:  3                                   )}
+734:  3                                   <p className="text-xs text-slate-400 mt-1">Desde {editingAssociado.data_adesao ? new Date(editingAssociado.data_adesao).toLocaleDateString('pt-BR') : 'Data não definida'}</p>
+735:  3                                 </div>
+736:  3                               </div>
+737:  3 
+738:  4                               {editingAssociado.historico_contratos && editingAssociado.historico_contratos.map((hist) => (
+739:  4                                 <div className="flex gap-4" key={hist.id}>
+740:  4                                   <div className="mt-1">
+741:  4                                     <div className="w-2 h-2 rounded-full bg-[#4A88E9]"></div>
+742:  4                                     <div className="w-0.5 h-full bg-[#262A45] mx-auto mt-1"></div>
+743:  4                                   </div>
+744:  4                                   <div className="pb-4">
+745:  4                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-[#4A88E9]/10 text-[#4A88E9] mb-1 border border-[#4A88E9]/20">
+746:  4                                       Anterior
+747:  4                                     </span>
+748:  4                                     <p className="text-sm text-white font-medium capitalize">Plano {hist.plano}</p>
+749:  4                                     <p className="text-xs text-slate-300 mt-0.5">Valor: R$ {hist.valor.toFixed(2).replace('.', ',')}</p>
+750:  4                                     <p className="text-xs text-slate-400 mt-1">
+751:  4                                       {new Date(hist.data_inicio).toLocaleDateString('pt-BR')} {hist.data_fim ? `até ${new Date(hist.data_fim).toLocaleDateString('pt-BR')}` : ''}
+752:  4                                     </p>
+753:  4                                   </div>
+754:  4                                 </div>
+755:  3                               ))}
+756:  3 
+757:  3                               <div className="flex gap-4">
+758:  3                                 <div className="mt-1">
+759:  3                                   <div className="w-2 h-2 rounded-full bg-slate-600"></div>
+760:  3                                 </div>
+761:  3                                 <div>
+762:  3                                   <p className="text-sm text-slate-400 font-medium">Adesão Inicial</p>
+763:  3                                   <p className="text-xs text-slate-500 mt-0.5">{editingAssociado.data_adesao ? new Date(editingAssociado.data_adesao).toLocaleDateString('pt-BR') : 'Data não definida'}</p>
+764:  3                                 </div>
+765:  3                               </div>
+766:  3                             </div>
+767:  3                           </div>
+768:  3                         </div>
+769:  3                       </div>
+770:  3                     </div>
+771:  3                   ) : (
+772:  3                     <div className="space-y-6">
+773:  3                       <div className="flex items-center justify-between border-b border-[#262A45] pb-4">
+774:  3                         <h4 className="text-white font-medium">Documentos do Associado</h4>
+775:  3                       </div>
+776:  3 
+777:  3                       <div className="space-y-4">
+778:  3                         <div className="border-2 border-dashed border-[#262A45] rounded-xl p-8 flex flex-col items-center justify-center bg-[#101223]/50">
+779:  3                           <input
+780:  3                             type="file"
+781:  3                             id="upload-doc"
+782:  3                             className="hidden"
+783:  3                             accept=".pdf,image/*"
+784:  5                             onChange={(e) => {
+785:  5                               const file = e.target.files?.[0];
+786:  6                               if (file) {
+787:  6                                 // Simulate an upload by just adding to local list
+788:  7                                 const novoDoc = {
+789:  7                                   id: Math.random().toString(36).substring(7),
+790:  7                                   nome: file.name,
+791:  7                                   url: URL.createObjectURL(file), // Temp URL for preview
+792:  7                                   tipo: file.type,
+793:  7                                   tamanho: file.size,
+794:  7                                   data_upload: new Date().toISOString()
+795:  6                                 };
+796:  7                                 setEditingAssociado({
+797:  7                                   ...editingAssociado,
+798:  7                                   documentos: [...(editingAssociado.documentos || []), novoDoc]
+799:  6                                 });
+800:  5                               }
+801:  3                             }}
+802:  3                           />
+803:  3                           <label htmlFor="upload-doc" className="cursor-pointer flex flex-col items-center">
+804:  3                             <div className="w-12 h-12 bg-[#222542] rounded-full flex items-center justify-center mb-3">
+805:  3                               <Plus className="w-6 h-6 text-[#7E4CF3]" />
+806:  3                             </div>
+807:  3                             <p className="text-sm font-medium text-white mb-1">Clique para enviar um documento</p>
+808:  3                             <p className="text-xs text-slate-500">PDF, JPG, PNG (máx. 5MB)</p>
+809:  3                           </label>
+810:  3                         </div>
+811:  3 
+812:  4                         {editingAssociado.documentos && editingAssociado.documentos.length > 0 && (
+813:  4                           <div className="space-y-3 mt-6">
+814:  4                             <h5 className="text-sm font-semibold text-slate-400">Arquivos Salvos</h5>
+815:  4                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+816:  5                               {editingAssociado.documentos.map((doc, idx) => (
+817:  5                                 <div key={doc.id} className="flex items-center justify-between p-3 bg-[#101223] border border-[#262A45] rounded-lg group">
+818:  5                                   <div className="flex items-center gap-3 overflow-hidden">
+819:  5                                     <div className="w-10 h-10 bg-[#181B34] rounded flex items-center justify-center shrink-0">
+820:  5                                       <span className="text-xs font-bold text-slate-400 uppercase">{doc.nome.split('.').pop()}</span>
+821:  5                                     </div>
+822:  5                                     <div className="overflow-hidden">
+823:  5                                       <p className="text-sm text-white font-medium truncate">{doc.nome}</p>
+824:  5                                       <p className="text-xs text-slate-500">{(doc.tamanho / 1024).toFixed(1)} KB • {new Date(doc.data_upload).toLocaleDateString('pt-BR')}</p>
+825:  5                                     </div>
+826:  5                                   </div>
+827:  5                                   <div className="flex items-center gap-2">
+828:  5                                     <a href={doc.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors">
+829:  5                                       <Search className="w-4 h-4" />
+830:  5                                     </a>
+831:  5                                     <button
+832:  5                                       type="button"
+833:  7                                       onClick={() => {
+834:  7                                         const novosDocs = [...editingAssociado.documentos!];
+835:  7                                         novosDocs.splice(idx, 1);
+836:  7                                         setEditingAssociado({ ...editingAssociado, documentos: novosDocs });
+837:  5                                       }}
+838:  5                                       className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors"
+839:  5                                     >
+840:  5                                       <Trash2 className="w-4 h-4" />
+841:  5                                     </button>
+842:  5                                   </div>
+843:  5                                 </div>
+844:  4                               ))}
+845:  4                             </div>
+846:  4                           </div>
+847:  3                         )}
+848:  3                       </div>
+849:  3                     </div>
+850:  2                   )}
+851:  2                 </div>
+852:  2 
+853:  2                 {/* Footer Buttons */}
+854:  2                 <div className="p-6 border-t border-[#262A45] bg-[#101223]/50 flex items-center justify-between shrink-0">
+855:  2                   <button
+856:  2                     type="button"
+857:  2                     onClick={handleCloseModal}
+858:  2                     className="px-4 py-2 bg-[#222542] border border-[#2A2D48] text-slate-300 rounded-xl font-medium hover:bg-[#2A2D48] hover:text-white transition-colors"
+859:  2                   >
+860:  2                     Cancelar
+861:  2                   </button>
+862:  2                   <div className="flex gap-3">
+863:  3                     {isEditingMode ? (
+864:  3                       <button
+865:  3                         type="submit"
+866:  3                         disabled={!state.isOnline}
+867:  3                         className="px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#7E4CF3]/25 disabled:opacity-50"
+868:  3                       >
+869:  3                         Salvar Alterações
+870:  3                       </button>
+871:  3                     ) : (
+872:  3                       <>
+873:  4                         {activeTab !== 'principal' && (
+874:  4                           <button
+875:  4                             type="button"
+876:  6                             onClick={() => {
+877:  6                               if (activeTab === 'documentos') setActiveTab('contratos');
+878:  6                               else if (activeTab === 'contratos') setActiveTab('dependentes');
+879:  6                               else if (activeTab === 'dependentes') setActiveTab('principal');
+880:  4                             }}
+881:  4                             className="px-4 py-2 bg-[#222542] border border-[#2A2D48] text-slate-300 rounded-xl font-medium hover:bg-[#2A2D48] hover:text-white transition-colors"
+882:  4                           >
+883:  4                             Voltar
+884:  4                           </button>
+885:  3                         )}
+886:  3 
+887:  4                         {activeTab !== 'documentos' ? (
+888:  4                           <button
+889:  4                             type="button"
+890:  6                             onClick={() => {
+891:  6                               const form = document.getElementById('associado-form') as HTMLFormElement;
+892:  7                               if (form && !form.checkValidity()) {
+893:  7                                 form.reportValidity();
+894:  7                                 return;
+895:  6                               }
+896:  6                               if (activeTab === 'principal') setActiveTab('dependentes');
+897:  6                               else if (activeTab === 'dependentes') setActiveTab('contratos');
+898:  6                               else if (activeTab === 'contratos') setActiveTab('documentos');
+899:  4                             }}
+900:  4                             className="px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#7E4CF3]/25"
+901:  4                           >
+902:  4                             Próximo
+903:  4                           </button>
+904:  4                         ) : (
+905:  4                           <button
+906:  4                             type="submit"
+907:  4                             disabled={!state.isOnline}
+908:  4                             className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-emerald-500/25 disabled:opacity-50"
+909:  4                           >
+910:  4                             Finalizar Cadastro
+911:  4                           </button>
+912:  3                         )}
+913:  3                       </>
+914:  2                     )}
+915:  2                   </div>
+916:  2                 </div>
+917:  2               </form>
+918:  2             </div>
+919:  2           </div>
+920:  2         </div>
+921:  1       )}
+922:  1     </div>
+923:  1   );
+924:  0 };
