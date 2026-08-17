@@ -379,8 +379,12 @@ export const RequisicoesPage: React.FC = () => {
       await loadData();
 
       // Offer printing
-      const empresa = await getEmpresaById(tenantId, state.isOnline);
-      await gerarPDFGuiaRequisicao(novaReq, empresa);
+      try {
+        const empresa = await getEmpresaById(tenantId, state.isOnline);
+        await gerarPDFGuiaRequisicao(novaReq, empresa);
+      } catch (pdfErr) {
+        console.warn('Erro ao gerar prévia PDF da guia:', pdfErr);
+      }
     } catch (err: any) {
       console.error(err);
       toast.error('Erro ao emitir guia de requisição.');
@@ -463,7 +467,8 @@ export const RequisicoesPage: React.FC = () => {
   // Filtered List
   const requisicoesFiltradas = useMemo(() => {
     return requisicoes.filter(r => {
-      const matchStatus = !filtros.status || r.status === filtros.status;
+      const matchStatus = !filtros.status || 
+        (filtros.status === 'emitida' ? (r.status === 'emitida' || (r.status as any) === 'pendente') : r.status === filtros.status);
       const matchTipo = !filtros.tipoPrestador || r.tipo_prestador === filtros.tipoPrestador;
       const q = (filtros.busca || '').toLowerCase();
       const matchBusca = !q || (
@@ -535,7 +540,7 @@ export const RequisicoesPage: React.FC = () => {
             </div>
           </div>
           <div className="text-2xl font-bold text-amber-500">
-            {requisicoes.filter(r => r.status === 'emitida').length}
+            {requisicoes.filter(r => r.status === 'emitida' || (r.status as any) === 'pendente').length}
           </div>
           <div className="text-xs text-text-subtle mt-1">Aguardando autorização/atendimento</div>
         </div>
@@ -550,7 +555,7 @@ export const RequisicoesPage: React.FC = () => {
           <div className="text-2xl font-bold text-emerald-500">
             {requisicoes.filter(r => r.status === 'autorizada' || r.status === 'realizada').length}
           </div>
-          <div className="text-xs text-text-subtle mt-1">Atendimentos liberados</div>
+          <div className="text-xs text-text-subtle mt-1">Atendimentos liberados / realizados</div>
         </div>
 
         <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
@@ -590,9 +595,9 @@ export const RequisicoesPage: React.FC = () => {
               className="bg-bg-surface border border-border-default text-text-base text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-[#3B82F6]"
             >
               <option value="">Todos os Status</option>
-              <option value="emitida">Emitida</option>
+              <option value="emitida">Emitida / Pendente</option>
               <option value="autorizada">Autorizada</option>
-              <option value="realizada">Realizada</option>
+              <option value="realizada">Realizada (Pronta p/ Faturamento)</option>
               <option value="cancelada">Cancelada</option>
             </select>
 
@@ -669,18 +674,27 @@ export const RequisicoesPage: React.FC = () => {
                     </td>
 
                     <td className="px-6 py-3.5 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                        req.status === 'emitida' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
-                        req.status === 'autorizada' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
-                        req.status === 'realizada' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                        'bg-rose-500/10 text-rose-500 border-rose-500/20'
-                      }`}>
-                        {req.status === 'emitida' && <Clock className="w-3 h-3" />}
-                        {req.status === 'autorizada' && <ShieldCheck className="w-3 h-3" />}
-                        {req.status === 'realizada' && <CheckCircle2 className="w-3 h-3" />}
-                        {req.status === 'cancelada' && <XCircle className="w-3 h-3" />}
-                        {req.status.toUpperCase()}
-                      </span>
+                      {(() => {
+                        const isEmitidaOrPendente = req.status === 'emitida' || (req.status as any) === 'pendente';
+                        const isAutorizada = req.status === 'autorizada';
+                        const isRealizada = req.status === 'realizada';
+                        const isCancelada = req.status === 'cancelada';
+
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                            isEmitidaOrPendente ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                            isAutorizada ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
+                            isRealizada ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                            'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                          }`}>
+                            {isEmitidaOrPendente && <Clock className="w-3 h-3" />}
+                            {isAutorizada && <ShieldCheck className="w-3 h-3" />}
+                            {isRealizada && <CheckCircle2 className="w-3 h-3" />}
+                            {isCancelada && <XCircle className="w-3 h-3" />}
+                            {isEmitidaOrPendente ? 'PENDENTE' : req.status.toUpperCase()}
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     <td className="px-6 py-3.5 text-right font-bold text-text-base whitespace-nowrap">
@@ -697,7 +711,7 @@ export const RequisicoesPage: React.FC = () => {
                           <Eye className="w-4 h-4" />
                         </button>
                         
-                        {req.status === 'emitida' && (
+                        {(req.status === 'emitida' || (req.status as any) === 'pendente') && (
                           <button
                             onClick={() => handleEditRequisicao(req)}
                             className="p-1.5 text-amber-500 hover:text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg border border-amber-500/20 transition-colors"
@@ -706,7 +720,6 @@ export const RequisicoesPage: React.FC = () => {
                             <Pencil className="w-4 h-4" />
                           </button>
                         )}
-
 
                         <button
                           onClick={async () => {
@@ -720,21 +733,35 @@ export const RequisicoesPage: React.FC = () => {
                           <Printer className="w-4 h-4" />
                         </button>
 
-                        {req.status === 'emitida' && (
-                          <button
-                            onClick={() => handleAlterarStatus(req.id, 'autorizada')}
-                            className="px-2.5 py-1 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg transition-colors"
-                          >
-                            Autorizar
-                          </button>
+                        {(req.status === 'emitida' || (req.status as any) === 'pendente') && (
+                          <>
+                            <button
+                              onClick={() => handleAlterarStatus(req.id, 'autorizada')}
+                              className="px-2.5 py-1 text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/30 rounded-lg transition-colors flex items-center gap-1"
+                              title="Autorizar Atendimento"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              Autorizar
+                            </button>
+                            <button
+                              onClick={() => handleAlterarStatus(req.id, 'realizada')}
+                              className="px-2.5 py-1 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg transition-colors flex items-center gap-1"
+                              title="Marcar como Realizada"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Realizada
+                            </button>
+                          </>
                         )}
 
-                                                {req.status === 'autorizada' && (
+                        {req.status === 'autorizada' && (
                           <>
                             <button
                               onClick={() => handleAlterarStatus(req.id, 'realizada')}
-                              className="px-2.5 py-1 text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/30 rounded-lg transition-colors"
+                              className="px-2.5 py-1 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg transition-colors flex items-center gap-1"
+                              title="Confirmar Realização do Procedimento"
                             >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
                               Realizada
                             </button>
                             <button
@@ -747,7 +774,6 @@ export const RequisicoesPage: React.FC = () => {
                           </>
                         )}
 
-                        
                         {req.status === 'realizada' && (
                           <button
                             onClick={() => handleAbrirModalReabrir(req, 'autorizada')}

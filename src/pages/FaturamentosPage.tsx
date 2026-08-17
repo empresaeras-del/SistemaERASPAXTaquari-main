@@ -133,16 +133,22 @@ export const FaturamentosPage: React.FC = () => {
       // Filter by Provider type
       if (tipoPrestador === 'credenciado') {
         if (!selCredenciadoId) return false;
-        return req.credenciado_id === selCredenciadoId;
+        const credObj = credenciados.find(c => c.id === selCredenciadoId);
+        const credNome = credObj ? (credObj.nome_fantasia || credObj.razao_social) : '';
+        return (
+          req.credenciado_id === selCredenciadoId ||
+          (Boolean(credNome) && Boolean(req.credenciado_nome) && req.credenciado_nome.toLowerCase().trim() === credNome.toLowerCase().trim())
+        );
       } else {
         if (!redeExternaNome) return false;
         return (
           req.tipo_prestador === 'rede_externa' &&
+          Boolean(req.credenciado_nome) &&
           req.credenciado_nome.toLowerCase().trim() === redeExternaNome.toLowerCase().trim()
         );
       }
     });
-  }, [todasRequisicoes, reqsJaFaturadasIds, tipoPrestador, selCredenciadoId, redeExternaNome]);
+  }, [todasRequisicoes, reqsJaFaturadasIds, tipoPrestador, selCredenciadoId, redeExternaNome, credenciados]);
 
   // Selected requisitions objects
   const reqsSelecionadasObjs = useMemo(() => {

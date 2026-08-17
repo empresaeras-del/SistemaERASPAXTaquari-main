@@ -2,7 +2,7 @@ import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { addToSyncQueue } from '../lib/syncService';
 import { v4 as uuidv4 } from 'uuid';
-import { Requisicao, StatusRequisicao } from '../types/requisicoes';
+import { Requisicao, RequisicaoItem, StatusRequisicao } from '../types/requisicoes';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import jsPDF from 'jspdf';
@@ -18,28 +18,65 @@ export const gerarCodigoRequisicao = (indexNumber: number = 1): string => {
   return `REQ-${yyyy}${mm}${dd}-${suf}`;
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const getRequisicoes = async (isOnline: boolean, tenantId: string): Promise<Requisicao[]> => {
+  let supaRequisicoes: Requisicao[] = [];
+  let fetchedFromSupa = false;
+
   if (isOnline) {
     try {
-      let query = supabase.from('requisicoes').select('*, itens:requisicao_itens(*)');
+      let query = supabase.from('requisicoes').select('*').is('deleted_at', null);
       if (tenantId && tenantId !== 'all') {
         query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
       }
       query = query.order('data_emissao', { ascending: false });
       const { data, error } = await query;
+      
       if (!error && data) {
-        for (const item of data) {
+        fetchedFromSupa = true;
+        const reqIds = data.map(r => r.id).filter(Boolean);
+        let itensMap: Record<string, RequisicaoItem[]> = {};
+
+        if (reqIds.length > 0) {
+          try {
+            const { data: itensData } = await supabase
+              .from('requisicao_itens')
+              .select('*')
+              .in('requisicao_id', reqIds);
+
+            if (itensData) {
+              itensData.forEach(item => {
+                if (!itensMap[item.requisicao_id]) itensMap[item.requisicao_id] = [];
+                itensMap[item.requisicao_id].push(item);
+              });
+            }
+          } catch (itemErr) {
+            console.warn('Erro ao buscar itens de requisições:', itemErr);
+          }
+        }
+
+        supaRequisicoes = data.map(r => ({
+          ...r,
+          itens: itensMap[r.id] || r.itens || []
+        }));
+
+        for (const item of supaRequisicoes) {
           await saveToIDB('requisicoes', item);
         }
-        return data as Requisicao[];
       }
     } catch (e) {
       console.warn('Erro ao buscar requisições no Supabase, fallback IDB:', e);
     }
   }
 
+  if (fetchedFromSupa && supaRequisicoes.length > 0) {
+    return supaRequisicoes;
+  }
+
+  // Fallback para IndexedDB
   const localData = await getAllFromIDB<Requisicao>('requisicoes');
-  let result = localData;
+  let result = localData.filter(r => !(r as any).deleted_at);
   if (tenantId && tenantId !== 'all') {
     result = result.filter(r => r.tenant_id === tenantId || (r as any).empresa_id === tenantId);
   }
@@ -59,7 +96,7 @@ export const criarRequisicao = async (
   }).length + 1;
 
   const dataEmissao = new Date();
-  const dataValidade = addDays(dataEmissao, 30); // Validade de 30 dias por padrão
+  const dataValidade = addDays(dataEmissao, 30);
   const reqId = uuidv4();
 
   const { itens, ...dadosSemItens } = dados;
@@ -76,43 +113,71 @@ export const criarRequisicao = async (
     updated_at: dataEmissao.toISOString()
   };
 
-  const dbPayload = {
-    ...dadosSemItens,
-    id: reqId,
-    tenant_id: tenantId,
-    empresa_id: tenantId,
-    codigo_requisicao: novaReq.codigo_requisicao,
-    data_emissao: novaReq.data_emissao,
-    data_validade: novaReq.data_validade,
-    created_at: novaReq.created_at,
-    updated_at: novaReq.updated_at
-  };
-
   if (isOnline) {
     try {
-      const { error } = await supabase.from('requisicoes').insert([dbPayload]);
-      if (error) {
-        console.error('Erro ao salvar requisição no Supabase:', error);
+      const dbPayload: any = {
+        id: reqId,
+        tenant_id: tenantId,
+        empresa_id: tenantId,
+        codigo_requisicao: novaReq.codigo_requisicao,
+        associado_id: UUID_REGEX.test(dadosSemItens.associado_id || '') ? dadosSemItens.associado_id : null,
+        associado_nome: dadosSemItens.associado_nome || 'Associado',
+        associado_cpf: dadosSemItens.associado_cpf || null,
+        associado_plano: dadosSemItens.associado_plano || null,
+        paciente_tipo: dadosSemItens.paciente_tipo || 'titular',
+        paciente_id: UUID_REGEX.test(dadosSemItens.paciente_id || '') ? dadosSemItens.paciente_id : null,
+        paciente_nome: dadosSemItens.paciente_nome || dadosSemItens.associado_nome || 'Paciente',
+        paciente_cpf: dadosSemItens.paciente_cpf || dadosSemItens.associado_cpf || null,
+        paciente_parentesco: dadosSemItens.paciente_parentesco || 'Titular',
+        tipo_prestador: dadosSemItens.tipo_prestador || 'credenciado',
+        credenciado_id: UUID_REGEX.test(dadosSemItens.credenciado_id || '') ? dadosSemItens.credenciado_id : null,
+        credenciado_nome: dadosSemItens.credenciado_nome || 'Prestador',
+        credenciado_cnpj_cpf: dadosSemItens.credenciado_cnpj_cpf || null,
+        medico_solicitante: dadosSemItens.medico_solicitante || null,
+        crm_solicitante: dadosSemItens.crm_solicitante || null,
+        data_emissao: novaReq.data_emissao,
+        data_validade: novaReq.data_validade,
+        status: novaReq.status || 'emitida',
+        valor_total: novaReq.valor_total || 0,
+        valor_coparticipacao_total: novaReq.valor_coparticipacao_total || 0,
+        observacoes: novaReq.observacoes || null,
+        created_at: novaReq.created_at,
+        updated_at: novaReq.updated_at
+      };
+
+      let insertResult = await supabase.from('requisicoes').insert([dbPayload]);
+      if (insertResult.error) {
+        console.warn('Erro na inserção padrão de requisição:', insertResult.error);
+        const fallbackPayload = { ...dbPayload, status: 'pendente' };
+        insertResult = await supabase.from('requisicoes').insert([fallbackPayload]);
+      }
+
+      if (insertResult.error) {
+        console.error('Erro ao salvar requisição no Supabase após fallback:', insertResult.error);
       } else if (itens && itens.length > 0) {
         const itensToInsert = itens.map(item => ({
-          id: item.id || uuidv4(),
+          id: UUID_REGEX.test(item.id || '') ? item.id : uuidv4(),
           requisicao_id: reqId,
-          procedimento_id: item.procedimento_id,
-          codigo_tuss: item.codigo_tuss,
-          descricao: item.descricao,
-          quantidade: item.quantidade,
-          valor_unitario: item.valor_unitario,
+          procedimento_id: UUID_REGEX.test(item.procedimento_id || '') ? item.procedimento_id : null,
+          codigo_tuss: item.codigo_tuss || '',
+          descricao: item.descricao || 'Item de Requisição',
+          quantidade: item.quantidade || 1,
+          valor_unitario: item.valor_unitario || 0,
           valor_coparticipacao: item.valor_coparticipacao || 0,
-          valor_total: item.valor_total,
+          valor_total: item.valor_total || 0,
           observacoes: item.observacoes || null,
           tenant_id: tenantId,
           empresa_id: tenantId
         }));
         const { error: errItens } = await supabase.from('requisicao_itens').insert(itensToInsert);
-        if (errItens) console.warn('Erro ao inserir itens da requisição no Supabase:', errItens);
+        if (errItens) {
+          console.warn('Erro ao inserir itens da requisição no Supabase:', errItens);
+          const basicItens = itensToInsert.map(({ tenant_id, empresa_id, valor_coparticipacao, observacoes, ...rest }) => rest);
+          await supabase.from('requisicao_itens').insert(basicItens);
+        }
       }
     } catch (e) {
-      console.warn('Erro ao inserir requisição no Supabase:', e);
+      console.warn('Erro geral ao inserir requisição no Supabase:', e);
     }
     await saveToIDB('requisicoes', novaReq);
     await registrarAuditoria('Emissão de Requisição/Guia', {
@@ -134,29 +199,34 @@ export const atualizarRequisicao = async (
   req: Requisicao
 ): Promise<Requisicao> => {
   const reqAtualizada = { ...req, updated_at: new Date().toISOString() };
-  const { itens, ...dbPayload } = reqAtualizada;
+  const { itens, ...dadosSemItens } = reqAtualizada;
 
   if (isOnline) {
     try {
-      const { error } = await supabase.from('requisicoes').update({
-        ...dbPayload,
+      const dbPayload = {
+        ...dadosSemItens,
+        associado_id: UUID_REGEX.test(dadosSemItens.associado_id || '') ? dadosSemItens.associado_id : null,
+        paciente_id: UUID_REGEX.test(dadosSemItens.paciente_id || '') ? dadosSemItens.paciente_id : null,
+        credenciado_id: UUID_REGEX.test(dadosSemItens.credenciado_id || '') ? dadosSemItens.credenciado_id : null,
         empresa_id: req.tenant_id
-      }).eq('id', req.id);
+      };
+
+      const { error } = await supabase.from('requisicoes').update(dbPayload).eq('id', req.id);
       
       if (error) {
         console.error('Erro ao atualizar requisicao no Supabase:', error);
       } else if (itens && itens.length > 0) {
         await supabase.from('requisicao_itens').delete().eq('requisicao_id', req.id);
         const itensToInsert = itens.map(item => ({
-          id: item.id || uuidv4(),
+          id: UUID_REGEX.test(item.id || '') ? item.id : uuidv4(),
           requisicao_id: req.id,
-          procedimento_id: item.procedimento_id,
-          codigo_tuss: item.codigo_tuss,
-          descricao: item.descricao,
-          quantidade: item.quantidade,
-          valor_unitario: item.valor_unitario,
+          procedimento_id: UUID_REGEX.test(item.procedimento_id || '') ? item.procedimento_id : null,
+          codigo_tuss: item.codigo_tuss || '',
+          descricao: item.descricao || 'Item de Requisição',
+          quantidade: item.quantidade || 1,
+          valor_unitario: item.valor_unitario || 0,
           valor_coparticipacao: item.valor_coparticipacao || 0,
-          valor_total: item.valor_total,
+          valor_total: item.valor_total || 0,
           observacoes: item.observacoes || null,
           tenant_id: req.tenant_id,
           empresa_id: req.tenant_id
@@ -184,7 +254,16 @@ export const atualizarStatusRequisicao = async (
   novoStatus: StatusRequisicao,
   extras?: { motivo_cancelamento?: string; autorizado_por?: string; cancelado_por?: string }
 ): Promise<Requisicao> => {
-  const req = await getFromIDB<Requisicao>('requisicoes', requisicaoId);
+  let req = await getFromIDB<Requisicao>('requisicoes', requisicaoId);
+  if (!req && isOnline) {
+    try {
+      const { data } = await supabase.from('requisicoes').select('*').eq('id', requisicaoId).single();
+      if (data) req = data as Requisicao;
+    } catch (e) {
+      console.warn('Erro ao buscar requisição no Supabase para atualização de status:', e);
+    }
+  }
+
   if (!req) {
     throw new Error('Requisição não encontrada.');
   }
@@ -200,7 +279,18 @@ export const atualizarStatusRequisicao = async (
 
   if (isOnline) {
     try {
-      await supabase.from('requisicoes').upsert(reqAtualizada);
+      const updateData: any = {
+        status: novoStatus,
+        updated_at: reqAtualizada.updated_at
+      };
+      if (extras?.motivo_cancelamento) updateData.motivo_cancelamento = extras.motivo_cancelamento;
+      if (extras?.autorizado_por) updateData.autorizado_por = extras.autorizado_por;
+      if (extras?.cancelado_por) updateData.cancelado_por = extras.cancelado_por;
+
+      const { error } = await supabase.from('requisicoes').update(updateData).eq('id', requisicaoId);
+      if (error) {
+        console.warn('Erro ao atualizar status da requisição no Supabase:', error);
+      }
     } catch (e) {
       console.warn('Erro ao atualizar status da requisição no Supabase:', e);
     }
