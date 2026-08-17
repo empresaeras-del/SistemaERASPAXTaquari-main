@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { generateUUID } from '../utils/uuid';
 import { supabase } from '../lib/supabase';
 import { 
   ItemFunerario, 
@@ -60,7 +61,7 @@ export async function salvarCoberturasDoItem(
       // 2. Insert new coverage rows if any selected
       if (planosVinculados.length > 0) {
         const newRows = planosVinculados.map(pv => ({
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           plano_id: pv.plano_id,
           item_id: itemId,
           tipo_cobertura: pv.tipo_cobertura,
@@ -86,7 +87,7 @@ export async function salvarCoberturasDoItem(
       const vinculacao = planosVinculados.find(pv => pv.plano_id === plano.id);
       if (vinculacao) {
         plano.coberturas.push({
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           plano_id: plano.id,
           item_id: itemId,
           tipo_cobertura: vinculacao.tipo_cobertura,
@@ -183,7 +184,7 @@ export function useItensFunerarios() {
       if (!user) throw new Error("Usuário não autenticado.");
       const { planosVinculados, ...itemData } = data;
       const tenantId = (itemData as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
-      const itemId = crypto.randomUUID();
+      const itemId = generateUUID();
 
       const newItem = { 
         id: itemId,

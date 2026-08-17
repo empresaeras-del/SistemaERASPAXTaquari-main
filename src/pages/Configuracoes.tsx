@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { generateUUID } from '../utils/uuid';
 import { useAppContext } from "../context/AppContext";
 import { getContasBancarias, salvarContaBancaria, deletarContaBancaria } from "../services/contasBancariasService";
 import { ContaBancaria } from "../types/contasBancarias";
@@ -168,7 +169,7 @@ export const ConfiguracoesPage: React.FC = () => {
       }
       setModalActiveTab('dados');
       setEditingEmpresa({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         status: "ativo",
       });
       setEmpresaContas([]);
@@ -282,7 +283,7 @@ export const ConfiguracoesPage: React.FC = () => {
       }
       const availableNiveis = getAvailableNiveisForUser(state.user);
       setEditingUsuario({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         tenant_id: state.user?.nivel === 'super_admin' ? (state.empresaSelecionada || "") : (state.user?.tenant_id || state.empresaSelecionada || ""),
         status: "ativo",
         nivel: availableNiveis[0]?.value || "funcionario",
@@ -1018,7 +1019,7 @@ export const ConfiguracoesPage: React.FC = () => {
                           const isValidUUID = editingConta.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editingConta.id);
                           const contaToSave: ContaBancaria = {
                             ...editingConta as ContaBancaria,
-                            id: isValidUUID ? (editingConta.id as string) : crypto.randomUUID(),
+                            id: isValidUUID ? (editingConta.id as string) : generateUUID(),
                             tenant_id: editingEmpresa.id!,
                             criado_em: editingConta.criado_em || new Date().toISOString()
                           };

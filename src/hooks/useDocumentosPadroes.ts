@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { generateUUID } from '../utils/uuid';
 import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
@@ -73,7 +74,7 @@ export function useDocumentosPadroes() {
     try {
       const now = new Date().toISOString();
       const tenantId = data.empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
-      const docId = data.id || crypto.randomUUID();
+      const docId = data.id || generateUUID();
 
       const docPayload = {
         id: docId,

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
+import { generateUUID } from '../utils/uuid';
 
 export interface Notificacao {
   id: string;
@@ -104,7 +105,7 @@ export const deleteNotificacao = async (id: string, isOnline: boolean): Promise<
 export const createNotificacao = async (notificacao: Omit<Notificacao, 'id' | 'created_at'>, isOnline: boolean): Promise<void> => {
   const newNotif: Notificacao = {
     ...notificacao,
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     created_at: new Date().toISOString()
   };
 

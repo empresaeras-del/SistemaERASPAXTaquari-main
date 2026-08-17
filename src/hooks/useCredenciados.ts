@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { generateUUID } from '../utils/uuid';
 import { supabase } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { addToSyncQueue } from '../lib/syncService';
@@ -53,7 +54,7 @@ export function useCredenciados() {
     try {
       const newItem = { 
         ...data, 
-        id: crypto.randomUUID()
+        id: generateUUID()
       };
       let inserted = newItem;
       if (isOnline) {
@@ -106,7 +107,7 @@ export function useCredenciados() {
 
   const vincularProcedimento = async (data: CredenciadoProcedimentoInsert) => {
     try {
-      const newItem = { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() };
+      const newItem = { ...data, id: generateUUID(), created_at: new Date().toISOString() };
       try {
         const { data: inserted, error: err } = await supabase.from('credenciados_procedimentos').insert([newItem]).select().single();
         if (err) throw err;

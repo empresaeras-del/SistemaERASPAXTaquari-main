@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { generateUUID } from '../../utils/uuid';
 import { useAppContext } from '../../context/AppContext';
 import { getAssociados, Associado } from '../../services/associadosService';
 import { useItensFunerarios } from '../../hooks/useItensFunerarios';
@@ -154,7 +155,7 @@ export const NovoAtendimentoWizard: React.FC<{
       const tenantId = state.empresaSelecionada && state.empresaSelecionada !== 'all' ? state.empresaSelecionada : 'default_tenant';
       
       const newAtendimento: Atendimento = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         tenant_id: tenantId,
         tipo_cliente: tipoCliente,
         associado_id: tipoCliente === 'associado' ? selectedAssociado?.id : undefined,
@@ -172,7 +173,7 @@ export const NovoAtendimentoWizard: React.FC<{
         created_at: new Date().toISOString(),
         created_by: state.user?.id,
         itens: financeiro.itemsProcessed.map(i => ({
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           tenant_id: tenantId,
           atendimento_id: '',
           item_id: i.id,
@@ -186,7 +187,7 @@ export const NovoAtendimentoWizard: React.FC<{
 
       // Gerar contas a receber se tiver valor descoberto
       if (financeiro.totalUncovered > 0) {
-        const receitaId = crypto.randomUUID();
+        const receitaId = generateUUID();
         const tipoDev = tipoCliente === 'associado' ? 'associado' : 'cliente_pf';
         const devNome = tipoCliente === 'associado' ? selectedAssociado?.nome : fNome;
         const devCpf = tipoCliente === 'associado' ? selectedAssociado?.cpf : fCpf;
@@ -215,7 +216,7 @@ export const NovoAtendimentoWizard: React.FC<{
           status: 'ativo',
           atendimento_id: newAtendimento.id
         }, [{
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           tenant_id: tenantId,
           receita_id: receitaId,
           numero_parcela: 1,

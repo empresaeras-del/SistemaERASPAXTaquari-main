@@ -1,4 +1,5 @@
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { generateUUID } from '../utils/uuid';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { 
@@ -222,7 +223,7 @@ export const RequisicoesPage: React.FC = () => {
     const qtd = Number(qtdProc) || 1;
 
     const novoItem: RequisicaoItem = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       procedimento_id: procObj.id,
       codigo_tuss: procObj.codigo_tuss,
       descricao: procObj.descricao,
@@ -337,7 +338,7 @@ export const RequisicoesPage: React.FC = () => {
         const dataEmissao = new Date().toISOString();
 
         const novaReceita: Receita = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           tenant_id: tenantId,
           tipo_devedor: 'associado',
           associado_id: associadoSelecionado.id,
@@ -354,7 +355,7 @@ export const RequisicoesPage: React.FC = () => {
         };
 
         const parcelaUnica: ParcelaReceber = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           tenant_id: tenantId,
           receita_id: novaReceita.id,
           numero_parcela: 1,

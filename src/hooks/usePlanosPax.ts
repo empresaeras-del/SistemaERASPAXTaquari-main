@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { generateUUID } from '../utils/uuid';
 import { supabase } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
@@ -82,7 +83,7 @@ export function usePlanosPax() {
       } = data;
       
       const tenantId = (planoBase as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
-      const planoId = crypto.randomUUID();
+      const planoId = generateUUID();
 
       // Sanitizar dados base para garantir que apenas colunas do banco sejam enviadas
       const dbPlanoPayload = {
@@ -114,7 +115,7 @@ export function usePlanosPax() {
 
       const faixasData = data.regra_calculo === 'faixa_etaria' && faixas && faixas.length > 0 
         ? faixas.map(f => ({ 
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             plano_id: planoId,
             idade_de: Number((f as any).idade_de ?? (f as any).idade_min) || 0,
             idade_ate: Number((f as any).idade_ate ?? (f as any).idade_max) || 99,
@@ -126,7 +127,7 @@ export function usePlanosPax() {
 
       const coberturasData = [
         ...(itensCobertos || []).map(itemId => ({
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           plano_id: planoId,
           item_id: itemId,
           tipo_cobertura: 'coberto',
@@ -135,7 +136,7 @@ export function usePlanosPax() {
           empresa_id: tenantId
         })),
         ...(itensExcluidos || []).map(itemId => ({
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           plano_id: planoId,
           item_id: itemId,
           tipo_cobertura: 'excluido',
@@ -224,7 +225,7 @@ export function usePlanosPax() {
 
       const faixasData = data.regra_calculo === 'faixa_etaria' && faixas && faixas.length > 0 
         ? faixas.map(f => ({ 
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             plano_id: id,
             idade_de: Number((f as any).idade_de ?? (f as any).idade_min) || 0,
             idade_ate: Number((f as any).idade_ate ?? (f as any).idade_max) || 99,
@@ -236,7 +237,7 @@ export function usePlanosPax() {
 
       const coberturasData = [
         ...(itensCobertos || []).map(itemId => ({
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           plano_id: id,
           item_id: itemId,
           tipo_cobertura: 'coberto',
@@ -245,7 +246,7 @@ export function usePlanosPax() {
           empresa_id: tenantId
         })),
         ...(itensExcluidos || []).map(itemId => ({
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           plano_id: id,
           item_id: itemId,
           tipo_cobertura: 'excluido',

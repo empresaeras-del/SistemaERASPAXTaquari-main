@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { generateUUID } from '../utils/uuid';
 import { supabase } from '../lib/supabase';
 import { 
   Fornecedor, 
@@ -224,7 +225,7 @@ export function useFornecedores() {
       const tenantId = (data as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
       const newFornecedor: Fornecedor = {
         ...data,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         created_at: now,
         updated_at: now,
         created_by: user?.id,

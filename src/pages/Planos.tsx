@@ -1,4 +1,5 @@
 import { useToast } from "../context/ToastContext";
+import { v4 as uuidv4 } from 'uuid';
 import { useConfirm } from "../context/ConfirmContext";
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
@@ -54,7 +55,7 @@ export const PlanosPage: React.FC = () => {
       setEditingPlano({ ...plano });
     } else {
       setEditingPlano({
-        id: Math.random().toString(36).substring(7),
+        id: uuidv4(),
         tenant_id: state.empresaSelecionada || '',
         periodicidade: 'mensal',
         status: 'ativo',

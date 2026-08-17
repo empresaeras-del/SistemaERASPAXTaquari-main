@@ -1,5 +1,6 @@
 import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
+import { generateUUID } from '../utils/uuid';
 
 export interface Empresa {
   id: string;
@@ -69,7 +70,7 @@ export const saveEmpresa = async (empresa: Empresa, isOnline: boolean): Promise<
   const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(empresa.id);
   const empresaToSave: Empresa = {
     ...empresa,
-    id: isValidUUID ? empresa.id : crypto.randomUUID()
+    id: isValidUUID ? empresa.id : generateUUID()
   };
 
   const { error } = await supabase.from('tenants').upsert(empresaToSave);

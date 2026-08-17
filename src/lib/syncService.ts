@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getFromIDB, saveToIDB, deleteFromIDB, getAllFromIDB } from './idb';
+import { generateUUID } from '../utils/uuid';
 
 export interface SyncTask {
   id: string;
@@ -14,7 +15,7 @@ const SYNC_QUEUE_STORE = 'sync_queue';
 export const addToSyncQueue = async (task: Omit<SyncTask, 'id' | 'createdAt'>) => {
   const newTask: SyncTask = {
     ...task,
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     createdAt: new Date().toISOString(),
   };
   await saveToIDB(SYNC_QUEUE_STORE, newTask);

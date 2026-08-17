@@ -1,4 +1,5 @@
 import { get, set } from "idb-keyval";
+import { generateUUID } from '../../utils/uuid';
 import React, { useState, useEffect } from 'react';
 import { Filter, Save, Bookmark, X, ChevronDown, Check } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
@@ -50,7 +51,7 @@ export const AdvancedFilterBar: React.FC<AdvancedFilterBarProps> = ({
     if (!newFilterName.trim()) return;
     
     const newFilter: SavedFilter = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name: newFilterName,
       filters: currentFilters
     };

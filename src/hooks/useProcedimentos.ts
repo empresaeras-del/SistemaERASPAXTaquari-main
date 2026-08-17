@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { generateUUID } from '../utils/uuid';
 import { supabase } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
@@ -63,7 +64,7 @@ export function useProcedimentos() {
     try {
       const newItem = { 
         ...data, 
-        id: data.id || crypto.randomUUID(),
+        id: data.id || generateUUID(),
         empresa_id: data.empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001')
       };
       const { data: inserted, error: err } = await supabase.from('procedimentos').insert([newItem]).select().single();

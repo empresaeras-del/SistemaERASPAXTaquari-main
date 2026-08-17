@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { generateUUID } from '../../utils/uuid';
 import { X, Save, Edit2, Calendar, MapPin, User, FileText, CheckCircle, Clock, Trash2, Plus, DollarSign } from 'lucide-react';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
 import { saveAtendimento } from '../../services/atendimentosService';
@@ -61,7 +62,7 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
 
   const addItem = () => {
     setItemsList([...itemsList, {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       atendimento_id: atendimento.id,
       item_id: '',
       quantidade: 1,

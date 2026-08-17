@@ -1,4 +1,5 @@
 import { saveToIDB } from './idb';
+import { generateUUID } from '../utils/uuid';
 import { get } from './idb-safe';
 import { createClient } from '@supabase/supabase-js';
 
@@ -55,7 +56,7 @@ export const registrarAuditoria = async (acao: string, detalhes: any) => {
   // 2. Sempre gravar no IDB para visualização local/offline
   try {
     const log = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       tenant_id: tenantId,
       usuario_id: userId,
       acao,

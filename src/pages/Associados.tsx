@@ -882,7 +882,7 @@ export const AssociadosPage: React.FC = () => {
       setIsEditingMode(true);
     } else {
       setEditingAssociado({
-        id: Math.random().toString(36).substring(7),
+        id: uuidv4(),
         tenant_id: state.empresaSelecionada || "",
         nome: "",
         cpf: "",
@@ -988,7 +988,7 @@ export const AssociadosPage: React.FC = () => {
         if (original && original.plano_pax_id && original.plano_pax_id !== novoAssociado.plano_pax_id) {
             const hist = novoAssociado.historico_contratos ? [...novoAssociado.historico_contratos] : [];
             hist.push({
-                id: Math.random().toString(36).substring(7),
+                id: uuidv4(),
                 plano: original.plano_nome || "Anterior",
                 valor: original.valor_plano || 0,
                 data_inicio: original.data_adesao,
@@ -2137,7 +2137,7 @@ export const AssociadosPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => {
-                              const newId = Math.random().toString(36).substring(7);
+                              const newId = uuidv4();
                               setEditingAssociado({
                                 ...editingAssociado,
                                 dependentes: [
@@ -2709,7 +2709,7 @@ export const AssociadosPage: React.FC = () => {
                               if (file) {
                                 // Simulate an upload by just adding to local list
                                 const novoDoc = {
-                                  id: Math.random().toString(36).substring(7),
+                                  id: uuidv4(),
                                   nome: file.name,
                                   url: URL.createObjectURL(file), // Temp URL for preview
                                   tipo: file.type,
