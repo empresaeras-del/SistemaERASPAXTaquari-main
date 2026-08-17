@@ -5,12 +5,12 @@ import { getEmpresas, Empresa } from '../services/empresasService';
 
 export const LoginPage: React.FC = () => {
   const { signIn, signUp, resetPassword, session, loading } = useAuth();
-  
+
   // Login states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
+
   // Register states
   const [regNome, setRegNome] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -19,7 +19,7 @@ export const LoginPage: React.FC = () => {
   const [regTenantId, setRegTenantId] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [registerSuccess, setRegisterSuccess] = useState(false);
-  
+
   // Common states
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export const LoginPage: React.FC = () => {
         setEmpresas(data);
         setRegTenantId(data[0].id);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   // Se já logado, redireciona
@@ -108,30 +108,38 @@ export const LoginPage: React.FC = () => {
     <div className="login-page">
       {/* Background decorativo */}
       <div className="login-bg">
+        <div className="login-bg-grid" />
         <div className="login-bg-orb login-bg-orb-1" />
         <div className="login-bg-orb login-bg-orb-2" />
         <div className="login-bg-orb login-bg-orb-3" />
       </div>
 
       <div className="login-container">
-        {/* Lado esquerdo — Branding */}
+        {/* Lado esquerdo — Branding com Emblema Animado ERAS */}
         <div className="login-brand">
           <div className="login-brand-content">
-            <div className="login-logo">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" className="login-logo-icon">
-                <circle cx="24" cy="24" r="22" fill="url(#logoGrad)" />
-                <path d="M14 20 L24 12 L34 20 L34 34 L14 34 Z" fill="white" fillOpacity="0.9" />
-                <rect x="20" y="26" width="8" height="8" fill="url(#logoGrad)" rx="1" />
-                <defs>
-                  <linearGradient id="logoGrad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#6366f1" />
-                    <stop offset="100%" stopColor="#8b5cf6" />
-                  </linearGradient>
-                </defs>
-              </svg>
+            <div className="eras-emblem-showcase">
+              <div className="eras-emblem-halo" />
+              <div className="eras-emblem-cyber-ring" />
+              <div className="eras-emblem-card">
+                <img 
+                  src="/eras-cyber-emblem.jpg" 
+                  alt="ERAS Emblema Cyber" 
+                  className="eras-emblem-img" 
+                />
+                <div className="eras-emblem-scanline" />
+                <div className="eras-emblem-sheen" />
+              </div>
             </div>
+
+            <div className="login-brand-tag">
+              <span className="login-brand-tag-dot" />
+              <span>Tecnologia & Gestão PAX</span>
+            </div>
+
             <h1 className="login-brand-title">ERAS PAX</h1>
-            <p className="login-brand-subtitle">Sistema de Gestão Funerária</p>
+            <p className="login-brand-subtitle">Sistema de Gestão Funerária & Planos</p>
+            
             <div className="login-brand-features">
               <div className="login-feature-item">
                 <span className="login-feature-dot" />
@@ -152,13 +160,23 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
           <p className="login-brand-footer">
-            Taquari, Rio Grande do Sul &nbsp;•&nbsp; {new Date().getFullYear()}
+            Coxim, Mato Grosso do Sul &nbsp;•&nbsp; {new Date().getFullYear()}
           </p>
         </div>
 
         {/* Lado direito — Formulário */}
         <div className="login-form-side">
           <div className="login-card">
+            {/* Emblema mobile (visível em telas menores) */}
+            <div className="login-mobile-emblem">
+              <div className="login-mobile-emblem-card">
+                <img src="/eras-cyber-emblem.jpg" alt="ERAS" />
+              </div>
+              <div>
+                <div className="text-white font-bold text-lg leading-tight">ERAS PAX</div>
+                <div className="text-xs text-rose-400 font-medium">Gestão Funerária</div>
+              </div>
+            </div>
 
             {/* === MODO LOGIN === */}
             {mode === 'login' && (
@@ -309,10 +327,10 @@ export const LoginPage: React.FC = () => {
                     <p>Sua conta foi criada no Supabase. Você já pode fazer login com seu e-mail e senha.</p>
                     <button
                       className="login-btn-secondary"
-                      onClick={() => { 
-                        setMode('login'); 
+                      onClick={() => {
+                        setMode('login');
                         setEmail(regEmail);
-                        setRegisterSuccess(false); 
+                        setRegisterSuccess(false);
                       }}
                     >
                       Ir para o Login

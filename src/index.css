@@ -359,7 +359,7 @@
 /* Page wrapper */
 .login-page {
   min-height: 100vh;
-  background: #060b16;
+  background: #050811;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -376,42 +376,54 @@
 .login-bg-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.25;
+  filter: blur(90px);
+  opacity: 0.3;
 }
 .login-bg-orb-1 {
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, #6366f1, transparent);
-  top: -200px;
-  left: -150px;
-  animation: float1 8s ease-in-out infinite;
+  width: 650px;
+  height: 650px;
+  background: radial-gradient(circle, #e11d48, #881337 40%, transparent 70%);
+  top: -180px;
+  left: -120px;
+  animation: float1 10s ease-in-out infinite;
 }
 .login-bg-orb-2 {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, #8b5cf6, transparent);
-  bottom: -150px;
-  right: -100px;
-  animation: float2 10s ease-in-out infinite;
+  width: 550px;
+  height: 550px;
+  background: radial-gradient(circle, #2563eb, #1e3a8a 40%, transparent 70%);
+  bottom: -120px;
+  right: -80px;
+  animation: float2 12s ease-in-out infinite;
 }
 .login-bg-orb-3 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, #06b6d4, transparent);
-  top: 40%;
-  left: 30%;
-  opacity: 0.12;
-  animation: float3 12s ease-in-out infinite;
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, #0ea5e9, #0369a1 40%, transparent 70%);
+  top: 45%;
+  left: 28%;
+  opacity: 0.18;
+  animation: float3 14s ease-in-out infinite;
+}
+
+/* Grid overlay */
+.login-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
 }
 
 @keyframes float1 {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(40px, 30px); }
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(35px, 25px) scale(1.05); }
 }
 @keyframes float2 {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(-30px, -40px); }
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-25px, -35px) scale(1.08); }
 }
 @keyframes float3 {
   0%, 100% { transform: translate(0, 0) scale(1); }
@@ -440,44 +452,234 @@
   flex: 1;
   flex-direction: column;
   justify-content: space-between;
-  padding: 3rem;
-  background: linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.08) 100%);
-  border-right: 1px solid rgba(255,255,255,0.06);
+  padding: 3.5rem 4rem;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.75) 0%, rgba(8, 12, 28, 0.9) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
   animation: fadeUp 0.6s ease both;
+  backdrop-filter: blur(10px);
 }
 @media (min-width: 1024px) {
   .login-brand { display: flex; }
 }
 
 .login-brand-content {
-  max-width: 480px;
+  max-width: 520px;
 }
 
-.login-logo {
-  margin-bottom: 2rem;
+/* === ERAS ANIMATED CYBER EMBLEM === */
+.eras-emblem-showcase {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 2.2rem;
+  perspective: 1000px;
 }
-.login-logo-icon {
-  width: 56px;
-  height: 56px;
-  filter: drop-shadow(0 0 20px rgba(99,102,241,0.5));
+
+.eras-emblem-halo {
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(circle, rgba(225, 29, 72, 0.45) 0%, rgba(37, 99, 235, 0.25) 50%, transparent 75%);
+  filter: blur(28px);
+  border-radius: 50%;
+  animation: erasPulseGlow 4s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.eras-emblem-cyber-ring {
+  position: absolute;
+  inset: -12px;
+  border-radius: 28px;
+  border: 1px dashed rgba(225, 29, 72, 0.4);
+  animation: erasRotateRing 25s linear infinite;
+  pointer-events: none;
+}
+
+.eras-emblem-cyber-ring::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: #38bdf8;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #38bdf8, 0 0 20px #38bdf8;
+  transform: translateX(-50%);
+}
+
+.eras-emblem-card {
+  position: relative;
+  width: 190px;
+  height: 190px;
+  border-radius: 26px;
+  padding: 8px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 20px 50px rgba(0, 0, 0, 0.6),
+    0 0 30px rgba(225, 29, 72, 0.35),
+    inset 0 0 20px rgba(225, 29, 72, 0.2);
+  backdrop-filter: blur(12px);
+  animation: erasFloat 5s ease-in-out infinite;
+  transform-style: preserve-3d;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.eras-emblem-card:hover {
+  transform: scale(1.04) rotateY(5deg);
+  box-shadow: 
+    0 25px 60px rgba(0, 0, 0, 0.7),
+    0 0 45px rgba(225, 29, 72, 0.55),
+    0 0 25px rgba(56, 189, 248, 0.4);
+}
+
+.eras-emblem-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 18px;
+  filter: contrast(1.1) brightness(1.05);
+  transition: filter 0.3s ease;
+}
+
+/* Holographic Laser Scanline effect */
+.eras-emblem-scanline {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(56, 189, 248, 0.2) 50%,
+    rgba(225, 29, 72, 0.6) 95%,
+    rgba(255, 255, 255, 0.9) 100%
+  );
+  box-shadow: 0 0 15px rgba(225, 29, 72, 0.8);
+  animation: erasLaserScan 3.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+/* Light sheen reflection sweep */
+.eras-emblem-sheen {
+  position: absolute;
+  top: 0;
+  left: -150%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    115deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 80%
+  );
+  transform: skewX(-25deg);
+  animation: erasSheen 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes erasFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(1deg);
+  }
+}
+
+@keyframes erasPulseGlow {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes erasRotateRing {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes erasLaserScan {
+  0% {
+    top: -100%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    top: 200%;
+    opacity: 0;
+  }
+}
+
+@keyframes erasSheen {
+  0%, 40% {
+    left: -150%;
+  }
+  80%, 100% {
+    left: 200%;
+  }
+}
+
+/* Brand text */
+.login-brand-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.85rem;
+  background: rgba(225, 29, 72, 0.12);
+  border: 1px solid rgba(225, 29, 72, 0.35);
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f43f5e;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 0 15px rgba(225, 29, 72, 0.15);
+}
+
+.login-brand-tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f43f5e;
+  box-shadow: 0 0 8px #f43f5e;
+  animation: erasPulseGlow 1.5s infinite alternate;
 }
 
 .login-brand-title {
-  font-size: 2.5rem;
-  font-weight: 800;
+  font-size: 2.75rem;
+  font-weight: 900;
   color: #fff;
-  letter-spacing: -0.03em;
-  margin: 0 0 0.5rem;
-  background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+  letter-spacing: -0.04em;
+  margin: 0 0 0.4rem;
+  background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 40%, #cbd5e1 70%, #94a3b8 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.15);
 }
 
 .login-brand-subtitle {
   font-size: 1.1rem;
   color: #94a3b8;
-  margin: 0 0 2.5rem;
+  margin: 0 0 2.2rem;
+  font-weight: 500;
 }
 
 .login-brand-features {
@@ -489,23 +691,56 @@
 .login-feature-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.85rem;
   color: #cbd5e1;
   font-size: 0.95rem;
+  font-weight: 500;
 }
 
 .login-feature-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #f43f5e, #38bdf8);
   flex-shrink: 0;
-  box-shadow: 0 0 8px rgba(99,102,241,0.6);
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.7);
 }
 
 .login-brand-footer {
-  color: #475569;
-  font-size: 0.8rem;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+/* Mobile animated emblem on top of form */
+.login-mobile-emblem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+@media (min-width: 1024px) {
+  .login-mobile-emblem { display: none; }
+}
+
+.login-mobile-emblem-card {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  border-radius: 14px;
+  padding: 3px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border: 1px solid rgba(225, 29, 72, 0.3);
+  box-shadow: 0 0 15px rgba(225, 29, 72, 0.4);
+  overflow: hidden;
+}
+
+.login-mobile-emblem-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
 }
 
 /* === RIGHT: Form Panel === */
