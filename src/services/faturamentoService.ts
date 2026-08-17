@@ -1,11 +1,11 @@
 import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB } from '../lib/idb';
 import { addToSyncQueue } from '../lib/syncService';
-import { v4 as uuidv4 } from 'uuid';
+import { generateUUID } from '../utils/uuid';
 import { RemessaFaturamento, StatusRemessa } from '../types/faturamento';
 import { Requisicao } from '../types/requisicoes';
 import { salvarDespesa, cancelarDespesa, Despesa, ParcelaPagar, FormaPagamento } from './financeiroService';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import { fetchImageAsBase64, fetchImageWithDimensions } from '../utils/imageUtils';
@@ -32,7 +32,6 @@ export const getRemessas = async (isOnline: boolean, tenantId: string): Promise<
         for (const item of data) {
           await saveToIDB('remessas_faturamento', item);
         }
-        return data as RemessaFaturamento[];
       }
     } catch (e) {
       console.warn('Erro ao buscar remessas no Supabase, fallback IDB:', e);
@@ -44,6 +43,77 @@ export const getRemessas = async (isOnline: boolean, tenantId: string): Promise<
   if (tenantId && tenantId !== 'all') {
     result = result.filter(r => r.tenant_id === tenantId);
   }
+
+  // Autocorreção: se houver remessa com status 'fechada' sem lançamento gerado no Contas a Pagar, gera agora
+  for (const rem of result) {
+    if (rem.status === 'fechada' && rem.valor_liquido > 0) {
+      try {
+        const parcelaId = rem.parcela_pagar_id || generateUUID();
+        const despesaId = rem.despesa_id || generateUUID();
+        const existingP = await getFromIDB<ParcelaPagar>('parcelas_pagar', parcelaId);
+        
+        if (!existingP) {
+          const effectiveTenant = rem.tenant_id || tenantId || 'default_tenant';
+          const vencimento = rem.data_vencimento_pagamento || format(addDays(new Date(rem.data_criacao || new Date()), 15), 'yyyy-MM-dd');
+          const dataCriacao = rem.data_fechamento || rem.data_criacao || new Date().toISOString();
+
+          const novaDespesa: Despesa = {
+            id: despesaId,
+            tenant_id: effectiveTenant,
+            tipo_credor: 'fornecedor_pj',
+            credor_nome: rem.credenciado_nome,
+            credor_cpf_cnpj: rem.credenciado_cnpj_cpf,
+            descricao: `Faturamento Remessa ${rem.codigo_remessa} - ${rem.credenciado_nome} (${rem.qtd_guias} guias)`,
+            categoria: 'Repasse Credenciados / Prestadores',
+            centro_custo: 'Rede Assistencial',
+            data_emissao: dataCriacao,
+            data_inicio_pagamento: vencimento,
+            valor_total: rem.valor_liquido,
+            qtd_parcelas: 1,
+            forma_pagamento_padrao: 'pix',
+            observacoes: `Gerado automaticamente pelo fechamento da Remessa ${rem.codigo_remessa}. ${rem.observacoes || ''}`,
+            status: 'ativo',
+            criado_em: dataCriacao,
+            criado_por: rem.fechado_por || 'Sistema',
+            atualizado_em: new Date().toISOString()
+          };
+
+          const novaParcela: ParcelaPagar = {
+            id: parcelaId,
+            tenant_id: effectiveTenant,
+            despesa_id: despesaId,
+            numero_parcela: 1,
+            total_parcelas: 1,
+            tipo_credor: 'fornecedor_pj',
+            credor_nome: rem.credenciado_nome,
+            credor_cpf_cnpj: rem.credenciado_cnpj_cpf,
+            descricao: `Remessa ${rem.codigo_remessa} (${rem.qtd_guias} guias)`,
+            data_vencimento: vencimento,
+            valor: rem.valor_liquido,
+            forma_pagamento: 'pix',
+            observacao: `Vencimento do Faturamento da Rede Credenciada (${rem.codigo_remessa})`,
+            status: 'pendente',
+            criado_em: dataCriacao,
+            atualizado_em: new Date().toISOString()
+          };
+
+          await salvarDespesa(isOnline, novaDespesa, [novaParcela]);
+
+          if (!rem.despesa_id || !rem.parcela_pagar_id) {
+            rem.despesa_id = despesaId;
+            rem.parcela_pagar_id = parcelaId;
+            await saveToIDB('remessas_faturamento', rem);
+            if (isOnline) {
+              await supabase.from('remessas_faturamento').upsert(rem);
+            }
+          }
+        }
+      } catch (errSync) {
+        console.warn('Erro ao auto-sincronizar contas a pagar de remessa fechada:', errSync);
+      }
+    }
+  }
+
   return result.sort((a, b) => new Date(b.data_criacao).getTime() - new Date(a.data_criacao).getTime());
 };
 
@@ -63,7 +133,7 @@ export const criarRemessa = async (
 
   const novaRemessa: RemessaFaturamento = {
     ...dados,
-    id: uuidv4(),
+    id: generateUUID(),
     tenant_id: tenantId,
     codigo_remessa: gerarCodigoRemessa(indexMes),
     data_criacao: dataCriacao,
@@ -126,24 +196,30 @@ export const fecharRemessaEGerarContaPagar = async (
   formaPagamento: FormaPagamento = 'pix',
   usuarioNome: string = 'Operador'
 ): Promise<RemessaFaturamento> => {
-  const remessa = await getFromIDB<RemessaFaturamento>('remessas_faturamento', remessaId);
+  let remessa = await getFromIDB<RemessaFaturamento>('remessas_faturamento', remessaId);
+  if (!remessa && isOnline) {
+    try {
+      const { data } = await supabase.from('remessas_faturamento').select('*').eq('id', remessaId).maybeSingle();
+      if (data) remessa = data as RemessaFaturamento;
+    } catch (e) {
+      console.warn('Erro ao buscar remessa no Supabase:', e);
+    }
+  }
+
   if (!remessa) {
     throw new Error('Remessa não encontrada.');
   }
 
-  if (remessa.status === 'fechada' || remessa.status === 'paga') {
-    throw new Error('Esta remessa já foi fechada anteriormente.');
-  }
-
-  const despesaId = uuidv4();
-  const parcelaId = uuidv4();
+  const effectiveTenantId = remessa.tenant_id || tenantId || 'default_tenant';
+  const despesaId = remessa.despesa_id || generateUUID();
+  const parcelaId = remessa.parcela_pagar_id || generateUUID();
   const dataHoje = new Date().toISOString();
 
   // 1. Gerar Despesa (Contas a Pagar)
   const novaDespesa: Despesa = {
     id: despesaId,
-    tenant_id: tenantId,
-    tipo_credor: remessa.tipo_prestador === 'credenciado' ? 'fornecedor_pj' : 'fornecedor_pj',
+    tenant_id: effectiveTenantId,
+    tipo_credor: 'fornecedor_pj',
     credor_nome: remessa.credenciado_nome,
     credor_cpf_cnpj: remessa.credenciado_cnpj_cpf,
     descricao: `Faturamento Remessa ${remessa.codigo_remessa} - ${remessa.credenciado_nome} (${remessa.qtd_guias} guias)`,
@@ -163,11 +239,11 @@ export const fecharRemessaEGerarContaPagar = async (
 
   const novaParcela: ParcelaPagar = {
     id: parcelaId,
-    tenant_id: tenantId,
+    tenant_id: effectiveTenantId,
     despesa_id: despesaId,
     numero_parcela: 1,
     total_parcelas: 1,
-    tipo_credor: remessa.tipo_prestador === 'credenciado' ? 'fornecedor_pj' : 'fornecedor_pj',
+    tipo_credor: 'fornecedor_pj',
     credor_nome: remessa.credenciado_nome,
     credor_cpf_cnpj: remessa.credenciado_cnpj_cpf,
     descricao: `Remessa ${remessa.codigo_remessa} (${remessa.qtd_guias} guias)`,
@@ -180,12 +256,13 @@ export const fecharRemessaEGerarContaPagar = async (
     atualizado_em: dataHoje
   };
 
-  // Salvar no Financeiro
+  // Salvar no Financeiro (IDB e Supabase)
   await salvarDespesa(isOnline, novaDespesa, [novaParcela]);
 
   // 2. Atualizar a Remessa
   const remessaFechada: RemessaFaturamento = {
     ...remessa,
+    tenant_id: effectiveTenantId,
     status: 'fechada',
     data_fechamento: dataHoje,
     data_vencimento_pagamento: dataVencimento,

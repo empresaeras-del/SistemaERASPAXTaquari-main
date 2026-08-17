@@ -296,7 +296,7 @@ export const getParcelasPagar = async (isOnline: boolean, tenantId: string): Pro
     try {
       let query = supabase.from('parcelas_pagar').select('*');
       if (tenantId && tenantId !== 'all') {
-        query = query.eq('tenant_id', tenantId);
+        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant`);
       }
       const { data, error } = await query;
       if (error) throw error;
@@ -316,7 +316,7 @@ export const getParcelasPagar = async (isOnline: boolean, tenantId: string): Pro
 
   return parcelas.filter(p => {
     if (!p) return false;
-    if (tenantId && tenantId !== 'all' && p.tenant_id && p.tenant_id !== tenantId) return false;
+    if (tenantId && tenantId !== 'all' && p.tenant_id && p.tenant_id !== tenantId && p.tenant_id !== 'default_tenant') return false;
     return true;
   });
 };
