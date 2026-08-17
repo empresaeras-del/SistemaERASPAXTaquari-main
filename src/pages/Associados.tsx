@@ -877,6 +877,8 @@ export const AssociadosPage: React.FC = () => {
   }, [state.isOnline, state.empresaSelecionada]);
 
   const handleOpenModal = (associado?: Associado) => {
+    setSelectedDependenteId(null);
+    setBuscaDependenteInterno("");
     if (associado) {
       setEditingAssociado({ ...associado });
       setIsEditingMode(true);
@@ -2247,9 +2249,16 @@ export const AssociadosPage: React.FC = () => {
                                   const idx = editingAssociado.dependentes?.findIndex(d => d.id === selectedDependenteId);
                                   if (idx !== undefined && idx !== -1) {
                                       const dep = editingAssociado.dependentes![idx];
-                                      if (!dep.nome || !dep.cpf || !dep.data_nascimento || !dep.parentesco) {
-                                          toast.error("Preencha todos os campos do dependente antes de confirmar.");
+                                      if (!dep.nome || !dep.parentesco) {
+                                          toast.error("Preencha pelo menos o Nome e o Parentesco do dependente antes de confirmar.");
                                           return;
+                                      }
+                                      // Valida CPF apenas se foi preenchido
+                                      if (dep.cpf && dep.cpf.replace(/\D/g, '').length > 0) {
+                                          if (!isValidCPFOrCNPJ(dep.cpf, false)) {
+                                              toast.error(`CPF do dependente ${dep.nome} é inválido.`);
+                                              return;
+                                          }
                                       }
                                       
                                       // Se tudo OK, abre modal/confirmação
@@ -2288,7 +2297,6 @@ export const AssociadosPage: React.FC = () => {
                                       Nome Completo
                                     </label>
                                     <input
-                                      required
                                       type="text"
                                       value={dep.nome}
                                       onChange={(e) => {
@@ -2337,8 +2345,7 @@ export const AssociadosPage: React.FC = () => {
                                       Data Nasc.
                                     </label>
                                     <input
-                                      required
-                              type="date"
+                                      type="date"
                                       value={dep.data_nascimento || ""}
                                       onChange={(e) => {
                                         const novosDeps = [
@@ -2361,7 +2368,6 @@ export const AssociadosPage: React.FC = () => {
                                       Parentesco
                                     </label>
                                     <input
-                                      required
                                       type="text"
                                       value={dep.parentesco}
                                       onChange={(e) => {

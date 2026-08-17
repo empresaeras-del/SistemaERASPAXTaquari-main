@@ -54,20 +54,24 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
 
   if (isOnline) {
     try {
-      let query = supabase.from('associados').select('*').is('deleted_at', null);
+      // Busca associados junto com seus dependentes via join
+      let query = supabase
+        .from('associados')
+        .select('*, dependentes(*)')
+        .is('deleted_at', null);
       if (tenantId && tenantId !== 'all') {
         query = query.eq('tenant_id', tenantId);
       }
       const { data, error } = await query;
       if (error) throw error;
       
-      // Update local cache
+      // Update local cache (salva com dependentes incluso)
       if (data) {
         for (const item of data) {
           await saveToIDB(STORE_NAME, item);
         }
       }
-      associados = data || [];
+      associados = (data as Associado[]) || [];
     } catch (error) {
       console.warn('Supabase fetch failed (likely not configured), falling back to IDB.');
       associados = await getAllFromIDB<Associado>(STORE_NAME);
