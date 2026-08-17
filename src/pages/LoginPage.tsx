@@ -122,10 +122,10 @@ export const LoginPage: React.FC = () => {
               <div className="eras-emblem-halo" />
               <div className="eras-emblem-cyber-ring" />
               <div className="eras-emblem-card">
-                <img 
-                  src="/eras-cyber-emblem.jpg" 
-                  alt="ERAS Emblema Cyber" 
-                  className="eras-emblem-img" 
+                <img
+                  src="/eras-cyber-emblem.jpg"
+                  alt="ERAS Emblema Cyber"
+                  className="eras-emblem-img"
                 />
                 <div className="eras-emblem-scanline" />
                 <div className="eras-emblem-sheen" />
@@ -137,9 +137,9 @@ export const LoginPage: React.FC = () => {
               <span>Tecnologia & Gestão PAX</span>
             </div>
 
-            <h1 className="login-brand-title">ERAS PAX</h1>
+            <h1 className="login-brand-title">Sistema ERAS v 1.0</h1>
             <p className="login-brand-subtitle">Sistema de Gestão Funerária & Planos</p>
-            
+
             <div className="login-brand-features">
               <div className="login-feature-item">
                 <span className="login-feature-dot" />
