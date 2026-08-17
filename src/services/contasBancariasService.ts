@@ -62,9 +62,9 @@ export const getContasBancarias = async (tenantId: string, isOnline: boolean): P
 
 export const salvarContaBancaria = async (isOnline: boolean, conta: ContaBancaria): Promise<void> => {
   if (isOnline) {
-    // Optionally sync with Supabase if it exists
     try {
-      const { error } = await supabase.from('contas_bancarias').upsert(conta);
+      const { criado_em, ...dataToSave } = conta;
+      const { error } = await supabase.from('contas_bancarias').upsert(dataToSave);
       if (error) console.warn('Supabase update conta_bancaria error:', error);
     } catch (e) {
       console.warn('Supabase update error:', e);

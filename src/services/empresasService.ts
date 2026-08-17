@@ -65,18 +65,22 @@ export const saveEmpresa = async (empresa: Empresa, isOnline: boolean): Promise<
     throw new Error('Não é possível salvar enquanto estiver offline.');
   }
 
-  try {
-    const { error } = await supabase.from('tenants').upsert(empresa);
-    if (error) {
-      console.warn('Supabase save failed (likely not configured), proceeding with IDB only.', error);
-    }
-  } catch (err) {
-    console.warn('Supabase save threw error, proceeding with IDB only.', err);
+  // Garante que o id seja um UUID válido (necessário para a coluna id UUID da tabela tenants)
+  const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(empresa.id);
+  const empresaToSave: Empresa = {
+    ...empresa,
+    id: isValidUUID ? empresa.id : crypto.randomUUID()
+  };
+
+  const { error } = await supabase.from('tenants').upsert(empresaToSave);
+  if (error) {
+    console.error('Erro ao salvar empresa no Supabase:', error);
+    throw new Error(error.message || 'Falha ao salvar empresa no banco de dados.');
   }
 
   // Sincroniza IDB pós-escrita
-  await saveToIDB(STORE_NAME, empresa);
-  await registrarAuditoria('Salvar Empresa', { id: empresa.id, nome_fantasia: empresa.nome_fantasia });
+  await saveToIDB(STORE_NAME, empresaToSave);
+  await registrarAuditoria('Salvar Empresa', { id: empresaToSave.id, nome_fantasia: empresaToSave.nome_fantasia });
 };
 
 export const deleteEmpresa = async (id: string, isOnline: boolean): Promise<void> => {
@@ -90,7 +94,8 @@ export const deleteEmpresa = async (id: string, isOnline: boolean): Promise<void
     .eq('id', id);
 
   if (error) {
-     console.warn('Supabase delete failed (likely not configured), proceeding with IDB only.');
+    console.error('Erro ao excluir empresa no Supabase:', error);
+    throw new Error(error.message || 'Falha ao excluir empresa no banco de dados.');
   }
 
   await deleteFromIDB(STORE_NAME, id);

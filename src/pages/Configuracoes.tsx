@@ -31,7 +31,9 @@ import {
   Wallet,
   Database,
   DownloadCloud,
-MessageCircle } from "lucide-react";
+  Eye,
+  EyeOff,
+  MessageCircle } from "lucide-react";
 
 import { SistemaBackupPanel } from '../components/configuracoes/SistemaBackupPanel';
 import { MensagensConfigTab } from '../components/configuracoes/MensagensConfigTab';
@@ -148,7 +150,7 @@ export const ConfiguracoesPage: React.FC = () => {
       setEmpresaContas(contas);
     } else {
       setEditingEmpresa({
-        id: Math.random().toString(36).substring(7),
+        id: crypto.randomUUID(),
         status: "ativo",
       });
       setEmpresaContas([]);
@@ -171,9 +173,9 @@ export const ConfiguracoesPage: React.FC = () => {
       await loadData();
       handleCloseModal();
       toast.success("Empresa salva com sucesso!");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao salvar", error);
-      toast.error("Erro ao salvar. Verifique se você está online.");
+      toast.error(error?.message || "Erro ao salvar empresa no Supabase.");
     }
   };
 
@@ -228,12 +230,17 @@ export const ConfiguracoesPage: React.FC = () => {
     }
   };
 
+  const [senhaUsuario, setSenhaUsuario] = useState('');
+  const [showSenhaUsuario, setShowSenhaUsuario] = useState(false);
+
   const handleOpenUsuarioModal = (usuario?: UsuarioCadastro) => {
+    setSenhaUsuario('');
+    setShowSenhaUsuario(false);
     if (usuario) {
       setEditingUsuario({ ...usuario });
     } else {
       setEditingUsuario({
-        id: Math.random().toString(36).substring(7),
+        id: crypto.randomUUID(),
         tenant_id: state.empresaSelecionada || "",
         status: "ativo",
         modulos_permitidos: [],
@@ -245,21 +252,31 @@ export const ConfiguracoesPage: React.FC = () => {
   const handleCloseUsuarioModal = () => {
     setIsUsuarioModalOpen(false);
     setEditingUsuario(null);
+    setSenhaUsuario('');
   };
 
   const handleSaveUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUsuario || !editingUsuario.id) return;
 
+    const isNew = !usuarios.some(u => u.id === editingUsuario.id);
+
+    if (isNew) {
+      if (!senhaUsuario || senhaUsuario.length < 6) {
+        toast.error("Para cadastrar um novo usuário no Supabase, a senha deve ter pelo menos 6 caracteres.");
+        return;
+      }
+    }
+
     try {
       const novoUsuario = editingUsuario as UsuarioCadastro;
-      await saveUsuario(novoUsuario, state.isOnline);
+      await saveUsuario(novoUsuario, state.isOnline, senhaUsuario || undefined);
       await loadData();
       handleCloseUsuarioModal();
-      toast.success("Usuário salvo com sucesso!");
-    } catch (error) {
+      toast.success(isNew ? "Usuário criado com sucesso no Supabase!" : "Usuário atualizado com sucesso!");
+    } catch (error: any) {
       console.error("Erro ao salvar usuário", error);
-      toast.error("Erro ao salvar usuário. Verifique se você está online.");
+      toast.error(error?.message || "Erro ao salvar usuário. Verifique sua conexão.");
     }
   };
 
@@ -926,9 +943,10 @@ export const ConfiguracoesPage: React.FC = () => {
                             return;
                           }
                           const isNew = !editingConta.id;
+                          const isValidUUID = editingConta.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editingConta.id);
                           const contaToSave: ContaBancaria = {
                             ...editingConta as ContaBancaria,
-                            id: editingConta.id || `conta-${Date.now()}`,
+                            id: isValidUUID ? (editingConta.id as string) : crypto.randomUUID(),
                             tenant_id: editingEmpresa.id!,
                             criado_em: editingConta.criado_em || new Date().toISOString()
                           };
@@ -1153,6 +1171,34 @@ export const ConfiguracoesPage: React.FC = () => {
                     className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
                   />
                 </div>
+
+                {!usuarios.some(u => u.id === editingUsuario.id) && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-400 mb-1">
+                      Senha Inicial de Acesso (Supabase Auth) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showSenhaUsuario ? "text" : "password"}
+                        required
+                        placeholder="Mínimo 6 caracteres"
+                        value={senhaUsuario}
+                        onChange={(e) => setSenhaUsuario(e.target.value)}
+                        className="w-full px-4 py-2.5 pr-10 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSenhaUsuario(!showSenhaUsuario)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      >
+                        {showSenhaUsuario ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <span className="text-xs text-slate-500 mt-1 block">
+                      Esta senha será usada pelo colaborador para entrar no sistema.
+                    </span>
+                  </div>
+                )}
                 
                 {state.user?.nivel === 'super_admin' && (
                   <div>

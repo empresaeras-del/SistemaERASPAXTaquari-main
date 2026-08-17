@@ -9,6 +9,7 @@ interface AuthContextType {
   supabaseUser: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, metadata: { nome: string; tenant_id?: string }) => Promise<{ error: string | null; user?: User | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
 }
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
   supabaseUser: null,
   loading: true,
   signIn: async () => ({ error: null }),
+  signUp: async () => ({ error: null }),
   signOut: async () => {},
   resetPassword: async () => ({ error: null }),
 });
@@ -117,6 +119,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signUp = async (
+    email: string,
+    password: string,
+    metadata: { nome: string; tenant_id?: string }
+  ): Promise<{ error: string | null; user?: User | null }> => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            nome: metadata.nome,
+            tenant_id: metadata.tenant_id || 'default',
+            nivel: 'funcionario'
+          }
+        }
+      });
+
+      setLoading(false);
+
+      if (error) {
+        if (error.message.includes('already registered') || error.message.includes('User already exists')) {
+          return { error: 'Este e-mail já está cadastrado no sistema.' };
+        }
+        if (error.message.includes('Password should be at least')) {
+          return { error: 'A senha deve conter no mínimo 6 caracteres.' };
+        }
+        return { error: error.message };
+      }
+
+      return { error: null, user: data.user };
+    } catch (err) {
+      setLoading(false);
+      return { error: 'Erro inesperado ao realizar cadastro. Tente novamente.' };
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setSession(null);
@@ -132,7 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, supabaseUser, loading, signIn, signOut, resetPassword }}>
+    <AuthContext.Provider value={{ session, user, supabaseUser, loading, signIn, signUp, signOut, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );
