@@ -21,6 +21,7 @@ import { useColumnVisibility } from "../hooks/useColumnVisibility";
 import { ColumnVisibilityToggle } from "../components/ColumnVisibilityToggle";
 import { useFornecedores } from "../hooks/useFornecedores";
 import { registrarAuditoria } from "../lib/supabase";
+import { canDelete } from "../utils/permissions";
 import { MessageCircle, Phone, ClipboardList, Activity, MapPin, User, FileText, CreditCard, FolderOpen, Folder, File, Plus, Search, Filter, Edit2, Trash2, X, Users, Heart, AlertCircle, ShieldCheck, CheckCircle, Clock, XCircle, DollarSign, Calendar, LayoutGrid, List , Printer } from "lucide-react";
 import { PlanoPaxSelect } from "../components/planos-pax/PlanoPaxSelect";
 import { AssociadoRequisicoesTab } from "../components/associados/AssociadoRequisicoesTab";
@@ -1023,6 +1024,11 @@ export const AssociadosPage: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
+    if (!canDelete(state.user)) {
+      toast.error("Permissão negada. Somente usuários Administradores podem excluir registros no sistema.");
+      return;
+    }
+
     confirm({
       title: "Excluir Associado",
       message:

@@ -6,6 +6,7 @@ export interface Usuario {
   email: string;
   nivel: NivelAcesso;
   modulos_permitidos: string[];
+  tenant_id?: string;
 }
 
 export interface AppState {

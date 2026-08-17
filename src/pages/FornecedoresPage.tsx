@@ -33,7 +33,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../context/ConfirmContext';
-
+import { canDelete } from '../utils/permissions';
+import { useAppContext } from '../context/AppContext';
 
 const defaultCategoriasList = [
   'Urnas e Caixões',
@@ -56,6 +57,7 @@ const defaultTiposFornecimentoList = [
 
 
 export const FornecedoresPage: React.FC = () => {
+  const { state } = useAppContext();
   const [categorias, setCategorias] = useState<string[]>(defaultCategoriasList);
   const [tiposFornecimento, setTiposFornecimento] = useState<string[]>(defaultTiposFornecimentoList);
 
@@ -114,6 +116,11 @@ export const FornecedoresPage: React.FC = () => {
   };
 
   const handleExcluir = (fornecedor: Fornecedor) => {
+    if (!canDelete(state.user)) {
+      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+      return;
+    }
+
     confirm({
       title: 'Excluir Fornecedor?',
       message: `Tem certeza que deseja excluir o fornecedor "${fornecedor.nome_fantasia}"? Esta ação não pode ser desfeita.`,

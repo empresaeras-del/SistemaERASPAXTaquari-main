@@ -12,6 +12,15 @@ import {
   Empresa,
 } from "../services/empresasService";
 import {
+  canCreateEmpresa,
+  canEditEmpresa,
+  canDeleteEmpresa,
+  canEditUser,
+  canDeleteUser,
+  canDelete,
+  getAvailableNiveisForUser
+} from "../utils/permissions";
+import {
   getUsuarios,
   saveUsuario,
   deleteUsuario,
@@ -143,12 +152,21 @@ export const ConfiguracoesPage: React.FC = () => {
   };
 
   const handleOpenModal = async (empresa?: Empresa) => {
-    setModalActiveTab('dados');
     if (empresa) {
+      if (!canEditEmpresa(state.user, empresa.id)) {
+        toast.error("Você só tem permissão para editar os dados da sua respectiva empresa.");
+        return;
+      }
+      setModalActiveTab('dados');
       setEditingEmpresa({ ...empresa });
       const contas = await getContasBancarias(empresa.id, state.isOnline);
       setEmpresaContas(contas);
     } else {
+      if (!canCreateEmpresa(state.user)) {
+        toast.error("Somente o Super Admin pode incluir novas empresas no sistema.");
+        return;
+      }
+      setModalActiveTab('dados');
       setEditingEmpresa({
         id: crypto.randomUUID(),
         status: "ativo",
@@ -167,6 +185,16 @@ export const ConfiguracoesPage: React.FC = () => {
     e.preventDefault();
     if (!editingEmpresa || !editingEmpresa.id) return;
 
+    const isNew = !empresas.some(emp => emp.id === editingEmpresa.id);
+    if (isNew && !canCreateEmpresa(state.user)) {
+      toast.error("Somente o Super Admin pode incluir novas empresas no sistema.");
+      return;
+    }
+    if (!isNew && !canEditEmpresa(state.user, editingEmpresa.id)) {
+      toast.error("Você só tem permissão para editar os dados da sua respectiva empresa.");
+      return;
+    }
+
     try {
       const novaEmpresa = editingEmpresa as Empresa;
       await saveEmpresa(novaEmpresa, state.isOnline);
@@ -180,6 +208,11 @@ export const ConfiguracoesPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canDeleteEmpresa(state.user)) {
+      toast.error("Somente o Super Admin pode excluir empresas.");
+      return;
+    }
+
     confirm({
       title: "Excluir Empresa",
       message: "Tem certeza que deseja excluir esta empresa? Esta ação não pode ser desfeita.",
@@ -214,7 +247,7 @@ export const ConfiguracoesPage: React.FC = () => {
             prev ? { ...prev, [field]: publicUrl } : null,
           );
         } catch (error) {
-          toast.error("Erro ao fazer upload da imagem.");
+          console.error("Erro no upload", error);
         } finally {
           setUploading(false);
         }
@@ -237,12 +270,22 @@ export const ConfiguracoesPage: React.FC = () => {
     setSenhaUsuario('');
     setShowSenhaUsuario(false);
     if (usuario) {
+      if (!canEditUser(state.user, usuario)) {
+        toast.error("Você não tem permissão para editar usuários deste nível.");
+        return;
+      }
       setEditingUsuario({ ...usuario });
     } else {
+      if (state.user?.nivel !== 'super_admin' && state.user?.nivel !== 'admin') {
+        toast.error("Você não tem permissão para cadastrar usuários.");
+        return;
+      }
+      const availableNiveis = getAvailableNiveisForUser(state.user);
       setEditingUsuario({
         id: crypto.randomUUID(),
-        tenant_id: state.empresaSelecionada || "",
+        tenant_id: state.user?.nivel === 'super_admin' ? (state.empresaSelecionada || "") : (state.user?.tenant_id || state.empresaSelecionada || ""),
         status: "ativo",
+        nivel: availableNiveis[0]?.value || "funcionario",
         modulos_permitidos: [],
       });
     }
@@ -262,8 +305,21 @@ export const ConfiguracoesPage: React.FC = () => {
     const isNew = !usuarios.some(u => u.id === editingUsuario.id);
 
     if (isNew) {
+      if (state.user?.nivel !== 'super_admin' && state.user?.nivel !== 'admin') {
+        toast.error("Você não tem permissão para cadastrar novos usuários.");
+        return;
+      }
+      if (state.user?.nivel === 'admin' && (editingUsuario.nivel === 'super_admin' || editingUsuario.nivel === 'admin')) {
+        toast.error("Administradores só podem criar usuários de nível Gerente ou Funcionário.");
+        return;
+      }
       if (!senhaUsuario || senhaUsuario.length < 6) {
         toast.error("Para cadastrar um novo usuário no Supabase, a senha deve ter pelo menos 6 caracteres.");
+        return;
+      }
+    } else {
+      if (!canEditUser(state.user, editingUsuario as UsuarioCadastro)) {
+        toast.error("Você não tem permissão para editar usuários deste nível.");
         return;
       }
     }
@@ -281,6 +337,12 @@ export const ConfiguracoesPage: React.FC = () => {
   };
 
   const handleDeleteUsuario = async (id: string) => {
+    const userToDelete = usuarios.find(u => u.id === id);
+    if (userToDelete && !canDeleteUser(state.user, userToDelete)) {
+      toast.error("Permissão negada. Somente o Super Admin pode excluir usuários do mesmo nível ou superiores.");
+      return;
+    }
+
     confirm({
       title: "Excluir Usuário",
       message: "Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.",
@@ -312,23 +374,27 @@ export const ConfiguracoesPage: React.FC = () => {
         </div>
 
         {activeTab === "empresas" ? (
-          <button
-            disabled={!state.isOnline}
-            onClick={() => handleOpenModal()}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#7E4CF3] hover:bg-[#6A3DE8] text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Plus className="w-5 h-5" />
-            Nova Empresa
-          </button>
+          canCreateEmpresa(state.user) && (
+            <button
+              disabled={!state.isOnline}
+              onClick={() => handleOpenModal()}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#7E4CF3] hover:bg-[#6A3DE8] text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-5 h-5" />
+              Nova Empresa
+            </button>
+          )
         ) : (
-          <button
-            disabled={!state.isOnline || !state.empresaSelecionada}
-            onClick={() => handleOpenUsuarioModal()}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#7E4CF3] hover:bg-[#6A3DE8] text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Plus className="w-5 h-5" />
-            Novo Usuário
-          </button>
+          (state.user?.nivel === 'super_admin' || state.user?.nivel === 'admin') && (
+            <button
+              disabled={!state.isOnline || (!state.empresaSelecionada && state.user?.nivel === 'super_admin')}
+              onClick={() => handleOpenUsuarioModal()}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#7E4CF3] hover:bg-[#6A3DE8] text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-5 h-5" />
+              Novo Usuário
+            </button>
+          )
         )}
       </div>
 
@@ -457,19 +523,25 @@ export const ConfiguracoesPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleOpenModal(empresa); }}
-                            className="p-1 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            disabled={!state.isOnline}
-                            onClick={(e) => { e.stopPropagation(); handleDelete(empresa.id); }}
-                            className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {canEditEmpresa(state.user, empresa.id) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleOpenModal(empresa); }}
+                              className="p-1 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                              title="Editar Empresa"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {canDeleteEmpresa(state.user) && (
+                            <button
+                              disabled={!state.isOnline}
+                              onClick={(e) => { e.stopPropagation(); handleDelete(empresa.id); }}
+                              className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
+                              title="Excluir Empresa (Super Admin)"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1092,19 +1164,25 @@ export const ConfiguracoesPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleOpenUsuarioModal(usuario); }}
-                            className="p-1 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            disabled={!state.isOnline}
-                            onClick={(e) => { e.stopPropagation(); handleDeleteUsuario(usuario.id); }}
-                            className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {canEditUser(state.user, usuario) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleOpenUsuarioModal(usuario); }}
+                              className="p-1 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                              title="Editar Usuário"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {canDeleteUser(state.user, usuario) && (
+                            <button
+                              disabled={!state.isOnline}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteUsuario(usuario.id); }}
+                              className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
+                              title="Excluir Usuário"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1237,9 +1315,11 @@ export const ConfiguracoesPage: React.FC = () => {
                     }
                     className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
                   >
-                    {state.user?.nivel === 'super_admin' && <option className="bg-[#101223]" value="super_admin">Super Admin</option>}<option className="bg-[#101223]" value="admin">Administrador</option>
-                    <option className="bg-[#101223]" value="gerente">Gerente</option>
-                    <option className="bg-[#101223]" value="funcionario">Funcionário</option>
+                    {getAvailableNiveisForUser(state.user).map(opt => (
+                      <option key={opt.value} className="bg-[#101223]" value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>

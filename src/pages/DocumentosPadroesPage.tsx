@@ -5,6 +5,7 @@ import JoditEditor from 'jodit-react';
 import { useDocumentosPadroes } from '../hooks/useDocumentosPadroes';
 import { useAppContext } from '../context/AppContext';
 import { DocumentoPadrao, TipoDocumento } from '../types/documentos';
+import { canDelete } from '../utils/permissions';
 import { FileText, Plus, Search, Pencil, Power, PowerOff, UploadCloud, X, Download, FileCheck, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify, List, Eye, Maximize, Minimize, Trash2, Printer } from 'lucide-react';
 
 const TIPO_LABELS: Record<TipoDocumento, string> = {
@@ -225,10 +226,14 @@ export const DocumentosPadroesPage = () => {
   };
 
   const handleDelete = async (doc: DocumentoPadrao) => {
+    if (!canDelete(state.user)) {
+      alert('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+      return;
+    }
     if (window.confirm(`Tem certeza que deseja excluir o modelo "${doc.nome}"?`)) {
       try {
         await excluir(doc.id);
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
         alert(err.message || 'Erro ao excluir documento');
       }

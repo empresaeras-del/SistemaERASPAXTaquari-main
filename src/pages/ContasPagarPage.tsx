@@ -16,6 +16,7 @@ import {
 } from '../services/financeiroService';
 import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
 import { LoteCaixa } from '../types/caixas';
+import { canDelete } from '../utils/permissions';
 import {
   Search,
   Plus,
@@ -263,6 +264,11 @@ export const ContasPagarPage: React.FC = () => {
   };
 
   const handleExcluirParcela = (parcela: ParcelaPagar) => {
+    if (!canDelete(state.user)) {
+      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+      return;
+    }
+
     confirm({
       title: 'Excluir Parcela',
       message: `Deseja realmente excluir a parcela ${parcela.numero_parcela}/${parcela.total_parcelas} de R$ ${parcela.valor.toFixed(2)} (${parcela.credor_nome})?`,
@@ -282,6 +288,11 @@ export const ContasPagarPage: React.FC = () => {
   };
 
   const handleExcluirDespesaCompleta = (despesaId: string, descricao: string) => {
+    if (!canDelete(state.user)) {
+      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+      return;
+    }
+
     confirm({
       title: 'Excluir Despesa Inteira',
       message: `Atenção: Esta ação excluirá permanentemente a despesa "${descricao}" e TODAS as suas parcelas vinculadas. Deseja continuar?`,

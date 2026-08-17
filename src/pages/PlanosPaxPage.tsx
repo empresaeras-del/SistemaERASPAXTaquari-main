@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { usePlanosPax } from '../hooks/usePlanosPax';
 import { PlanoPaxForm } from '../components/planos-pax/PlanoPaxForm';
 import { PlanoPaxCompleto } from '../types/planosPax';
+import { canDelete } from '../utils/permissions';
+import { useAppContext } from '../context/AppContext';
 import { Building2, Plus, Search, Pencil, Power, PowerOff, ShieldCheck, ShieldAlert, ArrowRightLeft, Trash2, User, Users, CircleDollarSign, Check, Clock, MapPin, LayoutGrid, List, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../context/ConfirmContext';
@@ -164,6 +166,7 @@ const PlanoCard = ({ plano, handleOpenForm, handleToggleStatus, handleDelete }: 
 };
 
 export const PlanosPaxPage: React.FC = () => {
+  const { state } = useAppContext();
   const { planos, loading, criar, editar, desativar, reativar, excluir } = usePlanosPax();
   const { confirm } = useConfirm();
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -190,6 +193,11 @@ export const PlanosPaxPage: React.FC = () => {
   };
 
   const handleDelete = (plano: PlanoPaxCompleto) => {
+    if (!canDelete(state.user)) {
+      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+      return;
+    }
+
     confirm({
       title: "Excluir Plano",
       message: `Tem certeza que deseja excluir o plano "${plano.nome}"? Esta ação não pode ser desfeita e contratos vinculados podem perder a referência.`,

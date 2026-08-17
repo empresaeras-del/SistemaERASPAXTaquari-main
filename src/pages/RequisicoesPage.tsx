@@ -49,7 +49,7 @@ import { ptBR } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { getRemessas } from '../services/faturamentoService';
 import { salvarReceita, Receita, ParcelaReceber } from '../services/financeiroService';
-
+import { canDelete } from '../utils/permissions';
 
 export const RequisicoesPage: React.FC = () => {
   const { state } = useAppContext();
@@ -441,6 +441,10 @@ export const RequisicoesPage: React.FC = () => {
 
   const handleConfirmarCancelamento = async () => {
     if (!modalCancelar) return;
+    if (!canDelete(state.user)) {
+      toast.error('Permissão negada. Somente usuários Administradores podem cancelar ou excluir guias.');
+      return;
+    }
     try {
       await atualizarStatusRequisicao(state.isOnline, modalCancelar.id, 'cancelada', {
         cancelado_por: state.user?.nome || 'Operador',

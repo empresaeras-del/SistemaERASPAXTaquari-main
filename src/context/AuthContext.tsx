@@ -48,8 +48,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: authUser.id,
           nome: userMeta.nome || userMeta.full_name || authUser.email?.split('@')[0] || 'Usuário',
           email: authUser.email || '',
-          nivel: (appMeta.nivel as NivelAcesso) || 'funcionario',
+          nivel: (appMeta.nivel as NivelAcesso) || (userMeta.nivel as NivelAcesso) || 'funcionario',
           modulos_permitidos: appMeta.modulos_permitidos || ['*'],
+          tenant_id: appMeta.tenant_id || userMeta.tenant_id,
         };
       }
 
@@ -59,6 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: data.email,
         nivel: data.nivel as NivelAcesso,
         modulos_permitidos: data.modulos_permitidos || ['*'],
+        tenant_id: data.tenant_id,
       };
     } catch {
       return null;

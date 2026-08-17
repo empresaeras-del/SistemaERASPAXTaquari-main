@@ -3,6 +3,7 @@ import { useProcedimentos } from '../hooks/useProcedimentos';
 import { useAppContext } from '../context/AppContext';
 import { CurrencyInput } from '../components/common/CurrencyInput';
 import { Procedimento } from '../types/procedimentos';
+import { canDelete } from '../utils/permissions';
 import { Plus, Search, Pencil, Power, PowerOff, Trash2, Activity, Filter, X, Settings2, PlusCircle, Trash2 as TrashIcon, List, Upload } from 'lucide-react';
 import { UploadProcedimentos } from '../components/procedimentos/UploadProcedimentos';
 import { getFromIDB, saveToIDB } from '../lib/idb';
@@ -11,7 +12,8 @@ import { useConfirm } from '../context/ConfirmContext';
 
 export const ProcedimentosPage = () => {
   const { procedimentos, loading, criar, editar, excluir } = useProcedimentos();
-  const { state: { isOnline, empresaSelecionada } } = useAppContext();
+  const { state } = useAppContext();
+  const { isOnline, empresaSelecionada } = state;
   const toast = useToast();
   const { confirm } = useConfirm();
   
@@ -87,6 +89,11 @@ export const ProcedimentosPage = () => {
   };
 
   const handleDelete = (proc: Procedimento) => {
+    if (!canDelete(state.user)) {
+      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+      return;
+    }
+
     confirm({
       title: "Excluir Procedimento",
       message: `Tem certeza que deseja excluir o procedimento "${proc.descricao}"? Esta ação não pode ser desfeita.`,
