@@ -130,10 +130,12 @@ export const ProcedimentosCredenciado: React.FC<ProcedimentosCredenciadoProps> =
   };
 
   const filteredVinculados = vinculados.filter(v => {
-    const term = searchTerm.toLowerCase();
+    const term = searchTerm.toLowerCase().trim();
+    if (!term) return true;
     const proc = v.procedimentos;
-    if (!proc) return false;
-    return proc.descricao.toLowerCase().includes(term) || proc.codigo_tuss.toLowerCase().includes(term);
+    const desc = (proc?.descricao || '').toLowerCase();
+    const tuss = (proc?.codigo_tuss || '').toLowerCase();
+    return desc.includes(term) || tuss.includes(term);
   });
 
   return (
@@ -292,8 +294,8 @@ export const ProcedimentosCredenciado: React.FC<ProcedimentosCredenciadoProps> =
             <tbody className="divide-y divide-[#475569]">
               {filteredVinculados.map((v) => (
                 <tr key={v.id} className="hover:bg-bg-subtle/50 transition-colors">
-                  <td className="px-4 py-3 font-mono">{v.procedimentos?.codigo_tuss}</td>
-                  <td className="px-4 py-3">{v.procedimentos?.descricao}</td>
+                  <td className="px-4 py-3 font-mono">{v.procedimentos?.codigo_tuss || '-'}</td>
+                  <td className="px-4 py-3">{v.procedimentos?.descricao || 'Procedimento Vinculado'}</td>
                   <td className="px-4 py-3 text-right">
                     {editingId === v.id ? (
                       <input
