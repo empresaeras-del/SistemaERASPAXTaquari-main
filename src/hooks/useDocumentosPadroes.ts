@@ -104,6 +104,9 @@ export function useDocumentosPadroes() {
 
         // Se uma coluna específica não existir no cache do PostgREST, remove e retenta
         if (err && err.code === 'PGRST204') {
+          if (err.message.includes('descricao')) {
+            delete payloadToTry.descricao;
+          }
           if (err.message.includes('conteudo_html')) {
             delete payloadToTry.conteudo_html;
           }
@@ -175,6 +178,9 @@ export function useDocumentosPadroes() {
           .single();
 
         if (err && err.code === 'PGRST204') {
+          if (err.message.includes('descricao')) {
+            delete payloadToTry.descricao;
+          }
           if (err.message.includes('conteudo_html')) {
             delete payloadToTry.conteudo_html;
           }

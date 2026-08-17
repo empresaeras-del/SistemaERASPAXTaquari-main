@@ -260,9 +260,9 @@ export const DocumentosPadroesPage = () => {
       }
       setIsFormOpen(false);
       setEditingDoc(null);
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao salvar documento');
+    } catch (err: any) {
+      console.error('Erro ao salvar documento:', err);
+      alert(err?.message || 'Erro ao salvar documento');
     }
   };
 
