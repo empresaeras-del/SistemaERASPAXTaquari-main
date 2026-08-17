@@ -21,9 +21,9 @@ export const gerarCodigoRequisicao = (indexNumber: number = 1): string => {
 export const getRequisicoes = async (isOnline: boolean, tenantId: string): Promise<Requisicao[]> => {
   if (isOnline) {
     try {
-      let query = supabase.from('requisicoes').select('*');
+      let query = supabase.from('requisicoes').select('*, itens:requisicao_itens(*)');
       if (tenantId && tenantId !== 'all') {
-        query = query.eq('tenant_id', tenantId);
+        query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
       }
       query = query.order('data_emissao', { ascending: false });
       const { data, error } = await query;
@@ -41,7 +41,7 @@ export const getRequisicoes = async (isOnline: boolean, tenantId: string): Promi
   const localData = await getAllFromIDB<Requisicao>('requisicoes');
   let result = localData;
   if (tenantId && tenantId !== 'all') {
-    result = result.filter(r => r.tenant_id === tenantId);
+    result = result.filter(r => r.tenant_id === tenantId || (r as any).empresa_id === tenantId);
   }
   return result.sort((a, b) => new Date(b.data_emissao).getTime() - new Date(a.data_emissao).getTime());
 };
@@ -60,22 +60,57 @@ export const criarRequisicao = async (
 
   const dataEmissao = new Date();
   const dataValidade = addDays(dataEmissao, 30); // Validade de 30 dias por padrão
+  const reqId = uuidv4();
+
+  const { itens, ...dadosSemItens } = dados;
 
   const novaReq: Requisicao = {
-    ...dados,
-    id: uuidv4(),
+    ...dadosSemItens,
+    id: reqId,
     tenant_id: tenantId,
     codigo_requisicao: gerarCodigoRequisicao(indexHoje),
     data_emissao: dataEmissao.toISOString(),
     data_validade: dados.data_validade || dataValidade.toISOString(),
+    itens: itens || [],
     created_at: dataEmissao.toISOString(),
     updated_at: dataEmissao.toISOString()
   };
 
+  const dbPayload = {
+    ...dadosSemItens,
+    id: reqId,
+    tenant_id: tenantId,
+    empresa_id: tenantId,
+    codigo_requisicao: novaReq.codigo_requisicao,
+    data_emissao: novaReq.data_emissao,
+    data_validade: novaReq.data_validade,
+    created_at: novaReq.created_at,
+    updated_at: novaReq.updated_at
+  };
+
   if (isOnline) {
     try {
-      const { error } = await supabase.from('requisicoes').insert(novaReq);
-      if (error) console.warn('Erro ao salvar requisição no Supabase:', error);
+      const { error } = await supabase.from('requisicoes').insert([dbPayload]);
+      if (error) {
+        console.error('Erro ao salvar requisição no Supabase:', error);
+      } else if (itens && itens.length > 0) {
+        const itensToInsert = itens.map(item => ({
+          id: item.id || uuidv4(),
+          requisicao_id: reqId,
+          procedimento_id: item.procedimento_id,
+          codigo_tuss: item.codigo_tuss,
+          descricao: item.descricao,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          valor_coparticipacao: item.valor_coparticipacao || 0,
+          valor_total: item.valor_total,
+          observacoes: item.observacoes || null,
+          tenant_id: tenantId,
+          empresa_id: tenantId
+        }));
+        const { error: errItens } = await supabase.from('requisicao_itens').insert(itensToInsert);
+        if (errItens) console.warn('Erro ao inserir itens da requisição no Supabase:', errItens);
+      }
     } catch (e) {
       console.warn('Erro ao inserir requisição no Supabase:', e);
     }
@@ -94,16 +129,40 @@ export const criarRequisicao = async (
   return novaReq;
 };
 
-
 export const atualizarRequisicao = async (
   isOnline: boolean,
   req: Requisicao
 ): Promise<Requisicao> => {
   const reqAtualizada = { ...req, updated_at: new Date().toISOString() };
+  const { itens, ...dbPayload } = reqAtualizada;
+
   if (isOnline) {
     try {
-      const { error } = await supabase.from('requisicoes').upsert(reqAtualizada);
-      if (error) console.warn('Erro ao atualizar requisicao no Supabase:', error);
+      const { error } = await supabase.from('requisicoes').update({
+        ...dbPayload,
+        empresa_id: req.tenant_id
+      }).eq('id', req.id);
+      
+      if (error) {
+        console.error('Erro ao atualizar requisicao no Supabase:', error);
+      } else if (itens && itens.length > 0) {
+        await supabase.from('requisicao_itens').delete().eq('requisicao_id', req.id);
+        const itensToInsert = itens.map(item => ({
+          id: item.id || uuidv4(),
+          requisicao_id: req.id,
+          procedimento_id: item.procedimento_id,
+          codigo_tuss: item.codigo_tuss,
+          descricao: item.descricao,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          valor_coparticipacao: item.valor_coparticipacao || 0,
+          valor_total: item.valor_total,
+          observacoes: item.observacoes || null,
+          tenant_id: req.tenant_id,
+          empresa_id: req.tenant_id
+        }));
+        await supabase.from('requisicao_itens').insert(itensToInsert);
+      }
     } catch (e) {
       console.warn('Erro ao atualizar requisicao no Supabase:', e);
     }

@@ -152,51 +152,35 @@ export function useFornecedores() {
   const carregarFornecedores = async () => {
     setLoading(true);
     try {
-      let lista: Fornecedor[] = [];
-
       if (isOnline) {
         try {
-          let query = supabase
-            .from('fornecedores')
-            .select('*');
-
+          let query = supabase.from('fornecedores').select('*').is('deleted_at', null);
           if (empresaSelecionada && empresaSelecionada !== 'all') {
-            query = query.eq('empresa_id', empresaSelecionada);
+            query = query.or(`empresa_id.eq.${empresaSelecionada},tenant_id.eq.${empresaSelecionada}`);
           }
-
           const { data, error } = await query.order('created_at', { ascending: false });
-
           if (!error && data && data.length > 0) {
-            lista = data as Fornecedor[];
-            // Sync with IDB
-            for (const f of lista) {
-              await saveToIDB('fornecedores', f);
+            for (const item of data) {
+              await saveToIDB('fornecedores', item);
             }
           }
         } catch (e) {
-          console.warn('Erro ao buscar fornecedores do Supabase, usando IDB fallback:', e);
+          console.warn('Erro ao carregar do Supabase:', e);
         }
       }
 
-      // If online failed or returned empty list, check IDB
-      if (lista.length === 0) {
-        lista = await getAllFromIDB<Fornecedor>('fornecedores');
-        if (empresaSelecionada && empresaSelecionada !== 'all') {
-          lista = lista.filter(f => (f as any).empresa_id === empresaSelecionada);
-        }
+      let all = await getAllFromIDB<Fornecedor>('fornecedores');
+      if (empresaSelecionada && empresaSelecionada !== 'all') {
+        all = all.filter(f => (f as any).empresa_id === empresaSelecionada || (f as any).tenant_id === empresaSelecionada);
+      }
+      all = all.filter(f => !(f as any).deleted_at);
+
+      if (all.length === 0) {
+        setFornecedores([]);
+        return;
       }
 
-      // If still empty, populate with initial seed with empresa_id
-      if (lista.length === 0) {
-        const empId = (empresaSelecionada && empresaSelecionada !== 'all') ? empresaSelecionada : 'emp-001';
-        lista = SEED_FORNECEDORES.map(f => ({ ...f, empresa_id: empId }));
-        for (const f of lista) {
-          await saveToIDB('fornecedores', f);
-        }
-      }
-
-      // Apply local filters if present
-      let filtrados = [...lista];
+      let filtrados = [...all];
 
       if (filtros.busca) {
         const term = filtros.busca.toLowerCase();
@@ -237,30 +221,32 @@ export function useFornecedores() {
   const criar = async (data: FornecedorInsert) => {
     try {
       const now = new Date().toISOString();
+      const tenantId = (data as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
       const newFornecedor: Fornecedor = {
         ...data,
         id: crypto.randomUUID(),
         created_at: now,
         updated_at: now,
         created_by: user?.id,
-        empresa_id: (data as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001')
+        empresa_id: tenantId,
+        tenant_id: tenantId
       };
 
       if (isOnline) {
-        try {
-          const { data: inserted, error } = await supabase
-            .from('fornecedores')
-            .insert([newFornecedor])
-            .select()
-            .single();
+        const { data: inserted, error } = await supabase
+          .from('fornecedores')
+          .insert([newFornecedor])
+          .select()
+          .single();
 
-          if (!error && inserted) {
-            await saveToIDB('fornecedores', inserted);
-            await carregarFornecedores();
-            return inserted as Fornecedor;
-          }
-        } catch (e) {
-          console.warn('Erro Supabase ao criar fornecedor, salvando em IDB:', e);
+        if (error) {
+          console.error('Erro Supabase ao criar fornecedor:', error);
+          throw new Error(`Erro ao salvar fornecedor no banco: ${error.message}`);
+        }
+        if (inserted) {
+          await saveToIDB('fornecedores', inserted);
+          await carregarFornecedores();
+          return inserted as Fornecedor;
         }
       }
 
@@ -268,6 +254,7 @@ export function useFornecedores() {
       await carregarFornecedores();
       return newFornecedor;
     } catch (err: any) {
+      if (err instanceof Error) throw err;
       throw new Error(err.message || 'Erro ao cadastrar fornecedor.');
     }
   };
@@ -276,29 +263,33 @@ export function useFornecedores() {
     try {
       const now = new Date().toISOString();
       const existing = await getFromIDB<Fornecedor>('fornecedores', id);
+      const tenantId = (data as any).empresa_id || (existing as any)?.empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
+
       const updatedFornecedor: Fornecedor = {
         ...(existing || {} as Fornecedor),
         ...data,
         id,
+        empresa_id: tenantId,
+        tenant_id: tenantId,
         updated_at: now
       };
 
       if (isOnline) {
-        try {
-          const { data: updated, error } = await supabase
-            .from('fornecedores')
-            .update({ ...data, updated_at: now })
-            .eq('id', id)
-            .select()
-            .single();
+        const { data: updated, error } = await supabase
+          .from('fornecedores')
+          .update({ ...data, empresa_id: tenantId, tenant_id: tenantId, updated_at: now })
+          .eq('id', id)
+          .select()
+          .single();
 
-          if (!error && updated) {
-            await saveToIDB('fornecedores', updated);
-            await carregarFornecedores();
-            return updated as Fornecedor;
-          }
-        } catch (e) {
-          console.warn('Erro Supabase ao editar fornecedor, atualizando IDB:', e);
+        if (error) {
+          console.error('Erro Supabase ao editar fornecedor:', error);
+          throw new Error(`Erro ao atualizar fornecedor no banco: ${error.message}`);
+        }
+        if (updated) {
+          await saveToIDB('fornecedores', updated);
+          await carregarFornecedores();
+          return updated as Fornecedor;
         }
       }
 
@@ -306,6 +297,7 @@ export function useFornecedores() {
       await carregarFornecedores();
       return updatedFornecedor;
     } catch (err: any) {
+      if (err instanceof Error) throw err;
       throw new Error(err.message || 'Erro ao atualizar fornecedor.');
     }
   };

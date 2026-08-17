@@ -30,10 +30,11 @@ export function usePlanosPax() {
             item:itens_funerarios(*)
           ),
           faixas:planos_pax_faixas(*)
-        `);
+        `)
+        .is('deleted_at', null);
 
       if (empresaSelecionada && empresaSelecionada !== 'all') {
-        query = query.eq('empresa_id', empresaSelecionada);
+        query = query.or(`empresa_id.eq.${empresaSelecionada},tenant_id.eq.${empresaSelecionada}`);
       }
 
       const { data, error: err } = await query.order('created_at', { ascending: false });
@@ -51,8 +52,9 @@ export function usePlanosPax() {
       try {
         let idbData = await getAllFromIDB<PlanoPaxCompleto>('planos_pax');
         if (empresaSelecionada && empresaSelecionada !== 'all') {
-          idbData = idbData.filter(p => (p as any).empresa_id === empresaSelecionada);
+          idbData = idbData.filter(p => (p as any).empresa_id === empresaSelecionada || (p as any).tenant_id === empresaSelecionada);
         }
+        idbData = idbData.filter(p => !(p as any).deleted_at);
         idbData.sort((a, b) => {
            if (!a.created_at || !b.created_at) return 0;
            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -79,79 +81,108 @@ export function usePlanosPax() {
         ...planoBase 
       } = data;
       
-      const newItem = { 
-        ...planoBase, 
-        id: crypto.randomUUID(),
-        empresa_id: (planoBase as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001')
-      };
-      const planoId = newItem.id;
+      const tenantId = (planoBase as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
+      const planoId = crypto.randomUUID();
 
-      const faixasData = data.regra_calculo === 'faixa_etaria' && faixas.length > 0 
-        ? faixas.map(f => ({ ...f, plano_id: planoId, id: crypto.randomUUID() })) 
+      // Sanitizar dados base para garantir que apenas colunas do banco sejam enviadas
+      const dbPlanoPayload = {
+        id: planoId,
+        codigo: planoBase.codigo,
+        nome: planoBase.nome,
+        descricao: planoBase.descricao || null,
+        tipo_plano: planoBase.tipo_plano,
+        limite_vidas: planoBase.tipo_plano === 'coletivo' ? Number(planoBase.limite_vidas) || 2 : null,
+        idade_minima: Number(planoBase.idade_minima) || 0,
+        idade_maxima: planoBase.idade_maxima ? Number(planoBase.idade_maxima) : null,
+        valor_mensalidade: Number(planoBase.valor_mensalidade) || 0,
+        taxa_adesao: Number(planoBase.taxa_adesao) || 0,
+        carencia_geral_dias: Number(planoBase.carencia_geral_dias) || 30,
+        carencia_acidente_dias: Number(planoBase.carencia_acidente_dias) || 0,
+        carencia_morte_natural_dias: Number(planoBase.carencia_morte_natural_dias) || 90,
+        km_translado_coberto: planoBase.km_translado_coberto !== undefined && planoBase.km_translado_coberto !== null ? Number(planoBase.km_translado_coberto) : null,
+        regra_calculo: planoBase.regra_calculo || 'fixo',
+        minimo_vidas: (planoBase as any).minimo_vidas || 1,
+        minimo_vidas_calculo: (planoBase as any).minimo_vidas_calculo || (planoBase as any).minimo_vidas || 1,
+        ativo: planoBase.ativo !== undefined ? planoBase.ativo : true,
+        vigencia_inicio: planoBase.vigencia_inicio || null,
+        vigencia_fim: planoBase.vigencia_fim || null,
+        empresa_id: tenantId,
+        tenant_id: tenantId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const faixasData = data.regra_calculo === 'faixa_etaria' && faixas && faixas.length > 0 
+        ? faixas.map(f => ({ 
+            id: crypto.randomUUID(),
+            plano_id: planoId,
+            idade_de: Number((f as any).idade_de ?? (f as any).idade_min) || 0,
+            idade_ate: Number((f as any).idade_ate ?? (f as any).idade_max) || 99,
+            valor: Number(f.valor) || 0,
+            tenant_id: tenantId,
+            empresa_id: tenantId
+          })) 
         : [];
 
       const coberturasData = [
-        ...itensCobertos.map(itemId => ({
+        ...(itensCobertos || []).map(itemId => ({
           id: crypto.randomUUID(),
           plano_id: planoId,
           item_id: itemId,
           tipo_cobertura: 'coberto',
-          observacao: observacoesItens[itemId] || null
+          observacao: observacoesItens?.[itemId] || null,
+          tenant_id: tenantId,
+          empresa_id: tenantId
         })),
-        ...itensExcluidos.map(itemId => ({
+        ...(itensExcluidos || []).map(itemId => ({
           id: crypto.randomUUID(),
           plano_id: planoId,
           item_id: itemId,
           tipo_cobertura: 'excluido',
-          observacao: observacoesItens[itemId] || null
+          observacao: observacoesItens?.[itemId] || null,
+          tenant_id: tenantId,
+          empresa_id: tenantId
         }))
       ];
       
       const planoCompletoToSave = {
-        ...newItem,
+        ...dbPlanoPayload,
         faixas: faixasData,
         coberturas: coberturasData
       } as unknown as PlanoPaxCompleto;
 
       let onlineSuccess = false;
       if (isOnline) {
-        try {
-          const { error: errPlano } = await supabase
-            .from('planos_pax')
-            .insert([newItem]);
-          
-          if (errPlano) {
-            console.warn("Falha no Supabase ao criar plano, caindo para IDB", errPlano);
-            throw errPlano;
-          }
-          
-          if (faixasData.length > 0) {
-            const { error: errFaixas } = await supabase.from('planos_pax_faixas').insert(faixasData);
-            if (errFaixas) console.warn("Erro ao salvar faixas:", errFaixas);
-          }
-          
-          if (coberturasData.length > 0) {
-            const { error: errCoberturas } = await supabase.from('planos_pax_coberturas').insert(coberturasData);
-            if (errCoberturas) console.warn("Erro ao salvar coberturas:", errCoberturas);
-          }
-          await registrarAuditoria('Criar Plano', { id: planoId, nome: newItem.nome });
-          onlineSuccess = true;
-        } catch (errPlano) {
-           console.warn("Falha no Supabase, caindo para IDB");
+        const { error: errPlano } = await supabase
+          .from('planos_pax')
+          .insert([dbPlanoPayload]);
+        
+        if (errPlano) {
+          console.error("Erro ao salvar plano no Supabase:", errPlano);
+          throw new Error(`Erro ao salvar no banco: ${errPlano.message}`);
         }
+        
+        if (faixasData.length > 0) {
+          const { error: errFaixas } = await supabase.from('planos_pax_faixas').insert(faixasData);
+          if (errFaixas) console.warn("Erro ao salvar faixas no Supabase:", errFaixas);
+        }
+        
+        if (coberturasData.length > 0) {
+          const { error: errCoberturas } = await supabase.from('planos_pax_coberturas').insert(coberturasData);
+          if (errCoberturas) console.warn("Erro ao salvar coberturas no Supabase:", errCoberturas);
+        }
+        
+        await registrarAuditoria('Criar Plano', { id: planoId, nome: dbPlanoPayload.nome });
+        onlineSuccess = true;
       }
       
-      // Sincronizar cache IDB pós-escrita ou fallback
+      // Sincronizar cache IDB
       await saveToIDB('planos_pax', planoCompletoToSave);
-      
       await carregarPlanos();
-      return onlineSuccess ? (await buscarPorId(planoId) as PlanoPaxCompleto) : planoCompletoToSave;
+      return planoCompletoToSave;
     } catch (err: unknown) {
-      console.warn("Erro no criar plano", err);
-      if (err instanceof Error) throw new Error(err.message);
-      if (typeof err === 'object' && err !== null && 'message' in err) {
-         throw new Error(String((err as any).message));
-      }
+      console.error("Erro ao criar plano:", err);
+      if (err instanceof Error) throw err;
       throw new Error('Erro ao criar plano.');
     }
   };
@@ -163,75 +194,109 @@ export function usePlanosPax() {
         ...planoBase 
       } = data;
       
-      const faixasData = data.regra_calculo === 'faixa_etaria' && faixas.length > 0 
-        ? faixas.map(f => ({ ...f, plano_id: id, id: crypto.randomUUID() })) 
+      const tenantId = (planoBase as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
+
+      // Sanitizar dados para UPDATE
+      const dbPlanoUpdate = {
+        codigo: planoBase.codigo,
+        nome: planoBase.nome,
+        descricao: planoBase.descricao || null,
+        tipo_plano: planoBase.tipo_plano,
+        limite_vidas: planoBase.tipo_plano === 'coletivo' ? Number(planoBase.limite_vidas) || 2 : null,
+        idade_minima: Number(planoBase.idade_minima) || 0,
+        idade_maxima: planoBase.idade_maxima ? Number(planoBase.idade_maxima) : null,
+        valor_mensalidade: Number(planoBase.valor_mensalidade) || 0,
+        taxa_adesao: Number(planoBase.taxa_adesao) || 0,
+        carencia_geral_dias: Number(planoBase.carencia_geral_dias) || 30,
+        carencia_acidente_dias: Number(planoBase.carencia_acidente_dias) || 0,
+        carencia_morte_natural_dias: Number(planoBase.carencia_morte_natural_dias) || 90,
+        km_translado_coberto: planoBase.km_translado_coberto !== undefined && planoBase.km_translado_coberto !== null ? Number(planoBase.km_translado_coberto) : null,
+        regra_calculo: planoBase.regra_calculo || 'fixo',
+        minimo_vidas: (planoBase as any).minimo_vidas || 1,
+        minimo_vidas_calculo: (planoBase as any).minimo_vidas_calculo || (planoBase as any).minimo_vidas || 1,
+        ativo: planoBase.ativo !== undefined ? planoBase.ativo : true,
+        vigencia_inicio: planoBase.vigencia_inicio || null,
+        vigencia_fim: planoBase.vigencia_fim || null,
+        empresa_id: tenantId,
+        tenant_id: tenantId,
+        updated_at: new Date().toISOString()
+      };
+
+      const faixasData = data.regra_calculo === 'faixa_etaria' && faixas && faixas.length > 0 
+        ? faixas.map(f => ({ 
+            id: crypto.randomUUID(),
+            plano_id: id,
+            idade_de: Number((f as any).idade_de ?? (f as any).idade_min) || 0,
+            idade_ate: Number((f as any).idade_ate ?? (f as any).idade_max) || 99,
+            valor: Number(f.valor) || 0,
+            tenant_id: tenantId,
+            empresa_id: tenantId
+          })) 
         : [];
 
       const coberturasData = [
-        ...itensCobertos.map(itemId => ({
+        ...(itensCobertos || []).map(itemId => ({
           id: crypto.randomUUID(),
           plano_id: id,
           item_id: itemId,
           tipo_cobertura: 'coberto',
-          observacao: observacoesItens[itemId] || null
+          observacao: observacoesItens?.[itemId] || null,
+          tenant_id: tenantId,
+          empresa_id: tenantId
         })),
-        ...itensExcluidos.map(itemId => ({
+        ...(itensExcluidos || []).map(itemId => ({
           id: crypto.randomUUID(),
           plano_id: id,
           item_id: itemId,
           tipo_cobertura: 'excluido',
-          observacao: observacoesItens[itemId] || null
+          observacao: observacoesItens?.[itemId] || null,
+          tenant_id: tenantId,
+          empresa_id: tenantId
         }))
       ];
       
-      let onlineSuccess = false;
       if (isOnline) {
-        try {
-          const { error: errPlano } = await supabase
-            .from('planos_pax')
-            .update(planoBase)
-            .eq('id', id);
-          
-          if (errPlano) throw errPlano;
-          
-          await supabase.from('planos_pax_faixas').delete().eq('plano_id', id);
-          if (faixasData.length > 0) {
-            const { error: errFaixas } = await supabase.from('planos_pax_faixas').insert(faixasData);
-            if (errFaixas) console.warn("Erro ao salvar faixas:", errFaixas);
-          }
-          
-          await supabase.from('planos_pax_coberturas').delete().eq('plano_id', id);
-          if (coberturasData.length > 0) {
-            const { error: errCoberturas } = await supabase.from('planos_pax_coberturas').insert(coberturasData);
-            if (errCoberturas) console.warn("Erro ao salvar coberturas:", errCoberturas);
-          }
-          
-          // Get previous data for auditing
-          const { data: oldPlano } = await supabase.from('planos_pax').select('*').eq('id', id).single();
-          await registrarAuditoria('Editar Plano', { 
-            id, 
-            nome: data.nome,
-            dados_anteriores: oldPlano,
-            dados_novos: data
-          });
-
-          onlineSuccess = true;
-        } catch (e) {
-          console.warn("Falha no Supabase editar, caindo para IDB");
+        const { error: errPlano } = await supabase
+          .from('planos_pax')
+          .update(dbPlanoUpdate)
+          .eq('id', id);
+        
+        if (errPlano) {
+          console.error("Erro ao atualizar plano no Supabase:", errPlano);
+          throw new Error(`Erro ao atualizar no banco: ${errPlano.message}`);
         }
+        
+        await supabase.from('planos_pax_faixas').delete().eq('plano_id', id);
+        if (faixasData.length > 0) {
+          const { error: errFaixas } = await supabase.from('planos_pax_faixas').insert(faixasData);
+          if (errFaixas) console.warn("Erro ao atualizar faixas no Supabase:", errFaixas);
+        }
+        
+        await supabase.from('planos_pax_coberturas').delete().eq('plano_id', id);
+        if (coberturasData.length > 0) {
+          const { error: errCoberturas } = await supabase.from('planos_pax_coberturas').insert(coberturasData);
+          if (errCoberturas) console.warn("Erro ao atualizar coberturas no Supabase:", errCoberturas);
+        }
+        
+        await registrarAuditoria('Editar Plano', { 
+          id, 
+          nome: data.nome,
+          dados_novos: dbPlanoUpdate
+        });
       }
       
       const existing = await getFromIDB<PlanoPaxCompleto>('planos_pax', id) || {} as PlanoPaxCompleto;
       await saveToIDB('planos_pax', {
         ...existing,
-        ...planoBase,
+        ...dbPlanoUpdate,
         faixas: faixasData,
         coberturas: coberturasData
       } as unknown as PlanoPaxCompleto);
       
       await carregarPlanos();
     } catch (err: unknown) {
-      if (err instanceof Error) throw new Error(err.message);
+      console.error("Erro ao editar plano:", err);
+      if (err instanceof Error) throw err;
       throw new Error('Erro ao editar plano.');
     }
   };

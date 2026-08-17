@@ -26,6 +26,8 @@ export interface PlanoPax {
   created_at: string;
   updated_at: string;
   created_by?: string;
+  empresa_id?: string;
+  tenant_id?: string;
 }
 
 export type PlanoPaxInsert = Omit<PlanoPax, 'id' | 'created_at' | 'updated_at' | 'created_by'>;

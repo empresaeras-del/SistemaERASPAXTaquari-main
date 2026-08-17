@@ -52,6 +52,7 @@ export interface Fornecedor {
   updated_at: string;
   created_by?: string;
   empresa_id?: string;
+  tenant_id?: string;
 }
 
 export type FornecedorInsert = Omit<Fornecedor, 'id' | 'created_at' | 'updated_at'>;

@@ -114,10 +114,11 @@ export function useItensFunerarios() {
 
       let query = supabase
         .from('itens_funerarios')
-        .select('*');
+        .select('*')
+        .is('deleted_at', null);
 
       if (empresaSelecionada && empresaSelecionada !== 'all') {
-        query = query.eq('empresa_id', empresaSelecionada);
+        query = query.or(`empresa_id.eq.${empresaSelecionada},tenant_id.eq.${empresaSelecionada}`);
       }
 
       if (filtros.categoria) {
@@ -147,8 +148,9 @@ export function useItensFunerarios() {
       try {
         let idbData = await getAllFromIDB<ItemFunerario>('itens_funerarios');
         if (empresaSelecionada && empresaSelecionada !== 'all') {
-          idbData = idbData.filter(i => (i as any).empresa_id === empresaSelecionada);
+          idbData = idbData.filter(i => (i as any).empresa_id === empresaSelecionada || (i as any).tenant_id === empresaSelecionada);
         }
+        idbData = idbData.filter(i => !(i as any).deleted_at);
         if (filtros.categoria) {
             idbData = idbData.filter(i => i.categoria === filtros.categoria);
         }
@@ -180,33 +182,48 @@ export function useItensFunerarios() {
     try {
       if (!user) throw new Error("Usuário não autenticado.");
       const { planosVinculados, ...itemData } = data;
+      const tenantId = (itemData as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
+      const itemId = crypto.randomUUID();
+
       const newItem = { 
-        ...itemData, 
-        created_by: user.id, 
-        id: crypto.randomUUID(),
-        empresa_id: (itemData as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001')
+        id: itemId,
+        codigo: itemData.codigo,
+        nome: itemData.nome,
+        descricao: itemData.descricao || null,
+        categoria: itemData.categoria,
+        unidade: itemData.unidade || 'unidade',
+        valor_referencia: itemData.valor_referencia ? Number(itemData.valor_referencia) : null,
+        ativo: itemData.ativo !== undefined ? itemData.ativo : true,
+        ordem_exibicao: itemData.ordem_exibicao ? Number(itemData.ordem_exibicao) : 0,
+        created_by: user.id,
+        empresa_id: tenantId,
+        tenant_id: tenantId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
       
-      const { data: inserted, error: err } = await supabase.from('itens_funerarios').insert([
-        newItem
-      ]).select().single();
-      
-      const createdId = inserted?.id || newItem.id;
-
-      if (err) {
-        console.warn('Supabase insert failed, saving to IDB only.');
-        await saveToIDB('itens_funerarios', newItem);
-      } else {
-        await saveToIDB('itens_funerarios', inserted);
+      let inserted = newItem;
+      if (isOnline) {
+        const { data: dbData, error: err } = await supabase.from('itens_funerarios').insert([
+          newItem
+        ]).select().single();
+        
+        if (err) {
+          console.error('Erro ao inserir item funerário no Supabase:', err);
+          throw new Error(`Erro ao salvar no banco: ${err.message}`);
+        }
+        if (dbData) inserted = dbData;
       }
 
+      await saveToIDB('itens_funerarios', inserted);
+
       if (planosVinculados && Array.isArray(planosVinculados)) {
-        await salvarCoberturasDoItem(createdId, planosVinculados, isOnline);
+        await salvarCoberturasDoItem(itemId, planosVinculados, isOnline);
       }
 
       await carregarItens();
     } catch (err: unknown) {
-      if (err instanceof Error) throw new Error(err.message);
+      if (err instanceof Error) throw err;
       throw new Error('Erro ao criar item funerário.');
     }
   };
@@ -214,16 +231,29 @@ export function useItensFunerarios() {
   const editar = async (id: string, data: ItemFunerarioUpdate & { planosVinculados?: PlanoVinculadoItem[] }) => {
     try {
       const { planosVinculados, ...itemData } = data;
+      const tenantId = (itemData as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
+
+      const updatedPayload = {
+        ...itemData,
+        empresa_id: tenantId,
+        tenant_id: tenantId,
+        updated_at: new Date().toISOString()
+      };
       
-      const { data: updated, error: err } = await supabase.from('itens_funerarios').update(itemData).eq('id', id).select().single();
-      if (err) {
-        console.warn('Supabase update failed, attempting IDB update.');
-        const existing = await getFromIDB<ItemFunerario>('itens_funerarios', id);
-        if (existing) {
-          await saveToIDB('itens_funerarios', { ...existing, ...itemData });
+      if (isOnline) {
+        const { data: updated, error: err } = await supabase.from('itens_funerarios').update(updatedPayload).eq('id', id).select().single();
+        if (err) {
+          console.error('Erro ao atualizar item funerário no Supabase:', err);
+          throw new Error(`Erro ao atualizar no banco: ${err.message}`);
+        }
+        if (updated) {
+          await saveToIDB('itens_funerarios', updated);
         }
       } else {
-        await saveToIDB('itens_funerarios', updated);
+        const existing = await getFromIDB<ItemFunerario>('itens_funerarios', id);
+        if (existing) {
+          await saveToIDB('itens_funerarios', { ...existing, ...updatedPayload });
+        }
       }
 
       if (planosVinculados !== undefined && Array.isArray(planosVinculados)) {
@@ -232,7 +262,7 @@ export function useItensFunerarios() {
 
       await carregarItens();
     } catch (err: unknown) {
-      if (err instanceof Error) throw new Error(err.message);
+      if (err instanceof Error) throw err;
       throw new Error('Erro ao atualizar item funerário.');
     }
   };
