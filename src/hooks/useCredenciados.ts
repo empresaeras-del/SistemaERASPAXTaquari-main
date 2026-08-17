@@ -107,14 +107,21 @@ export function useCredenciados() {
 
   const vincularProcedimento = async (data: CredenciadoProcedimentoInsert) => {
     try {
+      const allIDB = await getAllFromIDB<any>('credenciados_procedimentos');
+      const existingInIDB = allIDB.find(
+        v => v && v.credenciado_id === data.credenciado_id && v.procedimento_id === data.procedimento_id
+      );
+
+      const itemId = existingInIDB?.id || generateUUID();
       const newItem: any = {
-        id: generateUUID(),
+        id: itemId,
         credenciado_id: data.credenciado_id,
         procedimento_id: data.procedimento_id,
-        valor_exclusivo: data.valor_exclusivo ?? 0,
-        valor_coparticipacao: data.valor_coparticipacao ?? 0,
-        valor: data.valor_exclusivo ?? 0,
-        created_at: new Date().toISOString()
+        valor_exclusivo: data.valor_exclusivo ?? existingInIDB?.valor_exclusivo ?? 0,
+        valor_coparticipacao: data.valor_coparticipacao ?? existingInIDB?.valor_coparticipacao ?? 0,
+        valor: data.valor_exclusivo ?? existingInIDB?.valor ?? 0,
+        created_at: existingInIDB?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
       if (isOnline) {
@@ -128,7 +135,7 @@ export function useCredenciados() {
               valor_exclusivo: newItem.valor_exclusivo,
               valor_coparticipacao: newItem.valor_coparticipacao,
               valor: newItem.valor
-            })
+            }, { onConflict: 'credenciado_id,procedimento_id' })
             .select()
             .single();
 
@@ -141,20 +148,18 @@ export function useCredenciados() {
                 credenciado_id: newItem.credenciado_id,
                 procedimento_id: newItem.procedimento_id,
                 valor: newItem.valor
-              })
+              }, { onConflict: 'credenciado_id,procedimento_id' })
               .select()
               .single();
 
-            if (errFallback) {
-              console.warn('Falha no Supabase ao vincular procedimento (fallback):', errFallback);
-            } else if (insertedFallback) {
+            if (!errFallback && insertedFallback) {
               newItem.id = insertedFallback.id || newItem.id;
             }
           } else if (inserted) {
             newItem.id = inserted.id || newItem.id;
           }
         } catch (errSupabase) {
-          console.warn('Falha no Supabase ao vincular procedimento, usando IDB:', errSupabase);
+          console.warn('Falha no Supabase ao vincular procedimento, mantendo no IDB:', errSupabase);
         }
       }
 
@@ -217,30 +222,44 @@ export function useCredenciados() {
 
   const buscarProcedimentosVinculados = async (credenciadoId: string) => {
     try {
-      let vinculadosRaw: any[] = [];
+      let supaData: any[] = [];
 
       if (isOnline) {
         try {
-          const { data: supaData, error: err } = await supabase
+          const { data, error: err } = await supabase
             .from('credenciados_procedimentos')
             .select('*')
             .eq('credenciado_id', credenciadoId);
 
-          if (!err && supaData && supaData.length > 0) {
-            vinculadosRaw = supaData;
+          if (!err && data) {
+            supaData = data;
           }
         } catch (supaErr) {
           console.warn("Falha no supabase ao buscar procedimentos vinculados:", supaErr);
         }
       }
 
-      // Se o Supabase não retornou registros, busca no IDB local
-      if (vinculadosRaw.length === 0) {
-        const allIDB = await getAllFromIDB<any>('credenciados_procedimentos');
-        vinculadosRaw = allIDB.filter(v => v && v.credenciado_id === credenciadoId);
+      // Busca todos os vínculos locais do IndexedDB para este credenciado
+      const allIDB = await getAllFromIDB<any>('credenciados_procedimentos');
+      const idbItems = allIDB.filter(v => v && v.credenciado_id === credenciadoId);
+
+      // Mescla de forma aditiva: preserva os itens do IDB e adiciona/atualiza com os do Supabase
+      const mergedMap = new Map<string, any>();
+      for (const item of idbItems) {
+        if (item && item.procedimento_id) {
+          mergedMap.set(item.procedimento_id, item);
+        }
+      }
+      for (const item of supaData) {
+        if (item && item.procedimento_id) {
+          const existing = mergedMap.get(item.procedimento_id) || {};
+          mergedMap.set(item.procedimento_id, { ...existing, ...item });
+        }
       }
 
-      // Buscar todos os procedimentos para montar os metadados (código, descrição, etc.)
+      const vinculadosRaw = Array.from(mergedMap.values());
+
+      // Buscar procedimentos cadastrados para anexar os metadados (código, descrição, etc.)
       let procedimentosList: any[] = [];
       try {
         if (isOnline) {
@@ -282,7 +301,7 @@ export function useCredenciados() {
         };
       });
 
-      // Atualiza IDB com os dados enriquecidos
+      // Sincroniza o IDB com os dados completos e consolidados
       for (const item of finalData) {
         await saveToIDB('credenciados_procedimentos', item);
       }

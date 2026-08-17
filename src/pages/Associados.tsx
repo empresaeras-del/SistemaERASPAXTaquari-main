@@ -865,7 +865,6 @@ export const AssociadosPage: React.FC = () => {
       });
       setParcelasAbertasMap(pMap);
     } catch (e) {
-
       console.error(e);
     } finally {
       setLoading(false);
@@ -876,9 +875,172 @@ export const AssociadosPage: React.FC = () => {
     loadData();
   }, [state.isOnline, state.empresaSelecionada]);
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const validarDadosAssociado = (assoc: Associado | null): { valido: boolean; erros: Array<{ campo: string; label: string; subTab: "basicas" | "filiacao" | "contato" | "endereco" | "sistema"; mensagem: string }> } => {
+    if (!assoc) return { valido: false, erros: [] };
+
+    const erros: Array<{ campo: string; label: string; subTab: "basicas" | "filiacao" | "contato" | "endereco" | "sistema"; mensagem: string }> = [];
+
+    // Informações Básicas
+    if (!assoc.nome || !assoc.nome.trim()) {
+      erros.push({
+        campo: 'nome',
+        label: 'Nome Completo',
+        subTab: 'basicas',
+        mensagem: 'Nome completo é obrigatório.'
+      });
+    }
+
+    const cpfLimpo = (assoc.cpf || '').replace(/\D/g, '');
+    if (!assoc.cpf || !assoc.cpf.trim() || cpfLimpo.length === 0) {
+      erros.push({
+        campo: 'cpf',
+        label: 'CPF',
+        subTab: 'basicas',
+        mensagem: 'CPF é obrigatório.'
+      });
+    } else if (!isValidCPFOrCNPJ(assoc.cpf, false)) {
+      erros.push({
+        campo: 'cpf',
+        label: 'CPF',
+        subTab: 'basicas',
+        mensagem: 'CPF inválido.'
+      });
+    }
+
+    if (!assoc.data_nascimento || !assoc.data_nascimento.trim()) {
+      erros.push({
+        campo: 'data_nascimento',
+        label: 'Data de Nascimento',
+        subTab: 'basicas',
+        mensagem: 'Data de nascimento é obrigatória.'
+      });
+    }
+
+    if (!assoc.sexo || !assoc.sexo.trim()) {
+      erros.push({
+        campo: 'sexo',
+        label: 'Sexo',
+        subTab: 'basicas',
+        mensagem: 'Selecione o sexo.'
+      });
+    }
+
+    // Contato
+    const telLimpo = (assoc.telefone || '').replace(/\D/g, '');
+    if (!assoc.telefone || !assoc.telefone.trim() || telLimpo.length < 10) {
+      erros.push({
+        campo: 'telefone',
+        label: 'Telefone',
+        subTab: 'contato',
+        mensagem: 'Telefone com DDD é obrigatório.'
+      });
+    }
+
+    // Endereço
+    if (!assoc.endereco_cep || !assoc.endereco_cep.trim()) {
+      erros.push({
+        campo: 'endereco_cep',
+        label: 'CEP',
+        subTab: 'endereco',
+        mensagem: 'CEP é obrigatório.'
+      });
+    }
+
+    if (!assoc.endereco_logradouro || !assoc.endereco_logradouro.trim()) {
+      erros.push({
+        campo: 'endereco_logradouro',
+        label: 'Logradouro',
+        subTab: 'endereco',
+        mensagem: 'Logradouro é obrigatório.'
+      });
+    }
+
+    if (!assoc.endereco_numero || !assoc.endereco_numero.trim()) {
+      erros.push({
+        campo: 'endereco_numero',
+        label: 'Número',
+        subTab: 'endereco',
+        mensagem: 'Número é obrigatório.'
+      });
+    }
+
+    if (!assoc.endereco_bairro || !assoc.endereco_bairro.trim()) {
+      erros.push({
+        campo: 'endereco_bairro',
+        label: 'Bairro',
+        subTab: 'endereco',
+        mensagem: 'Bairro é obrigatório.'
+      });
+    }
+
+    if (!assoc.endereco_cidade || !assoc.endereco_cidade.trim()) {
+      erros.push({
+        campo: 'endereco_cidade',
+        label: 'Cidade / UF',
+        subTab: 'endereco',
+        mensagem: 'Cidade / UF é obrigatório.'
+      });
+    }
+
+    // Sistema
+    if (!assoc.data_adesao || !assoc.data_adesao.trim()) {
+      erros.push({
+        campo: 'data_adesao',
+        label: 'Data de Adesão',
+        subTab: 'sistema',
+        mensagem: 'Data de adesão é obrigatória.'
+      });
+    }
+
+    return {
+      valido: erros.length === 0,
+      erros
+    };
+  };
+
+  const executarValidacaoOuAlertar = (): boolean => {
+    const { valido, erros } = validarDadosAssociado(editingAssociado);
+    if (!valido) {
+      const errorMap: Record<string, string> = {};
+      erros.forEach(e => {
+        errorMap[e.campo] = e.mensagem;
+      });
+      setFieldErrors(errorMap);
+
+      const nomesCampos = erros.map(e => e.label).join(', ');
+      toast.error(`Atenção: Campos obrigatórios pendentes (${erros.length}): ${nomesCampos}. Preencha os campos destacados em vermelho.`);
+
+      if (erros[0]?.subTab) {
+        setActiveSubTab(erros[0].subTab);
+      }
+      return false;
+    }
+    setFieldErrors({});
+    return true;
+  };
+
+  const handleFieldChange = (field: keyof Associado, value: any) => {
+    if (editingAssociado) {
+      setEditingAssociado({
+        ...editingAssociado,
+        [field]: value
+      });
+      if (fieldErrors[field as string]) {
+        setFieldErrors(prev => {
+          const next = { ...prev };
+          delete next[field as string];
+          return next;
+        });
+      }
+    }
+  };
+
   const handleOpenModal = (associado?: Associado) => {
     setSelectedDependenteId(null);
     setBuscaDependenteInterno("");
+    setFieldErrors({});
     if (associado) {
       setEditingAssociado({ ...associado });
       setIsEditingMode(true);
@@ -895,6 +1057,7 @@ export const AssociadosPage: React.FC = () => {
       setIsEditingMode(false);
     }
     setActiveTab("principal");
+    setActiveSubTab("basicas");
     setIsModalOpen(true);
   };
 
@@ -903,11 +1066,13 @@ export const AssociadosPage: React.FC = () => {
     setEditingAssociado(null);
     setSelectedDependenteId(null);
     setSelectedContratoId(null);
+    setFieldErrors({});
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingAssociado || !editingAssociado.id) return;
+    if (!executarValidacaoOuAlertar()) return;
     try {
       if (!state.empresaSelecionada) {
         toast.error("Selecione uma empresa antes de salvar.");
@@ -1451,12 +1616,7 @@ export const AssociadosPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      const form = document.getElementById("associado-form") as HTMLFormElement;
-                      if (form && !form.checkValidity()) {
-                        form.reportValidity();
-                        toast.error("Preencha todos os campos obrigatórios (*) antes de mudar de aba.");
-                        return;
-                      }
+                      if (!executarValidacaoOuAlertar()) return;
                       setActiveTab("resumo");
                     }}
                     className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
@@ -1471,12 +1631,7 @@ export const AssociadosPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      const form = document.getElementById("associado-form") as HTMLFormElement;
-                      if (form && !form.checkValidity()) {
-                        form.reportValidity();
-                        toast.error("Preencha todos os campos obrigatórios (*) antes de mudar de aba.");
-                        return;
-                      }
+                      if (!executarValidacaoOuAlertar()) return;
                       setActiveTab("principal");
                     }}
                     className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
@@ -1491,12 +1646,7 @@ export const AssociadosPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      const form = document.getElementById("associado-form") as HTMLFormElement;
-                      if (form && !form.checkValidity()) {
-                        form.reportValidity();
-                        toast.error("Preencha todos os campos obrigatórios (*) antes de mudar de aba.");
-                        return;
-                      }
+                      if (!executarValidacaoOuAlertar()) return;
                       setActiveTab("dependentes");
                     }}
                     className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
@@ -1511,12 +1661,7 @@ export const AssociadosPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      const form = document.getElementById("associado-form") as HTMLFormElement;
-                      if (form && !form.checkValidity()) {
-                        form.reportValidity();
-                        toast.error("Preencha todos os campos obrigatórios (*) antes de mudar de aba.");
-                        return;
-                      }
+                      if (!executarValidacaoOuAlertar()) return;
                       setActiveTab("contratos");
                     }}
                     className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
@@ -1531,12 +1676,7 @@ export const AssociadosPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      const form = document.getElementById("associado-form") as HTMLFormElement;
-                      if (form && !form.checkValidity()) {
-                        form.reportValidity();
-                        toast.error("Preencha todos os campos obrigatórios (*) antes de mudar de aba.");
-                        return;
-                      }
+                      if (!executarValidacaoOuAlertar()) return;
                       setActiveTab("mensalidades");
                     }}
                     className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
@@ -1551,12 +1691,7 @@ export const AssociadosPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      const form = document.getElementById("associado-form") as HTMLFormElement;
-                      if (form && !form.checkValidity()) {
-                        form.reportValidity();
-                        toast.error("Preencha todos os campos obrigatórios (*) antes de mudar de aba.");
-                        return;
-                      }
+                      if (!executarValidacaoOuAlertar()) return;
                       setActiveTab("documentos");
                     }}
                     className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
@@ -1573,12 +1708,7 @@ export const AssociadosPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          const form = document.getElementById("associado-form") as HTMLFormElement;
-                          if (form && !form.checkValidity()) {
-                            form.reportValidity();
-                            toast.error("Preencha todos os campos obrigatórios (*) antes de mudar de aba.");
-                            return;
-                          }
+                          if (!executarValidacaoOuAlertar()) return;
                           setActiveTab("requisicoes");
                         }}
                         className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
@@ -1593,12 +1723,7 @@ export const AssociadosPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          const form = document.getElementById("associado-form") as HTMLFormElement;
-                          if (form && !form.checkValidity()) {
-                            form.reportValidity();
-                            toast.error("Preencha todos os campos obrigatórios (*) antes de mudar de aba.");
-                            return;
-                          }
+                          if (!executarValidacaoOuAlertar()) return;
                           setActiveTab("atendimentos");
                         }}
                         className={`px-6 py-3 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
@@ -1698,6 +1823,7 @@ export const AssociadosPage: React.FC = () => {
               {/* Form Content */}
               <form
                 id="associado-form"
+                noValidate
                 onSubmit={handleSave}
                 className="flex-1 flex flex-col overflow-hidden"
               >
@@ -1708,41 +1834,73 @@ export const AssociadosPage: React.FC = () => {
                     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col h-full">
                       {/* Sub-tabs para Dados Principais (Fichários) */}
                       <div className="flex overflow-x-auto gap-2 pb-4 mb-4 border-b border-border-default/50 custom-scrollbar shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setActiveSubTab("basicas")}
-                          className={`px-4 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors ${activeSubTab === "basicas" ? "bg-[#3B82F6]/10 text-[#3B82F6]" : "text-text-subtle hover:text-text-base hover:bg-bg-hover"}`}
-                        >
-                          Informações Básicas
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActiveSubTab("filiacao")}
-                          className={`px-4 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors ${activeSubTab === "filiacao" ? "bg-indigo-500/10 text-indigo-400" : "text-text-subtle hover:text-text-base hover:bg-bg-hover"}`}
-                        >
-                          Filiação
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActiveSubTab("contato")}
-                          className={`px-4 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors ${activeSubTab === "contato" ? "bg-emerald-500/10 text-emerald-400" : "text-text-subtle hover:text-text-base hover:bg-bg-hover"}`}
-                        >
-                          Contato
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActiveSubTab("endereco")}
-                          className={`px-4 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors ${activeSubTab === "endereco" ? "bg-amber-500/10 text-amber-400" : "text-text-subtle hover:text-text-base hover:bg-bg-hover"}`}
-                        >
-                          Endereço
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActiveSubTab("sistema")}
-                          className={`px-4 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors ${activeSubTab === "sistema" ? "bg-purple-500/10 text-purple-400" : "text-text-subtle hover:text-text-base hover:bg-bg-hover"}`}
-                        >
-                          Informações do Sistema
-                        </button>
+                        {(() => {
+                          const { erros } = validarDadosAssociado(editingAssociado);
+                          const errBasicas = erros.filter(e => e.subTab === "basicas").length;
+                          const errContato = erros.filter(e => e.subTab === "contato").length;
+                          const errEndereco = erros.filter(e => e.subTab === "endereco").length;
+                          const errSistema = erros.filter(e => e.subTab === "sistema").length;
+
+                          return (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSubTab("basicas")}
+                                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors flex items-center gap-1.5 ${activeSubTab === "basicas" ? "bg-[#3B82F6]/10 text-[#3B82F6]" : "text-text-subtle hover:text-text-base hover:bg-bg-hover"}`}
+                              >
+                                <span>Informações Básicas</span>
+                                {Object.keys(fieldErrors).length > 0 && errBasicas > 0 && (
+                                  <span className="px-1.5 py-0.5 text-[10px] bg-rose-500 text-white rounded-full font-bold">
+                                    {errBasicas}
+                                  </span>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSubTab("filiacao")}
+                                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors flex items-center gap-1.5 ${activeSubTab === "filiacao" ? "bg-indigo-500/10 text-indigo-400" : "text-text-subtle hover:text-text-base hover:bg-bg-hover"}`}
+                              >
+                                <span>Filiação</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSubTab("contato")}
+                                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors flex items-center gap-1.5 ${activeSubTab === "contato" ? "bg-emerald-500/10 text-emerald-400" : "text-text-subtle hover:text-text-base hover:bg-bg-hover"}`}
+                              >
+                                <span>Contato</span>
+                                {Object.keys(fieldErrors).length > 0 && errContato > 0 && (
+                                  <span className="px-1.5 py-0.5 text-[10px] bg-rose-500 text-white rounded-full font-bold">
+                                    {errContato}
+                                  </span>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSubTab("endereco")}
+                                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors flex items-center gap-1.5 ${activeSubTab === "endereco" ? "bg-amber-500/10 text-amber-400" : "text-text-subtle hover:text-text-base hover:bg-bg-hover"}`}
+                              >
+                                <span>Endereço</span>
+                                {Object.keys(fieldErrors).length > 0 && errEndereco > 0 && (
+                                  <span className="px-1.5 py-0.5 text-[10px] bg-rose-500 text-white rounded-full font-bold">
+                                    {errEndereco}
+                                  </span>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSubTab("sistema")}
+                                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap rounded-lg transition-colors flex items-center gap-1.5 ${activeSubTab === "sistema" ? "bg-purple-500/10 text-purple-400" : "text-text-subtle hover:text-text-base hover:bg-bg-hover"}`}
+                              >
+                                <span>Informações do Sistema</span>
+                                {Object.keys(fieldErrors).length > 0 && errSistema > 0 && (
+                                  <span className="px-1.5 py-0.5 text-[10px] bg-rose-500 text-white rounded-full font-bold">
+                                    {errSistema}
+                                  </span>
+                                )}
+                              </button>
+                            </>
+                          );
+                        })()}
                       </div>
 
                       <div className="space-y-8">
@@ -1762,17 +1920,22 @@ export const AssociadosPage: React.FC = () => {
                               Nome Completo *
                             </label>
                             <input
-                              required
                               type="text"
                               value={editingAssociado.nome || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  nome: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              onChange={(e) => handleFieldChange("nome", e.target.value)}
+                              placeholder="Digite o nome completo"
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.nome
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             />
+                            {fieldErrors.nome && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.nome}
+                              </p>
+                            )}
                           </div>
 
                           <div className="space-y-1">
@@ -1780,17 +1943,13 @@ export const AssociadosPage: React.FC = () => {
                               CPF *
                             </label>
                             <input
-                              required
                               type="text"
                               maxLength={14}
+                              placeholder="000.000.000-00"
                               value={editingAssociado.cpf || ""}
                               onChange={(e) => {
                                 const formatted = maskCPFOrCNPJ(e.target.value, false);
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  cpf: formatted,
-                                });
-                                // Verificação em tempo real
+                                handleFieldChange("cpf", formatted);
                                 const cpfLimpo = formatted.replace(/\D/g, '');
                                 if (cpfLimpo.length === 11) {
                                   const duplicateUser = associados.find(a => a.status === 'ativo' && a.cpf?.replace(/\D/g, '') === cpfLimpo && a.id !== editingAssociado.id);
@@ -1799,8 +1958,18 @@ export const AssociadosPage: React.FC = () => {
                                   }
                                 }
                               }}
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.cpf
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             />
+                            {fieldErrors.cpf && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.cpf}
+                              </p>
+                            )}
                           </div>
 
                           <div className="space-y-1">
@@ -1810,12 +1979,8 @@ export const AssociadosPage: React.FC = () => {
                             <input
                               type="text"
                               value={editingAssociado.rg || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  rg: e.target.value,
-                                })
-                              }
+                              onChange={(e) => handleFieldChange("rg", e.target.value)}
+                              placeholder="Número do RG"
                               className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
                             />
                           </div>
@@ -1825,17 +1990,21 @@ export const AssociadosPage: React.FC = () => {
                               Data de Nascimento *
                             </label>
                             <input
-                              required
                               type="date"
                               value={editingAssociado.data_nascimento || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  data_nascimento: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              onChange={(e) => handleFieldChange("data_nascimento", e.target.value)}
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.data_nascimento
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             />
+                            {fieldErrors.data_nascimento && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.data_nascimento}
+                              </p>
+                            )}
                           </div>
 
                           <div className="space-y-1">
@@ -1843,21 +2012,25 @@ export const AssociadosPage: React.FC = () => {
                               Sexo *
                             </label>
                             <select
-                              required
                               value={editingAssociado.sexo || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  sexo: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              onChange={(e) => handleFieldChange("sexo", e.target.value)}
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.sexo
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             >
                               <option value="">Selecione</option>
                               <option value="M">Masculino</option>
                               <option value="F">Feminino</option>
                               <option value="O">Outro</option>
                             </select>
+                            {fieldErrors.sexo && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.sexo}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1880,12 +2053,8 @@ export const AssociadosPage: React.FC = () => {
                             <input
                               type="text"
                               value={editingAssociado.nome_mae || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  nome_mae: e.target.value,
-                                })
-                              }
+                              onChange={(e) => handleFieldChange("nome_mae", e.target.value)}
+                              placeholder="Nome da mãe"
                               className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
                             />
                           </div>
@@ -1896,12 +2065,8 @@ export const AssociadosPage: React.FC = () => {
                             <input
                               type="text"
                               value={editingAssociado.nome_pai || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  nome_pai: e.target.value,
-                                })
-                              }
+                              onChange={(e) => handleFieldChange("nome_pai", e.target.value)}
+                              placeholder="Nome do pai"
                               className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
                             />
                           </div>
@@ -1924,19 +2089,26 @@ export const AssociadosPage: React.FC = () => {
                               Telefone *
                             </label>
                             <input
-                              required
                               type="tel"
                               maxLength={15}
+                              placeholder="(00) 00000-0000"
                               value={editingAssociado.telefone || ""}
                               onChange={(e) => {
                                 const formatted = formatPhone(e.target.value);
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  telefone: formatted,
-                                })
+                                handleFieldChange("telefone", formatted);
                               }}
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.telefone
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             />
+                            {fieldErrors.telefone && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.telefone}
+                              </p>
+                            )}
                           </div>
                           <div className="space-y-1">
                             <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -1945,12 +2117,8 @@ export const AssociadosPage: React.FC = () => {
                             <input
                               type="email"
                               value={editingAssociado.email || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  email: e.target.value,
-                                })
-                              }
+                              onChange={(e) => handleFieldChange("email", e.target.value)}
+                              placeholder="exemplo@email.com"
                               className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
                             />
                           </div>
@@ -1974,16 +2142,21 @@ export const AssociadosPage: React.FC = () => {
                             </label>
                             <input
                               type="text"
-                              required
+                              placeholder="00000-000"
                               value={editingAssociado.endereco_cep || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  endereco_cep: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              onChange={(e) => handleFieldChange("endereco_cep", e.target.value)}
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.endereco_cep
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             />
+                            {fieldErrors.endereco_cep && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.endereco_cep}
+                              </p>
+                            )}
                           </div>
                           <div className="space-y-1 md:col-span-7">
                             <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -1991,16 +2164,21 @@ export const AssociadosPage: React.FC = () => {
                             </label>
                             <input
                               type="text"
-                              required
+                              placeholder="Rua, Avenida, Alameda..."
                               value={editingAssociado.endereco_logradouro || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  endereco_logradouro: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              onChange={(e) => handleFieldChange("endereco_logradouro", e.target.value)}
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.endereco_logradouro
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             />
+                            {fieldErrors.endereco_logradouro && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.endereco_logradouro}
+                              </p>
+                            )}
                           </div>
                           <div className="space-y-1 md:col-span-2">
                             <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -2008,16 +2186,21 @@ export const AssociadosPage: React.FC = () => {
                             </label>
                             <input
                               type="text"
-                              required
+                              placeholder="Nº"
                               value={editingAssociado.endereco_numero || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  endereco_numero: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              onChange={(e) => handleFieldChange("endereco_numero", e.target.value)}
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.endereco_numero
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             />
+                            {fieldErrors.endereco_numero && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.endereco_numero}
+                              </p>
+                            )}
                           </div>
                           <div className="space-y-1 md:col-span-6">
                             <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -2025,16 +2208,21 @@ export const AssociadosPage: React.FC = () => {
                             </label>
                             <input
                               type="text"
-                              required
+                              placeholder="Nome do bairro"
                               value={editingAssociado.endereco_bairro || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  endereco_bairro: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              onChange={(e) => handleFieldChange("endereco_bairro", e.target.value)}
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.endereco_bairro
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             />
+                            {fieldErrors.endereco_bairro && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.endereco_bairro}
+                              </p>
+                            )}
                           </div>
                           <div className="space-y-1 md:col-span-6">
                             <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -2042,16 +2230,21 @@ export const AssociadosPage: React.FC = () => {
                             </label>
                             <input
                               type="text"
-                              required
+                              placeholder="Cidade / UF"
                               value={editingAssociado.endereco_cidade || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  endereco_cidade: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              onChange={(e) => handleFieldChange("endereco_cidade", e.target.value)}
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.endereco_cidade
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             />
+                            {fieldErrors.endereco_cidade && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.endereco_cidade}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2072,17 +2265,21 @@ export const AssociadosPage: React.FC = () => {
                               Data de Adesão *
                             </label>
                             <input
-                              required
                               type="date"
                               value={editingAssociado.data_adesao || ""}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  data_adesao: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                              onChange={(e) => handleFieldChange("data_adesao", e.target.value)}
+                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                fieldErrors.data_adesao
+                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                              }`}
                             />
+                            {fieldErrors.data_adesao && (
+                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                {fieldErrors.data_adesao}
+                              </p>
+                            )}
                           </div>
 
                           <div className="space-y-1">
@@ -2090,14 +2287,8 @@ export const AssociadosPage: React.FC = () => {
                               Status *
                             </label>
                             <select
-                              required
                               value={editingAssociado.status || "ativo"}
-                              onChange={(e) =>
-                                setEditingAssociado({
-                                  ...editingAssociado,
-                                  status: e.target.value as Associado["status"],
-                                })
-                              }
+                              onChange={(e) => handleFieldChange("status", e.target.value as Associado["status"])}
                               className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
                             >
                               <option value="ativo">Ativo</option>
@@ -2862,17 +3053,10 @@ export const AssociadosPage: React.FC = () => {
                             key="btn-next"
                             type="button"
                             onClick={() => {
-                              const form = document.getElementById(
-                                "associado-form",
-                              ) as HTMLFormElement;
-                              if (form && !form.checkValidity()) {
-                                form.reportValidity();
-                                toast.error("Preencha todos os campos obrigatórios (*) antes de prosseguir.");
-                                return;
-                              }
-                              if (activeTab === "principal")
+                              if (activeTab === "principal") {
+                                if (!executarValidacaoOuAlertar()) return;
                                 setActiveTab("dependentes");
-                              else if (activeTab === "dependentes")
+                              } else if (activeTab === "dependentes")
                                 setActiveTab("contratos");
                               else if (activeTab === "contratos")
                                 setActiveTab("mensalidades");

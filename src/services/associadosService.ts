@@ -48,24 +48,74 @@ export interface Dependente {
 const STORE_NAME = 'associados';
 
 export const getAssociados = async (isOnline: boolean, tenantId: string | null): Promise<Associado[]> => {
-  
-
   let associados: Associado[] = [];
 
   if (isOnline) {
     try {
-      // Busca associados junto com seus dependentes via join
-      let query = supabase
-        .from('associados')
-        .select('*, dependentes(*)')
-        .is('deleted_at', null);
-      if (tenantId && tenantId !== 'all') {
-        query = query.eq('tenant_id', tenantId);
+      let data: any[] | null = null;
+
+      // 1. Tenta buscar associados com dependentes em join
+      try {
+        let query = supabase
+          .from('associados')
+          .select('*, dependentes(*)')
+          .is('deleted_at', null);
+        if (tenantId && tenantId !== 'all') {
+          query = query.eq('tenant_id', tenantId);
+        }
+        const res = await query;
+        if (!res.error && res.data) {
+          data = res.data;
+        }
+      } catch (e) {
+        // Fallback para queries separadas
       }
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      // Update local cache (salva com dependentes incluso)
+
+      // 2. Se join não retornou, busca direto da tabela associados e anexa dependentes
+      if (!data) {
+        let query = supabase
+          .from('associados')
+          .select('*')
+          .is('deleted_at', null);
+        if (tenantId && tenantId !== 'all') {
+          query = query.eq('tenant_id', tenantId);
+        }
+        const res = await query;
+        if (res.error) throw res.error;
+        const assocData = res.data || [];
+
+        // Busca dependentes vinculados
+        if (assocData.length > 0) {
+          const assocIds = assocData.map(a => a.id);
+          try {
+            const { data: depsData } = await supabase
+              .from('dependentes')
+              .select('*')
+              .in('associado_id', assocIds);
+            
+            const depsMap = new Map<string, Dependente[]>();
+            (depsData || []).forEach((d: any) => {
+              const list = depsMap.get(d.associado_id) || [];
+              list.push(d);
+              depsMap.set(d.associado_id, list);
+            });
+
+            data = assocData.map(a => ({
+              ...a,
+              dependentes: depsMap.get(a.id) || a.dependentes || []
+            }));
+          } catch (dErr) {
+            data = assocData.map(a => ({
+              ...a,
+              dependentes: a.dependentes || []
+            }));
+          }
+        } else {
+          data = [];
+        }
+      }
+
+      // Salva no cache local IDB
       if (data) {
         for (const item of data) {
           await saveToIDB(STORE_NAME, item);
@@ -73,7 +123,7 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
       }
       associados = (data as Associado[]) || [];
     } catch (error) {
-      console.warn('Supabase fetch failed (likely not configured), falling back to IDB.');
+      console.warn('Supabase fetch failed, falling back to IDB:', error);
       associados = await getAllFromIDB<Associado>(STORE_NAME);
     }
   } else {
