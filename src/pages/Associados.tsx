@@ -746,9 +746,17 @@ export const AssociadosPage: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
 
   const filtered = associados.filter((a) => {
-    const matchesSearch =
-      a.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.cpf.includes(searchTerm);
+    if (!a) return false;
+    const s = (searchTerm || '').trim().toLowerCase();
+    const sDigits = s.replace(/\D/g, '');
+    const nome = (a.nome || '').toLowerCase();
+    const cpf = a.cpf || '';
+    const cpfDigits = cpf.replace(/\D/g, '');
+
+    const matchesSearch = !s || 
+      nome.includes(s) || 
+      (sDigits.length > 0 && cpfDigits.includes(sDigits)) || 
+      cpf.includes(s);
     const matchesStatus = statusFilter ? a.status === statusFilter : true;
     const matchesPlano = planoFilter ? a.plano_pax_id === planoFilter : true;
     return matchesSearch && matchesStatus && matchesPlano;
@@ -822,20 +830,25 @@ export const AssociadosPage: React.FC = () => {
 
   const todosDependentes = React.useMemo(() => {
     const list: any[] = [];
-    associados.forEach(a => {
-      if (a.dependentes) {
+    (associados || []).forEach(a => {
+      if (a && a.dependentes && Array.isArray(a.dependentes)) {
         a.dependentes.forEach(d => {
-          list.push({ ...d, titular_nome: a.nome, titular_cpf: a.cpf });
+          if (d) {
+            list.push({ ...d, titular_nome: a.nome || '', titular_cpf: a.cpf || '' });
+          }
         });
       }
     });
     return list;
   }, [associados]);
 
-  const dependentesFiltrados = todosDependentes.filter(d => 
-    d.nome.toLowerCase().includes(buscaDependentes.toLowerCase()) || 
-    (d.titular_nome && d.titular_nome.toLowerCase().includes(buscaDependentes.toLowerCase()))
-  );
+  const dependentesFiltrados = todosDependentes.filter(d => {
+    if (!d) return false;
+    const q = (buscaDependentes || '').toLowerCase();
+    const nome = (d.nome || '').toLowerCase();
+    const titular = (d.titular_nome || '').toLowerCase();
+    return !q || nome.includes(q) || titular.includes(q);
+  });
   
   const loadData = async () => {
     setLoading(true);
@@ -844,28 +857,34 @@ export const AssociadosPage: React.FC = () => {
         state.isOnline,
         state.empresaSelecionada,
       );
-      setAssociados(data);
+      setAssociados(data || []);
 
-      const allParcelas = await getParcelasReceber(state.isOnline, state.empresaSelecionada || 'all');
-      const pMap: Record<string, number> = {};
-      data.forEach(a => {
-        pMap[a.id] = 0;
-      });
+      try {
+        const allParcelas = await getParcelasReceber(state.isOnline, state.empresaSelecionada || 'all');
+        const pMap: Record<string, number> = {};
+        (data || []).forEach(a => {
+          if (a && a.id) pMap[a.id] = 0;
+        });
 
-      allParcelas.forEach(p => {
-        if (p.status === 'pendente' || p.status === 'vencido' || p.status === 'atrasado') {
-          const assoc = data.find(a => 
-            (a.cpf && p.devedor_cpf_cnpj && a.cpf === p.devedor_cpf_cnpj) || 
-            (p.devedor_nome === a.nome)
-          );
-          if (assoc) {
-            pMap[assoc.id] = (pMap[assoc.id] || 0) + 1;
+        (allParcelas || []).forEach(p => {
+          if (p && (p.status === 'pendente' || p.status === 'vencido' || p.status === 'atrasado')) {
+            const assoc = (data || []).find(a => 
+              a && (
+                (a.cpf && p.devedor_cpf_cnpj && a.cpf.replace(/\D/g, '') === (p.devedor_cpf_cnpj || '').replace(/\D/g, '')) || 
+                (p.devedor_nome && a.nome && p.devedor_nome.trim().toLowerCase() === a.nome.trim().toLowerCase())
+              )
+            );
+            if (assoc && assoc.id) {
+              pMap[assoc.id] = (pMap[assoc.id] || 0) + 1;
+            }
           }
-        }
-      });
-      setParcelasAbertasMap(pMap);
+        });
+        setParcelasAbertasMap(pMap);
+      } catch (pErr) {
+        console.warn('Erro ao carregar parcelas de associados:', pErr);
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Erro ao carregar associados:', e);
     } finally {
       setLoading(false);
     }
@@ -1045,9 +1064,12 @@ export const AssociadosPage: React.FC = () => {
       setEditingAssociado({ ...associado });
       setIsEditingMode(true);
     } else {
+      const defaultTenant = (state.empresaSelecionada && state.empresaSelecionada !== 'all') 
+        ? state.empresaSelecionada 
+        : 'default_tenant';
       setEditingAssociado({
         id: uuidv4(),
-        tenant_id: state.empresaSelecionada || "",
+        tenant_id: defaultTenant,
         nome: "",
         cpf: "",
         status: "ativo",
@@ -1074,11 +1096,6 @@ export const AssociadosPage: React.FC = () => {
     if (!editingAssociado || !editingAssociado.id) return;
     if (!executarValidacaoOuAlertar()) return;
     try {
-      if (!state.empresaSelecionada) {
-        toast.error("Selecione uma empresa antes de salvar.");
-        return;
-      }
-      
       if (editingAssociado.cpf) {
         if (!isValidCPFOrCNPJ(editingAssociado.cpf, false)) {
           toast.error("CPF do titular inválido.");
@@ -1087,6 +1104,7 @@ export const AssociadosPage: React.FC = () => {
         const cpfLimpo = editingAssociado.cpf.replace(/\D/g, '');
         if (cpfLimpo.length > 0) {
           const duplicateUser = associados.find(a => 
+            a &&
             a.status === 'ativo' && 
             a.cpf?.replace(/\D/g, '') === cpfLimpo && 
             a.id !== editingAssociado.id
@@ -1100,7 +1118,7 @@ export const AssociadosPage: React.FC = () => {
       
       if (editingAssociado.dependentes && editingAssociado.dependentes.length > 0) {
         for (const dep of editingAssociado.dependentes) {
-          if (dep.cpf && !isValidCPFOrCNPJ(dep.cpf, false)) {
+          if (dep && dep.cpf && !isValidCPFOrCNPJ(dep.cpf, false)) {
              toast.error(`CPF do dependente ${dep.nome || ''} é inválido.`);
              return;
           }
@@ -1122,10 +1140,17 @@ export const AssociadosPage: React.FC = () => {
           return;
         }
       }
+
+      const targetTenant = (state.empresaSelecionada && state.empresaSelecionada !== 'all')
+        ? state.empresaSelecionada
+        : (editingAssociado.tenant_id && editingAssociado.tenant_id !== 'all' && editingAssociado.tenant_id !== '')
+          ? editingAssociado.tenant_id
+          : 'default_tenant';
+
       const novoAssociado = {
         ...editingAssociado,
         n_vidas: nVidasCalculadas,
-        tenant_id: state.empresaSelecionada,
+        tenant_id: targetTenant,
       } as Associado;
 
       if (novoAssociado.plano_pax_id) {
@@ -1137,7 +1162,7 @@ export const AssociadosPage: React.FC = () => {
         const planoCompleto = planosCompletos.find(p => p.id === novoAssociado.plano_pax_id);
         if (planoCompleto) {
           const dependentesIds = (novoAssociado.dependentes || []).map(d => {
-            if (d.data_nascimento) {
+            if (d && d.data_nascimento) {
               const bdate = new Date(d.data_nascimento);
               const age = new Date().getFullYear() - bdate.getFullYear();
               return age;
@@ -1171,7 +1196,7 @@ export const AssociadosPage: React.FC = () => {
           modulo: 'Associados',
           descricao: `Plano do associado ${novoAssociado.nome} modificado de ${originalPlano} para ${novoAssociado.plano_nome}. Justificativa: ${(novoAssociado as any).justificativa_modificacao_plano}`,
           usuario_id: state.user?.id || 'sistema',
-          tenant_id: state.empresaSelecionada || 'emp-001',
+          tenant_id: targetTenant,
           dados_novos: { 
             plano_anterior: originalPlano,
             novo_plano: novoAssociado.plano_nome,
@@ -1186,7 +1211,7 @@ export const AssociadosPage: React.FC = () => {
       toast.success("Associado salvo com sucesso!");
     } catch (error) {
       console.error("Erro ao salvar associado", error);
-      toast.error("Erro ao salvar associado. Verifique se você está online.");
+      toast.error("Erro ao salvar associado.");
     }
   };
 
@@ -1210,7 +1235,7 @@ export const AssociadosPage: React.FC = () => {
         } catch (error) {
           console.error("Erro ao excluir", error);
           toast.error(
-            "Erro ao excluir associado. Verifique se você está online.",
+            "Erro ao excluir associado.",
           );
         }
       },
@@ -1251,13 +1276,9 @@ export const AssociadosPage: React.FC = () => {
             <span>Exportar PDF</span>
           </button>
           <button
-            disabled={
-              !state.isOnline ||
-              !state.empresaSelecionada ||
-              state.empresaSelecionada === "all"
-            }
+            disabled={!state.isOnline && false}
             onClick={() => handleOpenModal()}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(59,130,246,0.25)] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(59,130,246,0.25)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Novo Associado

@@ -11,14 +11,18 @@ import {
 } from '../types/requisicoes';
 import { 
   getRequisicoes, 
-  criarRequisicao, atualizarRequisicao, 
+  criarRequisicao, 
+  atualizarRequisicao, 
   atualizarStatusRequisicao, 
+  excluirRequisicao,
   gerarPDFGuiaRequisicao 
 } from '../services/requisicoesService';
 import { getAssociados, Associado, Dependente } from '../services/associadosService';
 import { getEmpresaById } from '../services/empresasService';
 import { useCredenciados } from '../hooks/useCredenciados';
 import { useProcedimentos } from '../hooks/useProcedimentos';
+import { canDelete } from '../utils/permissions';
+import { useConfirm } from '../context/ConfirmContext';
 import { 
   FileCheck2, 
   Plus, 
@@ -51,10 +55,10 @@ import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import toast from 'react-hot-toast';
 import { getRemessas } from '../services/faturamentoService';
 import { salvarReceita, Receita, ParcelaReceber } from '../services/financeiroService';
-import { canDelete } from '../utils/permissions';
 
 export const RequisicoesPage: React.FC = () => {
   const { state } = useAppContext();
+  const { confirm } = useConfirm();
   const { credenciados, buscarProcedimentosVinculados } = useCredenciados();
   const { procedimentos: todosProcedimentos } = useProcedimentos();
 
@@ -62,6 +66,31 @@ export const RequisicoesPage: React.FC = () => {
   const [requisicoes, setRequisicoes] = useState<Requisicao[]>([]);
   const [associados, setAssociados] = useState<Associado[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleExcluirGuia = (req: Requisicao) => {
+    if (!canDelete(state.user)) {
+      toast.error('Permissão negada. Somente administradores podem excluir guias de requisição.');
+      return;
+    }
+
+    confirm({
+      title: 'Excluir Guia de Requisição',
+      message: `Deseja realmente excluir permanentemente a guia ${req.codigo_requisicao} (${req.paciente_nome})?`,
+      confirmText: 'Excluir Guia',
+      cancelText: 'Cancelar',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await excluirRequisicao(state.isOnline, req.id);
+          setRequisicoes(prev => prev.filter(r => r.id !== req.id));
+          toast.success('Guia de requisição excluída com sucesso!');
+          loadData();
+        } catch (e) {
+          toast.error('Erro ao excluir guia de requisição.');
+        }
+      }
+    });
+  };
 
   // Filters
   const [filtros, setFiltros] = useState<FiltroRequisicoes>({
@@ -788,12 +817,20 @@ export const RequisicoesPage: React.FC = () => {
                         {req.status !== 'cancelada' && req.status !== 'realizada' && (
                           <button
                             onClick={() => setModalCancelar(req)}
-                            className="p-1.5 text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg border border-rose-500/20 transition-colors"
-                            title="Cancelar Guia"
+                            className="p-1.5 text-amber-500 hover:text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg border border-amber-500/20 transition-colors"
+                            title="Cancelar Guia (Inativar)"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <XCircle className="w-4 h-4" />
                           </button>
                         )}
+
+                        <button
+                          onClick={() => handleExcluirGuia(req)}
+                          className="p-1.5 text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg border border-rose-500/20 transition-colors"
+                          title="Excluir Guia Definitivamente"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>

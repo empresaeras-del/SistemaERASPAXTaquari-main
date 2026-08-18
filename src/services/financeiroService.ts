@@ -32,6 +32,7 @@ export interface Receita {
   atendimento_id?: string;
   criado_em?: string;
   criado_por?: string;
+  deleted_at?: string | null;
 }
 
 export interface Despesa {
@@ -62,6 +63,7 @@ export interface Despesa {
   status: 'ativo' | 'rascunho' | 'cancelado' | 'quitado';
   atendimento_id?: string;
   criado_em?: string;
+  deleted_at?: string | null;
 }
 
 export interface ParcelaReceber {
@@ -92,6 +94,7 @@ export interface ParcelaReceber {
   total_parcelas?: number;
   recebido_por?: string;
   observacao_recebimento?: string;
+  deleted_at?: string | null;
 }
 
 export interface ParcelaPagar {
@@ -120,6 +123,7 @@ export interface ParcelaPagar {
   pago_por?: string;
   observacao_pagamento?: string;
   tipo_credor?: string;
+  deleted_at?: string | null;
 }
 
 export const salvarReceita = async (isOnline: boolean, receita: Receita, parcelas: ParcelaReceber[]): Promise<void> => {
@@ -357,151 +361,51 @@ export const salvarDespesa = async (isOnline: boolean, despesa: Despesa, parcela
 
 export const getParcelasPagar = async (isOnline: boolean, tenantId: string): Promise<ParcelaPagar[]> => {
   let parcelas: ParcelaPagar[] = [];
+  const localParcelas = await getAllFromIDB<ParcelaPagar>('parcelas_pagar');
 
   if (isOnline) {
     try {
       let query = supabase.from('parcelas_pagar').select('*');
       if (tenantId && tenantId !== 'all') {
-        query = query.eq('tenant_id', tenantId);
+        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
       }
       const { data, error } = await query;
-      if (error) {
-        // Se der erro no filtro, busca todos
-        const fallbackRes = await supabase.from('parcelas_pagar').select('*');
-        if (!fallbackRes.error && fallbackRes.data) {
-          for (const item of fallbackRes.data) {
-            await saveToIDB('parcelas_pagar', item);
-          }
-          parcelas = fallbackRes.data || [];
-        } else {
-          throw error;
-        }
-      } else if (data) {
+      if (!error && data && data.length > 0) {
         for (const item of data) {
           await saveToIDB('parcelas_pagar', item);
         }
-        parcelas = data || [];
+        
+        // Merge Supabase com os locais
+        const remoteMap = new Map<string, ParcelaPagar>();
+        data.forEach((item: any) => remoteMap.set(item.id, item));
+        (localParcelas || []).forEach(localItem => {
+          if (!remoteMap.has(localItem.id) && !localItem.deleted_at) {
+            remoteMap.set(localItem.id, localItem);
+          }
+        });
+        parcelas = Array.from(remoteMap.values());
+      } else {
+        parcelas = localParcelas || [];
       }
     } catch (error) {
       console.warn('Supabase fetch parcelas_pagar failed, using IDB fallback.', error);
-      parcelas = await getAllFromIDB<ParcelaPagar>('parcelas_pagar');
+      parcelas = localParcelas || [];
     }
   } else {
-    parcelas = await getAllFromIDB<ParcelaPagar>('parcelas_pagar');
+    parcelas = localParcelas || [];
   }
 
-  // Sincronização e Geração Automática para Remessas Fechadas:
-  // Garante que toda remessa com status 'fechada' possua sua respectiva parcela no Contas a Pagar
-  try {
-    let remessasFechadas: any[] = [];
-    if (isOnline) {
-      try {
-        let qRems = supabase.from('remessas_faturamento').select('*').eq('status', 'fechada');
-        if (tenantId && tenantId !== 'all') {
-          qRems = qRems.eq('tenant_id', tenantId);
-        }
-        const { data: remsSupabase } = await qRems;
-        if (remsSupabase && remsSupabase.length > 0) {
-          remessasFechadas = remsSupabase;
-          for (const r of remsSupabase) {
-            await saveToIDB('remessas_faturamento', r);
-          }
-        }
-      } catch (rErr) {
-        // fallback IDB
-      }
-    }
-    
-    if (remessasFechadas.length === 0) {
-      const allRemsIDB = await getAllFromIDB<any>('remessas_faturamento');
-      remessasFechadas = (allRemsIDB || []).filter(r => r && r.status === 'fechada');
-      if (tenantId && tenantId !== 'all') {
-        remessasFechadas = remessasFechadas.filter(r => r.tenant_id === tenantId || r.tenant_id === 'default_tenant');
-      }
-    }
-
-    for (const rem of remessasFechadas) {
-      if (!rem || rem.valor_liquido <= 0) continue;
-
-      // Verifica se a parcela já existe pelo parcela_pagar_id ou pela descrição da remessa
-      const jaExiste = parcelas.some(p => 
-        (rem.parcela_pagar_id && p.id === rem.parcela_pagar_id) ||
-        (rem.codigo_remessa && p.descricao && p.descricao.includes(rem.codigo_remessa))
-      );
-
-      if (!jaExiste) {
-        const despesaId = rem.despesa_id || generateUUID();
-        const parcelaId = rem.parcela_pagar_id || generateUUID();
-        const effectiveTenant = rem.tenant_id || tenantId || 'default_tenant';
-        const vencimento = rem.data_vencimento_pagamento || 
-          new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const dataCriacao = rem.data_fechamento || rem.data_criacao || new Date().toISOString();
-
-        const novaDespesa: Despesa = {
-          id: despesaId,
-          tenant_id: effectiveTenant,
-          tipo_credor: 'fornecedor_pj',
-          credor_nome: rem.credenciado_nome,
-          credor_cpf_cnpj: rem.credenciado_cnpj_cpf,
-          descricao: `Faturamento Remessa ${rem.codigo_remessa} - ${rem.credenciado_nome} (${rem.qtd_guias || 1} guias)`,
-          categoria: 'Repasse Credenciados / Prestadores',
-          centro_custo: 'Rede Assistencial',
-          data_emissao: dataCriacao,
-          data_inicio_pagamento: vencimento,
-          valor_total: rem.valor_liquido,
-          qtd_parcelas: 1,
-          forma_pagamento_padrao: 'pix',
-          observacoes: `Gerado automaticamente pelo fechamento da Remessa ${rem.codigo_remessa}. ${rem.observacoes || ''}`,
-          status: 'ativo',
-          criado_em: dataCriacao,
-          criado_por: rem.fechado_por || 'Sistema',
-          atualizado_em: new Date().toISOString()
-        };
-
-        const novaParcela: ParcelaPagar = {
-          id: parcelaId,
-          tenant_id: effectiveTenant,
-          despesa_id: despesaId,
-          numero_parcela: 1,
-          total_parcelas: 1,
-          tipo_credor: 'fornecedor_pj',
-          credor_nome: rem.credenciado_nome,
-          credor_cpf_cnpj: rem.credenciado_cnpj_cpf,
-          descricao: `Remessa ${rem.codigo_remessa} (${rem.qtd_guias || 1} guias)`,
-          data_vencimento: vencimento,
-          valor: rem.valor_liquido,
-          forma_pagamento: 'pix',
-          observacao: `Vencimento do Faturamento da Rede Credenciada (${rem.codigo_remessa})`,
-          status: 'pendente',
-          criado_em: dataCriacao,
-          atualizado_em: new Date().toISOString()
-        };
-
-        await salvarDespesa(isOnline, novaDespesa, [novaParcela]);
-
-        if (!rem.despesa_id || !rem.parcela_pagar_id) {
-          rem.despesa_id = despesaId;
-          rem.parcela_pagar_id = parcelaId;
-          await saveToIDB('remessas_faturamento', rem);
-          if (isOnline) {
-            try {
-              await supabase.from('remessas_faturamento').upsert(rem);
-            } catch (uErr) {
-              console.warn('Erro ao atualizar ids na remessa:', uErr);
-            }
-          }
-        }
-
-        parcelas.push(novaParcela);
-      }
-    }
-  } catch (syncErr) {
-    console.warn('Erro ao auto-sincronizar remessas fechadas em getParcelasPagar:', syncErr);
-  }
-
-  return parcelas.filter(p => {
+  return (parcelas || []).filter(p => {
     if (!p) return false;
-    if (tenantId && tenantId !== 'all' && p.tenant_id && p.tenant_id !== tenantId && p.tenant_id !== 'default_tenant') return false;
+    if (p.deleted_at) return false;
+    if (tenantId && tenantId !== 'all') {
+      const matchTenant = !p.tenant_id || 
+        p.tenant_id === tenantId || 
+        p.tenant_id === 'all' || 
+        p.tenant_id === 'default_tenant' || 
+        p.tenant_id === 'empresa_padrao';
+      if (!matchTenant) return false;
+    }
     return true;
   });
 };
@@ -700,12 +604,45 @@ export const excluirReceita = async (isOnline: boolean, receitaId: string): Prom
 };
 
 export const excluirParcelaPagar = async (isOnline: boolean, parcelaId: string): Promise<void> => {
+  // 1. Remove do IDB imediatamente para resposta instantânea na interface
+  await deleteFromIDB('parcelas_pagar', parcelaId);
+
+  // 2. Desvincula de remessas de faturamento se for o caso
+  try {
+    const allRemessas = await getAllFromIDB<any>('remessas_faturamento');
+    const linkedRems = (allRemessas || []).filter(r => r && (r.parcela_pagar_id === parcelaId || r.despesa_id === parcelaId));
+    for (const rem of linkedRems) {
+      rem.parcela_pagar_id = null;
+      rem.parcela_excluida = true;
+      await saveToIDB('remessas_faturamento', rem);
+      if (isOnline) {
+        try {
+          await supabase.from('remessas_faturamento').upsert(rem);
+        } catch (e) {}
+      }
+    }
+  } catch (e) {
+    console.warn('Erro ao desvincular remessa na exclusão de parcela:', e);
+  }
+
+  // 3. Exclui do Supabase ou coloca na fila
   if (isOnline) {
     try {
       const { error } = await supabase.from('parcelas_pagar').delete().eq('id', parcelaId);
-      if (error) console.warn('Supabase delete parcela_pagar error:', error);
+      if (error) {
+        console.warn('Supabase delete parcela_pagar error, enqueuing:', error);
+        await addToSyncQueue({
+          storeName: 'parcelas_pagar',
+          action: 'delete',
+          data: { id: parcelaId }
+        });
+      }
     } catch (e) {
-      console.warn('Supabase delete error:', e);
+      await addToSyncQueue({
+        storeName: 'parcelas_pagar',
+        action: 'delete',
+        data: { id: parcelaId }
+      });
     }
   } else {
     await addToSyncQueue({
@@ -714,23 +651,58 @@ export const excluirParcelaPagar = async (isOnline: boolean, parcelaId: string):
       data: { id: parcelaId }
     });
   }
-  await deleteFromIDB('parcelas_pagar', parcelaId);
-  await registrarAuditoria('Excluir Parcela Pagar', { id: parcelaId });
+
+  try {
+    await registrarAuditoria('Excluir Parcela Pagar', { id: parcelaId });
+  } catch (e) {}
 };
 
 export const excluirDespesa = async (isOnline: boolean, despesaId: string): Promise<void> => {
+  // 1. Exclui do IDB imediatamente
+  await deleteFromIDB('despesas', despesaId);
+
+  // 2. Exclui parcelas filhas
   const allParcelas = await getAllFromIDB<ParcelaPagar>('parcelas_pagar');
-  const relatedParcelas = allParcelas.filter(p => p.despesa_id === despesaId);
+  const relatedParcelas = (allParcelas || []).filter(p => p && p.despesa_id === despesaId);
   for (const p of relatedParcelas) {
     await excluirParcelaPagar(isOnline, p.id);
   }
 
+  // 3. Desvincula de remessas
+  try {
+    const allRemessas = await getAllFromIDB<any>('remessas_faturamento');
+    const linkedRems = (allRemessas || []).filter(r => r && r.despesa_id === despesaId);
+    for (const rem of linkedRems) {
+      rem.despesa_id = null;
+      rem.parcela_pagar_id = null;
+      rem.parcela_excluida = true;
+      await saveToIDB('remessas_faturamento', rem);
+      if (isOnline) {
+        try {
+          await supabase.from('remessas_faturamento').upsert(rem);
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  // 4. Exclui do Supabase ou enfileira
   if (isOnline) {
     try {
       const { error } = await supabase.from('despesas').delete().eq('id', despesaId);
-      if (error) console.warn('Supabase delete despesa error:', error);
+      if (error) {
+        console.warn('Supabase delete despesa error, enqueuing:', error);
+        await addToSyncQueue({
+          storeName: 'despesas',
+          action: 'delete',
+          data: { id: despesaId }
+        });
+      }
     } catch (e) {
-      console.warn('Supabase delete error:', e);
+      await addToSyncQueue({
+        storeName: 'despesas',
+        action: 'delete',
+        data: { id: despesaId }
+      });
     }
   } else {
     await addToSyncQueue({
@@ -739,8 +711,10 @@ export const excluirDespesa = async (isOnline: boolean, despesaId: string): Prom
       data: { id: despesaId }
     });
   }
-  await deleteFromIDB('despesas', despesaId);
-  await registrarAuditoria('Excluir Despesa', { id: despesaId });
+
+  try {
+    await registrarAuditoria('Excluir Despesa', { id: despesaId });
+  } catch (e) {}
 };
 
 export const getReceitaCompleta = async (

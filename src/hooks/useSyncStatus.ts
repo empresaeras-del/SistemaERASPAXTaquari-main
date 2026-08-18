@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
-import { getSyncQueue, processSyncQueue } from '../lib/syncService';
+import { useState, useEffect, useRef } from 'react';
+import { getSyncQueue, processSyncQueue, clearFailedSyncTasks } from '../lib/syncService';
 import { useAppContext } from '../context/AppContext';
 
 export const useSyncStatus = () => {
   const { state } = useAppContext();
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const updateQueueCount = async () => {
     const queue = await getSyncQueue();
@@ -13,7 +14,8 @@ export const useSyncStatus = () => {
   };
 
   useEffect(() => {
-    updateQueueCount();
+    // Limpa tasks que falharam repetidamente ao inicializar
+    clearFailedSyncTasks().then(() => updateQueueCount());
 
     const handleQueueUpdated = () => {
       updateQueueCount();
@@ -29,14 +31,19 @@ export const useSyncStatus = () => {
     return () => {
       window.removeEventListener('sync_queue_updated', handleQueueUpdated);
       window.removeEventListener('sync_status_changed', handleSyncStatusChanged);
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
     };
   }, []);
 
   useEffect(() => {
     if (state.isOnline && pendingCount > 0 && !isSyncing) {
-      processSyncQueue(state.isOnline);
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = setTimeout(() => {
+        processSyncQueue(state.isOnline);
+      }, 500);
     }
   }, [state.isOnline, pendingCount, isSyncing]);
 
   return { pendingCount, isSyncing };
 };
+

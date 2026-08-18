@@ -8,15 +8,53 @@ export interface SyncTask {
   action: 'insert' | 'update' | 'delete';
   data: any;
   createdAt: string;
+  retries?: number;
+  lastError?: string;
 }
 
 const SYNC_QUEUE_STORE = 'sync_queue';
+const MAX_RETRIES = 3;
 
-export const addToSyncQueue = async (task: Omit<SyncTask, 'id' | 'createdAt'>) => {
+const getSupabaseTableName = (storeName: string): string | null => {
+  const map: Record<string, string> = {
+    empresas: 'tenants',
+    tenants: 'tenants',
+    usuarios: 'users',
+    users: 'users',
+    associados: 'associados',
+    dependentes: 'dependentes',
+    planos_pax: 'planos_pax',
+    itens_funerarios: 'itens_funerarios',
+    credenciados: 'credenciados',
+    procedimentos: 'procedimentos',
+    credenciados_procedimentos: 'credenciados_procedimentos',
+    credenciados_planos: 'credenciados_planos',
+    receitas: 'receitas',
+    despesas: 'despesas',
+    parcelas_receber: 'parcelas_receber',
+    parcelas_pagar: 'parcelas_pagar',
+    lotes_caixa: 'lotes_caixa',
+    movimentacoes_caixa: 'movimentacoes_caixa',
+    requisicoes: 'requisicoes',
+    requisicao_itens: 'requisicao_itens',
+    remessas_faturamento: 'remessas_faturamento',
+    contas_bancarias: 'contas_bancarias',
+    fornecedores: 'fornecedores',
+    atendimentos: 'atendimentos',
+    atendimento_itens: 'atendimento_itens',
+    auditoria: 'auditoria',
+    notificacoes: 'notificacoes',
+    documentos_padroes: 'documentos_padroes',
+  };
+  return map[storeName] || null;
+};
+
+export const addToSyncQueue = async (task: Omit<SyncTask, 'id' | 'createdAt' | 'retries'>) => {
   const newTask: SyncTask = {
     ...task,
     id: generateUUID(),
     createdAt: new Date().toISOString(),
+    retries: 0
   };
   await saveToIDB(SYNC_QUEUE_STORE, newTask);
   window.dispatchEvent(new Event('sync_queue_updated'));
@@ -30,34 +68,107 @@ export const getSyncQueue = async (): Promise<SyncTask[]> => {
   }
 };
 
+export const clearFailedSyncTasks = async () => {
+  try {
+    const queue = await getSyncQueue();
+    for (const t of queue) {
+      if ((t.retries || 0) >= MAX_RETRIES) {
+        await deleteFromIDB(SYNC_QUEUE_STORE, t.id);
+      }
+    }
+    window.dispatchEvent(new Event('sync_queue_updated'));
+  } catch (e) {}
+};
+
+let isProcessing = false;
+
 export const processSyncQueue = async (isOnline: boolean) => {
-  if (!isOnline) return;
+  if (!isOnline || isProcessing) return;
 
   const queue = await getSyncQueue();
   if (queue.length === 0) return;
 
+  isProcessing = true;
   window.dispatchEvent(new CustomEvent('sync_status_changed', { detail: { isSyncing: true } }));
 
-  for (const task of queue) {
-    try {
-      if (task.action === 'insert' || task.action === 'update') {
-        const { error } = await supabase.from(task.storeName).upsert(task.data);
-        if (error) throw error;
-      } else if (task.action === 'delete') {
-        const { error } = await supabase.from(task.storeName).update({ deleted_at: new Date().toISOString() }).eq('id', task.data.id);
-        if (error) {
-           const hardDelete = await supabase.from(task.storeName).delete().eq('id', task.data.id);
-           if (hardDelete.error) throw hardDelete.error;
+  try {
+    for (const task of queue) {
+      const targetTable = getSupabaseTableName(task.storeName);
+
+      // Se a storeName não mapear para nenhuma tabela do Supabase (ex: preferencias), apenas remove
+      if (!targetTable) {
+        await deleteFromIDB(SYNC_QUEUE_STORE, task.id);
+        continue;
+      }
+
+      // Se excedeu o número de tentativas, remove para não travar o loop de sincronização
+      if ((task.retries || 0) >= MAX_RETRIES) {
+        console.warn(`Sync task ${task.id} (${task.storeName}) excedeu ${MAX_RETRIES} tentativas. Removendo da fila. Erro anterior:`, task.lastError);
+        await deleteFromIDB(SYNC_QUEUE_STORE, task.id);
+        continue;
+      }
+
+      try {
+        if (task.action === 'insert' || task.action === 'update') {
+          let payload = { ...task.data };
+
+          // Sanitização específica para associados
+          if (targetTable === 'associados') {
+            const { dependentes, fornecedor_id, justificativa_modificacao_plano, ...assocClean } = payload;
+            payload = assocClean;
+
+            const { error: assocErr } = await supabase.from(targetTable).upsert(payload);
+            if (assocErr) throw assocErr;
+
+            // Se houver dependentes, sincroniza separadamente
+            if (Array.isArray(dependentes) && dependentes.length > 0) {
+              const depsPayload = dependentes.map((d: any) => ({
+                id: d.id,
+                associado_id: payload.id,
+                tenant_id: payload.tenant_id,
+                empresa_id: payload.tenant_id,
+                nome: d.nome || '',
+                cpf: d.cpf || null,
+                data_nascimento: d.data_nascimento || null,
+                parentesco: d.parentesco || 'Outro'
+              }));
+              await supabase.from('dependentes').upsert(depsPayload);
+            }
+          } else {
+            const { error } = await supabase.from(targetTable).upsert(payload);
+            if (error) throw error;
+          }
+        } else if (task.action === 'delete') {
+          const { error } = await supabase.from(targetTable).update({ deleted_at: new Date().toISOString() }).eq('id', task.data?.id || task.data);
+          if (error) {
+            const hardDelete = await supabase.from(targetTable).delete().eq('id', task.data?.id || task.data);
+            if (hardDelete.error) throw hardDelete.error;
+          }
+        }
+
+        // Sucesso: remove da fila
+        await deleteFromIDB(SYNC_QUEUE_STORE, task.id);
+      } catch (error: any) {
+        console.warn(`Falha na sincronização da tarefa ${task.id} (${targetTable}):`, error?.message || error);
+        
+        // Atualiza contador de retry e registra erro
+        const updatedTask: SyncTask = {
+          ...task,
+          retries: (task.retries || 0) + 1,
+          lastError: error?.message || String(error)
+        };
+
+        if (updatedTask.retries >= MAX_RETRIES) {
+          // Se atingiu o limite, remove para evitar loop infinito
+          await deleteFromIDB(SYNC_QUEUE_STORE, task.id);
+        } else {
+          await saveToIDB(SYNC_QUEUE_STORE, updatedTask);
         }
       }
-      // If success, remove from queue
-      await deleteFromIDB(SYNC_QUEUE_STORE, task.id);
-    } catch (error) {
-      console.error(`Failed to process sync task ${task.id}`, error);
-      // We could optionally break here to retry later in order
     }
+  } finally {
+    isProcessing = false;
+    window.dispatchEvent(new CustomEvent('sync_status_changed', { detail: { isSyncing: false } }));
+    window.dispatchEvent(new Event('sync_queue_updated'));
   }
-
-  window.dispatchEvent(new CustomEvent('sync_status_changed', { detail: { isSyncing: false } }));
-  window.dispatchEvent(new Event('sync_queue_updated'));
 };

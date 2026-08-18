@@ -304,6 +304,7 @@ export const ContasPagarPage: React.FC = () => {
       onConfirm: async () => {
         try {
           await excluirParcelaPagar(state.isOnline, parcela.id);
+          setParcelas(prev => prev.filter(p => p.id !== parcela.id));
           toast.success('Parcela excluída com sucesso!');
           loadData();
         } catch (e) {
@@ -328,6 +329,7 @@ export const ContasPagarPage: React.FC = () => {
       onConfirm: async () => {
         try {
           await excluirDespesa(state.isOnline, despesaId);
+          setParcelas(prev => prev.filter(p => p.despesa_id !== despesaId));
           toast.success('Despesa e parcelas excluídas com sucesso!');
           if (showDetalhesModal) setShowDetalhesModal(false);
           loadData();

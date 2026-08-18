@@ -30,7 +30,7 @@ export const getRequisicoes = async (isOnline: boolean, tenantId: string): Promi
     try {
       let query = supabase.from('requisicoes').select('*').is('deleted_at', null);
       if (tenantId && tenantId !== 'all') {
-        query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
+        query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
       }
       query = query.order('data_emissao', { ascending: false });
       const { data, error } = await query;
@@ -63,16 +63,26 @@ export const getRequisicoes = async (isOnline: boolean, tenantId: string): Promi
           itens: itensMap[r.id] || r.itens || []
         }));
 
+        // Reconcilia com IndexedDB: remove os que não existem no Supabase
+        const localAll = await getAllFromIDB<Requisicao>('requisicoes');
+        const remoteIds = new Set(data.map(r => r.id));
+        for (const localItem of localAll) {
+          if (!remoteIds.has(localItem.id)) {
+            await deleteFromIDB('requisicoes', localItem.id);
+          }
+        }
         for (const item of supaRequisicoes) {
           await saveToIDB('requisicoes', item);
         }
+
+        return supaRequisicoes;
       }
     } catch (e) {
       console.warn('Erro ao buscar requisições no Supabase, fallback IDB:', e);
     }
   }
 
-  if (fetchedFromSupa && supaRequisicoes.length > 0) {
+  if (fetchedFromSupa) {
     return supaRequisicoes;
   }
 
@@ -80,9 +90,36 @@ export const getRequisicoes = async (isOnline: boolean, tenantId: string): Promi
   const localData = await getAllFromIDB<Requisicao>('requisicoes');
   let result = localData.filter(r => !(r as any).deleted_at);
   if (tenantId && tenantId !== 'all') {
-    result = result.filter(r => r.tenant_id === tenantId || (r as any).empresa_id === tenantId);
+    result = result.filter(r => r.tenant_id === tenantId || (r as any).empresa_id === tenantId || r.tenant_id === 'default_tenant' || r.tenant_id === 'empresa_padrao');
   }
   return result.sort((a, b) => new Date(b.data_emissao).getTime() - new Date(a.data_emissao).getTime());
+};
+
+export const excluirRequisicao = async (isOnline: boolean, id: string): Promise<void> => {
+  // 1. Remove do IndexedDB imediatamente
+  await deleteFromIDB('requisicoes', id);
+  try {
+    const allItens = await getAllFromIDB<any>('requisicao_itens');
+    for (const it of (allItens || []).filter(i => i && (i.requisicao_id === id || i.id === id))) {
+      await deleteFromIDB('requisicao_itens', it.id);
+    }
+  } catch (e) {}
+
+  // 2. Remove do Supabase ou enfileira
+  if (isOnline) {
+    try {
+      await supabase.from('requisicao_itens').delete().eq('requisicao_id', id);
+      await supabase.from('requisicoes').delete().eq('id', id);
+    } catch (e) {
+      await addToSyncQueue({ storeName: 'requisicoes', action: 'delete', data: { id } });
+    }
+  } else {
+    await addToSyncQueue({ storeName: 'requisicoes', action: 'delete', data: { id } });
+  }
+
+  try {
+    await registrarAuditoria('Excluir Requisição/Guia', { id });
+  } catch (e) {}
 };
 
 export const criarRequisicao = async (

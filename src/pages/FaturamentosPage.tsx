@@ -9,12 +9,15 @@ import {
   atualizarRemessa, 
   fecharRemessaEGerarContaPagar,
   reabrirRemessa, 
+  excluirRemessa,
   gerarPDFRelatorioFaturamento 
 } from '../services/faturamentoService';
 import { getRequisicoes } from '../services/requisicoesService';
 import { getEmpresaById } from '../services/empresasService';
 import { useCredenciados } from '../hooks/useCredenciados';
 import { FormaPagamento } from '../types/financeiro';
+import { canDelete } from '../utils/permissions';
+import { useConfirm } from '../context/ConfirmContext';
 import { 
   Receipt as ReceiptIcon,
   Plus as PlusIcon,
@@ -35,14 +38,17 @@ import {
   AlertCircle as AlertCircleIcon,
   Trash2 as Trash2Icon,
   Lock as LockIcon,
-  ChevronRight as ChevronRightIcon
-, RefreshCw, Pencil as PencilIcon } from 'lucide-react';
+  ChevronRight as ChevronRightIcon,
+  RefreshCw,
+  Pencil as PencilIcon
+} from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import toast from 'react-hot-toast';
 
 export const FaturamentosPage: React.FC = () => {
   const { state } = useAppContext();
+  const { confirm } = useConfirm();
   const { credenciados } = useCredenciados();
 
   // Data States
@@ -340,6 +346,31 @@ export const FaturamentosPage: React.FC = () => {
     }
   };
 
+  const handleExcluirRemessa = (rem: RemessaFaturamento) => {
+    if (!canDelete(state.user)) {
+      toast.error('Permissão negada. Somente administradores podem excluir remessas.');
+      return;
+    }
+
+    confirm({
+      title: 'Excluir Remessa de Faturamento',
+      message: `Deseja realmente excluir a remessa ${rem.codigo_remessa} (${rem.credenciado_nome}) no valor de ${formatCurrency(rem.valor_liquido)}?`,
+      confirmText: 'Excluir Remessa',
+      cancelText: 'Cancelar',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await excluirRemessa(state.isOnline, rem.id);
+          setRemessas(prev => prev.filter(r => r.id !== rem.id));
+          toast.success('Remessa excluída com sucesso!');
+          loadData();
+        } catch (e) {
+          toast.error('Erro ao excluir remessa.');
+        }
+      }
+    });
+  };
+
   // Filtered List of Remessas
   const remessasFiltradas = useMemo(() => {
     return remessas.filter(r => {
@@ -620,6 +651,14 @@ export const FaturamentosPage: React.FC = () => {
                             <span>Fechar e Gerar CP</span>
                           </button>
                         )}
+
+                        <button
+                          onClick={() => handleExcluirRemessa(rem)}
+                          className="p-1.5 text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg border border-rose-500/20 transition-colors"
+                          title="Excluir Remessa"
+                        >
+                          <Trash2Icon className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>

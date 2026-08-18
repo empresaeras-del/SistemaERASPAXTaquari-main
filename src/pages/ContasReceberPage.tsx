@@ -314,6 +314,7 @@ export const ContasReceberPage: React.FC = () => {
       onConfirm: async () => {
         try {
           await excluirParcelaReceber(state.isOnline, parcela.id);
+          setParcelas(prev => prev.filter(p => p.id !== parcela.id));
           toast.success('Parcela excluída com sucesso!');
           loadData();
         } catch (e) {
@@ -338,6 +339,7 @@ export const ContasReceberPage: React.FC = () => {
       onConfirm: async () => {
         try {
           await excluirReceita(state.isOnline, receitaId);
+          setParcelas(prev => prev.filter(p => p.receita_id !== receitaId));
           toast.success('Receita e parcelas excluídas com sucesso!');
           if (showDetalhesModal) setShowDetalhesModal(false);
           loadData();

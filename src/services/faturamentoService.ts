@@ -1,5 +1,5 @@
 import { supabase, registrarAuditoria } from '../lib/supabase';
-import { getFromIDB, saveToIDB, getAllFromIDB } from '../lib/idb';
+import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { addToSyncQueue } from '../lib/syncService';
 import { generateUUID } from '../utils/uuid';
 import { RemessaFaturamento, StatusRemessa } from '../types/faturamento';
@@ -21,101 +21,81 @@ export const gerarCodigoRemessa = (indexNumber: number = 1): string => {
 };
 
 export const getRemessas = async (isOnline: boolean, tenantId: string): Promise<RemessaFaturamento[]> => {
+  let supaRemessas: RemessaFaturamento[] = [];
+  let fetchedFromSupa = false;
+
   if (isOnline) {
     try {
       let query = supabase.from('remessas_faturamento').select('*');
       if (tenantId && tenantId !== 'all') {
-        query = query.eq('tenant_id', tenantId);
+        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
       }
       query = query.order('data_criacao', { ascending: false });
       const { data, error } = await query;
       if (!error && data) {
+        fetchedFromSupa = true;
+        supaRemessas = data;
+
+        // Reconcilia com IndexedDB: remove os que não existem no Supabase
+        const localAll = await getAllFromIDB<RemessaFaturamento>('remessas_faturamento');
+        const remoteIds = new Set(data.map((r: any) => r.id));
+        for (const localItem of localAll) {
+          if (!remoteIds.has(localItem.id)) {
+            await deleteFromIDB('remessas_faturamento', localItem.id);
+          }
+        }
         for (const item of data) {
           await saveToIDB('remessas_faturamento', item);
         }
+
+        return supaRemessas;
       }
     } catch (e) {
       console.warn('Erro ao buscar remessas no Supabase, fallback IDB:', e);
     }
   }
 
-  const localData = await getAllFromIDB<RemessaFaturamento>('remessas_faturamento');
-  let result = localData;
-  if (tenantId && tenantId !== 'all') {
-    result = result.filter(r => r.tenant_id === tenantId);
+  if (fetchedFromSupa) {
+    return supaRemessas;
   }
 
-  // Autocorreção: se houver remessa com status 'fechada' sem lançamento gerado no Contas a Pagar, gera agora
-  for (const rem of result) {
-    if (rem.status === 'fechada' && rem.valor_liquido > 0) {
-      try {
-        const parcelaId = rem.parcela_pagar_id || generateUUID();
-        const despesaId = rem.despesa_id || generateUUID();
-        const existingP = await getFromIDB<ParcelaPagar>('parcelas_pagar', parcelaId);
-        
-        if (!existingP) {
-          const effectiveTenant = rem.tenant_id || tenantId || 'default_tenant';
-          const vencimento = rem.data_vencimento_pagamento || format(addDays(new Date(rem.data_criacao || new Date()), 15), 'yyyy-MM-dd');
-          const dataCriacao = rem.data_fechamento || rem.data_criacao || new Date().toISOString();
-
-          const novaDespesa: Despesa = {
-            id: despesaId,
-            tenant_id: effectiveTenant,
-            tipo_credor: 'fornecedor_pj',
-            credor_nome: rem.credenciado_nome,
-            credor_cpf_cnpj: rem.credenciado_cnpj_cpf,
-            descricao: `Faturamento Remessa ${rem.codigo_remessa} - ${rem.credenciado_nome} (${rem.qtd_guias} guias)`,
-            categoria: 'Repasse Credenciados / Prestadores',
-            centro_custo: 'Rede Assistencial',
-            data_emissao: dataCriacao,
-            data_inicio_pagamento: vencimento,
-            valor_total: rem.valor_liquido,
-            qtd_parcelas: 1,
-            forma_pagamento_padrao: 'pix',
-            observacoes: `Gerado automaticamente pelo fechamento da Remessa ${rem.codigo_remessa}. ${rem.observacoes || ''}`,
-            status: 'ativo',
-            criado_em: dataCriacao,
-            criado_por: rem.fechado_por || 'Sistema',
-            atualizado_em: new Date().toISOString()
-          };
-
-          const novaParcela: ParcelaPagar = {
-            id: parcelaId,
-            tenant_id: effectiveTenant,
-            despesa_id: despesaId,
-            numero_parcela: 1,
-            total_parcelas: 1,
-            tipo_credor: 'fornecedor_pj',
-            credor_nome: rem.credenciado_nome,
-            credor_cpf_cnpj: rem.credenciado_cnpj_cpf,
-            descricao: `Remessa ${rem.codigo_remessa} (${rem.qtd_guias} guias)`,
-            data_vencimento: vencimento,
-            valor: rem.valor_liquido,
-            forma_pagamento: 'pix',
-            observacao: `Vencimento do Faturamento da Rede Credenciada (${rem.codigo_remessa})`,
-            status: 'pendente',
-            criado_em: dataCriacao,
-            atualizado_em: new Date().toISOString()
-          };
-
-          await salvarDespesa(isOnline, novaDespesa, [novaParcela]);
-
-          if (!rem.despesa_id || !rem.parcela_pagar_id) {
-            rem.despesa_id = despesaId;
-            rem.parcela_pagar_id = parcelaId;
-            await saveToIDB('remessas_faturamento', rem);
-            if (isOnline) {
-              await supabase.from('remessas_faturamento').upsert(rem);
-            }
-          }
-        }
-      } catch (errSync) {
-        console.warn('Erro ao auto-sincronizar contas a pagar de remessa fechada:', errSync);
-      }
-    }
+  const localData = await getAllFromIDB<RemessaFaturamento>('remessas_faturamento');
+  let result = localData.filter(r => !(r as any).deleted_at);
+  if (tenantId && tenantId !== 'all') {
+    result = result.filter(r => r.tenant_id === tenantId || r.tenant_id === 'default_tenant' || r.tenant_id === 'empresa_padrao');
   }
 
   return result.sort((a, b) => new Date(b.data_criacao).getTime() - new Date(a.data_criacao).getTime());
+};
+
+export const excluirRemessa = async (isOnline: boolean, id: string): Promise<void> => {
+  // 1. Obtém a remessa para desvincular/cancelar despesas ou parcelas no financeiro se houver
+  const rem = await getFromIDB<RemessaFaturamento>('remessas_faturamento', id);
+  if (rem) {
+    if (rem.despesa_id) {
+      try {
+        await cancelarDespesa(isOnline, rem.despesa_id);
+      } catch (e) {}
+    }
+  }
+
+  // 2. Remove do IndexedDB imediatamente
+  await deleteFromIDB('remessas_faturamento', id);
+
+  // 3. Remove do Supabase ou enfileira
+  if (isOnline) {
+    try {
+      await supabase.from('remessas_faturamento').delete().eq('id', id);
+    } catch (e) {
+      await addToSyncQueue({ storeName: 'remessas_faturamento', action: 'delete', data: { id } });
+    }
+  } else {
+    await addToSyncQueue({ storeName: 'remessas_faturamento', action: 'delete', data: { id } });
+  }
+
+  try {
+    await registrarAuditoria('Excluir Remessa Faturamento', { id });
+  } catch (e) {}
 };
 
 export const criarRemessa = async (
