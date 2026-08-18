@@ -139,10 +139,48 @@ export const processSyncQueue = async (isOnline: boolean) => {
             if (error) throw error;
           }
         } else if (task.action === 'delete') {
-          const { error } = await supabase.from(targetTable).update({ deleted_at: new Date().toISOString() }).eq('id', task.data?.id || task.data);
-          if (error) {
-            const hardDelete = await supabase.from(targetTable).delete().eq('id', task.data?.id || task.data);
-            if (hardDelete.error) throw hardDelete.error;
+          const targetId = task.data?.id || task.data;
+          if (targetTable === 'associados') {
+            try {
+              // a) Receitas e Parcelas a Receber
+              const { data: recs } = await supabase.from('receitas').select('id').eq('associado_id', targetId);
+              if (recs && recs.length > 0) {
+                await supabase.from('parcelas_receber').delete().in('receita_id', recs.map(r => r.id));
+                await supabase.from('receitas').delete().eq('associado_id', targetId);
+              }
+
+              // b) Atendimentos e Itens
+              const { data: atends } = await supabase.from('atendimentos').select('id').eq('associado_id', targetId);
+              if (atends && atends.length > 0) {
+                await supabase.from('atendimento_itens').delete().in('atendimento_id', atends.map(a => a.id));
+                await supabase.from('atendimentos').delete().eq('associado_id', targetId);
+              }
+
+              // c) Requisições e Itens
+              const { data: reqs } = await supabase.from('requisicoes').select('id').eq('associado_id', targetId);
+              if (reqs && reqs.length > 0) {
+                await supabase.from('requisicao_itens').delete().in('requisicao_id', reqs.map(r => r.id));
+                await supabase.from('requisicoes').delete().eq('associado_id', targetId);
+              }
+
+              // d) Dependentes e Contratos
+              await supabase.from('dependentes').delete().eq('associado_id', targetId);
+              await supabase.from('contratos').delete().eq('associado_id', targetId);
+
+              // e) Associado
+              const { error: delErr } = await supabase.from('associados').delete().eq('id', targetId);
+              if (delErr) {
+                await supabase.from('associados').update({ deleted_at: new Date().toISOString(), status: 'inativo' }).eq('id', targetId);
+              }
+            } catch (cascadeErr) {
+              console.warn('Erro ao processar exclusão em cascata na fila de sync:', cascadeErr);
+            }
+          } else {
+            const { error } = await supabase.from(targetTable).update({ deleted_at: new Date().toISOString() }).eq('id', targetId);
+            if (error) {
+              const hardDelete = await supabase.from(targetTable).delete().eq('id', targetId);
+              if (hardDelete.error) throw hardDelete.error;
+            }
           }
         }
 

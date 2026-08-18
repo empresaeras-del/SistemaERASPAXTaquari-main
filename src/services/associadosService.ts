@@ -300,29 +300,136 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
 };
 
 export const softDeleteAssociado = async (id: string, isOnline: boolean): Promise<void> => {
-  // Exclui do IDB primeiro
-  await deleteFromIDB(STORE_NAME, id);
+  // 1. Limpeza no IndexedDB de todas as tabelas vinculadas
+  try {
+    await deleteFromIDB(STORE_NAME, id);
 
-  if (isOnline) {
-    try {
-      let { error } = await supabase
-        .from('associados')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', id);
+    // Dependentes locais
+    const localDeps = await getAllFromIDB<any>('dependentes');
+    for (const d of localDeps) {
+      if (d.associado_id === id) {
+        await deleteFromIDB('dependentes', d.id);
+      }
+    }
 
-      if (error) {
-        console.warn('Soft delete failed in Supabase, trying hard delete...', error);
-        const hardDelete = await supabase.from('associados').delete().eq('id', id);
-        if (hardDelete.error) {
-          console.warn('Hard delete also failed. Enqueuing delete.', hardDelete.error);
-          await addToSyncQueue({
-            storeName: STORE_NAME,
-            action: 'delete',
-            data: { id }
-          });
+    // Contratos locais
+    const localContratos = await getAllFromIDB<any>('contratos');
+    for (const c of localContratos) {
+      if (c.associado_id === id) {
+        await deleteFromIDB('contratos', c.id);
+      }
+    }
+
+    // Requisições e Itens locais
+    const localReqs = await getAllFromIDB<any>('requisicoes');
+    for (const r of localReqs) {
+      if (r.associado_id === id) {
+        await deleteFromIDB('requisicoes', r.id);
+        const localReqItens = await getAllFromIDB<any>('requisicao_itens');
+        for (const ri of localReqItens) {
+          if (ri.requisicao_id === r.id) {
+            await deleteFromIDB('requisicao_itens', ri.id);
+          }
         }
       }
-    } catch (err) {
+    }
+
+    // Atendimentos e Itens locais
+    const localAtends = await getAllFromIDB<any>('atendimentos');
+    for (const a of localAtends) {
+      if (a.associado_id === id) {
+        await deleteFromIDB('atendimentos', a.id);
+        const localAtendItens = await getAllFromIDB<any>('atendimento_itens');
+        for (const ai of localAtendItens) {
+          if (ai.atendimento_id === a.id) {
+            await deleteFromIDB('atendimento_itens', ai.id);
+          }
+        }
+      }
+    }
+
+    // Receitas e Parcelas locais
+    const localReceitas = await getAllFromIDB<any>('receitas');
+    for (const rec of localReceitas) {
+      if (rec.associado_id === id || rec.cliente_id === id) {
+        await deleteFromIDB('receitas', rec.id);
+        const localParcelas = await getAllFromIDB<any>('parcelas_receber');
+        for (const p of localParcelas) {
+          if (p.receita_id === rec.id) {
+            await deleteFromIDB('parcelas_receber', p.id);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Erro ao limpar registros vinculados no IndexedDB:', e);
+  }
+
+  // 2. Exclusão em cascata no Supabase
+  if (isOnline) {
+    try {
+      // a) Parcelas a Receber e Receitas vinculadas ao associado
+      const { data: receitas } = await supabase
+        .from('receitas')
+        .select('id')
+        .eq('associado_id', id);
+
+      if (receitas && receitas.length > 0) {
+        const receitaIds = receitas.map(r => r.id);
+        await supabase.from('parcelas_receber').delete().in('receita_id', receitaIds);
+        await supabase.from('receitas').delete().eq('associado_id', id);
+      }
+
+      // b) Atendimento Itens e Atendimentos vinculados
+      const { data: atendimentos } = await supabase
+        .from('atendimentos')
+        .select('id')
+        .eq('associado_id', id);
+
+      if (atendimentos && atendimentos.length > 0) {
+        const atendimentoIds = atendimentos.map(a => a.id);
+        await supabase.from('atendimento_itens').delete().in('atendimento_id', atendimentoIds);
+        await supabase.from('atendimentos').delete().eq('associado_id', id);
+      }
+
+      // c) Requisição Itens e Requisições vinculadas
+      const { data: requisicoes } = await supabase
+        .from('requisicoes')
+        .select('id')
+        .eq('associado_id', id);
+
+      if (requisicoes && requisicoes.length > 0) {
+        const requisicaoIds = requisicoes.map(r => r.id);
+        await supabase.from('requisicao_itens').delete().in('requisicao_id', requisicaoIds);
+        await supabase.from('requisicoes').delete().eq('associado_id', id);
+      }
+
+      // d) Dependentes vinculados
+      await supabase.from('dependentes').delete().eq('associado_id', id);
+
+      // e) Contratos vinculados
+      await supabase.from('contratos').delete().eq('associado_id', id);
+
+      // f) Exclusão do Associado da tabela principal
+      const { error: deleteErr } = await supabase
+        .from('associados')
+        .delete()
+        .eq('id', id);
+
+      if (deleteErr) {
+        // Se hard delete falhar por qualquer motivo, tenta soft delete
+        console.warn('Hard delete falhou, aplicando soft-delete:', deleteErr.message);
+        const { error: softErr } = await supabase
+          .from('associados')
+          .update({ deleted_at: new Date().toISOString(), status: 'inativo' })
+          .eq('id', id);
+
+        if (softErr) {
+          throw new Error(softErr.message || deleteErr.message);
+        }
+      }
+    } catch (err: any) {
+      console.warn('Erro na exclusão online no Supabase, enfileirando para sincronização:', err?.message || err);
       await addToSyncQueue({
         storeName: STORE_NAME,
         action: 'delete',
@@ -330,6 +437,7 @@ export const softDeleteAssociado = async (id: string, isOnline: boolean): Promis
       });
     }
   } else {
+    // Se offline, adiciona à fila de sincronização
     await addToSyncQueue({
       storeName: STORE_NAME,
       action: 'delete',
@@ -338,9 +446,11 @@ export const softDeleteAssociado = async (id: string, isOnline: boolean): Promis
   }
 
   try {
-    await registrarAuditoria('Excluir Associado (Soft Delete)', { id });
+    await registrarAuditoria('Excluir Associado e Vínculos', { id });
   } catch (e) {}
 };
+
+export const deleteAssociado = softDeleteAssociado;
 export interface DocumentoAssociado {
   id: string;
   nome: string;
