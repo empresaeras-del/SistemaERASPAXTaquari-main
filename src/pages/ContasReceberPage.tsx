@@ -15,7 +15,7 @@ import {
   Receita
 } from '../services/financeiroService';
 import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
-import { getEmpresaById } from '../services/empresasService';
+import { getEmpresaById, Empresa } from '../services/empresasService';
 import { LoteCaixa } from '../types/caixas';
 import { canDelete } from '../utils/permissions';
 import {
@@ -118,13 +118,18 @@ export const ContasReceberPage: React.FC = () => {
   const [showDetalhesModal, setShowDetalhesModal] = useState(false);
   const [parcelaDetalhes, setParcelaDetalhes] = useState<ParcelaReceber | null>(null);
   const [receitaPai, setReceitaPai] = useState<Receita | null>(null);
+  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
 
   const loadData = async () => {
     setLoading(true);
     try {
       if (state.empresaSelecionada) {
-        const contas = await getContasBancariasAtivas(state.empresaSelecionada, state.isOnline);
+        const [contas, emp] = await Promise.all([
+          getContasBancariasAtivas(state.empresaSelecionada, state.isOnline),
+          getEmpresaById(state.empresaSelecionada, state.isOnline)
+        ]);
         setContasBancarias(contas);
+        if (emp) setEmpresaData(emp);
       }
       const data = await getParcelasReceber(state.isOnline, state.empresaSelecionada);
       setParcelas(data);
@@ -1180,10 +1185,27 @@ export const ContasReceberPage: React.FC = () => {
 
             {/* Recibo de Pagamento - Somente Impressão */}
             <div className="hidden print:block p-8 font-sans bg-white text-black print:!bg-white print:!text-black">
-              <div className="text-center border-b-2 border-black pb-4 mb-6">
-                <h1 className="text-3xl font-bold uppercase tracking-wider mb-2">Recibo de Pagamento</h1>
-                <p className="text-gray-600">Nº {parcelaDetalhes.id.split('-')[0].toUpperCase()}</p>
-              </div>
+              {/* Cabeçalho com Logotipo da Empresa alinhado às margens */}
+              {empresaData?.logo_url ? (
+                <div className="text-center pb-4 mb-6 border-b-2 border-black">
+                  <img 
+                    src={empresaData.logo_url} 
+                    alt={empresaData.nome_fantasia || "Logotipo"} 
+                    className="max-h-20 w-full object-contain mx-auto mb-2"
+                    style={{ maxHeight: '80px', width: '100%', objectFit: 'contain' }}
+                  />
+                  <h1 className="text-2xl font-bold uppercase tracking-wider">Recibo de Pagamento</h1>
+                  <p className="text-gray-600 text-sm">Nº {parcelaDetalhes.id.split('-')[0].toUpperCase()}</p>
+                </div>
+              ) : (
+                <div className="text-center border-b-2 border-black pb-4 mb-6">
+                  <h2 className="text-lg font-bold text-gray-800 uppercase mb-1">
+                    {empresaData?.nome_fantasia || empresaData?.razao_social || 'EMPRESA'}
+                  </h2>
+                  <h1 className="text-3xl font-bold uppercase tracking-wider mb-1">Recibo de Pagamento</h1>
+                  <p className="text-gray-600 text-sm">Nº {parcelaDetalhes.id.split('-')[0].toUpperCase()}</p>
+                </div>
+              )}
 
               <div className="flex justify-between items-center mb-8">
                 <div>
@@ -1216,7 +1238,7 @@ export const ContasReceberPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-12 space-y-4">
+              <div className="mt-8 space-y-4">
                 <div className="flex justify-between text-sm border-b border-gray-300 pb-2">
                   <span className="text-gray-600 font-bold uppercase">Forma de Pagamento:</span>
                   <span className="font-medium uppercase">{parcelaDetalhes.forma_pagamento_efetivo || parcelaDetalhes.forma_pagamento || '-'}</span>
@@ -1231,10 +1253,25 @@ export const ContasReceberPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-20 pt-8 border-t-2 border-black flex flex-col items-center">
-                <div className="w-64 border-b border-black mb-2"></div>
-                <p className="text-sm font-bold uppercase tracking-wider">Assinatura / Carimbo</p>
-                <p className="text-xs text-gray-500 mt-1">Este recibo comprova o pagamento do valor especificado acima.</p>
+              {/* Rodapé com Assinatura da Empresa */}
+              <div className="mt-14 pt-6 border-t-2 border-black flex flex-col items-center justify-center text-center print:break-inside-avoid">
+                {empresaData?.assinatura_url && (
+                  <div className="mb-2 flex justify-center">
+                    <img 
+                      src={empresaData.assinatura_url} 
+                      alt="Assinatura da Empresa" 
+                      style={{ maxHeight: '75px', maxWidth: '240px', objectFit: 'contain' }}
+                    />
+                  </div>
+                )}
+                <div className="w-64 border-b border-black mb-1"></div>
+                <p className="text-sm font-bold uppercase tracking-wider">
+                  {empresaData?.nome_fantasia || empresaData?.razao_social || 'Assinatura / Carimbo'}
+                </p>
+                {empresaData?.cnpj && (
+                  <p className="text-xs text-gray-600">CNPJ: {empresaData.cnpj}</p>
+                )}
+                <p className="text-[11px] text-gray-500 mt-1">Este recibo comprova o pagamento do valor especificado acima.</p>
               </div>
             </div>
 

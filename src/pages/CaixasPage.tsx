@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { getLotesCaixa, reabrirLoteCaixa, getMovimentacoesCaixa, abrirLoteCaixa, registrarMovimentacao, estornarMovimentacaoCaixa, fecharLoteCaixa } from '../services/caixasService';
+import { getEmpresaById, Empresa } from '../services/empresasService';
 import { LoteCaixa, MovimentacaoCaixa } from '../types/caixas';
 import toast from 'react-hot-toast';
 import { Plus, RefreshCw, X, RotateCcw, ArrowUpRight, ArrowDownRight, Printer, Eye, FileText } from 'lucide-react';
@@ -37,6 +38,7 @@ export const CaixasPage: React.FC = () => {
   const [observacaoFechamento, setObservacaoFechamento] = useState('');
 
   const [modalLoteDetalhes, setModalLoteDetalhes] = useState<{isOpen: boolean, lote: LoteCaixa | null, movimentacoes: MovimentacaoCaixa[], loading: boolean, autoPrint?: boolean}>({isOpen: false, lote: null, movimentacoes: [], loading: false, autoPrint: false});
+  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
 
   const getTenantId = () => state.empresaSelecionada || 'tenant-1';
 
@@ -45,8 +47,13 @@ export const CaixasPage: React.FC = () => {
       setLoading(true);
       const tenantId = getTenantId();
       const isOnline = state.isOnline;
-      const lotesData = await getLotesCaixa(isOnline, tenantId);
+
+      const [lotesData, emp] = await Promise.all([
+        getLotesCaixa(isOnline, tenantId),
+        getEmpresaById(tenantId, isOnline)
+      ]);
       setLotes(lotesData);
+      if (emp) setEmpresaData(emp);
       
       const aberto = lotesData.find(l => l.status === 'aberto');
       if (aberto) {
@@ -461,6 +468,26 @@ export const CaixasPage: React.FC = () => {
       {modalLoteDetalhes.isOpen && modalLoteDetalhes.lote && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in print:static print:bg-transparent print:p-0 print:block">
           <div className="bg-bg-surface w-full max-w-4xl rounded-2xl shadow-2xl border border-border-default flex flex-col max-h-[90vh] print:max-w-none print:max-h-none print:border-none print:shadow-none print:rounded-none">
+            {/* Cabeçalho impresso com logotipo da empresa */}
+            <div className="hidden print:block p-6 pb-4 border-b-2 border-slate-900 text-center">
+              {empresaData?.logo_url ? (
+                <div className="mb-3 flex justify-center">
+                  <img 
+                    src={empresaData.logo_url} 
+                    alt={empresaData.nome_fantasia || "Logotipo"} 
+                    className="max-h-20 w-full object-contain mx-auto"
+                    style={{ maxHeight: '80px', width: '100%', objectFit: 'contain' }}
+                  />
+                </div>
+              ) : (
+                <h2 className="text-xl font-bold uppercase tracking-wider text-slate-900 mb-1">
+                  {empresaData?.nome_fantasia || empresaData?.razao_social || 'EMPRESA'}
+                </h2>
+              )}
+              <h1 className="text-lg font-bold uppercase tracking-wider">Demonstrativo de Fechamento de Caixa</h1>
+              <p className="text-xs text-slate-600">Lote: {modalLoteDetalhes.lote.codigo_lote} | Emitido em: {new Date().toLocaleString()}</p>
+            </div>
+
             <div className="p-6 border-b border-border-default flex justify-between items-start print:border-b-2 print:border-black">
               <div>
                 <h3 className="text-xl font-bold text-text-base flex items-center gap-2">
@@ -551,6 +578,31 @@ export const CaixasPage: React.FC = () => {
                         ))}
                       </tbody>
                     </table>
+                  )}
+                </div>
+              </div>
+
+              {/* Rodapé impresso com assinaturas */}
+              <div className="hidden print:flex justify-between items-end mt-16 pt-8 border-t border-slate-300 print:break-inside-avoid">
+                <div className="text-center w-64">
+                  <div className="border-t border-slate-900 mb-1"></div>
+                  <p className="text-xs font-bold uppercase">Operador do Caixa</p>
+                  <p className="text-[10px] text-slate-500">Conferido e Entregue</p>
+                </div>
+                <div className="text-center w-64">
+                  {empresaData?.assinatura_url && (
+                    <div className="mb-1 flex justify-center">
+                      <img 
+                        src={empresaData.assinatura_url} 
+                        alt="Assinatura da Empresa" 
+                        style={{ maxHeight: '60px', maxWidth: '200px', objectFit: 'contain' }}
+                      />
+                    </div>
+                  )}
+                  <div className="border-t border-slate-900 mb-1"></div>
+                  <p className="text-xs font-bold uppercase">Supervisão / Gerência</p>
+                  {empresaData?.cnpj && (
+                    <p className="text-[10px] text-slate-500">CNPJ: {empresaData.cnpj}</p>
                   )}
                 </div>
               </div>

@@ -7,7 +7,7 @@ import { useAppContext } from '../context/AppContext';
 import { DocumentoPadrao, TipoDocumento } from '../types/documentos';
 import { canDelete } from '../utils/permissions';
 import { formatLocalDate } from '../utils/dateUtils';
-import { FileText, Plus, Search, Pencil, Power, PowerOff, UploadCloud, X, Download, FileCheck, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify, List, Eye, Maximize, Minimize, Trash2, Printer } from 'lucide-react';
+import { FileText, Plus, Search, Pencil, Power, PowerOff, UploadCloud, X, Download, FileCheck, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify, List, Eye, Maximize, Minimize, Trash2, Printer, Building2 } from 'lucide-react';
 
 const TIPO_LABELS: Record<TipoDocumento, string> = {
   'contrato_adesao': 'Contrato de Adesão',
@@ -67,7 +67,8 @@ export const DocumentosPadroesPage = () => {
   const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>({});
   const [associados, setAssociados] = useState<Associado[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
-  const [logoHtml, setLogoHtml] = useState<string>('');
+  const [currentEmpresa, setCurrentEmpresa] = useState<Empresa | null>(null);
+  const [selectedEmpresaId, setSelectedEmpresaId] = useState<string>('');
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorRef = useRef<any>(null);
@@ -120,26 +121,6 @@ export const DocumentosPadroesPage = () => {
   }), [isFullscreen]);
 
 
-    React.useEffect(() => {
-    if (docToPrint) {
-      const fetchLogo = async () => {
-        try {
-          const tenantId = empresaSelecionada || 'default_tenant';
-          const empresa = await getEmpresaById(tenantId, isOnline);
-          if (empresa?.logo_url) {
-            setLogoHtml(`<div style="width: 100%; text-align: center; margin-bottom: 20px;"><img src="${empresa.logo_url}" style="width: 100%; max-height: 120px; object-fit: contain;" /></div>`);
-          } else {
-            setLogoHtml('');
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      };
-      fetchLogo();
-    }
-  }, [docToPrint, empresaSelecionada, isOnline]);
-
-
   React.useEffect(() => {
     const loadAuxData = async () => {
       try {
@@ -147,8 +128,29 @@ export const DocumentosPadroesPage = () => {
           getAssociados(isOnline, state.empresaSelecionada || 'empresa_padrao'),
           getEmpresas(isOnline)
         ]);
-        setAssociados(assocData.filter(a => a.status === 'ativo'));
-        setEmpresas(empData.filter(e => e.status === 'ativo'));
+        const activeAssocs = assocData.filter(a => a.status === 'ativo');
+        const activeEmps = empData.filter(e => e.status === 'ativo');
+        setAssociados(activeAssocs);
+        setEmpresas(activeEmps);
+
+        const targetEmpId = state.empresaSelecionada || (docToPrint?.empresa_id) || '';
+        let targetEmp = activeEmps.find(e => e.id === targetEmpId) || activeEmps[0] || null;
+        if (!targetEmp && targetEmpId) {
+          targetEmp = await getEmpresaById(targetEmpId, isOnline);
+        }
+
+        if (targetEmp) {
+          setCurrentEmpresa(targetEmp);
+          setSelectedEmpresaId(targetEmp.id);
+          setPlaceholderValues(prev => ({
+            ...prev,
+            '{{empresa_nome}}': prev['{{empresa_nome}}'] || targetEmp.nome_fantasia || targetEmp.razao_social || '',
+            '{{empresa_cnpj}}': prev['{{empresa_cnpj}}'] || targetEmp.cnpj || '',
+            '{{empresa_endereco}}': prev['{{empresa_endereco}}'] || targetEmp.endereco || '',
+            '{{empresa_telefone}}': prev['{{empresa_telefone}}'] || targetEmp.telefone || '',
+            '{{empresa_email}}': prev['{{empresa_email}}'] || targetEmp.email || '',
+          }));
+        }
       } catch (err) {
         console.error("Erro ao carregar dados auxiliares", err);
       }
@@ -202,16 +204,18 @@ export const DocumentosPadroesPage = () => {
   };
 
   const handleEmpresaChange = (empresaId: string) => {
+    setSelectedEmpresaId(empresaId);
     const empresa = empresas.find(e => e.id === empresaId);
     if (!empresa) return;
+    setCurrentEmpresa(empresa);
 
     setPlaceholderValues(prev => {
       const newVals = { ...prev };
-      if ('{{empresa_nome}}' in newVals) newVals['{{empresa_nome}}'] = empresa.nome_fantasia || empresa.razao_social || '';
-      if ('{{empresa_cnpj}}' in newVals) newVals['{{empresa_cnpj}}'] = empresa.cnpj || '';
-      if ('{{empresa_endereco}}' in newVals) newVals['{{empresa_endereco}}'] = `${empresa.endereco || ''}`;
-      if ('{{empresa_telefone}}' in newVals) newVals['{{empresa_telefone}}'] = empresa.telefone || '';
-      if ('{{empresa_email}}' in newVals) newVals['{{empresa_email}}'] = empresa.email || '';
+      newVals['{{empresa_nome}}'] = empresa.nome_fantasia || empresa.razao_social || '';
+      newVals['{{empresa_cnpj}}'] = empresa.cnpj || '';
+      newVals['{{empresa_endereco}}'] = `${empresa.endereco || ''}`;
+      newVals['{{empresa_telefone}}'] = empresa.telefone || '';
+      newVals['{{empresa_email}}'] = empresa.email || '';
       return newVals;
     });
   };
@@ -490,6 +494,30 @@ export const DocumentosPadroesPage = () => {
              </div>
              <div className="p-6 overflow-y-auto flex-1 space-y-5 custom-scrollbar bg-bg-base">
 
+                {/* Seleção de Empresa Emissora */}
+                <div className="bg-bg-surface p-3.5 rounded-xl border border-border-default space-y-2">
+                  <label className="block text-xs font-bold text-[#3B82F6] uppercase tracking-wider flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5" />
+                    Empresa Emissora
+                  </label>
+                  <select
+                    value={selectedEmpresaId}
+                    onChange={(e) => handleEmpresaChange(e.target.value)}
+                    className="w-full bg-bg-base border border-border-default rounded-lg px-3 py-2 text-text-base text-sm focus:border-[#3B82F6] outline-none"
+                  >
+                    <option value="">Selecione a empresa...</option>
+                    {empresas.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.nome_fantasia || emp.razao_social}</option>
+                    ))}
+                  </select>
+                  {currentEmpresa && (
+                    <div className="text-[11px] text-text-subtle pt-1 flex flex-col gap-0.5 border-t border-border-default/50">
+                      <span>Logotipo: {currentEmpresa.logo_url ? '✅ Vinculado' : '⚠️ Sem logotipo'}</span>
+                      <span>Assinatura: {currentEmpresa.assinatura_url ? '✅ Vinculada' : '⚠️ Sem assinatura'}</span>
+                    </div>
+                  )}
+                </div>
+
                 {Object.keys(placeholderValues).length > 0 ? (
                   Object.keys(placeholderValues).map(variable => {
                     const isAssociadoNome = variable === '{{associado_nome}}';
@@ -514,6 +542,7 @@ export const DocumentosPadroesPage = () => {
                           </select>
                         ) : isEmpresaNome ? (
                           <select
+                            value={selectedEmpresaId}
                             onChange={(e) => {
                               const val = e.target.value;
                               setPlaceholderValues(prev => ({ ...prev, [variable]: val ? (empresas.find(emp => emp.id === val)?.nome_fantasia || '') : '' }));
@@ -564,25 +593,68 @@ export const DocumentosPadroesPage = () => {
              </div>
           </div>
           
-          {/* Document Preview */}
+          {/* Document Preview & Print Area */}
           <div className="flex-1 overflow-y-auto bg-[#0F1123] flex justify-center p-8 print:p-0 print:bg-white custom-scrollbar">
-            <div id="print-area" className="w-full max-w-4xl bg-white text-black p-12 lg:p-16 min-h-[1056px] shadow-2xl print:max-w-none print:w-full print:min-h-0 print:my-0 print:shadow-none print:p-0">
-              <div 
-                className="prose max-w-none print:prose-p:m-0 print:prose-p:leading-normal"
-                style={{ fontSize: '12pt', lineHeight: '1.5', fontFamily: 'Arial, sans-serif' }}
-                dangerouslySetInnerHTML={{ 
-                  __html: (() => {
-                    let html = docToPrint.conteudo ? docToPrint.conteudo : '<p class="text-center italic text-gray-500">Documento vazio</p>';
-                    if (logoHtml) html = logoHtml + html;
-                    Object.entries(placeholderValues).forEach(([key, value]) => {
-                      const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                      const displayValue = value ? `<strong>${value}</strong>` : `<span class="text-rose-500 font-bold bg-rose-50 px-1 rounded print:bg-transparent print:text-black">${key}</span>`;
-                      html = html.replace(regex, displayValue);
-                    });
-                    return html;
-                  })()
-                }} 
-              />
+            <div id="print-area" className="w-full max-w-4xl bg-white text-black p-10 lg:p-14 min-h-[1056px] shadow-2xl print:max-w-none print:w-full print:min-h-0 print:my-0 print:shadow-none print:p-0 flex flex-col justify-between">
+              <div>
+                {/* Cabeçalho com Logotipo da Empresa alinhado às margens */}
+                {currentEmpresa?.logo_url ? (
+                  <div className="doc-header w-full pb-4 mb-6 border-b-2 border-slate-900 flex items-center justify-center text-center">
+                    <img 
+                      src={currentEmpresa.logo_url} 
+                      alt={currentEmpresa.nome_fantasia || "Logotipo"} 
+                      className="w-full max-h-24 object-contain mx-auto"
+                      style={{ maxHeight: '95px', width: '100%', objectFit: 'contain' }}
+                    />
+                  </div>
+                ) : (
+                  <div className="doc-header w-full pb-3 mb-6 border-b-2 border-slate-900 text-center">
+                    <h2 className="text-xl font-bold uppercase tracking-wider text-slate-900">
+                      {currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social || 'DOCUMENTO OFICIAL'}
+                    </h2>
+                    {currentEmpresa?.cnpj && (
+                      <p className="text-xs text-slate-600 font-medium">CNPJ: {currentEmpresa.cnpj}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Conteúdo do Documento */}
+                <div 
+                  className="prose max-w-none print:prose-p:m-0 print:prose-p:leading-normal"
+                  style={{ fontSize: '12pt', lineHeight: '1.6', fontFamily: 'Arial, sans-serif' }}
+                  dangerouslySetInnerHTML={{ 
+                    __html: (() => {
+                      let html = docToPrint.conteudo ? docToPrint.conteudo : '<p class="text-center italic text-gray-500">Documento vazio</p>';
+                      Object.entries(placeholderValues).forEach(([key, value]) => {
+                        const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                        const displayValue = value ? `<strong>${value}</strong>` : `<span class="text-rose-500 font-bold bg-rose-50 px-1 rounded print:bg-transparent print:text-black">${key}</span>`;
+                        html = html.replace(regex, displayValue);
+                      });
+                      return html;
+                    })()
+                  }} 
+                />
+              </div>
+
+              {/* Rodapé com Assinatura da Empresa */}
+              <div className="doc-footer w-full mt-12 pt-6 border-t border-slate-200 flex flex-col items-center justify-center text-center print:break-inside-avoid">
+                {currentEmpresa?.assinatura_url && (
+                  <div className="mb-2 flex justify-center">
+                    <img 
+                      src={currentEmpresa.assinatura_url} 
+                      alt="Assinatura da Empresa" 
+                      style={{ maxHeight: '80px', maxWidth: '280px', objectFit: 'contain' }}
+                    />
+                  </div>
+                )}
+                <div className="w-72 border-t border-slate-900 my-1"></div>
+                <p className="text-xs font-bold text-slate-900 uppercase">
+                  {currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social || 'Assinatura Autorizada'}
+                </p>
+                {currentEmpresa?.cnpj && (
+                  <p className="text-[10px] text-slate-600">CNPJ: {currentEmpresa.cnpj}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

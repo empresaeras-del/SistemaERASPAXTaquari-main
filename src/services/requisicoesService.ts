@@ -9,6 +9,7 @@ import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import jsPDF from 'jspdf';
 import { fetchImageAsBase64, fetchImageWithDimensions } from '../utils/imageUtils';
 import autoTable from 'jspdf-autotable';
+import { getEmpresaById } from './empresasService';
 
 export const gerarCodigoRequisicao = (indexNumber: number = 1): string => {
   const dataHoje = new Date();
@@ -311,10 +312,14 @@ export const atualizarStatusRequisicao = async (
 
 // IMPRESSÃO / EXPORTAÇÃO PDF DA GUIA
 export const gerarPDFGuiaRequisicao = async (req: Requisicao, empresa?: any) => {
+  if (!empresa) {
+    try {
+      empresa = await getEmpresaById(req.tenant_id || 'default_tenant', true);
+    } catch {}
+  }
   const logoUrl = empresa?.logo_url;
   const doc = new jsPDF();
   const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-
 
   let currentY = 14;
   if (logoUrl) {
@@ -349,7 +354,7 @@ export const gerarPDFGuiaRequisicao = async (req: Requisicao, empresa?: any) => 
   doc.setFont('helvetica', 'normal');
   doc.text(`Data de Emissão: ${formatLocalDateTime(req.data_emissao)}`, 80, currentY);
   if (req.data_validade) {
-    doc.text(`Validade: ${formatLocalDate(req.data_validade)}`, 150, 38);
+    doc.text(`Validade: ${formatLocalDate(req.data_validade)}`, 150, currentY);
   }
 
   // Bloco 1: Dados do Associado / Paciente

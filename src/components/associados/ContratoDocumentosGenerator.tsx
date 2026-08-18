@@ -3,7 +3,7 @@ import { useDocumentosPadroes } from '../../hooks/useDocumentosPadroes';
 import { FileText, Printer, X } from 'lucide-react';
 import { Associado } from '../../services/associadosService';
 import { DocumentoPadrao } from '../../types/documentos';
-import { getEmpresaById } from '../../services/empresasService';
+import { getEmpresaById, Empresa } from '../../services/empresasService';
 import { useAppContext } from '../../context/AppContext';
 import { formatLocalDate } from '../../utils/dateUtils';
 
@@ -15,7 +15,7 @@ interface Props {
 export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorMensalidade }) => {
   const { state: { isOnline, empresaSelecionada } } = useAppContext();
   const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>({});
-  const [logoHtml, setLogoHtml] = useState<string>('');
+  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
   const { documentos, loading } = useDocumentosPadroes();
   const [selectedDoc, setSelectedDoc] = useState<string>('');
   const [docToPrint, setDocToPrint] = useState<DocumentoPadrao | null>(null);
@@ -59,12 +59,13 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
 
   useEffect(() => {
     if (docToPrint) {
-      const fetchLogoAndEmpresa = async () => {
+      const fetchEmpresa = async () => {
         try {
           const tenantId = empresaSelecionada || 'default_tenant';
           const empresa = await getEmpresaById(tenantId, isOnline);
           
           if (empresa) {
+            setEmpresaData(empresa);
             setPlaceholderValues(prev => {
               const newVals = { ...prev };
               if ('{{empresa_nome}}' in newVals && !newVals['{{empresa_nome}}']) newVals['{{empresa_nome}}'] = empresa.nome_fantasia || empresa.razao_social || '';
@@ -75,17 +76,11 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
               return newVals;
             });
           }
-
-          if (empresa?.logo_url) {
-            setLogoHtml(`<div style="width: 100%; text-align: center; margin-bottom: 20px;"><img src="${empresa.logo_url}" style="width: 100%; max-height: 120px; object-fit: contain;" /></div>`);
-          } else {
-            setLogoHtml('');
-          }
         } catch (e) {
           console.error(e);
         }
       };
-      fetchLogoAndEmpresa();
+      fetchEmpresa();
     }
   }, [docToPrint, empresaSelecionada, isOnline]);
 
@@ -190,27 +185,70 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
             </div>
           </div>
           <div className="flex-1 overflow-y-auto bg-[#0F1123] flex justify-center p-8 print:p-0 print:bg-white custom-scrollbar">
-            <div id="print-area" className="a4-simulated shadow-2xl relative">
-              <div 
-                className="prose max-w-none print:prose-p:m-0 print:prose-p:leading-normal"
-                style={{ fontSize: '12pt', lineHeight: '1.5', fontFamily: 'Arial, sans-serif' }}
-                dangerouslySetInnerHTML={{ 
-                  __html: (() => {
-                    let html = docToPrint.conteudo ? docToPrint.conteudo : '<p class="text-center italic text-gray-500">Documento vazio</p>';
-                    if (logoHtml) html = logoHtml + html;
-                    Object.entries(placeholderValues).forEach(([key, value]) => {
-                      const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                      const displayValue = value ? `<strong>${value}</strong>` : `<span class="text-rose-500 font-bold bg-rose-50 px-1 rounded print:bg-transparent print:text-black">${key}</span>`;
-                      html = html.replace(regex, displayValue);
-                    });
-                    return html;
-                  })()
-                }}
-              />
+            <div id="print-area" className="a4-simulated shadow-2xl relative flex flex-col justify-between p-10 lg:p-14 min-h-[1056px] bg-white text-black">
+              <div>
+                {/* Cabeçalho com Logotipo alinhado às margens */}
+                {empresaData?.logo_url ? (
+                  <div className="doc-header w-full pb-4 mb-6 border-b-2 border-slate-900 flex items-center justify-center text-center">
+                    <img 
+                      src={empresaData.logo_url} 
+                      alt={empresaData.nome_fantasia || "Logotipo"} 
+                      className="w-full max-h-24 object-contain mx-auto"
+                      style={{ maxHeight: '95px', width: '100%', objectFit: 'contain' }}
+                    />
+                  </div>
+                ) : (
+                  <div className="doc-header w-full pb-3 mb-6 border-b-2 border-slate-900 text-center">
+                    <h2 className="text-xl font-bold uppercase tracking-wider text-slate-900">
+                      {empresaData?.nome_fantasia || empresaData?.razao_social || 'DOCUMENTO OFICIAL'}
+                    </h2>
+                    {empresaData?.cnpj && (
+                      <p className="text-xs text-slate-600 font-medium">CNPJ: {empresaData.cnpj}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Conteúdo do Documento */}
+                <div 
+                  className="prose max-w-none print:prose-p:m-0 print:prose-p:leading-normal"
+                  style={{ fontSize: '12pt', lineHeight: '1.6', fontFamily: 'Arial, sans-serif' }}
+                  dangerouslySetInnerHTML={{ 
+                    __html: (() => {
+                      let html = docToPrint.conteudo ? docToPrint.conteudo : '<p class="text-center italic text-gray-500">Documento vazio</p>';
+                      Object.entries(placeholderValues).forEach(([key, value]) => {
+                        const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                        const displayValue = value ? `<strong>${value}</strong>` : `<span class="text-rose-500 font-bold bg-rose-50 px-1 rounded print:bg-transparent print:text-black">${key}</span>`;
+                        html = html.replace(regex, displayValue);
+                      });
+                      return html;
+                    })()
+                  }}
+                />
+              </div>
+
+              {/* Rodapé com Assinatura da Empresa */}
+              <div className="doc-footer w-full mt-12 pt-6 border-t border-slate-200 flex flex-col items-center justify-center text-center print:break-inside-avoid">
+                {empresaData?.assinatura_url && (
+                  <div className="mb-2 flex justify-center">
+                    <img 
+                      src={empresaData.assinatura_url} 
+                      alt="Assinatura da Empresa" 
+                      style={{ maxHeight: '80px', maxWidth: '280px', objectFit: 'contain' }}
+                    />
+                  </div>
+                )}
+                <div className="w-72 border-t border-slate-900 my-1"></div>
+                <p className="text-xs font-bold text-slate-900 uppercase">
+                  {empresaData?.nome_fantasia || empresaData?.razao_social || 'Assinatura Autorizada'}
+                </p>
+                {empresaData?.cnpj && (
+                  <p className="text-[10px] text-slate-600">CNPJ: {empresaData.cnpj}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
     </div>
   );
-}
+};

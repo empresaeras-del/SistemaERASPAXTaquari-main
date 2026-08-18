@@ -328,7 +328,7 @@ export const FaturamentosPage: React.FC = () => {
       // Auto-download PDF
       const reqsInclusas = todasRequisicoes.filter(r => remFechada.requisicao_ids.includes(r.id));
       const empresa = await getEmpresaById(tenantId, state.isOnline);
-      await gerarPDFRelatorioFaturamento(remFechada, reqsInclusas, empresa?.logo_url, empresa?.assinatura_url);
+      await gerarPDFRelatorioFaturamento(remFechada, reqsInclusas, empresa?.logo_url, empresa?.assinatura_url, empresa);
 
       setModalFecharRemessa(null);
       await loadData();
@@ -600,7 +600,7 @@ export const FaturamentosPage: React.FC = () => {
                             const reqsInclusas = todasRequisicoes.filter(r => rem.requisicao_ids.includes(r.id));
                             const tenantId = state.empresaSelecionada || 'default_tenant';
                             const empresa = await getEmpresaById(tenantId, state.isOnline);
-                            await gerarPDFRelatorioFaturamento(rem, reqsInclusas, empresa?.logo_url, empresa?.assinatura_url);
+                            await gerarPDFRelatorioFaturamento(rem, reqsInclusas, empresa?.logo_url, empresa?.assinatura_url, empresa);
                           }}
                           className="p-1.5 text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-colors"
                           title="Imprimir Relatório da Remessa"
@@ -1151,7 +1151,7 @@ export const FaturamentosPage: React.FC = () => {
                   const reqsInclusas = todasRequisicoes.filter(r => modalDetalhes.requisicao_ids.includes(r.id));
                   const tenantId = state.empresaSelecionada || 'default_tenant';
                   const empresa = await getEmpresaById(tenantId, state.isOnline);
-                  await gerarPDFRelatorioFaturamento(modalDetalhes, reqsInclusas, empresa?.logo_url, empresa?.assinatura_url);
+                  await gerarPDFRelatorioFaturamento(modalDetalhes, reqsInclusas, empresa?.logo_url, empresa?.assinatura_url, empresa);
                 }}
                 className="px-4 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-xs font-medium flex items-center gap-1.5"
               >

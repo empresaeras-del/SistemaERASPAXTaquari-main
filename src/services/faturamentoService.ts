@@ -291,11 +291,11 @@ export const gerarPDFRelatorioFaturamento = async (
   remessa: RemessaFaturamento,
   requisicoesInclusas: Requisicao[],
   logoUrl?: string,
-  assinaturaUrl?: string
+  assinaturaUrl?: string,
+  empresa?: any
 ) => {
   const doc = new jsPDF();
   const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-
 
   let currentY = 14;
   if (logoUrl) {
@@ -333,7 +333,7 @@ export const gerarPDFRelatorioFaturamento = async (
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
 
-    doc.text(`Prestador: ${remessa.credenciado_nome}`, 14, currentY);
+  doc.text(`Prestador: ${remessa.credenciado_nome}`, 14, currentY);
   doc.text(`Documento (CNPJ/CPF): ${remessa.credenciado_cnpj_cpf || 'Não Informado'}`, 14, currentY + 5);
   doc.text(`Tipo Prestador: ${remessa.tipo_prestador === 'credenciado' ? 'Rede Credenciada' : 'Rede Externa'}`, 14, currentY + 10);
 
@@ -396,7 +396,7 @@ export const gerarPDFRelatorioFaturamento = async (
     doc.text(`Observações da Remessa: ${remessa.observacoes}`, 14, footerY);
   }
 
-// Assinaturas
+  // Assinaturas
   const sigY = footerY + 22;
   
   if (assinaturaUrl) {
@@ -404,9 +404,7 @@ export const gerarPDFRelatorioFaturamento = async (
     if (sigImgData && sigImgData.base64) {
       const sigHeight = 15;
       const sigWidth = (sigImgData.width * sigHeight) / sigImgData.height;
-      
-      const sigX = 14 + (81 - sigWidth) / 2; // center within the line (14 to 95) => width is 81. center = 14 + (81 - sigWidth)/2
-      
+      const sigX = 14 + (81 - sigWidth) / 2;
       doc.addImage(sigImgData.base64, 'PNG', sigX, sigY - 18, sigWidth, sigHeight, '', 'FAST');
     }
   }
@@ -420,8 +418,21 @@ export const gerarPDFRelatorioFaturamento = async (
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 41, 59);
-  doc.text('Responsável pelo Faturamento (Operadora)', 22, sigY + 5);
-  doc.text('Aceite do Prestador Credenciado', 130, sigY + 5);
+
+  if (empresa?.nome_fantasia || empresa?.razao_social) {
+    doc.text(empresa.nome_fantasia || empresa.razao_social, 54, sigY + 5, { align: 'center' });
+    if (empresa.cnpj) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.text(`CNPJ: ${empresa.cnpj}`, 54, sigY + 9, { align: 'center' });
+    }
+  } else {
+    doc.text('Responsável pelo Faturamento (Operadora)', 54, sigY + 5, { align: 'center' });
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('Aceite do Prestador Credenciado', 155, sigY + 5, { align: 'center' });
 
   doc.save(`Faturamento_Remessa_${remessa.codigo_remessa}.pdf`);
 };

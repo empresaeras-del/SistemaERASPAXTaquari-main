@@ -31,16 +31,47 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
   
   const handlePrint = async () => {
     let logoHtml = '';
+    let assinaturaHtml = '';
+    let empresaNome = '';
+    let empresaCnpj = '';
+
     try {
-      const tenantId = state.empresaSelecionada;
-      if (tenantId) {
-        const empresa = await getEmpresaById(tenantId, state.isOnline);
-        if (empresa?.logo_url) {
-          logoHtml = `<div style="width: 100%; text-align: center; margin-bottom: 20px;"><img src="${empresa.logo_url}" style="width: 100%; max-height: 120px; object-fit: contain;" /></div>`;
+      const tenantId = state.empresaSelecionada || 'default_tenant';
+      const empresa = await getEmpresaById(tenantId, state.isOnline);
+      if (empresa) {
+        empresaNome = empresa.nome_fantasia || empresa.razao_social || '';
+        empresaCnpj = empresa.cnpj || '';
+
+        if (empresa.logo_url) {
+          logoHtml = `<div style="width: 100%; text-align: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #1e293b;"><img src="${empresa.logo_url}" style="width: 100%; max-height: 95px; object-fit: contain;" /></div>`;
+        } else if (empresaNome) {
+          logoHtml = `<div style="width: 100%; text-align: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #1e293b;"><h2 style="margin: 0; font-size: 20px; text-transform: uppercase;">${empresaNome}</h2>${empresaCnpj ? `<p style="margin: 4px 0 0 0; font-size: 12px; color: #64748b;">CNPJ: ${empresaCnpj}</p>` : ''}</div>`;
+        }
+
+        if (empresa.assinatura_url) {
+          assinaturaHtml = `
+            <div style="text-align: center; width: 45%;">
+              <div style="margin-bottom: 4px; min-height: 60px; display: flex; align-items: flex-end; justify-content: center;">
+                <img src="${empresa.assinatura_url}" style="max-height: 60px; max-width: 200px; object-fit: contain;" />
+              </div>
+              <div style="border-top: 1px solid #1e293b; width: 100%; margin-bottom: 4px;"></div>
+              <p style="margin: 0; font-weight: bold; font-size: 12px; text-transform: uppercase;">${empresaNome || 'Assinatura Autorizada'}</p>
+              ${empresaCnpj ? `<p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">CNPJ: ${empresaCnpj}</p>` : ''}
+            </div>
+          `;
+        } else {
+          assinaturaHtml = `
+            <div style="text-align: center; width: 45%;">
+              <div style="min-height: 60px;"></div>
+              <div style="border-top: 1px solid #1e293b; width: 100%; margin-bottom: 4px;"></div>
+              <p style="margin: 0; font-weight: bold; font-size: 12px; text-transform: uppercase;">${empresaNome || 'Assinatura da Empresa'}</p>
+              ${empresaCnpj ? `<p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">CNPJ: ${empresaCnpj}</p>` : ''}
+            </div>
+          `;
         }
       }
     } catch (e) {
-      console.error('Erro ao buscar logo:', e);
+      console.error('Erro ao buscar empresa:', e);
     }
 
     const printContent = `
@@ -48,24 +79,25 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
         <head>
           <title>Ficha de Cadastro - ${associado.nome}</title>
           <style>
-            body { font-family: sans-serif; padding: 20px; color: #333; }
-            h1 { font-size: 24px; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
-            h2 { font-size: 18px; margin-top: 20px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
-            p { margin: 5px 0; font-size: 14px; }
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+            body { font-family: Arial, sans-serif; padding: 24px; color: #1e293b; line-height: 1.4; }
+            h1 { font-size: 20px; border-bottom: 2px solid #1e293b; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; text-align: center; }
+            h2 { font-size: 14px; margin-top: 16px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; text-transform: uppercase; color: #334155; }
+            p { margin: 4px 0; font-size: 13px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
             .full { grid-column: span 2; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th, td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 14px; }
-            th { background-color: #f5f5f5; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; font-size: 12px; }
+            th { background-color: #f1f5f9; font-weight: bold; }
+            .footer-signatures { margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; page-break-inside: avoid; }
             @media print {
-              body { padding: 0; }
+              body { padding: 10mm; }
               button { display: none; }
             }
           </style>
         </head>
         <body>
           ${logoHtml}
-          <h1>Ficha de Cadastro - Associado</h1>
+          <h1>Ficha de Cadastro do Associado</h1>
           
           <h2>Dados Pessoais</h2>
           <div class="grid">
@@ -90,7 +122,6 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
             <p><strong>Bairro:</strong> ${associado.endereco_bairro || ''}</p>
             <p><strong>Cidade/UF:</strong> ${associado.endereco_cidade || ''}</p>
             <p><strong>CEP:</strong> ${associado.endereco_cep || ''}</p>
-            
           </div>
 
           <h2>Filiação</h2>
@@ -104,7 +135,6 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
             <p><strong>Plano Atual:</strong> ${associado.plano_nome || 'Sem plano vinculado'}</p>
             <p><strong>Valor do Plano:</strong> ${associado.valor_plano ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(associado.valor_plano) : 'R$ 0,00'}</p>
             <p><strong>Total de Vidas:</strong> ${associado.n_vidas || 1}</p>
-            
           </div>
 
           <h2>Dependentes (${associado.dependentes?.length || 0})</h2>
@@ -129,11 +159,16 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                 `).join('')}
               </tbody>
             </table>
-          ` : '<p>Nenhum dependente cadastrado.</p>'}
+          ` : '<p style="font-style: italic; color: #64748b; font-size: 12px;">Nenhum dependente cadastrado.</p>'}
           
-          <div style="margin-top: 50px; text-align: center;">
-            <p>____________________________________________________</p>
-            <p>Assinatura do Associado</p>
+          <div class="footer-signatures">
+            <div style="text-align: center; width: 45%;">
+              <div style="min-height: 60px;"></div>
+              <div style="border-top: 1px solid #1e293b; width: 100%; margin-bottom: 4px;"></div>
+              <p style="margin: 0; font-weight: bold; font-size: 12px; text-transform: uppercase;">Assinatura do Associado</p>
+              <p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">${associado.nome}</p>
+            </div>
+            ${assinaturaHtml}
           </div>
         </body>
       </html>
