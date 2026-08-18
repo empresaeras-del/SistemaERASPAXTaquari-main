@@ -220,6 +220,130 @@ export const DocumentosPadroesPage = () => {
     });
   };
 
+  const handlePrint = () => {
+    const printArea = document.getElementById('print-area');
+    if (!printArea) {
+      window.print();
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8" />
+            <title>${docToPrint?.nome || 'Documento'}</title>
+            <style>
+              @page {
+                size: A4 portrait;
+                margin: 15mm 15mm 15mm 15mm;
+              }
+              *, *::before, *::after {
+                box-sizing: border-box;
+              }
+              html, body {
+                margin: 0;
+                padding: 0;
+                background-color: #ffffff;
+                color: #000000;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 11pt;
+                line-height: 1.5;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .doc-container {
+                width: 100%;
+                max-width: 100%;
+                margin: 0 auto;
+                background: #ffffff;
+              }
+              .doc-header {
+                width: 100%;
+                text-align: center;
+                border-bottom: 2px solid #0f172a;
+                padding-bottom: 12px;
+                margin-bottom: 20px;
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              .doc-header img {
+                max-height: 95px;
+                width: 100%;
+                object-fit: contain;
+                display: block;
+                margin: 0 auto;
+              }
+              .doc-content {
+                width: 100%;
+                page-break-inside: auto;
+                break-inside: auto;
+              }
+              .doc-content p, 
+              .doc-content div, 
+              .doc-content h1, 
+              .doc-content h2, 
+              .doc-content h3, 
+              .doc-content h4, 
+              .doc-content table, 
+              .doc-content ul, 
+              .doc-content ol {
+                page-break-inside: auto;
+                break-inside: auto;
+                margin-bottom: 10px;
+              }
+              .doc-footer {
+                width: 100%;
+                margin-top: 35px;
+                padding-top: 15px;
+                border-top: 1px solid #cbd5e1;
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              .doc-footer img {
+                max-height: 80px;
+                max-width: 280px;
+                object-fit: contain;
+                margin-bottom: 5px;
+              }
+              .signature-line {
+                width: 280px;
+                border-top: 1px solid #0f172a;
+                margin: 5px auto;
+              }
+              h1, h2, h3, h4 {
+                color: #000000;
+              }
+              strong {
+                font-weight: bold;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="doc-container">
+              ${printArea.innerHTML}
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 350);
+    } else {
+      window.print();
+    }
+  };
+
   const handleOpenForm = (doc?: DocumentoPadrao) => {
     setEditingDoc(doc || { 
       ativo: true, 
@@ -577,7 +701,7 @@ export const DocumentosPadroesPage = () => {
              </div>
              <div className="p-6 border-t border-border-default bg-bg-surface space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                <button 
-                  onClick={() => window.print()}
+                  onClick={handlePrint}
                   className="w-full flex justify-center items-center gap-2 px-4 py-3 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl transition-all font-bold shadow-lg shadow-blue-500/20 active:scale-[0.98]"
                 >
                   <Printer className="w-5 h-5" />

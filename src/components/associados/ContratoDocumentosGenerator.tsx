@@ -56,7 +56,6 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
     setDocToPrint(doc);
   };
 
-
   useEffect(() => {
     if (docToPrint) {
       const fetchEmpresa = async () => {
@@ -93,23 +92,224 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
     return () => document.body.classList.remove('printing-doc');
   }, [docToPrint]);
 
+  const handlePrint = () => {
+    const printArea = document.getElementById('print-area');
+    if (!printArea) {
+      window.print();
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8" />
+            <title>${docToPrint?.nome || 'Documento'}</title>
+            <style>
+              @page {
+                size: A4 portrait;
+                margin: 15mm 15mm 15mm 15mm;
+              }
+              *, *::before, *::after {
+                box-sizing: border-box;
+              }
+              html, body {
+                margin: 0;
+                padding: 0;
+                background-color: #ffffff;
+                color: #000000;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 11pt;
+                line-height: 1.5;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .doc-container {
+                width: 100%;
+                max-width: 100%;
+                margin: 0 auto;
+                background: #ffffff;
+              }
+              .doc-header {
+                width: 100%;
+                text-align: center;
+                border-bottom: 2px solid #0f172a;
+                padding-bottom: 12px;
+                margin-bottom: 20px;
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              .doc-header img {
+                max-height: 95px;
+                width: 100%;
+                object-fit: contain;
+                display: block;
+                margin: 0 auto;
+              }
+              .doc-content {
+                width: 100%;
+                page-break-inside: auto;
+                break-inside: auto;
+              }
+              .doc-content p, 
+              .doc-content div, 
+              .doc-content h1, 
+              .doc-content h2, 
+              .doc-content h3, 
+              .doc-content h4, 
+              .doc-content table, 
+              .doc-content ul, 
+              .doc-content ol {
+                page-break-inside: auto;
+                break-inside: auto;
+                margin-bottom: 10px;
+              }
+              .doc-footer {
+                width: 100%;
+                margin-top: 35px;
+                padding-top: 15px;
+                border-top: 1px solid #cbd5e1;
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              .doc-footer img {
+                max-height: 80px;
+                max-width: 280px;
+                object-fit: contain;
+                margin-bottom: 5px;
+              }
+              .signature-line {
+                width: 280px;
+                border-top: 1px solid #0f172a;
+                margin: 5px auto;
+              }
+              h1, h2, h3, h4 {
+                color: #000000;
+              }
+              strong {
+                font-weight: bold;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="doc-container">
+              ${printArea.innerHTML}
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 350);
+    } else {
+      window.print();
+    }
+  };
+
   return (
     <div className="mt-6 p-5 bg-bg-surface border border-border-default rounded-xl">
       <style>{`
         @media print {
-          body.printing-doc * {
-            visibility: hidden;
+          @page {
+            size: A4 portrait;
+            margin: 15mm;
           }
-          body.printing-doc #print-area, body.printing-doc #print-area * {
-            visibility: visible;
+          html, body {
+            height: auto !important;
+            min-height: 100% !important;
+            overflow: visible !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+          }
+          body.printing-doc {
+            overflow: visible !important;
+            background: #ffffff !important;
+          }
+          body.printing-doc * {
+            visibility: visible !important;
+          }
+          body.printing-doc nav,
+          body.printing-doc header,
+          body.printing-doc aside,
+          body.printing-doc .print\\:hidden,
+          body.printing-doc [class*="print:hidden"] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            width: 0 !important;
+            overflow: hidden !important;
+          }
+          body.printing-doc .fixed.inset-0 {
+            position: static !important;
+            display: block !important;
+            overflow: visible !important;
+            width: 100% !important;
+            height: auto !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          body.printing-doc .flex-1.overflow-y-auto {
+            position: static !important;
+            display: block !important;
+            overflow: visible !important;
+            width: 100% !important;
+            height: auto !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
           }
           body.printing-doc #print-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            margin: 0;
-            padding: 0;
+            position: static !important;
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            overflow: visible !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          body.printing-doc #print-area .doc-header {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            margin-bottom: 20px !important;
+          }
+          body.printing-doc #print-area .doc-footer {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            margin-top: 30px !important;
+          }
+          body.printing-doc #print-area .prose {
+            font-size: 11pt !important;
+            line-height: 1.5 !important;
+            color: #000000 !important;
+            max-width: 100% !important;
+            overflow: visible !important;
+          }
+          body.printing-doc #print-area .prose p,
+          body.printing-doc #print-area .prose div,
+          body.printing-doc #print-area .prose table,
+          body.printing-doc #print-area .prose h1,
+          body.printing-doc #print-area .prose h2,
+          body.printing-doc #print-area .prose h3 {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
           }
         }
       `}</style>
@@ -168,7 +368,7 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
             <div className="p-6 border-t border-border-default bg-bg-surface space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
               <button 
                 type="button"
-                onClick={() => window.print()}
+                onClick={handlePrint}
                 className="w-full flex justify-center items-center gap-2 px-4 py-3 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl transition-all font-bold shadow-lg shadow-blue-500/20 active:scale-[0.98]"
               >
                 <Printer className="w-5 h-5" />
@@ -185,7 +385,7 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
             </div>
           </div>
           <div className="flex-1 overflow-y-auto bg-[#0F1123] flex justify-center p-8 print:p-0 print:bg-white custom-scrollbar">
-            <div id="print-area" className="a4-simulated shadow-2xl relative flex flex-col justify-between p-10 lg:p-14 min-h-[1056px] bg-white text-black">
+            <div id="print-area" className="a4-simulated shadow-2xl relative flex flex-col justify-between p-10 lg:p-14 min-h-[1056px] bg-white text-black print:min-h-0 print:p-0 print:shadow-none print:border-none">
               <div>
                 {/* Cabeçalho com Logotipo alinhado às margens */}
                 {empresaData?.logo_url ? (
@@ -210,7 +410,7 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
 
                 {/* Conteúdo do Documento */}
                 <div 
-                  className="prose max-w-none print:prose-p:m-0 print:prose-p:leading-normal"
+                  className="prose max-w-none doc-content print:prose-p:m-0 print:prose-p:leading-normal"
                   style={{ fontSize: '12pt', lineHeight: '1.6', fontFamily: 'Arial, sans-serif' }}
                   dangerouslySetInnerHTML={{ 
                     __html: (() => {
@@ -237,7 +437,7 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
                     />
                   </div>
                 )}
-                <div className="w-72 border-t border-slate-900 my-1"></div>
+                <div className="w-72 border-t border-slate-900 my-1 signature-line"></div>
                 <p className="text-xs font-bold text-slate-900 uppercase">
                   {empresaData?.nome_fantasia || empresaData?.razao_social || 'Assinatura Autorizada'}
                 </p>
