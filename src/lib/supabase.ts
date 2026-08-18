@@ -6,7 +6,9 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'http://localhost:9999';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder_key';
 
-console.log('Supabase URL is:', supabaseUrl);
+if (import.meta.env.DEV) {
+  console.log('Supabase URL is:', supabaseUrl);
+}
 export const isSupabaseConfigured = !(supabaseUrl.includes('localhost:9999') || supabaseUrl.includes('placeholder'));
 export const supabase = createClient(supabaseUrl, supabaseKey, {
       global: {

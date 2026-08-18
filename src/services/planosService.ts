@@ -21,7 +21,7 @@ export const getPlanos = async (isOnline: boolean, tenantId?: string | null): Pr
 
   if (isOnline) {
     try {
-      let query = supabase.from('planos').select('*').is('deleted_at', null);
+      let query = supabase.from('planos_pax').select('*').is('deleted_at', null);
       if (tenantId && tenantId !== 'all') {
         query = query.eq('tenant_id', tenantId);
       }
@@ -55,7 +55,7 @@ export const savePlano = async (plano: Plano, isOnline: boolean): Promise<void> 
   
   if (isOnline) {
     try {
-      const { error } = await supabase.from('planos').upsert(plano);
+      const { error } = await supabase.from('planos_pax').upsert(plano);
       if (error) {
         console.warn('Supabase save failed, proceeding with IDB only.', error);
       }
@@ -83,7 +83,7 @@ export const savePlano = async (plano: Plano, isOnline: boolean): Promise<void> 
 export const deletePlano = async (id: string, isOnline: boolean): Promise<void> => {
   if (isOnline) {
     const { error } = await supabase
-      .from('planos')
+      .from('planos_pax')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
     if (error) {
