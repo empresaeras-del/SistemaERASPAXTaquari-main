@@ -1,23 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { salvarReceita, Receita, ParcelaReceber } from '../services/financeiroService';
+import { salvarReceita, getReceitaCompleta, Receita, ParcelaReceber } from '../services/financeiroService';
 import { getAssociados, Associado } from '../services/associadosService';
 import { getContasBancariasAtivas } from '../services/contasBancariasService';
 import { ContaBancaria } from '../types/contasBancarias';
-import { getFromIDB, getAllFromIDB } from '../lib/idb';
+import { getAllFromIDB } from '../lib/idb';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ArrowLeft, Save } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
+import { ArrowLeft, Save, Settings, Loader2 } from 'lucide-react';
+import { generateUUID } from '../utils/uuid';
 import toast from 'react-hot-toast';
 import { format, lastDayOfMonth } from 'date-fns';
 
 import { useOptions } from '../hooks/useOptions';
 import { OptionsModal } from '../components/OptionsModal';
-import { Settings } from 'lucide-react';
-
 
 const receitaSchema = z.object({
   tipo_devedor: z.enum(['associado', 'cliente_pf', 'cliente_pj']),
@@ -68,8 +66,8 @@ type ReceitaFormData = z.infer<typeof receitaSchema>;
 export const ContasReceberFormPage: React.FC = () => {
   const { id } = useParams();
 
-  const { options: categorias, addOption: addCategoria, removeOption: removeCategoria } = useOptions('categorias_receita', ['Mensalidade', 'Taxa de Adesão', 'Serviço Extra', 'Outro']);
-  const { options: formasPagamento, addOption: addFormaPagamento, removeOption: removeFormaPagamento } = useOptions('formas_pagamento', ['PIX', 'Boleto', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência', 'Dinheiro', 'Cheque', 'Outro']);
+  const { options: categorias, addOption: addCategoria, editOption: editCategoria, removeOption: removeCategoria } = useOptions('categorias_receita', ['Mensalidade', 'Taxa de Adesão', 'Serviço Extra', 'Outro']);
+  const { options: formasPagamento, addOption: addFormaPagamento, editOption: editFormaPagamento, removeOption: removeFormaPagamento } = useOptions('formas_pagamento', ['PIX', 'Boleto', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência', 'Dinheiro', 'Cheque', 'Outro']);
   
   const [modalOpen, setModalOpen] = useState<'categoria' | 'forma_pagamento' | null>(null);
 
@@ -90,6 +88,7 @@ export const ContasReceberFormPage: React.FC = () => {
   const [associados, setAssociados] = useState<Associado[]>([]);
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingDados, setLoadingDados] = useState(isEditing);
 
   const form = useForm<ReceitaFormData>({
     resolver: zodResolver(receitaSchema) as any,
@@ -131,11 +130,9 @@ export const ContasReceberFormPage: React.FC = () => {
   useEffect(() => {
     if (isEditing && id) {
       const loadReceita = async () => {
+        setLoadingDados(true);
         try {
-          const allReceitas = await getAllFromIDB<Receita>('receitas');
-          const rec = allReceitas.find(r => r.id === id);
-          const allParcelas = await getAllFromIDB<ParcelaReceber>('parcelas_receber');
-          const parcs = allParcelas.filter(p => p.receita_id === id);
+          const { receita: rec, parcelas: parcs } = await getReceitaCompleta(state.isOnline, id, targetParcelaId);
 
           if (rec) {
             form.reset({
@@ -144,32 +141,37 @@ export const ContasReceberFormPage: React.FC = () => {
               cliente_tipo: rec.cliente_tipo || 'pf',
               cliente_nome: rec.cliente_nome || '',
               cliente_cpf_cnpj: rec.cliente_cpf_cnpj || '',
-              descricao: rec.descricao,
-              categoria: rec.categoria,
-              data_emissao: rec.data_emissao,
-              data_inicio_cobranca: rec.data_inicio_cobranca,
-              valor_total: rec.valor_total,
-              qtd_parcelas: rec.qtd_parcelas,
-              forma_pagamento_padrao: rec.forma_pagamento_padrao,
+              descricao: rec.descricao || '',
+              categoria: rec.categoria || '',
+              data_emissao: rec.data_emissao || format(new Date(), "yyyy-MM-dd"),
+              data_inicio_cobranca: rec.data_inicio_cobranca || format(new Date(), "yyyy-MM-dd"),
+              valor_total: Number(rec.valor_total) || 0,
+              qtd_parcelas: Number(rec.qtd_parcelas) || (parcs.length > 0 ? parcs.length : 1),
+              forma_pagamento_padrao: rec.forma_pagamento_padrao || '',
               conta_bancaria_id: rec.conta_bancaria_id || '',
               observacoes: rec.observacoes || '',
               parcelas: parcs.map(p => ({
                 id: p.id,
                 numero_parcela: p.numero_parcela,
                 data_vencimento: p.data_vencimento,
-                valor: p.valor,
-                forma_pagamento: p.forma_pagamento || 'pix',
+                valor: Number(p.valor) || 0,
+                forma_pagamento: p.forma_pagamento || rec.forma_pagamento_padrao || 'pix',
                 observacao: p.observacoes || ''
               }))
             });
+          } else {
+            toast.error('Receita vinculada não encontrada.');
           }
         } catch (e) {
           console.error("Erro ao carregar receita para edição:", e);
+          toast.error("Erro ao carregar os dados da receita.");
+        } finally {
+          setLoadingDados(false);
         }
       };
       loadReceita();
     }
-  }, [id, isEditing]);
+  }, [id, isEditing, state.isOnline, targetParcelaId]);
 
   const gerarParcelas = (customData?: Partial<ReceitaFormData>) => {
     const values = { ...form.getValues(), ...customData };
@@ -226,7 +228,7 @@ export const ContasReceberFormPage: React.FC = () => {
     
     setLoading(true);
     try {
-      const receitaId = id || uuidv4();
+      const receitaId = id || generateUUID();
       const existingDbParcelas = id ? await getAllFromIDB<ParcelaReceber>(`parcelas_receber`) : [];
       const dbParcMap = new Map(existingDbParcelas.map(p => [p.id, p]));
       
@@ -265,23 +267,23 @@ export const ContasReceberFormPage: React.FC = () => {
       const parcelasGeradas: ParcelaReceber[] = parcelasSubmit.map(p => {
         const dbP = p.id ? dbParcMap.get(p.id) : null;
         return {
-        id: p.id || uuidv4(),
-        tenant_id: state.empresaSelecionada || 'empresa_padrao',
-        receita_id: receitaId,
-        numero_parcela: p.numero_parcela,
-        total_parcelas: Number(data.qtd_parcelas) || 1,
-        tipo_devedor: data.tipo_devedor,
-        devedor_nome: associadoSelecionado?.nome || data.cliente_nome || 'Desconhecido',
-        devedor_cpf_cnpj: associadoSelecionado?.cpf || data.cliente_cpf_cnpj || '',
-        descricao: data.descricao,
-        data_vencimento: p.data_vencimento,
-        valor: Number(p.valor) || 0,
-        forma_pagamento: (p.forma_pagamento || data.forma_pagamento_padrao) as any,
-        observacoes: p.observacao,
-        status: dbP?.status || 'pendente',
-        data_pagamento: dbP?.data_pagamento,
-        valor_pago: dbP?.valor_pago
-      };
+          id: p.id || generateUUID(),
+          tenant_id: state.empresaSelecionada || 'empresa_padrao',
+          receita_id: receitaId,
+          numero_parcela: p.numero_parcela,
+          total_parcelas: Number(data.qtd_parcelas) || 1,
+          tipo_devedor: data.tipo_devedor,
+          devedor_nome: associadoSelecionado?.nome || data.cliente_nome || 'Desconhecido',
+          devedor_cpf_cnpj: associadoSelecionado?.cpf || data.cliente_cpf_cnpj || '',
+          descricao: data.descricao,
+          data_vencimento: p.data_vencimento,
+          valor: Number(p.valor) || 0,
+          forma_pagamento: (p.forma_pagamento || data.forma_pagamento_padrao) as any,
+          observacoes: p.observacao,
+          status: dbP?.status || 'pendente',
+          data_pagamento: dbP?.data_pagamento,
+          valor_pago: dbP?.valor_pago
+        };
       });
 
       await salvarReceita(state.isOnline, novaReceita, parcelasGeradas);
@@ -318,6 +320,12 @@ export const ContasReceberFormPage: React.FC = () => {
       </div>
 
       <div className="bg-bg-subtle border border-border-default rounded-2xl flex-1 overflow-y-auto">
+        {loadingDados ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-3 text-text-subtle">
+            <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
+            <p className="text-sm font-medium">Carregando informações da receita...</p>
+          </div>
+        ) : (
         <form onSubmit={form.handleSubmit(onSubmit as any, onInvalid)} className="p-6 space-y-8">
           
           {/* SEÇÃO 1: DEVEDOR */}
@@ -599,13 +607,15 @@ export const ContasReceberFormPage: React.FC = () => {
             </button>
           </div>
         </form>
+        )}
       </div>
 
       {modalOpen === 'categoria' && (
         <OptionsModal
-          title="Gerenciar Categorias"
+          title="Gerenciar Categorias de Receita"
           options={categorias}
           onAdd={addCategoria}
+          onEdit={editCategoria}
           onRemove={removeCategoria}
           onClose={() => setModalOpen(null)}
         />
@@ -615,6 +625,7 @@ export const ContasReceberFormPage: React.FC = () => {
           title="Gerenciar Formas de Pagamento"
           options={formasPagamento}
           onAdd={addFormaPagamento}
+          onEdit={editFormaPagamento}
           onRemove={removeFormaPagamento}
           onClose={() => setModalOpen(null)}
         />

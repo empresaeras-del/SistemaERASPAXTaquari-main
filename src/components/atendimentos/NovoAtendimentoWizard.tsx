@@ -8,8 +8,9 @@ import { saveAtendimento } from '../../services/atendimentosService';
 import { salvarReceita } from '../../services/financeiroService';
 import { registrarAuditoria } from '../../lib/supabase';
 import { X, Search, FileText, CheckCircle2, ChevronRight, User, AlertTriangle, Plus, Trash2, UserX, UserMinus, HelpCircle } from 'lucide-react';
-import { useToast } from '../../context/ToastContext';
 import { format } from 'date-fns';
+import { useToast } from '../../context/ToastContext';
+import { formatLocalDate } from '../../utils/dateUtils';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
 
 export const NovoAtendimentoWizard: React.FC<{
@@ -434,7 +435,7 @@ export const NovoAtendimentoWizard: React.FC<{
                           <input type="radio" name="falecido" value="associado" checked={falecidoId === 'associado'} onChange={() => setFalecidoId('associado')} className="text-primary" />
                           <div>
                             <p className="font-medium text-text-base">{selectedAssociado.nome} (Titular)</p>
-                            <p className="text-xs text-text-subtle">CPF: {selectedAssociado.cpf} | Nasc: {selectedAssociado.data_nascimento ? new Date(selectedAssociado.data_nascimento).toLocaleDateString() : 'N/I'}</p>
+                            <p className="text-xs text-text-subtle">CPF: {selectedAssociado.cpf} | Nasc: {formatLocalDate(selectedAssociado.data_nascimento, 'dd/MM/yyyy', 'N/I')}</p>
                           </div>
                         </label>
                         {selectedAssociado.dependentes?.map(d => (
@@ -442,7 +443,7 @@ export const NovoAtendimentoWizard: React.FC<{
                             <input type="radio" name="falecido" value={d.id} checked={falecidoId === d.id} onChange={() => setFalecidoId(d.id)} className="text-primary" />
                             <div>
                               <p className="font-medium text-text-base">{d.nome} (Dependente)</p>
-                              <p className="text-xs text-text-subtle">CPF: {d.cpf || 'N/I'} | Nasc: {d.data_nascimento ? new Date(d.data_nascimento).toLocaleDateString() : 'N/I'}</p>
+                              <p className="text-xs text-text-subtle">CPF: {d.cpf || 'N/I'} | Nasc: {formatLocalDate(d.data_nascimento, 'dd/MM/yyyy', 'N/I')}</p>
                             </div>
                           </label>
                         ))}

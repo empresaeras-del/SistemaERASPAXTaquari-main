@@ -19,8 +19,9 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import { formatLocalDateTime } from '../../utils/dateUtils';
 
 interface NotificationCenterProps {
   isOpen: boolean;
@@ -305,9 +306,9 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
                           EMITIDA / PENDENTE
                         </span>
-                      </div>
-                      <div className="text-xs text-text-subtle mt-0.5 flex items-center gap-2">
-                        <span>Emissão: {format(new Date(req.data_emissao), 'dd/MM/yyyy HH:mm')}</span>
+                        <div className="text-xs text-text-subtle mt-0.5 flex items-center gap-2">
+                          <span>Emissão: {formatLocalDateTime(req.data_emissao)}</span>
+                        </div>
                       </div>
                     </div>
                     <span className="font-bold text-sm text-text-base">{formatBRL(req.valor_total)}</span>
@@ -387,7 +388,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                         </span>
                       </div>
                       <div className="text-xs text-text-subtle mt-0.5">
-                        Criação: {format(new Date(rem.data_criacao), 'dd/MM/yyyy HH:mm')}
+                        Criação: {formatLocalDateTime(rem.data_criacao)}
                       </div>
                     </div>
                     <span className="font-bold text-sm text-emerald-500">{formatBRL(rem.valor_liquido)}</span>

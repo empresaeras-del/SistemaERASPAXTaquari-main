@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Requisicao, RequisicaoItem, StatusRequisicao } from '../types/requisicoes';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import jsPDF from 'jspdf';
 import { fetchImageAsBase64, fetchImageWithDimensions } from '../utils/imageUtils';
 import autoTable from 'jspdf-autotable';
@@ -346,9 +347,9 @@ export const gerarPDFGuiaRequisicao = async (req: Requisicao, empresa?: any) => 
   doc.setFont('helvetica', 'bold');
   doc.text(`Status: ${req.status.toUpperCase()}`, 14, currentY);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Data de Emissão: ${format(new Date(req.data_emissao), 'dd/MM/yyyy HH:mm')}`, 80, currentY);
+  doc.text(`Data de Emissão: ${formatLocalDateTime(req.data_emissao)}`, 80, currentY);
   if (req.data_validade) {
-    doc.text(`Validade: ${format(new Date(req.data_validade), 'dd/MM/yyyy')}`, 150, 38);
+    doc.text(`Validade: ${formatLocalDate(req.data_validade)}`, 150, 38);
   }
 
   // Bloco 1: Dados do Associado / Paciente

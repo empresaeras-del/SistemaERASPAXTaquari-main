@@ -1,22 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { salvarDespesa, Despesa, ParcelaPagar } from '../services/financeiroService';
-import { getFromIDB, getAllFromIDB } from '../lib/idb';
+import { salvarDespesa, getDespesaCompleta, Despesa, ParcelaPagar } from '../services/financeiroService';
+import { getAllFromIDB } from '../lib/idb';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ArrowLeft, Save } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
+import { ArrowLeft, Save, Settings, Loader2 } from 'lucide-react';
+import { generateUUID } from '../utils/uuid';
 import toast from 'react-hot-toast';
 import { format, lastDayOfMonth } from 'date-fns';
 import { getContasBancariasAtivas } from '../services/contasBancariasService';
 import { ContaBancaria } from '../types/contasBancarias';
-
 import { useOptions } from '../hooks/useOptions';
 import { OptionsModal } from '../components/OptionsModal';
-import { Settings } from 'lucide-react';
 
+const defaultCategoriasDespesa = [
+  'Repasse Credenciados / Prestadores',
+  'Fornecedores',
+  'Aluguel',
+  'Salários e Encargos',
+  'Impostos e Taxas',
+  'Água / Luz / Telefone',
+  'Serviços de Terceiros',
+  'Manutenção e Conservação',
+  'Combustível e Transporte',
+  'Marketing e Publicidade',
+  'Material de Escritório',
+  'Despesas Bancárias',
+  'Outros'
+];
+
+const defaultCentrosCusto = [
+  'Rede Assistencial',
+  'Funerária',
+  'Cemitério',
+  'Administrativo',
+  'Financeiro',
+  'Comercial / Vendas',
+  'Operacional',
+  'TI e Sistemas',
+  'Geral'
+];
+
+const defaultFormasPagamento = [
+  'PIX',
+  'Boleto',
+  'Cartão de Crédito',
+  'Cartão de Débito',
+  'Transferência',
+  'Dinheiro',
+  'Cheque',
+  'Outro'
+];
 
 const despesaSchema = z.object({
   tipo_credor: z.enum(['fornecedor_pf', 'fornecedor_pj', 'funcionario', 'outro']),
@@ -25,6 +61,7 @@ const despesaSchema = z.object({
   
   descricao: z.string().min(3, "Descrição muito curta (mínimo 3 caracteres)"),
   categoria: z.string().min(1, "Selecione uma categoria"),
+  centro_custo: z.string().optional(),
   data_emissao: z.string().min(1, "Data de emissão obrigatória"),
   data_inicio_pagamento: z.string().min(1, "Data de início obrigatória"),
   valor_total: z.preprocess((v) => (v === '' || v === undefined ? 0 : Number(v)), z.number().min(0.01, "O valor deve ser maior que zero")),
@@ -48,10 +85,11 @@ type DespesaFormData = z.infer<typeof despesaSchema>;
 export const ContasPagarFormPage: React.FC = () => {
   const { id } = useParams();
 
-  const { options: categorias, addOption: addCategoria, removeOption: removeCategoria } = useOptions('categorias_despesa', ['Aluguel', 'Fornecedores', 'Salários', 'Impostos', 'Outro']);
-  const { options: formasPagamento, addOption: addFormaPagamento, removeOption: removeFormaPagamento } = useOptions('formas_pagamento', ['PIX', 'Boleto', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência', 'Dinheiro', 'Cheque', 'Outro']);
+  const { options: categorias, addOption: addCategoria, editOption: editCategoria, removeOption: removeCategoria } = useOptions('categorias_despesa', defaultCategoriasDespesa);
+  const { options: centrosCusto, addOption: addCentroCusto, editOption: editCentroCusto, removeOption: removeCentroCusto } = useOptions('centros_custo', defaultCentrosCusto);
+  const { options: formasPagamento, addOption: addFormaPagamento, editOption: editFormaPagamento, removeOption: removeFormaPagamento } = useOptions('formas_pagamento', defaultFormasPagamento);
   
-  const [modalOpen, setModalOpen] = useState<'categoria' | 'forma_pagamento' | null>(null);
+  const [modalOpen, setModalOpen] = useState<'categoria' | 'centro_custo' | 'forma_pagamento' | null>(null);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -68,6 +106,7 @@ export const ContasPagarFormPage: React.FC = () => {
   }, [state.empresaSelecionada, state.isOnline]);
   
   const [loading, setLoading] = useState(false);
+  const [loadingDados, setLoadingDados] = useState(isEditing);
   const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
 
   const form = useForm<DespesaFormData>({
@@ -77,12 +116,13 @@ export const ContasPagarFormPage: React.FC = () => {
       credor_nome: '',
       credor_cpf_cnpj: '',
       descricao: '',
-      categoria: '',
+      categoria: 'Repasse Credenciados / Prestadores',
+      centro_custo: 'Rede Assistencial',
       data_emissao: format(new Date(), "yyyy-MM-dd"),
       data_inicio_pagamento: format(new Date(), "yyyy-MM-dd"),
       valor_total: 0,
       qtd_parcelas: 1,
-      forma_pagamento_padrao: '',
+      forma_pagamento_padrao: 'pix',
       conta_bancaria_id: '',
       parcelas: []
     }
@@ -96,42 +136,47 @@ export const ContasPagarFormPage: React.FC = () => {
   useEffect(() => {
     if (isEditing && id) {
       const loadDespesa = async () => {
+        setLoadingDados(true);
         try {
-          const allDespesas = await getAllFromIDB<Despesa>('despesas');
-          const desp = allDespesas.find(d => d.id === id);
-          const allParcelas = await getAllFromIDB<ParcelaPagar>('parcelas_pagar');
-          const parcs = allParcelas.filter(p => p.despesa_id === id);
+          const { despesa: desp, parcelas: parcs } = await getDespesaCompleta(state.isOnline, id, targetParcelaId);
 
           if (desp) {
             form.reset({
               tipo_credor: (desp.tipo_credor as any) || 'fornecedor_pj',
               credor_nome: desp.credor_nome || '',
               credor_cpf_cnpj: desp.credor_cpf_cnpj || '',
-              descricao: desp.descricao,
-              categoria: desp.categoria,
-              data_emissao: desp.data_emissao,
-              data_inicio_pagamento: desp.data_inicio_pagamento,
-              valor_total: desp.valor_total,
-              qtd_parcelas: desp.qtd_parcelas,
-              forma_pagamento_padrao: desp.forma_pagamento_padrao,
+              descricao: desp.descricao || '',
+              categoria: desp.categoria || 'Repasse Credenciados / Prestadores',
+              centro_custo: desp.centro_custo || 'Rede Assistencial',
+              data_emissao: desp.data_emissao || format(new Date(), "yyyy-MM-dd"),
+              data_inicio_pagamento: desp.data_inicio_pagamento || format(new Date(), "yyyy-MM-dd"),
+              valor_total: Number(desp.valor_total) || 0,
+              qtd_parcelas: Number(desp.qtd_parcelas) || (parcs.length > 0 ? parcs.length : 1),
+              forma_pagamento_padrao: desp.forma_pagamento_padrao || 'pix',
+              conta_bancaria_id: desp.conta_bancaria_id || '',
               observacoes: desp.observacoes || '',
               parcelas: parcs.map(p => ({
                 id: p.id,
                 numero_parcela: p.numero_parcela,
                 data_vencimento: p.data_vencimento,
-                valor: p.valor,
-                forma_pagamento: p.forma_pagamento || 'pix',
+                valor: Number(p.valor) || 0,
+                forma_pagamento: p.forma_pagamento || desp.forma_pagamento_padrao || 'pix',
                 observacao: p.observacoes || ''
               }))
             });
+          } else {
+            toast.error('Despesa vinculada não encontrada.');
           }
         } catch (e) {
           console.error("Erro ao carregar despesa para edição:", e);
+          toast.error("Erro ao carregar os dados da despesa.");
+        } finally {
+          setLoadingDados(false);
         }
       };
       loadDespesa();
     }
-  }, [id, isEditing]);
+  }, [id, isEditing, state.isOnline, targetParcelaId]);
 
   const gerarParcelas = (customData?: Partial<DespesaFormData>) => {
     const values = { ...form.getValues(), ...customData };
@@ -187,7 +232,7 @@ export const ContasPagarFormPage: React.FC = () => {
     
     setLoading(true);
     try {
-      const despesaId = id || uuidv4();
+      const despesaId = id || generateUUID();
       const existingDbParcelas = id ? await getAllFromIDB<ParcelaPagar>(`parcelas_pagar`) : [];
       const dbParcMap = new Map(existingDbParcelas.map(p => [p.id, p]));
       
@@ -199,6 +244,7 @@ export const ContasPagarFormPage: React.FC = () => {
         credor_cpf_cnpj: data.credor_cpf_cnpj,
         descricao: data.descricao,
         categoria: data.categoria,
+        centro_custo: data.centro_custo || 'Rede Assistencial',
         data_emissao: data.data_emissao,
         data_inicio_pagamento: data.data_inicio_pagamento,
         valor_total: totalForm,
@@ -213,23 +259,23 @@ export const ContasPagarFormPage: React.FC = () => {
       const parcelasGeradas: ParcelaPagar[] = parcelasSubmit.map(p => {
         const dbP = p.id ? dbParcMap.get(p.id) : null;
         return {
-        id: p.id || uuidv4(),
-        tenant_id: state.empresaSelecionada || 'empresa_padrao',
-        despesa_id: despesaId,
-        numero_parcela: p.numero_parcela,
-        total_parcelas: Number(data.qtd_parcelas) || 1,
-        tipo_credor: data.tipo_credor,
-        credor_nome: data.credor_nome,
-        credor_cpf_cnpj: data.credor_cpf_cnpj || '',
-        descricao: data.descricao,
-        data_vencimento: p.data_vencimento,
-        valor: Number(p.valor) || 0,
-        forma_pagamento: (p.forma_pagamento || data.forma_pagamento_padrao) as any,
-        observacoes: p.observacao,
-        status: dbP?.status || 'pendente',
-        data_pagamento: dbP?.data_pagamento,
-        valor_pago: dbP?.valor_pago
-      };
+          id: p.id || generateUUID(),
+          tenant_id: state.empresaSelecionada || 'empresa_padrao',
+          despesa_id: despesaId,
+          numero_parcela: p.numero_parcela,
+          total_parcelas: Number(data.qtd_parcelas) || 1,
+          tipo_credor: data.tipo_credor,
+          credor_nome: data.credor_nome,
+          credor_cpf_cnpj: data.credor_cpf_cnpj || '',
+          descricao: data.descricao,
+          data_vencimento: p.data_vencimento,
+          valor: Number(p.valor) || 0,
+          forma_pagamento: (p.forma_pagamento || data.forma_pagamento_padrao) as any,
+          observacoes: p.observacao,
+          status: dbP?.status || 'pendente',
+          data_pagamento: dbP?.data_pagamento,
+          valor_pago: dbP?.valor_pago
+        };
       });
 
       await salvarDespesa(state.isOnline, novaDespesa, parcelasGeradas);
@@ -266,6 +312,12 @@ export const ContasPagarFormPage: React.FC = () => {
       </div>
 
       <div className="bg-bg-subtle border border-border-default rounded-2xl flex-1 overflow-y-auto">
+        {loadingDados ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-3 text-text-subtle">
+            <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
+            <p className="text-sm font-medium">Carregando informações da despesa...</p>
+          </div>
+        ) : (
         <form onSubmit={form.handleSubmit(onSubmit as any, onInvalid)} className="p-6 space-y-8">
           
           <section className="space-y-4">
@@ -321,29 +373,66 @@ export const ContasPagarFormPage: React.FC = () => {
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="block text-sm font-medium text-text-subtle">Categoria *</label>
-                  <button type="button" onClick={() => setModalOpen('categoria')} className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors" title="Gerenciar opções">
-                    <Settings className="w-4 h-4" />
+                  <button 
+                    type="button" 
+                    onClick={() => setModalOpen('categoria')} 
+                    className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors flex items-center gap-1 text-xs" 
+                    title="Gerenciar Categorias"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Gerenciar</span>
                   </button>
                 </div>
                 <select 
                   {...form.register("categoria")}
                   className={`w-full bg-bg-surface border ${errors.categoria ? 'border-rose-500' : 'border-border-default'} rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none`}
                 >
-                  <option value="">Selecione...</option>
+                  <option value="">Selecione a categoria...</option>
                   {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
                 {errors.categoria && <p className="text-rose-500 text-xs mt-1">{errors.categoria.message}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-text-subtle mb-1">Forma de Pagamento Padrão *</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-sm font-medium text-text-subtle">Centro de Custo</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setModalOpen('centro_custo')} 
+                    className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors flex items-center gap-1 text-xs" 
+                    title="Gerenciar Centros de Custo"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Gerenciar</span>
+                  </button>
+                </div>
+                <select 
+                  {...form.register("centro_custo")}
+                  className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
+                >
+                  <option value="">Selecione o centro de custo...</option>
+                  {centrosCusto.map(cc => <option key={cc} value={cc}>{cc}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-sm font-medium text-text-subtle">Forma de Pagamento Padrão *</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setModalOpen('forma_pagamento')} 
+                    className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors flex items-center gap-1 text-xs" 
+                    title="Gerenciar Formas de Pagamento"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Gerenciar</span>
+                  </button>
+                </div>
                 <select 
                   {...form.register("forma_pagamento_padrao")}
                   className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
                 >
-                  <option value="pix">PIX</option>
-                  <option value="boleto">Boleto</option>
-                  <option value="transferencia">Transferência</option>
+                  {formasPagamento.map(fp => <option key={fp} value={fp.toLowerCase()}>{fp}</option>)}
                 </select>
               </div>
 
@@ -407,6 +496,16 @@ export const ContasPagarFormPage: React.FC = () => {
                   className={`w-full bg-bg-surface border ${errors.qtd_parcelas ? 'border-rose-500' : 'border-border-default'} rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none disabled:opacity-50 disabled:cursor-not-allowed`}
                 />
                 {errors.qtd_parcelas && <p className="text-rose-500 text-xs mt-1">{errors.qtd_parcelas.message}</p>}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-text-subtle mb-1">Observações</label>
+                <textarea 
+                  {...form.register("observacoes")}
+                  rows={3}
+                  className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none resize-none"
+                  placeholder="Observações ou detalhes adicionais da despesa..."
+                />
               </div>
             </div>
           </section>
@@ -504,14 +603,26 @@ export const ContasPagarFormPage: React.FC = () => {
             </button>
           </div>
         </form>
+        )}
       </div>
 
       {modalOpen === 'categoria' && (
         <OptionsModal
-          title="Gerenciar Categorias"
+          title="Gerenciar Categorias de Despesa"
           options={categorias}
           onAdd={addCategoria}
+          onEdit={editCategoria}
           onRemove={removeCategoria}
+          onClose={() => setModalOpen(null)}
+        />
+      )}
+      {modalOpen === 'centro_custo' && (
+        <OptionsModal
+          title="Gerenciar Centros de Custo"
+          options={centrosCusto}
+          onAdd={addCentroCusto}
+          onEdit={editCentroCusto}
+          onRemove={removeCentroCusto}
           onClose={() => setModalOpen(null)}
         />
       )}
@@ -520,6 +631,7 @@ export const ContasPagarFormPage: React.FC = () => {
           title="Gerenciar Formas de Pagamento"
           options={formasPagamento}
           onAdd={addFormaPagamento}
+          onEdit={editFormaPagamento}
           onRemove={removeFormaPagamento}
           onClose={() => setModalOpen(null)}
         />

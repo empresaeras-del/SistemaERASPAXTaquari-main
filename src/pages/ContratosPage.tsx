@@ -7,6 +7,7 @@ import {
   Calendar, Eye, ChevronRight
 , Printer } from "lucide-react";
 import { usePlanosPax } from "../hooks/usePlanosPax";
+import { formatLocalDate } from "../utils/dateUtils";
 
 import { NovoContratoWizard } from "../components/contratos/NovoContratoWizard";
 import { Plus } from "lucide-react";
@@ -78,7 +79,7 @@ export const ContratosPage: React.FC = () => {
         planoNome,
         a.n_vidas?.toString() || "1",
         a.status,
-        a.data_adesao ? new Date(a.data_adesao).toLocaleDateString('pt-BR') : "",
+        a.data_adesao ? formatLocalDate(a.data_adesao) : "",
         valor
       ].join(";");
     });
@@ -125,16 +126,7 @@ export const ContratosPage: React.FC = () => {
   };
 
   const formatDateSafe = (dateStr: string | undefined) => {
-    if (!dateStr) return "Não informada";
-    try {
-      const parts = dateStr.split("T")[0].split("-");
-      if (parts.length === 3) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
-      }
-      return new Date(dateStr).toLocaleDateString("pt-BR");
-    } catch (e) {
-      return dateStr;
-    }
+    return formatLocalDate(dateStr, 'dd/MM/yyyy', 'Não informada');
   };
 
   return (

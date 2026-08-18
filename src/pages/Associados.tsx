@@ -1451,9 +1451,7 @@ export const AssociadosPage: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      {new Date(associado.data_adesao).toLocaleDateString(
-                        "pt-BR",
-                      )}
+                      {formatDateSafe(associado.data_adesao)}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">

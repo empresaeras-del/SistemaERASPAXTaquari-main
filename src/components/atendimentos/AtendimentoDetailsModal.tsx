@@ -9,6 +9,7 @@ import { useConfirm } from '../../context/ConfirmContext';
 import { cancelarReceitasPorAtendimento, getParcelasReceberPorAtendimento, ParcelaReceber } from '../../services/financeiroService';
 import { useItensFunerarios } from '../../hooks/useItensFunerarios';
 import { AtendimentoDocumentosGenerator } from './AtendimentoDocumentosGenerator';
+import { formatLocalDate } from '../../utils/dateUtils';
 
 interface Props {
   atendimento: Atendimento;
@@ -208,7 +209,7 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
                     {isEditing ? (
                       <input type="date" name="falecido_data_nascimento" value={formData.falecido_data_nascimento || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm" />
                     ) : (
-                      <p className="text-sm text-text-base font-medium">{formData.falecido_data_nascimento ? new Date(formData.falecido_data_nascimento).toLocaleDateString() : '-'}</p>
+                      <p className="text-sm text-text-base font-medium">{formatLocalDate(formData.falecido_data_nascimento)}</p>
                     )}
                   </div>
                 </div>

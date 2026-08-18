@@ -6,6 +6,7 @@ import { useDocumentosPadroes } from '../hooks/useDocumentosPadroes';
 import { useAppContext } from '../context/AppContext';
 import { DocumentoPadrao, TipoDocumento } from '../types/documentos';
 import { canDelete } from '../utils/permissions';
+import { formatLocalDate } from '../utils/dateUtils';
 import { FileText, Plus, Search, Pencil, Power, PowerOff, UploadCloud, X, Download, FileCheck, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify, List, Eye, Maximize, Minimize, Trash2, Printer } from 'lucide-react';
 
 const TIPO_LABELS: Record<TipoDocumento, string> = {
@@ -163,7 +164,7 @@ export const DocumentosPadroesPage = () => {
       const matches = [...docToPrint.conteudo.matchAll(regex)];
       const initialValues: Record<string, string> = {};
       matches.forEach(match => {
-        initialValues[match[0]] = match[0] === '{{data_atual}}' ? new Date().toLocaleDateString('pt-BR') : '';
+        initialValues[match[0]] = match[0] === '{{data_atual}}' ? formatLocalDate(new Date()) : '';
       });
       setPlaceholderValues(initialValues);
     }
@@ -194,7 +195,7 @@ export const DocumentosPadroesPage = () => {
       if ('{{numero_contrato}}' in newVals) newVals['{{numero_contrato}}'] = associado.numero_contrato || associado.id.substring(0, 8).toUpperCase();
       if ('{{valor_mensalidade}}' in newVals) newVals['{{valor_mensalidade}}'] = associado.valor_plano ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(associado.valor_plano) : '';
       if ('{{quantidade_dependentes}}' in newVals) newVals['{{quantidade_dependentes}}'] = (associado.dependentes?.length || 0).toString();
-      if ('{{data_adesao}}' in newVals) newVals['{{data_adesao}}'] = associado.data_adesao ? new Date(associado.data_adesao).toLocaleDateString('pt-BR') : '';
+      if ('{{data_adesao}}' in newVals) newVals['{{data_adesao}}'] = associado.data_adesao ? formatLocalDate(associado.data_adesao) : '';
             if ('{{associado_dependentes}}' in newVals) newVals['{{associado_dependentes}}'] = (associado.dependentes && associado.dependentes.length > 0) ? associado.dependentes.map(d => `${d.nome} - Parentesco: ${d.parentesco} - CPF: ${d.cpf || 'Não informado'}`).join('<br/>') : 'Nenhum dependente vinculado';
       return newVals;
     });

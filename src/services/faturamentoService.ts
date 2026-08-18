@@ -7,6 +7,7 @@ import { Requisicao } from '../types/requisicoes';
 import { salvarDespesa, cancelarDespesa, Despesa, ParcelaPagar, FormaPagamento } from './financeiroService';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import jsPDF from 'jspdf';
 import { fetchImageAsBase64, fetchImageWithDimensions } from '../utils/imageUtils';
 import autoTable from 'jspdf-autotable';
@@ -336,10 +337,10 @@ export const gerarPDFRelatorioFaturamento = async (
   doc.text(`Documento (CNPJ/CPF): ${remessa.credenciado_cnpj_cpf || 'Não Informado'}`, 14, currentY + 5);
   doc.text(`Tipo Prestador: ${remessa.tipo_prestador === 'credenciado' ? 'Rede Credenciada' : 'Rede Externa'}`, 14, currentY + 10);
 
-  doc.text(`Data de Criação: ${format(new Date(remessa.data_criacao), 'dd/MM/yyyy HH:mm')}`, 130, currentY);
+  doc.text(`Data de Criação: ${formatLocalDateTime(remessa.data_criacao)}`, 130, currentY);
   doc.text(`Status: ${remessa.status.toUpperCase()}`, 130, currentY + 5);
   if (remessa.data_vencimento_pagamento) {
-    doc.text(`Venc. Financeiro: ${format(new Date(remessa.data_vencimento_pagamento), 'dd/MM/yyyy')}`, 130, currentY + 10);
+    doc.text(`Venc. Financeiro: ${formatLocalDate(remessa.data_vencimento_pagamento)}`, 130, currentY + 10);
   }
 
   currentY += 16;
@@ -349,7 +350,7 @@ export const gerarPDFRelatorioFaturamento = async (
     const procsNomes = req.itens.map(i => `${i.descricao} (${i.quantidade}x)`).join(', ');
     return [
       req.codigo_requisicao,
-      format(new Date(req.data_emissao), 'dd/MM/yyyy'),
+      formatLocalDate(req.data_emissao),
       req.paciente_nome,
       procsNomes,
       formatBRL(req.valor_total)

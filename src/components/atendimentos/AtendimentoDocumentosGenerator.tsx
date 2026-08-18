@@ -6,6 +6,7 @@ import { getEmpresaById } from '../../services/empresasService';
 import { useAppContext } from '../../context/AppContext';
 import { useDocumentosPadroes } from '../../hooks/useDocumentosPadroes';
 import { getAssociados, Associado } from '../../services/associadosService';
+import { formatLocalDate } from '../../utils/dateUtils';
 
 interface Props {
   atendimento: Atendimento;
@@ -25,25 +26,26 @@ export const AtendimentoDocumentosGenerator: React.FC<Props> = ({ atendimento, p
   const [associadoData, setAssociadoData] = useState<Associado | null>(null);
 
   useEffect(() => {
-    if (atendimento.tipo_cliente === 'associado' && atendimento.associado_id) {
-      getAssociados(isOnline, empresaSelecionada).then(associados => {
-         const found = associados.find(a => a.id === atendimento.associado_id);
-         if (found) setAssociadoData(found);
+    if (atendimento.associado_id) {
+      getAssociados(isOnline, empresaSelecionada || 'default_tenant').then(assocs => {
+        const found = assocs.find(a => a.id === atendimento.associado_id);
+        if (found) setAssociadoData(found);
       });
     }
-  }, [atendimento, isOnline, empresaSelecionada]);
+  }, [atendimento.associado_id, isOnline, empresaSelecionada]);
 
   const handleGenerate = () => {
+    if (!selectedDoc) return;
     const doc = documentos.find(d => d.id === selectedDoc);
     if (!doc) return;
 
     const dataAtual = new Date();
     
     // Format itens
-    const itensStr = atendimento.itens?.map(i => `${i.quantidade}x ${i.item_nome || 'Item'} - R$ ${i.valor_unitario.toFixed(2)} (${i.coberto ? 'Coberto' : 'Particular'})`).join('<br/>') || 'Nenhum item vinculado';
+    const itensStr = (atendimento.itens || []).map(i => `${i.quantidade}x ${i.item_nome || 'Item'} (R$ ${(i.valor_unitario * i.quantidade).toFixed(2)})`).join(', ') || 'Nenhum item adicionado';
     
     // Format parcelas
-    const parcelasStr = parcelas.map(p => `Parcela ${p.numero_parcela} - Vencimento: ${p.data_vencimento ? new Date(p.data_vencimento).toLocaleDateString('pt-BR') : '-'} - Valor: R$ ${p.valor.toFixed(2)} - Status: ${p.status}`).join('<br/>') || 'Nenhuma parcela financeira';
+    const parcelasStr = parcelas.map(p => `Parcela ${p.numero_parcela} - Vencimento: ${formatLocalDate(p.data_vencimento)} - Valor: R$ ${p.valor.toFixed(2)} - Status: ${p.status}`).join('<br/>') || 'Nenhuma parcela financeira';
 
     const vars: Record<string, string> = {
       // Atendimento Data
@@ -51,16 +53,16 @@ export const AtendimentoDocumentosGenerator: React.FC<Props> = ({ atendimento, p
       '{{atendimento_tipo}}': atendimento.tipo_cliente === 'associado' ? 'Associado' : 'Cliente Externo',
       '{{atendimento_falecido_nome}}': atendimento.falecido_nome || '',
       '{{atendimento_falecido_cpf}}': atendimento.falecido_cpf || '',
-      '{{atendimento_falecido_data_nascimento}}': atendimento.falecido_data_nascimento ? new Date(atendimento.falecido_data_nascimento).toLocaleDateString('pt-BR') : '',
+      '{{atendimento_falecido_data_nascimento}}': formatLocalDate(atendimento.falecido_data_nascimento, 'dd/MM/yyyy', ''),
       '{{atendimento_local_velorio}}': atendimento.local_velorio || '',
       '{{atendimento_local_sepultamento}}': atendimento.local_sepultamento || '',
-      '{{atendimento_data_obito}}': atendimento.data_obito ? new Date(atendimento.data_obito).toLocaleDateString('pt-BR') : '',
-      '{{atendimento_data_velorio}}': atendimento.data_velorio ? new Date(atendimento.data_velorio).toLocaleDateString('pt-BR') : '',
-      '{{atendimento_data_sepultamento}}': atendimento.data_sepultamento ? new Date(atendimento.data_sepultamento).toLocaleDateString('pt-BR') : '',
+      '{{atendimento_data_obito}}': formatLocalDate(atendimento.data_obito, 'dd/MM/yyyy', ''),
+      '{{atendimento_data_velorio}}': formatLocalDate(atendimento.data_velorio, 'dd/MM/yyyy', ''),
+      '{{atendimento_data_sepultamento}}': formatLocalDate(atendimento.data_sepultamento, 'dd/MM/yyyy', ''),
       '{{atendimento_valor_total}}': `R$ ${(atendimento.valor_total || 0).toFixed(2)}`,
       '{{atendimento_itens_lista}}': itensStr,
       '{{atendimento_parcelas_lista}}': parcelasStr,
-      '{{data_atual}}': dataAtual.toLocaleDateString('pt-BR'),
+      '{{data_atual}}': formatLocalDate(dataAtual),
       
       // Associado Data (if applicable)
       '{{associado_nome}}': associadoData?.nome || '',

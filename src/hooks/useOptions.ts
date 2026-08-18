@@ -6,22 +6,40 @@ export const useOptions = (key: string, defaultOptions: string[]) => {
   
   useEffect(() => {
     const loadOptions = async () => {
-      const data = await getFromIDB<{id: string, options: string[]}>('preferencias', key);
-      if (data && data.options) {
-        setOptions(data.options);
-      } else {
-        await saveToIDB('preferencias', { id: key, options: defaultOptions });
+      try {
+        const data = await getFromIDB<{id: string, options: string[]}>('preferencias', key);
+        if (data && Array.isArray(data.options) && data.options.length > 0) {
+          // Garante que todas as defaultOptions também existam sem duplicar
+          const merged = Array.from(new Set([...data.options, ...defaultOptions]));
+          setOptions(merged);
+        } else {
+          setOptions(defaultOptions);
+          await saveToIDB('preferencias', { id: key, options: defaultOptions });
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar opções de preferências:', e);
+        setOptions(defaultOptions);
       }
     };
     loadOptions();
-  }, [key]); // defaultOptions shouldn't be a dependency or we use JSON.stringify
+  }, [key]);
   
   const addOption = async (option: string) => {
-    if (!options.includes(option)) {
-      const newOptions = [...options, option];
+    const trimmed = option.trim();
+    if (!trimmed) return;
+    if (!options.includes(trimmed)) {
+      const newOptions = [...options, trimmed];
       setOptions(newOptions);
       await saveToIDB('preferencias', { id: key, options: newOptions });
     }
+  };
+
+  const editOption = async (oldOption: string, newOption: string) => {
+    const trimmed = newOption.trim();
+    if (!trimmed) return;
+    const newOptions = options.map(o => (o === oldOption ? trimmed : o));
+    setOptions(newOptions);
+    await saveToIDB('preferencias', { id: key, options: newOptions });
   };
   
   const removeOption = async (option: string) => {
@@ -30,5 +48,5 @@ export const useOptions = (key: string, defaultOptions: string[]) => {
     await saveToIDB('preferencias', { id: key, options: newOptions });
   };
   
-  return { options, addOption, removeOption };
+  return { options, addOption, editOption, removeOption };
 };

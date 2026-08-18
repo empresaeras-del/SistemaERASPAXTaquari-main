@@ -5,6 +5,7 @@ import { Associado } from '../../services/associadosService';
 import { DocumentoPadrao } from '../../types/documentos';
 import { getEmpresaById } from '../../services/empresasService';
 import { useAppContext } from '../../context/AppContext';
+import { formatLocalDate } from '../../utils/dateUtils';
 
 interface Props {
   associado: Associado;
@@ -37,11 +38,11 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
       '{{plano_atual}}': associado.plano_nome || '',
       '{{plano_nome}}': associado.plano_nome || '',
       '{{valor_mensalidade}}': formatBRL(valorMensalidade),
-      '{{data_adesao}}': associado.data_adesao ? new Date(associado.data_adesao).toLocaleDateString('pt-BR') : '',
+      '{{data_adesao}}': formatLocalDate(associado.data_adesao, 'dd/MM/yyyy', ''),
       '{{numero_contrato}}': (associado as any).numero_contrato || (associado as any).numero_contrato_fisico || associado.id.substring(0, 8).toUpperCase(),
       '{{associado_dependentes}}': (associado.dependentes && associado.dependentes.length > 0) ? associado.dependentes.map(d => `${d.nome} - Parentesco: ${d.parentesco} - CPF: ${d.cpf || 'Não informado'}`).join('<br/>') : 'Nenhum dependente vinculado',
       '{{quantidade_dependentes}}': (associado.dependentes?.length || 0).toString(),
-      '{{data_atual}}': dataAtual.toLocaleDateString('pt-BR'),
+      '{{data_atual}}': formatLocalDate(dataAtual),
     };
 
     const regex = /\{\{([^}]+)\}\}/g;

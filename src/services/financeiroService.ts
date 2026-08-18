@@ -743,28 +743,220 @@ export const excluirDespesa = async (isOnline: boolean, despesaId: string): Prom
   await registrarAuditoria('Excluir Despesa', { id: despesaId });
 };
 
-export const getReceitaById = async (isOnline: boolean, id: string): Promise<Receita | null> => {
+export const getReceitaCompleta = async (
+  isOnline: boolean,
+  idOrParcelaId: string,
+  parcelaIdHint?: string | null
+): Promise<{ receita: Receita | null; parcelas: ParcelaReceber[] }> => {
+  let receita: Receita | null = null;
+  let targetReceitaId = idOrParcelaId;
+
+  // 1. Tenta buscar a receita diretamente pelo ID
   if (isOnline) {
     try {
-      const { data, error } = await supabase.from('receitas').select('*').eq('id', id).maybeSingle();
-      if (!error && data) return data;
+      const { data, error } = await supabase.from('receitas').select('*').eq('id', targetReceitaId).maybeSingle();
+      if (!error && data) {
+        receita = data;
+      }
     } catch (e) {
-      console.warn('Supabase get receita error:', e);
+      console.warn('Erro ao buscar receita no Supabase:', e);
     }
   }
-  return await getFromIDB<Receita>('receitas', id) || null;
+
+  if (!receita) {
+    receita = await getFromIDB<Receita>('receitas', targetReceitaId) || null;
+  }
+
+  // 2. Se não encontrou receita com esse ID, pode ser que seja o ID de uma parcela_receber
+  if (!receita) {
+    let parcelaRef: ParcelaReceber | null = null;
+    if (isOnline) {
+      try {
+        const { data: pData } = await supabase.from('parcelas_receber').select('*').eq('id', targetReceitaId).maybeSingle();
+        if (pData) parcelaRef = pData;
+      } catch (e) {
+        console.warn('Erro ao buscar parcela por ID no Supabase:', e);
+      }
+    }
+    if (!parcelaRef) {
+      parcelaRef = await getFromIDB<ParcelaReceber>('parcelas_receber', targetReceitaId) || null;
+    }
+
+    // Se ainda não achou e temos um parcelaIdHint
+    if (!parcelaRef && parcelaIdHint) {
+      if (isOnline) {
+        try {
+          const { data: pData } = await supabase.from('parcelas_receber').select('*').eq('id', parcelaIdHint).maybeSingle();
+          if (pData) parcelaRef = pData;
+        } catch (e) {
+          console.warn('Erro ao buscar parcelaIdHint no Supabase:', e);
+        }
+      }
+      if (!parcelaRef) {
+        parcelaRef = await getFromIDB<ParcelaReceber>('parcelas_receber', parcelaIdHint) || null;
+      }
+    }
+
+    if (parcelaRef && parcelaRef.receita_id) {
+      targetReceitaId = parcelaRef.receita_id;
+      if (isOnline) {
+        try {
+          const { data: rData } = await supabase.from('receitas').select('*').eq('id', targetReceitaId).maybeSingle();
+          if (rData) receita = rData;
+        } catch (e) {
+          console.warn('Erro ao buscar receita pai pelo receita_id da parcela:', e);
+        }
+      }
+      if (!receita) {
+        receita = await getFromIDB<Receita>('receitas', targetReceitaId) || null;
+      }
+    }
+  }
+
+  // 3. Carregar todas as parcelas dessa receita
+  let parcelas: ParcelaReceber[] = [];
+  if (receita) {
+    await saveToIDB('receitas', receita);
+    if (isOnline) {
+      try {
+        const { data: pList, error: pErr } = await supabase
+          .from('parcelas_receber')
+          .select('*')
+          .eq('receita_id', receita.id)
+          .order('numero_parcela', { ascending: true });
+        if (!pErr && pList && pList.length > 0) {
+          parcelas = pList;
+          for (const p of pList) {
+            await saveToIDB('parcelas_receber', p);
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao buscar parcelas da receita no Supabase:', e);
+      }
+    }
+
+    if (parcelas.length === 0) {
+      const allIDBParcelas = await getAllFromIDB<ParcelaReceber>('parcelas_receber');
+      parcelas = allIDBParcelas
+        .filter(p => p.receita_id === receita!.id)
+        .sort((a, b) => (a.numero_parcela || 0) - (b.numero_parcela || 0));
+    }
+  }
+
+  return { receita, parcelas };
+};
+
+export const getReceitaById = async (isOnline: boolean, id: string): Promise<Receita | null> => {
+  const { receita } = await getReceitaCompleta(isOnline, id);
+  return receita;
+};
+
+export const getDespesaCompleta = async (
+  isOnline: boolean,
+  idOrParcelaId: string,
+  parcelaIdHint?: string | null
+): Promise<{ despesa: Despesa | null; parcelas: ParcelaPagar[] }> => {
+  let despesa: Despesa | null = null;
+  let targetDespesaId = idOrParcelaId;
+
+  // 1. Tenta buscar a despesa diretamente pelo ID
+  if (isOnline) {
+    try {
+      const { data, error } = await supabase.from('despesas').select('*').eq('id', targetDespesaId).maybeSingle();
+      if (!error && data) {
+        despesa = data;
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar despesa no Supabase:', e);
+    }
+  }
+
+  if (!despesa) {
+    despesa = await getFromIDB<Despesa>('despesas', targetDespesaId) || null;
+  }
+
+  // 2. Se não encontrou despesa com esse ID, pode ser que o ID recebido seja o ID de uma parcela_pagar
+  if (!despesa) {
+    let parcelaRef: ParcelaPagar | null = null;
+    if (isOnline) {
+      try {
+        const { data: pData } = await supabase.from('parcelas_pagar').select('*').eq('id', targetDespesaId).maybeSingle();
+        if (pData) parcelaRef = pData;
+      } catch (e) {
+        console.warn('Erro ao buscar parcela por ID no Supabase:', e);
+      }
+    }
+    if (!parcelaRef) {
+      parcelaRef = await getFromIDB<ParcelaPagar>('parcelas_pagar', targetDespesaId) || null;
+    }
+
+    // Se ainda não achou e temos um parcelaIdHint
+    if (!parcelaRef && parcelaIdHint) {
+      if (isOnline) {
+        try {
+          const { data: pData } = await supabase.from('parcelas_pagar').select('*').eq('id', parcelaIdHint).maybeSingle();
+          if (pData) parcelaRef = pData;
+        } catch (e) {
+          console.warn('Erro ao buscar parcelaIdHint no Supabase:', e);
+        }
+      }
+      if (!parcelaRef) {
+        parcelaRef = await getFromIDB<ParcelaPagar>('parcelas_pagar', parcelaIdHint) || null;
+      }
+    }
+
+    if (parcelaRef && parcelaRef.despesa_id) {
+      targetDespesaId = parcelaRef.despesa_id;
+      if (isOnline) {
+        try {
+          const { data: dData } = await supabase.from('despesas').select('*').eq('id', targetDespesaId).maybeSingle();
+          if (dData) despesa = dData;
+        } catch (e) {
+          console.warn('Erro ao buscar despesa pai pelo despesa_id da parcela:', e);
+        }
+      }
+      if (!despesa) {
+        despesa = await getFromIDB<Despesa>('despesas', targetDespesaId) || null;
+      }
+    }
+  }
+
+  // 3. Carregar todas as parcelas dessa despesa
+  let parcelas: ParcelaPagar[] = [];
+  if (despesa) {
+    await saveToIDB('despesas', despesa);
+    if (isOnline) {
+      try {
+        const { data: pList, error: pErr } = await supabase
+          .from('parcelas_pagar')
+          .select('*')
+          .eq('despesa_id', despesa.id)
+          .order('numero_parcela', { ascending: true });
+        if (!pErr && pList && pList.length > 0) {
+          parcelas = pList;
+          for (const p of pList) {
+            await saveToIDB('parcelas_pagar', p);
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao buscar parcelas da despesa no Supabase:', e);
+      }
+    }
+
+    if (parcelas.length === 0) {
+      const allIDBParcelas = await getAllFromIDB<ParcelaPagar>('parcelas_pagar');
+      parcelas = allIDBParcelas
+        .filter(p => p.despesa_id === despesa!.id)
+        .sort((a, b) => (a.numero_parcela || 0) - (b.numero_parcela || 0));
+    }
+  }
+
+  return { despesa, parcelas };
 };
 
 export const getDespesaById = async (isOnline: boolean, id: string): Promise<Despesa | null> => {
-  if (isOnline) {
-    try {
-      const { data, error } = await supabase.from('despesas').select('*').eq('id', id).maybeSingle();
-      if (!error && data) return data;
-    } catch (e) {
-      console.warn('Supabase get despesa error:', e);
-    }
-  }
-  return await getFromIDB<Despesa>('despesas', id) || null;
+  const { despesa } = await getDespesaCompleta(isOnline, id);
+  return despesa;
 };
 
 

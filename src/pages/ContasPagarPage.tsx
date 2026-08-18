@@ -1,47 +1,52 @@
-import { useColumnVisibility } from '../hooks/useColumnVisibility';
 import React, { useState, useEffect, useMemo } from 'react';
-import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
-import { useAppContext } from '../context/AppContext';
-import { getContasBancariasAtivas } from '../services/contasBancariasService';
-import { ContaBancaria } from '../types/contasBancarias';
-import { useConfirm } from '../context/ConfirmContext';
-import {
-  getParcelasPagar,
-  ParcelaPagar,
-  registrarPagamento,
-  excluirParcelaPagar,
-  excluirDespesa,
-  getDespesaById,
-  Despesa
-} from '../services/financeiroService';
-import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
-import { LoteCaixa } from '../types/caixas';
-import { canDelete } from '../utils/permissions';
-import {
-  Search,
-  Plus,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
+import { useNavigate, useLocation } from 'react-router-dom';
+import { 
+  Building2, 
+  Search, 
+  Filter, 
+  DollarSign, 
+  Calendar, 
+  Eye, 
+  Pencil, 
+  Trash2, 
+  CheckCircle2, 
+  AlertCircle, 
+  Clock, 
+  Printer, 
+  Plus, 
+  CreditCard, 
   X,
-  Eye,
-  Pencil,
-  Trash2,
-  DollarSign,
-  FileText,
-  Building2,
-  CreditCard,
-  User,
-  Calendar,
-  AlertTriangle,
   Lock,
+  ChevronUp,
+  ChevronDown,
+  FileText,
+  User,
+  AlertTriangle,
   Wallet,
   ArrowRight,
   ShieldAlert
-, ChevronUp, ChevronDown, Printer } from "lucide-react";
-import { format, isPast, isToday } from 'date-fns';
-import { useNavigate, useLocation } from 'react-router-dom';
+} from 'lucide-react';
+import { useAppContext } from '../context/AppContext';
+import { 
+  getParcelasPagar, 
+  getDespesaById,
+  registrarPagamento, 
+  excluirParcelaPagar, 
+  excluirDespesa, 
+  ParcelaPagar, 
+  Despesa 
+} from '../services/financeiroService';
+import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
+import { LoteCaixa } from '../types/caixas';
+import { getContasBancariasAtivas } from '../services/contasBancariasService';
+import { ContaBancaria } from '../types/contasBancarias';
 import toast from 'react-hot-toast';
+import { format } from 'date-fns';
+import { parseLocalDate, formatLocalDate, formatLocalDateTime, isDateBeforeToday, isDateToday } from '../utils/dateUtils';
+import { canDelete } from '../utils/permissions';
+import { useConfirm } from '../context/ConfirmContext';
+import { useColumnVisibility } from '../hooks/useColumnVisibility';
+import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
 
 export const ContasPagarPage: React.FC = () => {
   const navigate = useNavigate();
@@ -134,9 +139,24 @@ export const ContasPagarPage: React.FC = () => {
       
       let matchesData = true;
       if (dataInicial || dataFinal) {
-        const pDate = new Date(p.data_vencimento);
-        if (dataInicial && new Date(dataInicial) > pDate) matchesData = false;
-        if (dataFinal && new Date(dataFinal) < pDate) matchesData = false;
+        const pDate = parseLocalDate(p.data_vencimento);
+        if (pDate) {
+          pDate.setHours(0, 0, 0, 0);
+          if (dataInicial) {
+            const dInit = parseLocalDate(dataInicial);
+            if (dInit) {
+              dInit.setHours(0, 0, 0, 0);
+              if (dInit > pDate) matchesData = false;
+            }
+          }
+          if (dataFinal) {
+            const dEnd = parseLocalDate(dataFinal);
+            if (dEnd) {
+              dEnd.setHours(23, 59, 59, 999);
+              if (dEnd < pDate) matchesData = false;
+            }
+          }
+        }
       }
       
       return matchesSearch && matchesStatus && matchesForma && matchesData;
@@ -152,8 +172,8 @@ export const ContasPagarPage: React.FC = () => {
         return sortDirection === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
       }
       if (sortField === 'vencimento') {
-        const dateA = new Date(a.data_vencimento).getTime();
-        const dateB = new Date(b.data_vencimento).getTime();
+        const dateA = parseLocalDate(a.data_vencimento)?.getTime() || 0;
+        const dateB = parseLocalDate(b.data_vencimento)?.getTime() || 0;
         return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
       }
       return 0;
@@ -164,9 +184,9 @@ export const ContasPagarPage: React.FC = () => {
     return parcelas.reduce((acc, p) => {
       if (p.status === 'pendente') {
         acc.aPagar += p.valor;
-        if (isPast(new Date(p.data_vencimento)) && !isToday(new Date(p.data_vencimento))) {
+        if (isDateBeforeToday(p.data_vencimento)) {
           acc.vencidas += p.valor;
-        } else if (isToday(new Date(p.data_vencimento))) {
+        } else if (isDateToday(p.data_vencimento)) {
           acc.venceHoje += p.valor;
         }
       } else if (p.status === 'pago') {
@@ -316,7 +336,7 @@ export const ContasPagarPage: React.FC = () => {
     if (status === 'pago') return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-500">Pago</span>;
     if (status === 'cancelado') return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-text-subtle">Cancelado</span>;
 
-    if (isPast(new Date(vencimento)) && !isToday(new Date(vencimento))) {
+    if (isDateBeforeToday(vencimento)) {
       return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-rose-500/10 text-rose-500">Vencido</span>;
     }
     return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500">Pendente</span>;
@@ -550,7 +570,7 @@ export const ContasPagarPage: React.FC = () => {
                       <div className="text-sm text-text-subtle">Parc. {parcela.numero_parcela}/{parcela.total_parcelas || 1}</div>
                     </td>
                     <td className="px-6 py-4">
-                      {parcela.data_vencimento ? format(new Date(parcela.data_vencimento), "dd/MM/yyyy") : '-'}
+                      {formatLocalDate(parcela.data_vencimento)}
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-text-base">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela.valor)}
@@ -958,12 +978,10 @@ export const ContasPagarPage: React.FC = () => {
                     <span className="text-text-subtle block">Tipo de Credor</span>
                     <span className="font-semibold text-text-base capitalize">{(parcelaDetalhes.tipo_credor || 'fornecedor').replace('_', ' ')}</span>
                   </div>
-                  {despesaPai?.centro_custo && (
-                    <div>
-                      <span className="text-text-subtle block">Centro de Custo</span>
-                      <span className="font-semibold text-indigo-400">{despesaPai.centro_custo}</span>
-                    </div>
-                  )}
+                  <div>
+                    <span className="text-text-subtle block">Centro de Custo</span>
+                    <span className="font-semibold text-indigo-400">{despesaPai?.centro_custo || 'Não informado'}</span>
+                  </div>
                 </div>
               </div>
 
@@ -995,7 +1013,7 @@ export const ContasPagarPage: React.FC = () => {
                   <div>
                     <span className="text-text-subtle block">Data de Vencimento</span>
                     <span className="font-semibold text-text-base">
-                      {parcelaDetalhes.data_vencimento ? format(new Date(parcelaDetalhes.data_vencimento), "dd/MM/yyyy") : '-'}
+                      {formatLocalDate(parcelaDetalhes.data_vencimento)}
                     </span>
                   </div>
                   <div>
@@ -1032,7 +1050,7 @@ export const ContasPagarPage: React.FC = () => {
                     <div>
                       <span className="text-text-subtle block">Data do Pagamento</span>
                       <span className="font-semibold text-text-base">
-                        {parcelaDetalhes.data_pagamento ? format(new Date(parcelaDetalhes.data_pagamento), "dd/MM/yyyy HH:mm") : '-'}
+                        {formatLocalDateTime(parcelaDetalhes.data_pagamento)}
                       </span>
                     </div>
                     <div>
@@ -1170,7 +1188,7 @@ export const ContasPagarPage: React.FC = () => {
                     <p className="font-medium text-lg">{parcelaDetalhes.descricao || 'Despesa'}</p>
                     <p className="text-gray-700">Parcela: {parcelaDetalhes.numero_parcela} de {parcelaDetalhes.total_parcelas || 1}</p>
                     <p className="text-gray-700">Forma Efetiva: {parcelaDetalhes.forma_pagamento_efetivo || 'Não informado'}</p>
-                    <p className="text-gray-700">Data Efetiva: {parcelaDetalhes.data_pagamento ? format(new Date(parcelaDetalhes.data_pagamento), "dd/MM/yyyy") : 'Não informado'}</p>
+                    <p className="text-gray-700">Data Efetiva: {formatLocalDate(parcelaDetalhes.data_pagamento, 'dd/MM/yyyy', 'Não informado')}</p>
                   </div>
                 </div>
               </div>

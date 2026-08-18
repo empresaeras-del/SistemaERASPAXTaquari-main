@@ -4,6 +4,7 @@ import { Atendimento } from '../../types/atendimentos';
 import { getAtendimentos } from '../../services/atendimentosService';
 import { useAppContext } from '../../context/AppContext';
 import { Activity, Search, MapPin } from 'lucide-react';
+import { formatLocalDate } from '../../utils/dateUtils';
 
 interface AssociadoAtendimentosTabProps {
   associado: Associado;
@@ -86,7 +87,7 @@ export const AssociadoAtendimentosTab: React.FC<AssociadoAtendimentosTabProps> =
                       {atd.status.replace('_', ' ')}
                     </span>
                   </div>
-                  <p className="text-xs text-text-subtle mb-3">Óbito: {atd.data_obito ? new Date(atd.data_obito).toLocaleDateString() : 'Não informado'}</p>
+                  <p className="text-xs text-text-subtle mb-3">Óbito: {formatLocalDate(atd.data_obito, 'dd/MM/yyyy', 'Não informado')}</p>
                   
                   <div className="flex items-center gap-4 text-sm text-text-subtle">
                     <div className="flex items-center gap-1.5">

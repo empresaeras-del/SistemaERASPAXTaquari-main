@@ -9,6 +9,7 @@ import { getEmpresaById } from "../services/empresasService";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import { Atendimento } from '../types/atendimentos';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { registrarAuditoria } from '../lib/supabase';
@@ -288,7 +289,7 @@ export const AtendimentosPage: React.FC = () => {
     const empresa = await getEmpresaById(tenantId, state.isOnline);
     const columns = ["Data", "Falecido", "Tipo", "Status", "Valor Extra"];
     const data = filtered.map(a => [
-      new Date(a.created_at || new Date()).toLocaleDateString(),
+      formatLocalDate(a.created_at || new Date()),
       a.falecido_nome,
       a.tipo_cliente.toUpperCase(),
       a.status.toUpperCase(),
@@ -508,7 +509,7 @@ export const AtendimentosPage: React.FC = () => {
                   `}>
                     {a.status.replace('_', ' ')}
                   </span>
-                  <span className="text-xs font-semibold text-text-subtle">{new Date(a.created_at || '').toLocaleDateString()}</span>
+                  <span className="text-xs font-semibold text-text-subtle">{formatLocalDate(a.created_at || '')}</span>
                 </div>
                 
                 <h3 className="text-lg font-bold text-text-base mb-1 line-clamp-1">{a.falecido_nome}</h3>
@@ -521,7 +522,7 @@ export const AtendimentosPage: React.FC = () => {
                    </div>
                    <div className="flex justify-between text-xs">
                      <span className="text-text-subtle font-medium">Data Óbito</span>
-                     <span className="text-text-base font-semibold truncate max-w-[120px]">{a.data_obito ? new Date(a.data_obito).toLocaleDateString() : '-'}</span>
+                     <span className="text-text-base font-semibold truncate max-w-[120px]">{formatLocalDate(a.data_obito)}</span>
                    </div>
                 </div>
                 

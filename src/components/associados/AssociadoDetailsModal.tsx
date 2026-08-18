@@ -4,6 +4,7 @@ import { Associado } from '../../services/associadosService';
 import { getEmpresaById } from '../../services/empresasService';
 import { useAppContext } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
+import { formatLocalDate } from '../../utils/dateUtils';
 
 interface Props {
   associado: Associado;
@@ -71,10 +72,10 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
             <p><strong>Nome:</strong> ${associado.nome}</p>
             <p><strong>CPF:</strong> ${associado.cpf}</p>
             <p><strong>RG:</strong> ${associado.rg || 'Não informado'}</p>
-            <p><strong>Data de Nascimento:</strong> ${associado.data_nascimento ? new Date(associado.data_nascimento).toLocaleDateString('pt-BR') : 'Não informada'}</p>
+            <p><strong>Data de Nascimento:</strong> ${formatLocalDate(associado.data_nascimento, 'dd/MM/yyyy', 'Não informada')}</p>
             <p><strong>Sexo:</strong> ${associado.sexo || 'Não informado'}</p>
             <p><strong>Status:</strong> ${associado.status.toUpperCase()}</p>
-            <p><strong>Data de Adesão:</strong> ${associado.data_adesao ? new Date(associado.data_adesao).toLocaleDateString('pt-BR') : 'Não informada'}</p>
+            <p><strong>Data de Adesão:</strong> ${formatLocalDate(associado.data_adesao, 'dd/MM/yyyy', 'Não informada')}</p>
           </div>
 
           <h2>Contato</h2>
@@ -123,7 +124,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                     <td>${dep.nome}</td>
                     <td>${dep.parentesco || ''}</td>
                     <td>${dep.cpf || ''}</td>
-                    <td>${dep.data_nascimento ? new Date(dep.data_nascimento).toLocaleDateString('pt-BR') : ''}</td>
+                    <td>${formatLocalDate(dep.data_nascimento, 'dd/MM/yyyy', '')}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -238,7 +239,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                 </div>
                 <div>
                   <p className="text-[10px] text-text-subtle uppercase">Data Nasc.</p>
-                  <p className="font-semibold text-text-base">{formatDate(associado.data_nascimento)}</p>
+                  <p className="font-semibold text-text-base">{formatLocalDate(associado.data_nascimento)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-text-subtle uppercase">Sexo</p>
@@ -246,7 +247,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                 </div>
                 <div>
                   <p className="text-[10px] text-text-subtle uppercase">Adesão</p>
-                  <p className="font-semibold text-text-base">{formatDate(associado.data_adesao)}</p>
+                  <p className="font-semibold text-text-base">{formatLocalDate(associado.data_adesao)}</p>
                 </div>
               </div>
 
@@ -345,7 +346,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                     {dep.data_nascimento && (
                       <div className="text-right">
                          <p className="text-[10px] text-text-subtle uppercase">Nascimento</p>
-                         <p className="text-xs font-medium text-text-base">{formatDate(dep.data_nascimento)}</p>
+                         <p className="text-xs font-medium text-text-base">{formatLocalDate(dep.data_nascimento)}</p>
                       </div>
                     )}
                   </div>

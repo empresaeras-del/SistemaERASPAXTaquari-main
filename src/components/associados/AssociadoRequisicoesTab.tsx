@@ -6,6 +6,7 @@ import { getRequisicoes, gerarPDFGuiaRequisicao } from '../../services/requisico
 import { getEmpresaById } from '../../services/empresasService';
 import { useAppContext } from '../../context/AppContext';
 import { FileText, Search, ClipboardList, Filter, Printer } from 'lucide-react';
+import { formatLocalDate } from '../../utils/dateUtils';
 
 interface AssociadoRequisicoesTabProps {
   associado: Associado;
@@ -97,7 +98,7 @@ export const AssociadoRequisicoesTab: React.FC<AssociadoRequisicoesTabProps> = (
                       {req.status}
                     </span>
                   </div>
-                  <p className="text-xs text-text-subtle mb-3">Emitida em: {new Date(req.data_emissao).toLocaleDateString()}</p>
+                  <p className="text-xs text-text-subtle mb-3">Emitida em: {formatLocalDate(req.data_emissao)}</p>
                   
                   <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
                     <div>

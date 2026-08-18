@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Atendimento } from '../types/atendimentos';
 import { Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { formatLocalDate } from '../utils/dateUtils';
 
 interface AtendimentosKanbanProps {
   atendimentos: Atendimento[];
@@ -77,7 +78,7 @@ export const AtendimentosKanban: React.FC<AtendimentosKanbanProps> = ({ atendime
                   </div>
                   <div className="text-xs text-text-subtle mb-3 flex flex-col gap-1">
                     <div>Tipo: <span className="capitalize text-text-base font-medium">{item.tipo_cliente}</span></div>
-                    <div>Data: {new Date(item.created_at || '').toLocaleDateString()}</div>
+                    <div>Data: {formatLocalDate(item.created_at || '')}</div>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-border-default/50">
                     <span className="text-xs font-semibold text-text-base">

@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertCircle, Calendar, ArrowRight } from 'lucide-react';
 import { useContasAPagarAlert } from '../hooks/useContasAPagarAlert';
-import { format } from 'date-fns';
+import { formatLocalDate } from '../utils/dateUtils';
 import { useNavigate } from 'react-router-dom';
 
 const formatCurrency = (value: number) => {
@@ -44,7 +44,7 @@ export const ContasAPagarAlert: React.FC = () => {
             <div className="flex justify-between items-end mt-auto">
               <div className="flex items-center gap-2 text-xs text-rose-500 font-bold bg-rose-500/10 px-2.5 py-1.5 rounded-lg">
                 <Calendar className="w-4 h-4" />
-                {conta.data_vencimento ? format(new Date(conta.data_vencimento), 'dd/MM/yyyy') : 'Sem data'}
+                {formatLocalDate(conta.data_vencimento, 'dd/MM/yyyy', 'Sem data')}
               </div>
               <span className="font-black text-text-base text-lg">
                 {formatCurrency(conta.valor)}

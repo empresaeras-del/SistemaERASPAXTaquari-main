@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import toast from 'react-hot-toast';
 import { getRemessas } from '../services/faturamentoService';
 import { salvarReceita, Receita, ParcelaReceber } from '../services/financeiroService';
@@ -647,7 +648,7 @@ export const RequisicoesPage: React.FC = () => {
                     <td className="px-6 py-3.5 whitespace-nowrap">
                       <div className="font-bold text-text-base">{req.codigo_requisicao}</div>
                       <div className="text-xs text-text-subtle">
-                        {format(new Date(req.data_emissao), 'dd/MM/yyyy HH:mm')}
+                        {formatLocalDateTime(req.data_emissao)}
                       </div>
                     </td>
 
@@ -1204,7 +1205,7 @@ export const RequisicoesPage: React.FC = () => {
               <div>
                 <h3 className="font-bold text-lg text-text-base">Guia {modalDetalhes.codigo_requisicao}</h3>
                 <p className="text-xs text-text-subtle">
-                  Emitida em {format(new Date(modalDetalhes.data_emissao), 'dd/MM/yyyy HH:mm')}
+                  Emitida em {formatLocalDateTime(modalDetalhes.data_emissao)}
                 </p>
               </div>
               <button onClick={() => setModalDetalhes(null)} className="text-text-subtle hover:text-text-base">

@@ -40,7 +40,8 @@ import {
   ArrowRight,
   ShieldAlert
 , ChevronUp, ChevronDown, Printer, MessageCircle } from "lucide-react";
-import { format, isPast, isToday } from 'date-fns';
+import { format } from 'date-fns';
+import { parseLocalDate, formatLocalDate, formatLocalDateTime, isDateBeforeToday, isDateToday } from '../utils/dateUtils';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { sendWhatsAppMessage, generateCobrançaTemplate } from '../utils/whatsapp';
@@ -51,14 +52,11 @@ export const ContasReceberPage: React.FC = () => {
   const { state } = useAppContext();
   const { confirm } = useConfirm();
 
-
-  
-
   const handleWhatsAppCobrança = async (parcela: ParcelaReceber) => {
     const msg = await generateCobrançaTemplate(
       parcela.devedor_nome || 'Cliente', 
       parcela.valor, 
-      format(new Date(parcela.data_vencimento), 'dd/MM/yyyy')
+      formatLocalDate(parcela.data_vencimento)
     );
     const phonePrompt = window.prompt("Confirme ou digite o WhatsApp do cliente (com DDD):", "");
     if (phonePrompt) {
@@ -152,9 +150,24 @@ export const ContasReceberPage: React.FC = () => {
       
       let matchesData = true;
       if (dataInicial || dataFinal) {
-        const pDate = new Date(p.data_vencimento);
-        if (dataInicial && new Date(dataInicial) > pDate) matchesData = false;
-        if (dataFinal && new Date(dataFinal) < pDate) matchesData = false;
+        const pDate = parseLocalDate(p.data_vencimento);
+        if (pDate) {
+          pDate.setHours(0, 0, 0, 0);
+          if (dataInicial) {
+            const dInit = parseLocalDate(dataInicial);
+            if (dInit) {
+              dInit.setHours(0, 0, 0, 0);
+              if (dInit > pDate) matchesData = false;
+            }
+          }
+          if (dataFinal) {
+            const dEnd = parseLocalDate(dataFinal);
+            if (dEnd) {
+              dEnd.setHours(23, 59, 59, 999);
+              if (dEnd < pDate) matchesData = false;
+            }
+          }
+        }
       }
       
       return matchesSearch && matchesStatus && matchesForma && matchesData;
@@ -170,8 +183,8 @@ export const ContasReceberPage: React.FC = () => {
         return sortDirection === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
       }
       if (sortField === 'vencimento') {
-        const dateA = new Date(a.data_vencimento).getTime();
-        const dateB = new Date(b.data_vencimento).getTime();
+        const dateA = parseLocalDate(a.data_vencimento)?.getTime() || 0;
+        const dateB = parseLocalDate(b.data_vencimento)?.getTime() || 0;
         return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
       }
       return 0;
@@ -182,9 +195,9 @@ export const ContasReceberPage: React.FC = () => {
     return parcelas.reduce((acc, p) => {
       if (p.status === 'pendente') {
         acc.aReceber += p.valor;
-        if (isPast(new Date(p.data_vencimento)) && !isToday(new Date(p.data_vencimento))) {
+        if (isDateBeforeToday(p.data_vencimento)) {
           acc.vencidas += p.valor;
-        } else if (isToday(new Date(p.data_vencimento))) {
+        } else if (isDateToday(p.data_vencimento)) {
           acc.venceHoje += p.valor;
         }
       } else if (p.status === 'recebido') {
@@ -334,7 +347,7 @@ export const ContasReceberPage: React.FC = () => {
     if (status === 'recebido') return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-500">Recebido</span>;
     if (status === 'cancelado') return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-text-subtle">Cancelado</span>;
 
-    if (isPast(new Date(vencimento)) && !isToday(new Date(vencimento))) {
+    if (isDateBeforeToday(vencimento)) {
       return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-rose-500/10 text-rose-500">Vencido</span>;
     }
     return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500">Pendente</span>;
@@ -569,7 +582,7 @@ export const ContasReceberPage: React.FC = () => {
                       <div className="text-sm text-text-subtle">Parc. {parcela.numero_parcela}/{parcela.total_parcelas || 1}</div>
                     </td>
                     <td className="px-6 py-4">
-                      {parcela.data_vencimento ? format(new Date(parcela.data_vencimento), "dd/MM/yyyy") : '-'}
+                      {formatLocalDate(parcela.data_vencimento)}
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-text-base">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela.valor)}
@@ -1025,7 +1038,7 @@ export const ContasReceberPage: React.FC = () => {
                   <div>
                     <span className="text-text-subtle block">Data de Vencimento</span>
                     <span className="font-semibold text-text-base">
-                      {parcelaDetalhes.data_vencimento ? format(new Date(parcelaDetalhes.data_vencimento), "dd/MM/yyyy") : '-'}
+                      {formatLocalDate(parcelaDetalhes.data_vencimento)}
                     </span>
                   </div>
                   <div>
@@ -1044,7 +1057,7 @@ export const ContasReceberPage: React.FC = () => {
                     <div>
                       <span className="text-text-subtle block">Data de Emissão</span>
                       <span className="font-semibold text-text-base">
-                        {format(new Date(receitaPai.data_emissao), "dd/MM/yyyy")}
+                        {formatLocalDate(receitaPai.data_emissao)}
                       </span>
                     </div>
                   )}
@@ -1062,7 +1075,7 @@ export const ContasReceberPage: React.FC = () => {
                     <div>
                       <span className="text-text-subtle block">Data do Recebimento</span>
                       <span className="font-semibold text-text-base">
-                        {parcelaDetalhes.data_recebimento ? format(new Date(parcelaDetalhes.data_recebimento), "dd/MM/yyyy HH:mm") : '-'}
+                        {formatLocalDateTime(parcelaDetalhes.data_recebimento)}
                       </span>
                     </div>
                     <div>
@@ -1210,7 +1223,7 @@ export const ContasReceberPage: React.FC = () => {
                 </div>
                 <div className="flex justify-between text-sm border-b border-gray-300 pb-2">
                   <span className="text-gray-600 font-bold uppercase">Data do Recebimento:</span>
-                  <span className="font-medium">{parcelaDetalhes.data_recebimento ? format(new Date(parcelaDetalhes.data_recebimento), "dd/MM/yyyy HH:mm") : '-'}</span>
+                  <span className="font-medium">{formatLocalDateTime(parcelaDetalhes.data_recebimento)}</span>
                 </div>
                 <div className="flex justify-between text-sm border-b border-gray-300 pb-2">
                   <span className="text-gray-600 font-bold uppercase">Recebido por:</span>

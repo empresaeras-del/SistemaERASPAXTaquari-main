@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getParcelasPagar, ParcelaPagar } from '../services/financeiroService';
 import { useAppContext } from '../context/AppContext';
+import { parseLocalDate } from '../utils/dateUtils';
 
 export function useContasAPagarAlert(diasAviso = 5) {
   const { state } = useAppContext();
@@ -19,18 +20,23 @@ export function useContasAPagarAlert(diasAviso = 5) {
         
         const limite = new Date(hoje);
         limite.setDate(limite.getDate() + diasAviso);
+        limite.setHours(23, 59, 59, 999);
         
         const parcelasProximas = parcelas.filter(p => {
           if (p.status === 'pago' || p.status === 'cancelado') return false;
           if (!p.data_vencimento) return false;
-          const vencimento = new Date(p.data_vencimento);
-          // Set time to 0 for fair comparison
-          vencimento.setHours(0,0,0,0);
+          const vencimento = parseLocalDate(p.data_vencimento);
+          if (!vencimento) return false;
+          vencimento.setHours(0, 0, 0, 0);
           return vencimento <= limite;
         });
 
         // Sort by data_vencimento (oldest first)
-        parcelasProximas.sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime());
+        parcelasProximas.sort((a, b) => {
+          const dateA = parseLocalDate(a.data_vencimento)?.getTime() || 0;
+          const dateB = parseLocalDate(b.data_vencimento)?.getTime() || 0;
+          return dateA - dateB;
+        });
 
         setAlertas(parcelasProximas);
       } catch (error) {

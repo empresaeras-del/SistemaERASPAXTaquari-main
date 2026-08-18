@@ -38,6 +38,7 @@ import {
   ChevronRight as ChevronRightIcon
 , RefreshCw, Pencil as PencilIcon } from 'lucide-react';
 import { format, addDays } from 'date-fns';
+import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import toast from 'react-hot-toast';
 
 export const FaturamentosPage: React.FC = () => {
@@ -531,7 +532,7 @@ export const FaturamentosPage: React.FC = () => {
                     <td className="px-6 py-3.5 whitespace-nowrap">
                       <div className="font-bold text-text-base">{rem.codigo_remessa}</div>
                       <div className="text-xs text-text-subtle">
-                        {format(new Date(rem.data_criacao), 'dd/MM/yyyy HH:mm')}
+                        {formatLocalDateTime(rem.data_criacao)}
                       </div>
                     </td>
 
@@ -820,7 +821,7 @@ export const FaturamentosPage: React.FC = () => {
                               </td>
                               <td className="p-3 font-bold text-text-base whitespace-nowrap">{req.codigo_requisicao}</td>
                               <td className="p-3 text-text-subtle whitespace-nowrap">
-                                {format(new Date(req.data_emissao), 'dd/MM/yyyy')}
+                                {formatLocalDate(req.data_emissao)}
                               </td>
                               <td className="p-3 text-text-base">{req.paciente_nome}</td>
                               <td className="p-3 text-text-subtle">
@@ -1054,7 +1055,7 @@ export const FaturamentosPage: React.FC = () => {
               <div>
                 <h3 className="font-bold text-lg text-text-base">Remessa {modalDetalhes.codigo_remessa}</h3>
                 <p className="text-xs text-text-subtle">
-                  Criada em {format(new Date(modalDetalhes.data_criacao), 'dd/MM/yyyy HH:mm')}
+                  Criada em {formatLocalDateTime(modalDetalhes.data_criacao)}
                 </p>
               </div>
               <button onClick={() => setModalDetalhes(null)} className="text-text-subtle hover:text-text-base">
