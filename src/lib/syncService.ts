@@ -140,8 +140,8 @@ export const processSyncQueue = async (isOnline: boolean) => {
           }
         } else if (task.action === 'delete') {
           const targetId = task.data?.id || task.data;
-          if (targetTable === 'associados') {
-            try {
+          try {
+            if (targetTable === 'associados') {
               // a) Receitas e Parcelas a Receber
               const { data: recs } = await supabase.from('receitas').select('id').eq('associado_id', targetId);
               if (recs && recs.length > 0) {
@@ -172,15 +172,61 @@ export const processSyncQueue = async (isOnline: boolean) => {
               if (delErr) {
                 await supabase.from('associados').update({ deleted_at: new Date().toISOString(), status: 'inativo' }).eq('id', targetId);
               }
-            } catch (cascadeErr) {
-              console.warn('Erro ao processar exclusão em cascata na fila de sync:', cascadeErr);
+            } else if (targetTable === 'planos_pax') {
+              await supabase.from('planos_pax_coberturas').delete().eq('plano_id', targetId);
+              await supabase.from('planos_pax_faixas').delete().eq('plano_id', targetId);
+              await supabase.from('credenciados_planos').delete().eq('plano_id', targetId);
+              const { error: delErr } = await supabase.from('planos_pax').delete().eq('id', targetId);
+              if (delErr) {
+                await supabase.from('planos_pax').update({ deleted_at: new Date().toISOString(), ativo: false }).eq('id', targetId);
+              }
+            } else if (targetTable === 'itens_funerarios') {
+              await supabase.from('planos_pax_coberturas').delete().eq('item_id', targetId);
+              const { error: delErr } = await supabase.from('itens_funerarios').delete().eq('id', targetId);
+              if (delErr) {
+                await supabase.from('itens_funerarios').update({ deleted_at: new Date().toISOString(), ativo: false }).eq('id', targetId);
+              }
+            } else if (targetTable === 'credenciados') {
+              await supabase.from('credenciados_planos').delete().eq('credenciado_id', targetId);
+              await supabase.from('credenciados_procedimentos').delete().eq('credenciado_id', targetId);
+              const { error: delErr } = await supabase.from('credenciados').delete().eq('id', targetId);
+              if (delErr) {
+                await supabase.from('credenciados').update({ deleted_at: new Date().toISOString(), status: 'descredenciado' }).eq('id', targetId);
+              }
+            } else if (targetTable === 'fornecedores') {
+              const { data: despesas } = await supabase.from('despesas').select('id').eq('fornecedor_id', targetId);
+              if (despesas && despesas.length > 0) {
+                await supabase.from('parcelas_pagar').delete().in('despesa_id', despesas.map(d => d.id));
+                await supabase.from('despesas').delete().eq('fornecedor_id', targetId);
+              }
+              const { error: delErr } = await supabase.from('fornecedores').delete().eq('id', targetId);
+              if (delErr) {
+                await supabase.from('fornecedores').update({ deleted_at: new Date().toISOString(), status: 'inativo' }).eq('id', targetId);
+              }
+            } else if (targetTable === 'atendimentos') {
+              await supabase.from('atendimento_itens').delete().eq('atendimento_id', targetId);
+              await supabase.from('atendimentos').delete().eq('id', targetId);
+            } else if (targetTable === 'requisicoes') {
+              await supabase.from('requisicao_itens').delete().eq('requisicao_id', targetId);
+              await supabase.from('requisicoes').delete().eq('id', targetId);
+            } else if (targetTable === 'receitas') {
+              await supabase.from('parcelas_receber').delete().eq('receita_id', targetId);
+              await supabase.from('receitas').delete().eq('id', targetId);
+            } else if (targetTable === 'despesas') {
+              await supabase.from('parcelas_pagar').delete().eq('despesa_id', targetId);
+              await supabase.from('despesas').delete().eq('id', targetId);
+            } else if (targetTable === 'lotes_caixa') {
+              await supabase.from('movimentacoes_caixa').delete().eq('lote_id', targetId);
+              await supabase.from('lotes_caixa').delete().eq('id', targetId);
+            } else {
+              const { error } = await supabase.from(targetTable).update({ deleted_at: new Date().toISOString() }).eq('id', targetId);
+              if (error) {
+                const hardDelete = await supabase.from(targetTable).delete().eq('id', targetId);
+                if (hardDelete.error) throw hardDelete.error;
+              }
             }
-          } else {
-            const { error } = await supabase.from(targetTable).update({ deleted_at: new Date().toISOString() }).eq('id', targetId);
-            if (error) {
-              const hardDelete = await supabase.from(targetTable).delete().eq('id', targetId);
-              if (hardDelete.error) throw hardDelete.error;
-            }
+          } catch (cascadeErr) {
+            console.warn(`Erro ao processar exclusão em cascata na fila de sync (${targetTable}):`, cascadeErr);
           }
         }
 

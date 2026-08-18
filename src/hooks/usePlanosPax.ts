@@ -368,15 +368,28 @@ export function usePlanosPax() {
           throw new Error('Existem contratos ativos utilizando este plano. Não é possível excluir.');
         }
         
+        // 1. Exclui coberturas vinculadas
+        await supabase.from('planos_pax_coberturas').delete().eq('plano_id', id);
+        
+        // 2. Exclui faixas vinculadas
+        await supabase.from('planos_pax_faixas').delete().eq('plano_id', id);
+        
+        // 3. Exclui vínculos com credenciados
+        await supabase.from('credenciados_planos').delete().eq('plano_id', id);
+
+        // 4. Exclui o plano principal
         const { error } = await supabase.from('planos_pax').delete().eq('id', id);
-        if (error) throw error;
-        await registrarAuditoria('Excluir Plano', { id });
+        if (error) {
+          await supabase.from('planos_pax').update({ deleted_at: new Date().toISOString(), ativo: false }).eq('id', id);
+        }
+        await registrarAuditoria('Excluir Plano e Vínculos', { id });
       } catch (err: any) {
         if (err.message && err.message.includes('contratos ativos')) throw err;
-        console.warn('Falha no Supabase ao excluir, caindo para IDB', err);
+        console.warn('Falha no Supabase ao excluir plano, caindo para IDB', err);
       }
     }
     await deleteFromIDB('planos_pax', id);
+    await deleteFromIDB('planos', id);
     await carregarPlanos();
   };
 

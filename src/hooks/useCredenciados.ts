@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { generateUUID } from '../utils/uuid';
-import { supabase } from '../lib/supabase';
+import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { addToSyncQueue } from '../lib/syncService';
 import { useAppContext } from '../context/AppContext';
@@ -327,12 +327,49 @@ export function useCredenciados() {
     }
   };
 
+  const excluir = async (id: string): Promise<void> => {
+    try {
+      if (isOnline) {
+        try {
+          // 1. Exclui vínculos com planos
+          await supabase.from('credenciados_planos').delete().eq('credenciado_id', id);
+
+          // 2. Exclui vínculos com procedimentos
+          await supabase.from('credenciados_procedimentos').delete().eq('credenciado_id', id);
+
+          // 3. Exclui o credenciado
+          const { error: delErr } = await supabase.from('credenciados').delete().eq('id', id);
+          if (delErr) {
+            await supabase.from('credenciados').update({ deleted_at: new Date().toISOString(), status: 'descredenciado' }).eq('id', id);
+          }
+          await registrarAuditoria('Excluir Credenciado', { id });
+        } catch (e) {
+          console.warn('Erro ao excluir credenciado no Supabase:', e);
+        }
+      }
+      
+      // Limpeza IDB
+      await deleteFromIDB('credenciados', id);
+      const localCp = await getAllFromIDB<any>('credenciados_procedimentos');
+      for (const cp of localCp) {
+        if (cp.credenciado_id === id) {
+          await deleteFromIDB('credenciados_procedimentos', cp.id);
+        }
+      }
+
+      await carregarCredenciados();
+    } catch (err: any) {
+      throw new Error(err?.message || 'Erro ao excluir credenciado.');
+    }
+  };
+
   return {
     credenciados,
     loading,
     error,
     criar,
     editar,
+    excluir,
     vincularPlano,
     buscarPlanosVinculados,
     vincularProcedimento,

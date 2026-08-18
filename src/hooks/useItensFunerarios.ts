@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { generateUUID } from '../utils/uuid';
-import { supabase } from '../lib/supabase';
+import { supabase, registrarAuditoria } from '../lib/supabase';
 import { 
   ItemFunerario, 
   ItemFunerarioInsert, 
@@ -11,7 +11,7 @@ import {
   PlanoVinculadoItem
 } from '../types/itensFunerarios';
 import { PlanoPaxCobertura, PlanoPaxCompleto } from '../types/planosPax';
-import { getFromIDB, saveToIDB, getAllFromIDB } from '../lib/idb';
+import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
 
 export async function getCoberturasDoItem(itemId: string, isOnline: boolean): Promise<PlanoPaxCobertura[]> {
@@ -268,34 +268,36 @@ export function useItensFunerarios() {
     }
   };
 
-  const desativar = async (id: string) => {
+  const excluir = async (id: string) => {
     try {
-      try {
-        const { data: vinculos, error: checkErr } = await supabase
-          .from('planos_pax_coberturas')
-          .select('id')
-          .eq('item_id', id)
-          .limit(1);
+      if (isOnline) {
+        try {
+          // 1. Exclui coberturas de planos que apontam para este item
+          await supabase.from('planos_pax_coberturas').delete().eq('item_id', id);
 
-        if (checkErr && checkErr.code !== '42P01') throw checkErr;
-
-        if (vinculos && vinculos.length > 0) {
-          console.warn('Item vinculado a planos. Apenas desativando.');
+          // 2. Exclui o item funerário (ou soft delete se houver restrição)
+          const { error: delErr } = await supabase.from('itens_funerarios').delete().eq('id', id);
+          if (delErr) {
+            await supabase.from('itens_funerarios').update({ deleted_at: new Date().toISOString(), ativo: false }).eq('id', id);
+          }
+          await registrarAuditoria('Excluir Item Funerário', { id });
+        } catch (e) {
+          console.warn('Erro ao excluir item funerário no Supabase:', e);
         }
-      } catch (err) {
-        console.warn('Falha no Supabase ao verificar vínculos, prosseguindo', err);
       }
-      
-      await editar(id, { ativo: false });
+      await deleteFromIDB('itens_funerarios', id);
+      await carregarItens();
     } catch (err: unknown) {
       if (err instanceof Error) throw new Error(err.message);
-      throw new Error('Erro ao desativar item funerário.');
+      throw new Error('Erro ao excluir item funerário.');
     }
   };
 
   const reativar = async (id: string) => {
     await editar(id, { ativo: true });
   };
+
+  const desativar = excluir;
 
   const reordenar = async (ids: string[]) => {
     try {
@@ -348,6 +350,7 @@ export function useItensFunerarios() {
     setFiltros,
     criar,
     editar,
+    excluir,
     desativar,
     reativar,
     reordenar,

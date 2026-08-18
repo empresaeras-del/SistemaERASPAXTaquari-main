@@ -68,3 +68,34 @@ export const saveAtendimento = async (atendimento: Atendimento, isOnline: boolea
   
   await saveToIDB(STORE_NAME, atendimento);
 };
+
+export const excluirAtendimento = async (id: string, isOnline: boolean): Promise<void> => {
+  // 1. Limpeza local no IndexedDB
+  await deleteFromIDB(STORE_NAME, id);
+  try {
+    const allItens = await getAllFromIDB<any>('atendimento_itens');
+    for (const item of (allItens || []).filter(i => i && i.atendimento_id === id)) {
+      await deleteFromIDB('atendimento_itens', item.id);
+    }
+  } catch (e) {}
+
+  // 2. Exclusão no Supabase ou enfileiramento
+  if (isOnline) {
+    try {
+      // a) Exclui itens do atendimento
+      await supabase.from('atendimento_itens').delete().eq('atendimento_id', id);
+
+      // b) Exclui o atendimento principal
+      const { error } = await supabase.from('atendimentos').delete().eq('id', id);
+      if (error) {
+        await supabase.from('atendimentos').update({ deleted_at: new Date().toISOString(), status: 'cancelado' }).eq('id', id);
+      }
+    } catch (err) {
+      console.warn('Erro ao excluir atendimento no Supabase:', err);
+    }
+  }
+
+  try {
+    await registrarAuditoria('Excluir Atendimento', { id });
+  } catch (e) {}
+};

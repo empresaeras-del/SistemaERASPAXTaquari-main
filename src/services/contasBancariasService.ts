@@ -1,6 +1,7 @@
 import { ContaBancaria } from '../types/contasBancarias';
-import { supabase } from '../lib/supabase';
+import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
+import { addToSyncQueue } from '../lib/syncService';
 
 const STORE_NAME = 'contas_bancarias';
 
@@ -74,13 +75,20 @@ export const salvarContaBancaria = async (isOnline: boolean, conta: ContaBancari
 };
 
 export const deletarContaBancaria = async (isOnline: boolean, id: string): Promise<void> => {
+  await deleteFromIDB(STORE_NAME, id);
   if (isOnline) {
     try {
       const { error } = await supabase.from('contas_bancarias').delete().eq('id', id);
       if (error) console.warn('Supabase delete conta_bancaria error:', error);
     } catch (e) {
       console.warn('Supabase delete error:', e);
+      await addToSyncQueue({ storeName: STORE_NAME, action: 'delete', data: { id } });
     }
+  } else {
+    await addToSyncQueue({ storeName: STORE_NAME, action: 'delete', data: { id } });
   }
-  await deleteFromIDB(STORE_NAME, id);
+
+  try {
+    await registrarAuditoria('Excluir Conta Bancária', { id });
+  } catch (e) {}
 };

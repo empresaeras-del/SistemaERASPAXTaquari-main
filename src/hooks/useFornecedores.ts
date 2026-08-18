@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { generateUUID } from '../utils/uuid';
-import { supabase } from '../lib/supabase';
+import { supabase, registrarAuditoria } from '../lib/supabase';
 import { 
   Fornecedor, 
   FornecedorInsert, 
@@ -315,12 +315,44 @@ export function useFornecedores() {
     try {
       if (isOnline) {
         try {
-          await supabase.from('fornecedores').delete().eq('id', id);
+          // 1. Busca e exclui parcelas a pagar e despesas vinculadas ao fornecedor
+          const { data: despesas } = await supabase
+            .from('despesas')
+            .select('id')
+            .eq('fornecedor_id', id);
+
+          if (despesas && despesas.length > 0) {
+            const despesaIds = despesas.map(d => d.id);
+            await supabase.from('parcelas_pagar').delete().in('despesa_id', despesaIds);
+            await supabase.from('despesas').delete().eq('fornecedor_id', id);
+          }
+
+          // 2. Exclui o fornecedor
+          const { error: delErr } = await supabase.from('fornecedores').delete().eq('id', id);
+          if (delErr) {
+            await supabase.from('fornecedores').update({ deleted_at: new Date().toISOString(), status: 'inativo' }).eq('id', id);
+          }
+          await registrarAuditoria('Excluir Fornecedor e Despesas Vinculadas', { id });
         } catch (e) {
           console.warn('Erro Supabase ao excluir fornecedor:', e);
         }
       }
+
+      // 3. Limpeza local no IDB
       await deleteFromIDB('fornecedores', id);
+      const localDespesas = await getAllFromIDB<any>('despesas');
+      for (const d of localDespesas) {
+        if (d.fornecedor_id === id) {
+          await deleteFromIDB('despesas', d.id);
+          const localParcelas = await getAllFromIDB<any>('parcelas_pagar');
+          for (const p of localParcelas) {
+            if (p.despesa_id === d.id) {
+              await deleteFromIDB('parcelas_pagar', p.id);
+            }
+          }
+        }
+      }
+
       await carregarFornecedores();
     } catch (err: any) {
       throw new Error(err.message || 'Erro ao excluir fornecedor.');

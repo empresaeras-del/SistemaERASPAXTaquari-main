@@ -571,3 +571,34 @@ export const reabrirLoteCaixa = async (
   
   return loteAtualizado;
 };
+
+export const excluirLoteCaixa = async (isOnline: boolean, loteId: string): Promise<void> => {
+  // 1. Limpeza no IDB
+  await deleteFromIDB('lotes_caixa', loteId);
+  try {
+    const localMovs = await getAllFromIDB<any>('movimentacoes_caixa');
+    for (const m of (localMovs || []).filter(m => m && m.lote_id === loteId)) {
+      await deleteFromIDB('movimentacoes_caixa', m.id);
+    }
+  } catch (e) {}
+
+  // 2. Exclusão no Supabase em cascata ou enfileiramento
+  if (isOnline) {
+    try {
+      await supabase.from('movimentacoes_caixa').delete().eq('lote_id', loteId);
+      const { error } = await supabase.from('lotes_caixa').delete().eq('id', loteId);
+      if (error) {
+        await supabase.from('lotes_caixa').update({ deleted_at: new Date().toISOString(), status: 'cancelado' }).eq('id', loteId);
+      }
+    } catch (e) {
+      console.warn('Erro ao excluir lote de caixa no Supabase:', e);
+      await addToSyncQueue({ storeName: 'lotes_caixa', action: 'delete', data: { id: loteId } });
+    }
+  } else {
+    await addToSyncQueue({ storeName: 'lotes_caixa', action: 'delete', data: { id: loteId } });
+  }
+
+  try {
+    await registrarAuditoria('Excluir Lote de Caixa e Movimentações', { id: loteId });
+  } catch (e) {}
+};

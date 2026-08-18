@@ -578,19 +578,29 @@ export const excluirParcelaReceber = async (isOnline: boolean, parcelaId: string
 };
 
 export const excluirReceita = async (isOnline: boolean, receitaId: string): Promise<void> => {
-  // Delete associated parcelas
+  // 1. Exclui receita e parcelas associadas no IDB
+  await deleteFromIDB('receitas', receitaId);
   const allParcelas = await getAllFromIDB<ParcelaReceber>('parcelas_receber');
   const relatedParcelas = allParcelas.filter(p => p.receita_id === receitaId);
   for (const p of relatedParcelas) {
-    await excluirParcelaReceber(isOnline, p.id);
+    await deleteFromIDB('parcelas_receber', p.id);
   }
 
+  // 2. Exclusão em cascata no Supabase
   if (isOnline) {
     try {
+      await supabase.from('parcelas_receber').delete().eq('receita_id', receitaId);
       const { error } = await supabase.from('receitas').delete().eq('id', receitaId);
-      if (error) console.warn('Supabase delete receita error:', error);
+      if (error) {
+        await supabase.from('receitas').update({ deleted_at: new Date().toISOString(), status: 'cancelado' }).eq('id', receitaId);
+      }
     } catch (e) {
-      console.warn('Supabase delete error:', e);
+      console.warn('Supabase delete receita error:', e);
+      await addToSyncQueue({
+        storeName: 'receitas',
+        action: 'delete',
+        data: { id: receitaId }
+      });
     }
   } else {
     await addToSyncQueue({
@@ -599,8 +609,7 @@ export const excluirReceita = async (isOnline: boolean, receitaId: string): Prom
       data: { id: receitaId }
     });
   }
-  await deleteFromIDB('receitas', receitaId);
-  await registrarAuditoria('Excluir Receita', { id: receitaId });
+  await registrarAuditoria('Excluir Receita e Parcelas', { id: receitaId });
 };
 
 export const excluirParcelaPagar = async (isOnline: boolean, parcelaId: string): Promise<void> => {
@@ -661,11 +670,11 @@ export const excluirDespesa = async (isOnline: boolean, despesaId: string): Prom
   // 1. Exclui do IDB imediatamente
   await deleteFromIDB('despesas', despesaId);
 
-  // 2. Exclui parcelas filhas
+  // 2. Exclui parcelas filhas no IDB
   const allParcelas = await getAllFromIDB<ParcelaPagar>('parcelas_pagar');
   const relatedParcelas = (allParcelas || []).filter(p => p && p.despesa_id === despesaId);
   for (const p of relatedParcelas) {
-    await excluirParcelaPagar(isOnline, p.id);
+    await deleteFromIDB('parcelas_pagar', p.id);
   }
 
   // 3. Desvincula de remessas
@@ -683,21 +692,20 @@ export const excluirDespesa = async (isOnline: boolean, despesaId: string): Prom
         } catch (e) {}
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Erro ao desvincular remessa na exclusão de parcela:', e);
+  }
 
-  // 4. Exclui do Supabase ou enfileira
+  // 4. Exclui do Supabase em cascata ou enfileira
   if (isOnline) {
     try {
+      await supabase.from('parcelas_pagar').delete().eq('despesa_id', despesaId);
       const { error } = await supabase.from('despesas').delete().eq('id', despesaId);
       if (error) {
-        console.warn('Supabase delete despesa error, enqueuing:', error);
-        await addToSyncQueue({
-          storeName: 'despesas',
-          action: 'delete',
-          data: { id: despesaId }
-        });
+        await supabase.from('despesas').update({ deleted_at: new Date().toISOString(), status: 'cancelado' }).eq('id', despesaId);
       }
     } catch (e) {
+      console.warn('Supabase delete despesa error, enqueuing:', e);
       await addToSyncQueue({
         storeName: 'despesas',
         action: 'delete',
@@ -713,7 +721,7 @@ export const excluirDespesa = async (isOnline: boolean, despesaId: string): Prom
   }
 
   try {
-    await registrarAuditoria('Excluir Despesa', { id: despesaId });
+    await registrarAuditoria('Excluir Despesa e Parcelas', { id: despesaId });
   } catch (e) {}
 };
 
