@@ -7,6 +7,7 @@ import { useAppContext } from '../context/AppContext';
 import { Building2, Plus, Search, Pencil, Power, PowerOff, ShieldCheck, ShieldAlert, ArrowRightLeft, Trash2, User, Users, CircleDollarSign, Check, Clock, MapPin, LayoutGrid, List, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../context/ConfirmContext';
+import { systemAlert } from '../utils/systemAlert';
 
 const PlanoCard = ({ plano, handleOpenForm, handleToggleStatus, handleDelete }: { plano: any, handleOpenForm: any, handleToggleStatus: any, handleDelete: any }) => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -194,7 +195,11 @@ export const PlanosPaxPage: React.FC = () => {
 
   const handleDelete = async (plano: PlanoPaxCompleto) => {
     if (!canDelete(state.user)) {
-      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+      systemAlert(
+        'Permissão Negada',
+        'Somente usuários Administradores e Super Administradores possuem permissão para excluir planos no sistema.',
+        'warning'
+      );
       return;
     }
 
@@ -207,9 +212,11 @@ export const PlanosPaxPage: React.FC = () => {
           ? `${vinculos.associados} associado(s) ativo(s)`
           : `${vinculos.contratos} contrato(s) ativo(s)`;
 
-        toast.error(`Não é possível excluir o plano "${plano.nome}": Existem ${detalhe} vinculados a este plano. Desative o plano para bloquear novas contratações.`, {
-          duration: 6000
-        });
+        systemAlert(
+          'Exclusão Não Permitida',
+          `Não é possível excluir o plano "${plano.nome}": Existem ${detalhe} vinculados a este plano.\n\nPara preservar a integridade dos dados e o histórico dos associados, você pode desativar o plano para bloquear novas contratações.`,
+          'warning'
+        );
         return;
       }
     } catch (e) {
@@ -226,7 +233,11 @@ export const PlanosPaxPage: React.FC = () => {
           await excluir(plano.id);
           toast.success('Plano excluído com sucesso!');
         } catch (error: any) {
-          toast.error(error.message || 'Erro ao excluir plano', { duration: 5000 });
+          systemAlert(
+            'Exclusão Não Permitida',
+            error.message || 'Ocorreu um erro ao tentar excluir o plano.',
+            'error'
+          );
         }
       }
     });

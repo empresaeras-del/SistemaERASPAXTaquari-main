@@ -996,13 +996,21 @@ export const ConfiguracoesPage: React.FC = () => {
                               <h5 className="font-bold text-text-base">{conta.nome}</h5>
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button type="button" onClick={() => setEditingConta(conta)} className="p-1.5 text-blue-400 hover:bg-blue-400/10 rounded-lg"><Edit2 className="w-4 h-4" /></button>
-                                <button type="button" onClick={async () => {
-                                  if (window.confirm('Excluir esta conta?')) {
-                                    await deletarContaBancaria(state.isOnline, conta.id);
-                                    setEmpresaContas(empresaContas.filter(c => c.id !== conta.id));
-                                    toast.success('Conta excluída');
-                                  }
-                                }} className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                                {canDelete(state.user) && (
+                                  <button type="button" onClick={() => {
+                                    confirm({
+                                      title: "Excluir Conta Bancária",
+                                      message: `Tem certeza que deseja excluir a conta "${conta.nome}"? Esta ação não pode ser desfeita.`,
+                                      danger: true,
+                                      confirmText: "Excluir",
+                                      onConfirm: async () => {
+                                        await deletarContaBancaria(state.isOnline, conta.id);
+                                        setEmpresaContas(empresaContas.filter(c => c.id !== conta.id));
+                                        toast.success('Conta excluída com sucesso!');
+                                      }
+                                    });
+                                  }} className="p-1.5 text-red-400 hover:bg-red-400/10 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                                )}
                               </div>
                             </div>
                             <div className="text-sm text-text-subtle space-y-1">

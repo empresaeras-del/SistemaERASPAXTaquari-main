@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { getPlanos, savePlano, deletePlano, Plano } from '../services/planosService';
 import { Plus, Edit2, Trash2, Package, Search, X, Save, Filter } from 'lucide-react';
+import { systemAlert } from '../utils/systemAlert';
 
 export const PlanosPage: React.FC = () => {
   const { state } = useAppContext();
@@ -99,9 +100,13 @@ export const PlanosPage: React.FC = () => {
           await deletePlano(id, state.isOnline);
           await loadData();
           toast.success("Plano excluído com sucesso!");
-        } catch (error) {
+        } catch (error: any) {
           console.error('Erro ao excluir plano', error);
-          toast.error('Erro ao excluir plano. Verifique se você está online.');
+          systemAlert(
+            'Exclusão Não Permitida',
+            error?.message || 'Não foi possível excluir este plano. Verifique se existem associados ou contratos vinculados.',
+            'warning'
+          );
         }
       }
     });
