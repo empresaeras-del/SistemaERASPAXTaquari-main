@@ -274,6 +274,31 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
       // 3. Sincroniza registro na tabela 'contratos' do Supabase se o associado tiver plano
       if (associadoToSave.plano_pax_id) {
         try {
+          // Garante que o plano existe no Supabase antes de criar o contrato
+          const { data: planoInSupabase } = await supabase
+            .from('planos_pax')
+            .select('id')
+            .eq('id', associadoToSave.plano_pax_id)
+            .maybeSingle();
+
+          if (!planoInSupabase) {
+            const localPlano = await getFromIDB<any>('planos_pax', associadoToSave.plano_pax_id);
+            if (localPlano) {
+              const { coberturas, faixas, itens, ...cleanPlano } = localPlano;
+              await supabase.from('planos_pax').upsert({
+                id: associadoToSave.plano_pax_id,
+                tenant_id: associadoToSave.tenant_id || 'default_tenant',
+                empresa_id: associadoToSave.tenant_id || 'default_tenant',
+                nome: cleanPlano.nome || associadoToSave.plano_nome || 'Plano PAX',
+                codigo: cleanPlano.codigo || `PLN-${associadoToSave.plano_pax_id.substring(0, 6).toUpperCase()}`,
+                tipo_plano: cleanPlano.tipo_plano || 'individual',
+                valor_mensalidade: cleanPlano.valor_mensalidade || associadoToSave.valor_plano || 0,
+                ativo: true,
+                ...cleanPlano
+              });
+            }
+          }
+
           const contratoData = {
             tenant_id: associadoToSave.tenant_id || 'default_tenant',
             empresa_id: (associadoToSave as any).empresa_id || associadoToSave.tenant_id || 'default_tenant',
@@ -293,9 +318,11 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
             .maybeSingle();
 
           if (existingContrato) {
-            await supabase.from('contratos').update(contratoData).eq('id', existingContrato.id);
+            const { error: updateErr } = await supabase.from('contratos').update(contratoData).eq('id', existingContrato.id);
+            if (updateErr) console.warn('Erro ao atualizar contrato no Supabase:', updateErr);
           } else {
-            await supabase.from('contratos').insert({ id: crypto.randomUUID(), ...contratoData });
+            const { error: insertErr } = await supabase.from('contratos').insert({ id: crypto.randomUUID(), ...contratoData });
+            if (insertErr) console.warn('Erro ao inserir contrato no Supabase:', insertErr);
           }
         } catch (contratoErr) {
           console.warn('Erro ao sincronizar contrato no Supabase:', contratoErr);

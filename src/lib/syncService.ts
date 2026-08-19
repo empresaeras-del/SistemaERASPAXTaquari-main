@@ -45,6 +45,7 @@ const getSupabaseTableName = (storeName: string): string | null => {
     auditoria: 'auditoria',
     notificacoes: 'notificacoes',
     documentos_padroes: 'documentos_padroes',
+    contratos: 'contratos',
   };
   return map[storeName] || null;
 };
@@ -133,6 +134,38 @@ export const processSyncQueue = async (isOnline: boolean) => {
                 parentesco: d.parentesco || 'Outro'
               }));
               await supabase.from('dependentes').upsert(depsPayload);
+            }
+
+            // Se houver plano, sincroniza também na tabela contratos
+            if (payload.plano_pax_id) {
+              try {
+                const contratoPayload = {
+                  id: crypto.randomUUID(),
+                  tenant_id: payload.tenant_id || 'default_tenant',
+                  empresa_id: payload.empresa_id || payload.tenant_id || 'default_tenant',
+                  associado_id: payload.id,
+                  plano_pax_id: payload.plano_pax_id,
+                  numero_contrato: payload.numero_contrato || `CTR-${payload.id.substring(0, 8).toUpperCase()}`,
+                  data_inicio: payload.data_adesao || new Date().toISOString().split('T')[0],
+                  valor_mensalidade: payload.valor_plano || null,
+                  status: payload.status || 'ativo',
+                  observacoes: payload.observacoes || null
+                };
+
+                const { data: existingContrato } = await supabase
+                  .from('contratos')
+                  .select('id')
+                  .eq('associado_id', payload.id)
+                  .maybeSingle();
+
+                if (existingContrato) {
+                  await supabase.from('contratos').update(contratoPayload).eq('id', existingContrato.id);
+                } else {
+                  await supabase.from('contratos').insert(contratoPayload);
+                }
+              } catch (contratoErr) {
+                console.warn('Erro ao sincronizar contrato na fila de sync:', contratoErr);
+              }
             }
           } else {
             const { error } = await supabase.from(targetTable).upsert(payload);
