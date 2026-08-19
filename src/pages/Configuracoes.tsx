@@ -55,6 +55,7 @@ import {
 
 import { SistemaBackupPanel } from '../components/configuracoes/SistemaBackupPanel';
 import { MensagensConfigTab } from '../components/configuracoes/MensagensConfigTab';
+import { SessaoSegurancaCard } from '../components/configuracoes/SessaoSegurancaCard';
 export const ConfiguracoesPage: React.FC = () => {
   const { state } = useAppContext();
   const toast = useToast();
@@ -674,49 +675,6 @@ export const ConfiguracoesPage: React.FC = () => {
         </div>
       )}
 
-      {previewUsuario && activeTab === "usuarios" && (
-        <div className="w-full lg:w-[400px] xl:w-[450px] shrink-0 bg-[#181B34] border border-[#262A45] rounded-2xl flex flex-col shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-[#262A45] flex items-center justify-between bg-[#101223]/50">
-            <h3 className="font-semibold text-white">Detalhes do Usuário</h3>
-            <button onClick={() => setPreviewUsuario(null)} className="text-slate-400 hover:text-white">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-          <div className="p-6 overflow-y-auto flex-1 space-y-6">
-            <div>
-              <h4 className="text-lg font-medium text-white mb-1">{previewUsuario.nome}</h4>
-              <p className="text-sm text-slate-400">{previewUsuario.email}</p>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-[#101223] p-3 rounded-xl border border-[#262A45]">
-                <p className="text-xs text-slate-500 mb-1">Status</p>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${previewUsuario.status === "ativo" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-slate-500/10 text-slate-400 border-slate-500/20"}`}>{previewUsuario.status}</span>
-              </div>
-              <div className="bg-[#101223] p-3 rounded-xl border border-[#262A45]">
-                <p className="text-xs text-slate-500 mb-1">Nível</p>
-                <p className="text-sm text-white capitalize">{previewUsuario.nivel.replace('_', ' ')}</p>
-              </div>
-            </div>
-          </div>
-          <div className="p-4 border-t border-[#262A45] bg-[#101223]/50 flex gap-2">
-            <button onClick={() => { handleOpenUsuarioModal(previewUsuario); setPreviewUsuario(null); }} className="flex-1 py-2 bg-[#222542] hover:bg-[#2A2D48] text-white rounded-lg text-sm font-medium transition-colors border border-[#2A2D48]">
-              Editar
-            </button>
-          </div>
-        </div>
-      )}
-      </div>
-
-
-      {activeTab === "sistema" && (
-        <SistemaBackupPanel />
-      )}
-
-      {activeTab === "mensagens" && (
-        <MensagensConfigTab />
-      )}
-
       {isModalOpen && editingEmpresa && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0C16]/80 backdrop-blur-sm p-4">
           <div className="bg-[#181B34] rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-[#262A45] overflow-hidden">
@@ -1287,6 +1245,53 @@ export const ConfiguracoesPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {previewUsuario && activeTab === "usuarios" && (
+        <div className="w-full lg:w-[400px] xl:w-[450px] shrink-0 bg-[#181B34] border border-[#262A45] rounded-2xl flex flex-col shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-[#262A45] flex items-center justify-between bg-[#101223]/50">
+            <h3 className="font-semibold text-white">Detalhes do Usuário</h3>
+            <button onClick={() => setPreviewUsuario(null)} className="text-slate-400 hover:text-white">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div className="p-6 overflow-y-auto flex-1 space-y-6">
+            <div>
+              <h4 className="text-lg font-medium text-white mb-1">{previewUsuario.nome}</h4>
+              <p className="text-sm text-slate-400">{previewUsuario.email}</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-[#101223] p-3 rounded-xl border border-[#262A45]">
+                <p className="text-xs text-slate-500 mb-1">Status</p>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${previewUsuario.status === "ativo" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-slate-500/10 text-slate-400 border-slate-500/20"}`}>{previewUsuario.status}</span>
+              </div>
+              <div className="bg-[#101223] p-3 rounded-xl border border-[#262A45]">
+                <p className="text-xs text-slate-500 mb-1">Nível</p>
+                <p className="text-sm text-white capitalize">{previewUsuario.nivel.replace('_', ' ')}</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-4 border-t border-[#262A45] bg-[#101223]/50 flex gap-2">
+            <button onClick={() => { handleOpenUsuarioModal(previewUsuario); setPreviewUsuario(null); }} className="flex-1 py-2 bg-[#222542] hover:bg-[#2A2D48] text-white rounded-lg text-sm font-medium transition-colors border border-[#2A2D48]">
+              Editar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "sistema" && (
+        <div className="flex-1 flex flex-col gap-6 overflow-y-auto">
+          <SessaoSegurancaCard />
+          <SistemaBackupPanel />
+        </div>
+      )}
+
+      {activeTab === "mensagens" && (
+        <div className="flex-1 flex flex-col overflow-y-auto">
+          <MensagensConfigTab />
+        </div>
+      )}
+      </div>
 
       {isUsuarioModalOpen && editingUsuario && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0C16]/80 backdrop-blur-sm p-4">

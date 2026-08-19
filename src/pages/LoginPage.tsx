@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getEmpresas, Empresa } from '../services/empresasService';
+import { Clock } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { signIn, signUp, resetPassword, session, loading } = useAuth();
+  const [searchParams] = useSearchParams();
+  const [isInactivity, setIsInactivity] = useState(() => {
+    return searchParams.get('reason') === 'inactivity' || sessionStorage.getItem('eras_logout_reason') === 'inactivity';
+  });
+
+  useEffect(() => {
+    if (sessionStorage.getItem('eras_logout_reason') === 'inactivity') {
+      setIsInactivity(true);
+      sessionStorage.removeItem('eras_logout_reason');
+    }
+  }, []);
 
   // Login states
   const [email, setEmail] = useState('');
@@ -187,6 +199,13 @@ export const LoginPage: React.FC = () => {
                 </div>
 
                 <form onSubmit={handleLogin} className="login-form" noValidate>
+                  {isInactivity && !error && (
+                    <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-3 shadow-sm animate-in fade-in">
+                      <Clock className="w-5 h-5 text-amber-400 shrink-0" />
+                      <span>Sua sessão foi encerrada automaticamente por inatividade. Faça login para continuar.</span>
+                    </div>
+                  )}
+
                   {error && (
                     <div className="login-error" role="alert">
                       <svg viewBox="0 0 20 20" fill="currentColor" className="login-error-icon">

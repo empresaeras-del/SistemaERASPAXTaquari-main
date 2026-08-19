@@ -7,6 +7,7 @@ import { useAppContext } from '../../context/AppContext';
 import { useBackgroundChecks } from '../../hooks/useBackgroundChecks';
 import { useScheduledBackup } from '../../hooks/useScheduledBackup';
 import { WelcomeModal } from './WelcomeModal';
+import { InactivityManager } from '../auth/InactivityManager';
 
 export const Layout: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -16,6 +17,7 @@ export const Layout: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-bg-base text-text-base overflow-hidden font-sans selection:bg-[#3B82F6] selection:text-text-base print:block print:h-auto print:bg-white print:text-black">
+      <InactivityManager />
 
       {state.layout === 'sidebar' && (
         <div className="print:hidden">

@@ -86,9 +86,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSupabaseUser(s.user);
         const profile = await loadUserProfile(s.user);
         setUser(profile);
+        try {
+          localStorage.setItem('eras_last_activity', String(Date.now()));
+        } catch (e) {}
       } else {
         setSupabaseUser(null);
         setUser(null);
+        try {
+          localStorage.removeItem('eras_last_activity');
+        } catch (e) {}
       }
       setLoading(false);
     });
@@ -160,10 +166,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    setSupabaseUser(null);
-    setUser(null);
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('Erro ao chamar signOut no Supabase:', e);
+    } finally {
+      setSession(null);
+      setSupabaseUser(null);
+      setUser(null);
+      try {
+        localStorage.removeItem('eras_last_activity');
+      } catch (e) {}
+    }
   };
 
   const resetPassword = async (email: string): Promise<{ error: string | null }> => {
