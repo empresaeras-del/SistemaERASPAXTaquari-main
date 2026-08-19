@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAppContext } from "../context/AppContext";
 import { getAssociados, Associado } from "../services/associadosService";
+import { supabase } from "../lib/supabase";
 import { 
   Search, Filter, FileText, Download, LayoutGrid, List,
   Users, CheckCircle2, AlertCircle, XCircle, CreditCard,
@@ -31,8 +32,42 @@ export const ContratosPage: React.FC = () => {
         state.isOnline,
         state.empresaSelecionada,
       );
-      // We only care about associados that have a plano_pax_id, i.e. a contract
-      setAssociados(data.filter(a => a.plano_pax_id));
+      // Associados vinculados a um plano
+      const comContrato = data.filter(a => a.plano_pax_id);
+      setAssociados(comContrato);
+
+      // Sincroniza em segundo plano com a tabela contratos do Supabase
+      if (state.isOnline && comContrato.length > 0) {
+        for (const assoc of comContrato) {
+          try {
+            const { data: existing } = await supabase
+              .from('contratos')
+              .select('id')
+              .eq('associado_id', assoc.id)
+              .maybeSingle();
+
+            const contratoData = {
+              tenant_id: assoc.tenant_id || 'default_tenant',
+              empresa_id: (assoc as any).empresa_id || assoc.tenant_id || 'default_tenant',
+              associado_id: assoc.id,
+              plano_pax_id: assoc.plano_pax_id,
+              numero_contrato: assoc.numero_contrato || `CTR-${assoc.id.substring(0, 8).toUpperCase()}`,
+              data_inicio: assoc.data_adesao || new Date().toISOString().split('T')[0],
+              valor_mensalidade: assoc.valor_plano || null,
+              status: assoc.status || 'ativo',
+              observacoes: (assoc as any).observacoes || null
+            };
+
+            if (!existing) {
+              await supabase.from('contratos').insert({ id: crypto.randomUUID(), ...contratoData });
+            } else {
+              await supabase.from('contratos').update(contratoData).eq('id', existing.id);
+            }
+          } catch (syncErr) {
+            console.warn('Erro ao sincronizar contrato existente:', syncErr);
+          }
+        }
+      }
     } catch (e) {
       console.error(e);
     } finally {

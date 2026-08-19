@@ -270,6 +270,37 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
           console.warn('Erro ao sincronizar dependentes:', depErr);
         }
       }
+
+      // 3. Sincroniza registro na tabela 'contratos' do Supabase se o associado tiver plano
+      if (associadoToSave.plano_pax_id) {
+        try {
+          const contratoData = {
+            tenant_id: associadoToSave.tenant_id || 'default_tenant',
+            empresa_id: (associadoToSave as any).empresa_id || associadoToSave.tenant_id || 'default_tenant',
+            associado_id: associadoId,
+            plano_pax_id: associadoToSave.plano_pax_id,
+            numero_contrato: associadoToSave.numero_contrato || `CTR-${associadoId.substring(0, 8).toUpperCase()}`,
+            data_inicio: associadoToSave.data_adesao || new Date().toISOString().split('T')[0],
+            valor_mensalidade: associadoToSave.valor_plano || null,
+            status: associadoToSave.status || 'ativo',
+            observacoes: (associadoToSave as any).observacoes || null
+          };
+
+          const { data: existingContrato } = await supabase
+            .from('contratos')
+            .select('id')
+            .eq('associado_id', associadoId)
+            .maybeSingle();
+
+          if (existingContrato) {
+            await supabase.from('contratos').update(contratoData).eq('id', existingContrato.id);
+          } else {
+            await supabase.from('contratos').insert({ id: crypto.randomUUID(), ...contratoData });
+          }
+        } catch (contratoErr) {
+          console.warn('Erro ao sincronizar contrato no Supabase:', contratoErr);
+        }
+      }
     } catch (err) {
       console.warn('Supabase save threw error, fallback to IDB and sync queue:', err);
       await addToSyncQueue({
