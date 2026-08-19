@@ -167,7 +167,7 @@ const PlanoCard = ({ plano, handleOpenForm, handleToggleStatus, handleDelete }: 
 
 export const PlanosPaxPage: React.FC = () => {
   const { state } = useAppContext();
-  const { planos, loading, criar, editar, desativar, reativar, excluir } = usePlanosPax();
+  const { planos, loading, criar, editar, desativar, reativar, excluir, verificarVinculosPlano } = usePlanosPax();
   const { confirm } = useConfirm();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPlano, setEditingPlano] = useState<PlanoPaxCompleto | null>(null);
@@ -192,15 +192,33 @@ export const PlanosPaxPage: React.FC = () => {
     }
   };
 
-  const handleDelete = (plano: PlanoPaxCompleto) => {
+  const handleDelete = async (plano: PlanoPaxCompleto) => {
     if (!canDelete(state.user)) {
       toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
       return;
     }
 
+    try {
+      const vinculos = await verificarVinculosPlano(plano.id);
+      if (vinculos.total > 0) {
+        const detalhe = vinculos.associados > 0 && vinculos.contratos > 0
+          ? `${vinculos.associados} associado(s) e ${vinculos.contratos} contrato(s) ativo(s)`
+          : vinculos.associados > 0
+          ? `${vinculos.associados} associado(s) ativo(s)`
+          : `${vinculos.contratos} contrato(s) ativo(s)`;
+
+        toast.error(`Não é possível excluir o plano "${plano.nome}": Existem ${detalhe} vinculados a este plano. Desative o plano para bloquear novas contratações.`, {
+          duration: 6000
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn('Erro ao verificar vínculos do plano:', e);
+    }
+
     confirm({
       title: "Excluir Plano",
-      message: `Tem certeza que deseja excluir o plano "${plano.nome}"? Esta ação não pode ser desfeita e contratos vinculados podem perder a referência.`,
+      message: `Tem certeza que deseja excluir o plano "${plano.nome}"? Esta ação não pode ser desfeita.`,
       danger: true,
       confirmText: "Excluir",
       onConfirm: async () => {
@@ -208,7 +226,7 @@ export const PlanosPaxPage: React.FC = () => {
           await excluir(plano.id);
           toast.success('Plano excluído com sucesso!');
         } catch (error: any) {
-          toast.error(error.message || 'Erro ao excluir plano');
+          toast.error(error.message || 'Erro ao excluir plano', { duration: 5000 });
         }
       }
     });

@@ -352,22 +352,77 @@ export function usePlanosPax() {
 
 
 
-  const excluir = async (id: string): Promise<void> => {
+  const verificarVinculosPlano = async (planoId: string): Promise<{ total: number; associados: number; contratos: number }> => {
+    let totalAssoc = 0;
+    let totalContratos = 0;
+
+    // 1. Verifica no IndexedDB local
+    try {
+      const localAssocs = await getAllFromIDB<any>('associados');
+      const assocsVinculados = (localAssocs || []).filter(a => 
+        a && !a.deleted_at && (a.plano_pax_id === planoId || a.plano_id === planoId) && a.status !== 'inativo' && a.status !== 'encerrado'
+      );
+      totalAssoc += assocsVinculados.length;
+    } catch (e) {}
+
+    try {
+      const localContratos = await getAllFromIDB<any>('contratos');
+      const contratosVinculados = (localContratos || []).filter(c => 
+        c && !c.deleted_at && c.plano_pax_id === planoId && c.status === 'ativo'
+      );
+      totalContratos += contratosVinculados.length;
+    } catch (e) {}
+
+    // 2. Verifica no Supabase se online
     if (isOnline) {
       try {
-        const { data: vinculos, error: checkErr } = await supabase
-          .from('contratos')
-          .select('id')
-          .eq('plano_pax_id', id)
-          .eq('status', 'ativo')
-          .limit(1);
+        const { count: countAssoc } = await supabase
+          .from('associados')
+          .select('id', { count: 'exact', head: true })
+          .or(`plano_pax_id.eq.${planoId},plano_id.eq.${planoId}`)
+          .is('deleted_at', null)
+          .neq('status', 'inativo');
         
-        if (checkErr && checkErr.code !== '42P01') throw checkErr;
-        
-        if (vinculos && vinculos.length > 0) {
-          throw new Error('Existem contratos ativos utilizando este plano. Não é possível excluir.');
+        if (countAssoc !== null && countAssoc !== undefined) {
+          totalAssoc = Math.max(totalAssoc, countAssoc);
         }
-        
+      } catch (e) {}
+
+      try {
+        const { count: countContratos } = await supabase
+          .from('contratos')
+          .select('id', { count: 'exact', head: true })
+          .eq('plano_pax_id', planoId)
+          .is('deleted_at', null)
+          .eq('status', 'ativo');
+
+        if (countContratos !== null && countContratos !== undefined) {
+          totalContratos = Math.max(totalContratos, countContratos);
+        }
+      } catch (e) {}
+    }
+
+    return {
+      total: totalAssoc + totalContratos,
+      associados: totalAssoc,
+      contratos: totalContratos
+    };
+  };
+
+  const excluir = async (id: string): Promise<void> => {
+    // 1. Validação obrigatória de integridade relacional
+    const vinculos = await verificarVinculosPlano(id);
+    if (vinculos.total > 0) {
+      const detalhe = vinculos.associados > 0 && vinculos.contratos > 0
+        ? `${vinculos.associados} associado(s) e ${vinculos.contratos} contrato(s) ativo(s)`
+        : vinculos.associados > 0
+        ? `${vinculos.associados} associado(s) ativo(s)`
+        : `${vinculos.contratos} contrato(s) ativo(s)`;
+      throw new Error(`Não é possível excluir este plano: Existem ${detalhe} vinculados. Desative o plano ou desvincule os associados/contratos antes de excluir.`);
+    }
+
+    if (isOnline) {
+      try {
         // 1. Exclui coberturas vinculadas
         await supabase.from('planos_pax_coberturas').delete().eq('plano_id', id);
         
@@ -384,8 +439,8 @@ export function usePlanosPax() {
         }
         await registrarAuditoria('Excluir Plano e Vínculos', { id });
       } catch (err: any) {
-        if (err.message && err.message.includes('contratos ativos')) throw err;
-        console.warn('Falha no Supabase ao excluir plano, caindo para IDB', err);
+        console.warn('Falha no Supabase ao excluir plano:', err);
+        throw new Error(err?.message || 'Erro ao excluir plano no Supabase.');
       }
     }
     await deleteFromIDB('planos_pax', id);
@@ -487,6 +542,7 @@ export function usePlanosPax() {
     reativar,
     excluir,
     buscarPorId,
+    verificarVinculosPlano,
     planosAtivos,
     calcularValor,
     recarregar: carregarPlanos
