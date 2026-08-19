@@ -4,13 +4,15 @@ import { useFinanceiroAlerts } from '../../hooks/useFinanceiroAlerts';
 import { 
   LayoutDashboard, Users, DollarSign, Settings, 
   ShieldAlert, Package, Building2, ChevronDown, 
-  Image as ImageIcon,
-  Menu
+  Briefcase
 } from 'lucide-react';
+import { useAppContext } from '../../context/AppContext';
+import { hasModuleAccess } from '../../utils/permissions';
 
 export const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+  { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { 
+    id: 'associados',
     icon: Users, 
     label: 'Associados',
     subItems: [
@@ -21,6 +23,7 @@ export const navItems = [
     ]
   },
   { 
+    id: 'financeiro',
     icon: DollarSign, 
     label: 'Financeiro', 
     subItems: [
@@ -29,9 +32,10 @@ export const navItems = [
       { label: 'Caixas', path: '/caixas' }
     ]
   },
-  { icon: Package, label: 'Planos', path: '/planos' },
-  { icon: Package, label: 'Itens', path: '/itens-funerarios' },
+  { id: 'planos', icon: Package, label: 'Planos', path: '/planos' },
+  { id: 'itens_funerarios', icon: Package, label: 'Itens', path: '/itens-funerarios' },
   { 
+    id: 'credenciados',
     icon: Building2, 
     label: 'Credenciados', 
     subItems: [
@@ -40,27 +44,38 @@ export const navItems = [
       { label: 'Faturamento', path: '/faturamentos' }
     ]
   },
-  { icon: ShieldAlert, label: 'Ata de Ocorrências', path: '/auditoria' },
   { 
+    id: 'administracao',
+    icon: Briefcase, 
+    label: 'Administração', 
+    subItems: [
+      { label: 'Fornecedores', path: '/fornecedores' }
+    ]
+  },
+  { id: 'auditoria', icon: ShieldAlert, label: 'Ata de Ocorrências', path: '/auditoria' },
+  { 
+    id: 'configuracoes',
     icon: Settings, 
     label: 'Config', 
     subItems: [
       { label: 'Geral', path: '/configuracoes' },
-      { label: 'Docs', path: '/documentos' },
-      { label: 'IA Imagens', path: '/gerador-imagens' }
+      { label: 'Docs', path: '/documentos' }
     ]
   },
 ];
 
 export const TopNav: React.FC = () => {
+  const { state } = useAppContext();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const location = useLocation();
   const { alertasReceber, alertasPagar } = useFinanceiroAlerts();
 
+  const visibleNavItems = navItems.filter(item => hasModuleAccess(state.user, item.id || item.label.toLowerCase()));
+
   return (
     <nav className="h-auto min-h-[48px] py-2 bg-bg-surface border-b border-border-default flex flex-wrap items-center px-4 relative z-40">
       <div className="flex flex-wrap gap-2 items-center w-full">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActiveSub = item.subItems?.some(s => location.pathname.startsWith(s.path));
           const isDropdownOpen = openDropdown === item.label;
 

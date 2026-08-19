@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useFinanceiroAlerts } from '../../hooks/useFinanceiroAlerts';
-import { LayoutDashboard, Users, FileText, DollarSign, Settings, ShieldAlert, Package, Building2, ChevronLeft, ChevronRight, FileCheck, ChevronDown, Info, GripVertical, UserPlus, Image as ImageIcon, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Users, DollarSign, Settings, ShieldAlert, Package, Building2, ChevronLeft, ChevronRight, ChevronDown, Info, GripVertical, Briefcase } from 'lucide-react';
 import { getFromIDB, saveToIDB } from '../../lib/idb';
+import { useAppContext } from '../../context/AppContext';
+import { hasModuleAccess } from '../../utils/permissions';
 
 type NavItem = {
+  id: string;
   icon: React.ElementType;
   label: string;
   path?: string;
@@ -12,8 +15,9 @@ type NavItem = {
 };
 
 const defaultNavItems: NavItem[] = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+  { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { 
+    id: 'associados',
     icon: Users, 
     label: 'Associados',
     subItems: [
@@ -24,6 +28,7 @@ const defaultNavItems: NavItem[] = [
     ]
   },
   { 
+    id: 'financeiro',
     icon: DollarSign, 
     label: 'Financeiro', 
     subItems: [
@@ -32,9 +37,10 @@ const defaultNavItems: NavItem[] = [
       { label: 'Caixas / Fluxo de Caixa', path: '/caixas' }
     ]
   },
-  { icon: Package, label: 'Planos', path: '/planos' },
-  { icon: Package, label: 'Itens Funerários', path: '/itens-funerarios' },
+  { id: 'planos', icon: Package, label: 'Planos', path: '/planos' },
+  { id: 'itens_funerarios', icon: Package, label: 'Itens Funerários', path: '/itens-funerarios' },
   { 
+    id: 'credenciados',
     icon: Building2, 
     label: 'Rede Credenciada', 
     subItems: [
@@ -44,20 +50,21 @@ const defaultNavItems: NavItem[] = [
     ]
   },
   { 
+    id: 'administracao',
     icon: Briefcase, 
     label: 'Administração', 
     subItems: [
       { label: 'Fornecedores/Prestadores', path: '/fornecedores' }
     ]
   },
-  { icon: ShieldAlert, label: 'Ata de Ocorrências', path: '/auditoria' },
+  { id: 'auditoria', icon: ShieldAlert, label: 'Ata de Ocorrências', path: '/auditoria' },
   { 
+    id: 'configuracoes',
     icon: Settings, 
     label: 'Configurações', 
     subItems: [
       { label: 'Geral', path: '/configuracoes' },
       { label: 'Documentos Padrões', path: '/documentos' },
-
     ]
   },
 ];
@@ -68,6 +75,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
+  const { state } = useAppContext();
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
   const [navItems, setNavItems] = useState<NavItem[]>(defaultNavItems);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -145,6 +153,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
     setDraggedIndex(index);
   };
 
+  // Filter items according to user permissions
+  const visibleNavItems = navItems.filter(item => hasModuleAccess(state.user, item.id || item.label.toLowerCase()));
+
   return (
     <aside className={`bg-bg-surface text-text-subtle flex flex-col h-full border-r border-border-default transition-all duration-300 ${isCollapsed ? "w-20" : "w-64"}`}>
       <div className={`h-16 flex items-center border-b border-border-default relative ${isCollapsed ? "justify-center" : "px-6"}`}>
@@ -167,7 +178,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       
       <div className="flex-1 overflow-y-auto overflow-x-hidden relative flex flex-col">
         <nav className="flex-1 py-4 flex flex-col gap-1 px-3">
-          {navItems.map((item, index) => {
+          {visibleNavItems.map((item, index) => {
             if (item.subItems) {
               const active = isSubMenuActive(item);
               const expanded = expandedMenus[item.label] || active;

@@ -20,7 +20,9 @@ import {
   canDeleteUser,
   canDelete,
   getAvailableNiveisForUser,
-  canChangeUserPassword
+  canChangeUserPassword,
+  canManageUserModules,
+  MODULOS_SISTEMA
 } from "../utils/permissions";
 import {
   getUsuarios,
@@ -44,7 +46,12 @@ import {
   DownloadCloud,
   Eye,
   EyeOff,
-  MessageCircle } from "lucide-react";
+  MessageCircle,
+  Layers,
+  Shield,
+  Check,
+  CheckSquare,
+  Square } from "lucide-react";
 
 import { SistemaBackupPanel } from '../components/configuracoes/SistemaBackupPanel';
 import { MensagensConfigTab } from '../components/configuracoes/MensagensConfigTab';
@@ -268,6 +275,45 @@ export const ConfiguracoesPage: React.FC = () => {
   const [senhaUsuario, setSenhaUsuario] = useState('');
   const [showSenhaUsuario, setShowSenhaUsuario] = useState(false);
 
+  const normalizeModulos = (mods?: string[]): string[] => {
+    if (!mods || mods.length === 0 || mods.includes('*')) {
+      return MODULOS_SISTEMA.map(m => m.id);
+    }
+    return mods;
+  };
+
+  const handleToggleModulo = (moduloId: string) => {
+    if (!editingUsuario) return;
+    const current = editingUsuario.modulos_permitidos || [];
+    const exists = current.includes(moduloId);
+    let updated: string[];
+    if (exists) {
+      updated = current.filter(id => id !== moduloId);
+    } else {
+      updated = [...current, moduloId];
+    }
+    setEditingUsuario({
+      ...editingUsuario,
+      modulos_permitidos: updated
+    });
+  };
+
+  const handleSelectAllModulos = () => {
+    if (!editingUsuario) return;
+    setEditingUsuario({
+      ...editingUsuario,
+      modulos_permitidos: MODULOS_SISTEMA.map(m => m.id)
+    });
+  };
+
+  const handleDeselectAllModulos = () => {
+    if (!editingUsuario) return;
+    setEditingUsuario({
+      ...editingUsuario,
+      modulos_permitidos: []
+    });
+  };
+
   const handleOpenUsuarioModal = (usuario?: UsuarioCadastro) => {
     setSenhaUsuario('');
     setShowSenhaUsuario(false);
@@ -276,7 +322,10 @@ export const ConfiguracoesPage: React.FC = () => {
         toast.error("Você não tem permissão para editar usuários deste nível.");
         return;
       }
-      setEditingUsuario({ ...usuario });
+      setEditingUsuario({ 
+        ...usuario,
+        modulos_permitidos: normalizeModulos(usuario.modulos_permitidos)
+      });
     } else {
       if (state.user?.nivel !== 'super_admin' && state.user?.nivel !== 'admin') {
         toast.error("Você não tem permissão para cadastrar usuários.");
@@ -287,8 +336,10 @@ export const ConfiguracoesPage: React.FC = () => {
         id: generateUUID(),
         tenant_id: state.user?.nivel === 'super_admin' ? (state.empresaSelecionada || "") : (state.user?.tenant_id || state.empresaSelecionada || ""),
         status: "ativo",
+        nome: "",
+        email: "",
         nivel: availableNiveis[0]?.value || "funcionario",
-        modulos_permitidos: [],
+        modulos_permitidos: MODULOS_SISTEMA.map(m => m.id),
       });
     }
     setIsUsuarioModalOpen(true);
@@ -331,7 +382,13 @@ export const ConfiguracoesPage: React.FC = () => {
     }
 
     try {
-      const novoUsuario = editingUsuario as UsuarioCadastro;
+      const permitidos = editingUsuario.modulos_permitidos || [];
+      const novoUsuario: UsuarioCadastro = {
+        ...(editingUsuario as UsuarioCadastro),
+        modulos_permitidos: (permitidos.length === MODULOS_SISTEMA.length || editingUsuario.nivel === 'super_admin')
+          ? ['*']
+          : permitidos
+      };
       const senhaLimpa = senhaUsuario ? senhaUsuario.trim() : undefined;
       await saveUsuario(novoUsuario, state.isOnline, senhaLimpa, state.user || undefined);
       await loadData();
@@ -1124,6 +1181,7 @@ export const ConfiguracoesPage: React.FC = () => {
                   <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">E-mail</th>
                   <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Empresa</th>
                   <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Nível</th>
+                  <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Módulos</th>
                   <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Ações</th>
                 </tr>
@@ -1132,7 +1190,7 @@ export const ConfiguracoesPage: React.FC = () => {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-6 py-8 text-center text-slate-400"
                     >
                       Carregando usuários...
@@ -1141,7 +1199,7 @@ export const ConfiguracoesPage: React.FC = () => {
                 ) : filteredUsuarios.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-6 py-8 text-center text-slate-400"
                     >
                       Nenhum usuário encontrado.
@@ -1151,7 +1209,8 @@ export const ConfiguracoesPage: React.FC = () => {
                   filteredUsuarios.map((usuario) => (
                     <tr
                       key={usuario.id}
-                      className="hover:bg-[#101223]/30 transition-colors cursor-pointer" onClick={() => setPreviewUsuario(usuario)}
+                      className="hover:bg-[#101223]/30 transition-colors cursor-pointer" 
+                      onClick={() => canEditUser(state.user, usuario) && handleOpenUsuarioModal(usuario)}
                     >
                       <td className="px-6 py-4 font-medium text-white">
                         {usuario.nome}
@@ -1162,6 +1221,22 @@ export const ConfiguracoesPage: React.FC = () => {
                           ?.nome_fantasia || "Desconhecida"}
                       </td>
                       <td className="px-6 py-4 capitalize">{usuario.nivel}</td>
+                      <td className="px-6 py-4">
+                        {usuario.nivel === 'super_admin' || usuario.modulos_permitidos?.includes('*') || (usuario.modulos_permitidos && usuario.modulos_permitidos.length >= MODULOS_SISTEMA.length) ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                            <Shield className="w-3 h-3" />
+                            Todos (Global)
+                          </span>
+                        ) : (
+                          <span 
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                            title={(usuario.modulos_permitidos || []).map(id => MODULOS_SISTEMA.find(m => m.id === id)?.label || id).join(', ')}
+                          >
+                            <Layers className="w-3 h-3" />
+                            {(usuario.modulos_permitidos || []).length} de {MODULOS_SISTEMA.length} módulos
+                          </span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
@@ -1207,11 +1282,21 @@ export const ConfiguracoesPage: React.FC = () => {
 
       {isUsuarioModalOpen && editingUsuario && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0C16]/80 backdrop-blur-sm p-4">
-          <div className="bg-[#181B34] rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border border-[#262A45] overflow-hidden">
+          <div className="bg-[#181B34] rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-[#262A45] overflow-hidden">
             <div className="px-6 py-4 border-b border-[#262A45] flex items-center justify-between shrink-0">
-              <h3 className="text-xl font-bold text-white tracking-tight">
-                {editingUsuario.nome ? "Editar Usuário" : "Novo Usuário"}
-              </h3>
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-[#7E4CF3]/20 border border-[#7E4CF3]/30 text-[#7E4CF3]">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white tracking-tight">
+                    {editingUsuario.nome ? "Editar Usuário" : "Novo Usuário"}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Gerencie os dados cadastrais, credenciais e permissões de módulos.
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={handleCloseUsuarioModal}
                 className="text-slate-400 hover:text-white transition-colors"
@@ -1226,39 +1311,41 @@ export const ConfiguracoesPage: React.FC = () => {
                 onSubmit={handleSaveUsuario}
                 className="space-y-4"
               >
-                <div>
-                  <label className="block text-sm font-semibold text-slate-400 mb-1">
-                    Nome Completo *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editingUsuario.nome || ""}
-                    onChange={(e) =>
-                      setEditingUsuario({
-                        ...editingUsuario,
-                        nome: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-400 mb-1">
-                    E-mail *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={editingUsuario.email || ""}
-                    onChange={(e) =>
-                      setEditingUsuario({
-                        ...editingUsuario,
-                        email: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-400 mb-1">
+                      Nome Completo *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editingUsuario.nome || ""}
+                      onChange={(e) =>
+                        setEditingUsuario({
+                          ...editingUsuario,
+                          nome: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-400 mb-1">
+                      E-mail *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={editingUsuario.email || ""}
+                      onChange={(e) =>
+                        setEditingUsuario({
+                          ...editingUsuario,
+                          email: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                    />
+                  </div>
                 </div>
 
                 {/* CAMPO DE SENHA (NOVO CADASTRO OU EDIÇÃO COM PERMISSÃO) */}
@@ -1317,68 +1404,149 @@ export const ConfiguracoesPage: React.FC = () => {
                   </div>
                 ) : null}
                 
-                {state.user?.nivel === 'super_admin' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {state.user?.nivel === 'super_admin' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-400 mb-1">
+                        Empresa Vinculada *
+                      </label>
+                      <select
+                        required
+                        value={editingUsuario.tenant_id || ''}
+                        onChange={(e) =>
+                          setEditingUsuario({
+                            ...editingUsuario,
+                            tenant_id: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                      >
+                        <option className="bg-[#101223]" value="all">Todas as Empresas (Acesso Global)</option>
+                        {empresas.map(e => <option className="bg-[#101223]" key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
+                      </select>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-sm font-semibold text-slate-400 mb-1">
-                      Empresa Vinculada *
+                      Nível de Acesso *
                     </label>
                     <select
                       required
-                      value={editingUsuario.tenant_id || ''}
+                      value={editingUsuario.nivel || "funcionario"}
                       onChange={(e) =>
                         setEditingUsuario({
                           ...editingUsuario,
-                          tenant_id: e.target.value,
+                          nivel: e.target.value as any,
                         })
                       }
                       className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
                     >
-                      <option className="bg-[#101223]" value="all">Todas as Empresas (Acesso Global)</option>
-                      {empresas.map(e => <option className="bg-[#101223]" key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
+                      {getAvailableNiveisForUser(state.user).map(opt => (
+                        <option key={opt.value} className="bg-[#101223]" value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
-                )}
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-400 mb-1">
-                    Nível de Acesso *
-                  </label>
-                  <select
-                    required
-                    value={editingUsuario.nivel || "funcionario"}
-                    onChange={(e) =>
-                      setEditingUsuario({
-                        ...editingUsuario,
-                        nivel: e.target.value as any,
-                      })
-                    }
-                    className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
-                  >
-                    {getAvailableNiveisForUser(state.user).map(opt => (
-                      <option key={opt.value} className="bg-[#101223]" value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-400 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={editingUsuario.status || "ativo"}
+                      onChange={(e) =>
+                        setEditingUsuario({
+                          ...editingUsuario,
+                          status: e.target.value as any,
+                        })
+                      }
+                      className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                    >
+                      <option className="bg-[#101223]" value="ativo">Ativo</option>
+                      <option className="bg-[#101223]" value="inativo">Inativo</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-400 mb-1">
-                    Status
-                  </label>
-                  <select
-                    value={editingUsuario.status || "ativo"}
-                    onChange={(e) =>
-                      setEditingUsuario({
-                        ...editingUsuario,
-                        status: e.target.value as any,
-                      })
-                    }
-                    className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
-                  >
-                    <option className="bg-[#101223]" value="ativo">Ativo</option>
-                    <option className="bg-[#101223]" value="inativo">Inativo</option>
-                  </select>
-                </div>
+
+                {/* SELEÇÃO DE MÓDULOS DE ACESSO */}
+                {canManageUserModules(state.user) && (
+                  <div className="pt-4 border-t border-[#262A45] space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <label className="block text-sm font-bold text-white flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-[#7E4CF3]" />
+                          Módulos com Acesso Permitido
+                        </label>
+                        <span className="text-xs text-slate-400">
+                          Selecione as áreas e rotas que este usuário poderá visualizar e operar.
+                        </span>
+                      </div>
+
+                      {editingUsuario.nivel !== 'super_admin' && (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleSelectAllModulos}
+                            className="text-xs font-semibold text-[#7E4CF3] hover:text-[#9B72F7] bg-[#7E4CF3]/10 hover:bg-[#7E4CF3]/20 px-3 py-1 rounded-lg transition-colors border border-[#7E4CF3]/30"
+                          >
+                            Marcar Todos
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDeselectAllModulos}
+                            className="text-xs font-semibold text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-lg transition-colors border border-slate-700"
+                          >
+                            Desmarcar Todos
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {editingUsuario.nivel === 'super_admin' ? (
+                      <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3.5 flex items-center gap-3">
+                        <Shield className="w-5 h-5 text-indigo-400 shrink-0" />
+                        <p className="text-xs text-indigo-300">
+                          Usuários com nível <strong>Super Admin</strong> possuem acesso total e irrestrito a todos os módulos do sistema.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
+                        {MODULOS_SISTEMA.map((modulo) => {
+                          const isChecked = (editingUsuario.modulos_permitidos || []).includes(modulo.id);
+                          return (
+                            <div
+                              key={modulo.id}
+                              onClick={() => handleToggleModulo(modulo.id)}
+                              className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between select-none ${
+                                isChecked
+                                  ? 'bg-gradient-to-br from-[#7E4CF3]/20 to-[#4A88E9]/15 border-[#7E4CF3] shadow-md shadow-[#7E4CF3]/10'
+                                  : 'bg-[#101223] border-[#262A45] hover:border-slate-600 opacity-70 hover:opacity-100'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2 mb-1">
+                                <span className="font-bold text-xs text-white leading-tight">
+                                  {modulo.label}
+                                </span>
+                                <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors ${
+                                  isChecked
+                                    ? 'bg-[#7E4CF3] text-white'
+                                    : 'border border-slate-600 bg-[#181B34]'
+                                }`}>
+                                  {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-slate-400 leading-tight">
+                                {modulo.descricao}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </form>
             </div>
 
@@ -1394,7 +1562,7 @@ export const ConfiguracoesPage: React.FC = () => {
                 type="submit"
                 form="usuarioForm"
                 disabled={!state.isOnline}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#7E4CF3]/25 disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#7E4CF3]/25 disabled:opacity-50 text-sm"
               >
                 <Save className="w-4 h-4" />
                 Salvar Usuário
