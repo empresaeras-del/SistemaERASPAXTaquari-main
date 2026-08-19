@@ -509,6 +509,7 @@ export const softDeleteAssociado = async (id: string, isOnline: boolean): Promis
 };
 
 export const deleteAssociado = softDeleteAssociado;
+
 export interface DocumentoAssociado {
   id: string;
   nome: string;
@@ -517,3 +518,67 @@ export interface DocumentoAssociado {
   tamanho: number;
   data_upload: string;
 }
+
+export const uploadDocumentoAssociado = async (
+  file: File,
+  associadoId?: string,
+  isOnline: boolean = true
+): Promise<DocumentoAssociado> => {
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('O arquivo excede o limite máximo permitido de 10MB.');
+  }
+
+  let finalUrl = '';
+
+  if (isOnline) {
+    try {
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = `associados/${associadoId || 'geral'}/${Date.now()}_${cleanName}`;
+
+      const { data, error } = await supabase.storage
+        .from('arquivos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (!error && data) {
+        const { data: publicData } = supabase.storage
+          .from('arquivos')
+          .getPublicUrl(data.path);
+        
+        if (publicData?.publicUrl) {
+          finalUrl = publicData.publicUrl;
+        }
+      }
+    } catch (storageErr) {
+      console.warn('Upload Supabase Storage falhou, usando fallback Base64:', storageErr);
+    }
+  }
+
+  if (!finalUrl) {
+    finalUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Falha ao processar arquivo'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Erro ao ler arquivo local'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const docId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `doc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+  return {
+    id: docId,
+    nome: file.name,
+    url: finalUrl,
+    tipo: file.type || 'application/octet-stream',
+    tamanho: file.size,
+    data_upload: new Date().toISOString()
+  };
+};

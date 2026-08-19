@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { X, User, MapPin, Phone, CreditCard, ShieldCheck, Heart, FileText, FolderOpen, Calendar, Edit2, Copy, CopyCheck, Printer } from 'lucide-react';
-import { Associado } from '../../services/associadosService';
+import { X, User, MapPin, Phone, CreditCard, ShieldCheck, Heart, FileText, FolderOpen, Calendar, Edit2, Copy, CopyCheck, Printer, Eye, Download, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { Associado, DocumentoAssociado } from '../../services/associadosService';
 import { getEmpresaById } from '../../services/empresasService';
 import { useAppContext } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { formatLocalDate } from '../../utils/dateUtils';
+import { VisualizadorDocumentoModal } from './VisualizadorDocumentoModal';
+import { downloadDocumento, isPdfDocument, isImageDocument } from '../../utils/documentUtils';
 
 interface Props {
   associado: Associado;
@@ -16,6 +18,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
   const toast = useToast();
   const { state } = useAppContext();
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [documentoVisualizando, setDocumentoVisualizando] = useState<DocumentoAssociado | null>(null);
 
   const copiarTexto = async (texto: string, label: string, id: string) => {
     try {
@@ -391,6 +394,93 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
               <p className="text-sm text-text-subtle italic">Nenhum dependente cadastrado.</p>
             )}
           </div>
+
+          {/* DOCUMENTOS ANEXADOS */}
+          {associado.documentos && associado.documentos.length > 0 && (
+            <div className="bg-bg-surface p-5 rounded-2xl border border-border-default/60 space-y-4">
+              <h3 className="text-xs font-bold text-[#3B82F6] uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="w-4 h-4" />
+                <span>Documentos Anexados ({associado.documentos.length})</span>
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {associado.documentos.map((doc, idx) => {
+                  const isPdf = isPdfDocument(doc);
+                  const isImg = isImageDocument(doc);
+                  const isLegacyBlob = doc.url && doc.url.startsWith("blob:");
+
+                  return (
+                    <div
+                      key={doc.id || idx}
+                      className="flex items-center justify-between p-3 bg-bg-subtle border border-border-default rounded-xl hover:border-[#3B82F6]/50 transition-all"
+                    >
+                      <div
+                        onClick={() => setDocumentoVisualizando(doc)}
+                        className="flex items-center gap-3 overflow-hidden cursor-pointer flex-1 mr-2"
+                      >
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs ${
+                          isPdf 
+                            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
+                            : isImg 
+                            ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' 
+                            : 'bg-bg-base text-text-subtle border border-border-default'
+                        }`}>
+                          {isPdf ? (
+                            <FileText className="w-4 h-4" />
+                          ) : isImg ? (
+                            <ImageIcon className="w-4 h-4" />
+                          ) : (
+                            <span className="uppercase">{doc.nome.split(".").pop()?.substring(0, 3)}</span>
+                          )}
+                        </div>
+                        <div className="overflow-hidden">
+                          <p className="text-sm font-medium text-text-base truncate hover:text-[#3B82F6] transition-colors" title={doc.nome}>
+                            {doc.nome}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-xs text-text-subtle">
+                              {doc.tamanho ? `${(doc.tamanho / 1024).toFixed(1)} KB` : 'Anexo'}
+                              {doc.data_upload && (
+                                <> • {new Date(doc.data_upload).toLocaleDateString("pt-BR")}</>
+                              )}
+                            </p>
+                            {isLegacyBlob && (
+                              <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20" title="Arquivo anexado em sessão anterior. Reenvie para visualização permanente.">
+                                <AlertTriangle className="w-2.5 h-2.5" /> Reenvio sugerido
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setDocumentoVisualizando(doc)}
+                          title="Visualizar"
+                          className="p-1.5 text-text-subtle hover:text-[#3B82F6] hover:bg-bg-hover rounded-lg transition-colors"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const success = await downloadDocumento(doc);
+                            if (!success) toast.error("Não foi possível baixar este arquivo.");
+                            else toast.success("Download iniciado!");
+                          }}
+                          title="Baixar"
+                          className="p-1.5 text-text-subtle hover:text-emerald-400 hover:bg-bg-hover rounded-lg transition-colors"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           
         </div>
 
@@ -404,6 +494,14 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
           </button>
         </div>
       </div>
+
+      {/* Visualizador de Documento */}
+      {documentoVisualizando && (
+        <VisualizadorDocumentoModal
+          documento={documentoVisualizando}
+          onClose={() => setDocumentoVisualizando(null)}
+        />
+      )}
     </div>
   );
 };
