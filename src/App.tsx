@@ -9,6 +9,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { Layout } from './components/layout/Layout';
 import { PrivateRoute } from './components/auth/PrivateRoute';
 import { Toaster } from 'react-hot-toast';
+import { InactivityManager } from './components/auth/InactivityManager';
 
 // Componente de carregamento suave para lazy loading
 const PageLoader = () => (
@@ -51,6 +52,7 @@ export default function App() {
             <BrowserRouter>
               <ErrorBoundary>
                 <SystemAlertProvider />
+                <InactivityManager />
                 <Toaster position="top-right" />
                 <Suspense fallback={<PageLoader />}>
                   <Routes>

@@ -25,15 +25,14 @@ export const getInactivityTimeoutMinutes = (): number => {
 export const setInactivityTimeoutMinutes = (minutes: number) => {
   try {
     localStorage.setItem(INACTIVITY_TIMEOUT_CONFIG_KEY, String(minutes));
-    // Dispara evento para sincronizar imediatamente
-    window.dispatchEvent(new Event('inactivity_config_changed'));
+    window.dispatchEvent(new CustomEvent('inactivity_config_changed', { detail: minutes }));
   } catch (e) {}
 };
 
 export const getWarningDurationSeconds = (timeoutMinutes: number): number => {
-  if (timeoutMinutes <= 1) return 20; // 20s para teste rápido de 1 minuto
-  if (timeoutMinutes <= 2) return 30; // 30s para teste de 2 minutos
-  return 60; // 60s para configurações de 5+ minutos
+  if (timeoutMinutes <= 1) return 20; // 20s para teste de 1 minuto (aviso aparece aos 40s)
+  if (timeoutMinutes <= 2) return 30; // 30s para teste de 2 minutos (aviso aparece aos 90s)
+  return 60; // 60s padrão para 5+ minutos
 };
 
 export const InactivityManager: React.FC = () => {
@@ -44,25 +43,14 @@ export const InactivityManager: React.FC = () => {
   const [showWarning, setShowWarning] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(60);
   const [maxWarningSeconds, setMaxWarningSeconds] = useState(60);
-  
+
   const lastActivityRef = useRef<number>(Date.now());
-  const throttleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isLoggingOutRef = useRef(false);
+  const showWarningRef = useRef(false);
 
-  // Atualiza timestamp de última atividade (com throttle para não sobrecarregar o storage)
-  const recordActivity = useCallback(() => {
-    if (showWarning || isLoggingOutRef.current) return;
-    const now = Date.now();
-    lastActivityRef.current = now;
-
-    if (!throttleTimerRef.current) {
-      throttleTimerRef.current = setTimeout(() => {
-        try {
-          localStorage.setItem(INACTIVITY_STORAGE_KEY, String(now));
-        } catch (e) {}
-        throttleTimerRef.current = null;
-      }, 1000);
-    }
+  // Mantém showWarningRef sincronizado sem forçar re-render do listener
+  useEffect(() => {
+    showWarningRef.current = showWarning;
   }, [showWarning]);
 
   // Reseta o aviso e restaura o timer
@@ -73,6 +61,7 @@ export const InactivityManager: React.FC = () => {
       localStorage.setItem(INACTIVITY_STORAGE_KEY, String(now));
     } catch (e) {}
     setShowWarning(false);
+    showWarningRef.current = false;
   }, []);
 
   // Executa o logoff por inatividade
@@ -80,6 +69,7 @@ export const InactivityManager: React.FC = () => {
     if (isLoggingOutRef.current) return;
     isLoggingOutRef.current = true;
     setShowWarning(false);
+    showWarningRef.current = false;
 
     try {
       sessionStorage.setItem('eras_logout_reason', 'inactivity');
@@ -108,17 +98,39 @@ export const InactivityManager: React.FC = () => {
     isLoggingOutRef.current = false;
   }, [user, signOut, navigate]);
 
-  // Listener para eventos de atividade do usuário
+  // Inicialização e captura contínua de eventos de atividade (executado uma única vez por sessão)
   useEffect(() => {
-    const isUserAuthenticated = !!session || !!state.user;
-    if (!isUserAuthenticated) return;
+    const isAuthenticated = !!session || !!state.user;
+    if (!isAuthenticated) return;
 
-    // Inicializa timestamp na montagem
+    // Inicializa o timestamp apenas se não existir ou se for inválido
+    const stored = localStorage.getItem(INACTIVITY_STORAGE_KEY);
+    const parsed = stored ? parseInt(stored, 10) : 0;
     const now = Date.now();
-    lastActivityRef.current = now;
-    try {
-      localStorage.setItem(INACTIVITY_STORAGE_KEY, String(now));
-    } catch (e) {}
+
+    if (!parsed || isNaN(parsed) || parsed > now || (now - parsed > getInactivityTimeoutMinutes() * 60 * 1000)) {
+      lastActivityRef.current = now;
+      try {
+        localStorage.setItem(INACTIVITY_STORAGE_KEY, String(now));
+      } catch (e) {}
+    } else {
+      lastActivityRef.current = parsed;
+    }
+
+    // Handler de eventos de atividade do usuário
+    const onUserActivity = () => {
+      // Se o modal de aviso estiver aberto, não reseta automaticamente pelo mousemove (exige clique explícito)
+      if (showWarningRef.current || isLoggingOutRef.current) return;
+
+      const currentTime = Date.now();
+      // Throttle de 1 segundo para gravação no localStorage
+      if (currentTime - lastActivityRef.current >= 1000) {
+        lastActivityRef.current = currentTime;
+        try {
+          localStorage.setItem(INACTIVITY_STORAGE_KEY, String(currentTime));
+        } catch (e) {}
+      }
+    };
 
     const events = [
       'mousedown',
@@ -127,68 +139,58 @@ export const InactivityManager: React.FC = () => {
       'touchstart',
       'scroll',
       'wheel',
-      'click',
-      'focus'
+      'click'
     ];
 
-    const handleUserInteraction = () => {
-      recordActivity();
-    };
-
     events.forEach(evt => {
-      window.addEventListener(evt, handleUserInteraction, { passive: true, capture: true });
-      document.addEventListener(evt, handleUserInteraction, { passive: true, capture: true });
+      window.addEventListener(evt, onUserActivity, { passive: true, capture: true });
+      document.addEventListener(evt, onUserActivity, { passive: true, capture: true });
     });
 
-    // Sincronização entre abas do navegador via Storage Event
-    const handleStorageChange = (e: StorageEvent) => {
+    // Sincronização entre múltiplas abas via storage event
+    const onStorageChange = (e: StorageEvent) => {
       if (e.key === INACTIVITY_STORAGE_KEY && e.newValue) {
         const remoteTime = parseInt(e.newValue, 10);
         if (!isNaN(remoteTime) && remoteTime > lastActivityRef.current) {
           lastActivityRef.current = remoteTime;
-          if (showWarning) {
+          if (showWarningRef.current) {
             setShowWarning(false);
+            showWarningRef.current = false;
           }
         }
       }
     };
-    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('storage', onStorageChange);
 
     return () => {
       events.forEach(evt => {
-        window.removeEventListener(evt, handleUserInteraction, { capture: true });
-        document.removeEventListener(evt, handleUserInteraction, { capture: true });
+        window.removeEventListener(evt, onUserActivity, { capture: true });
+        document.removeEventListener(evt, onUserActivity, { capture: true });
       });
-      window.removeEventListener('storage', handleStorageChange);
-      if (throttleTimerRef.current) clearTimeout(throttleTimerRef.current);
+      window.removeEventListener('storage', onStorageChange);
     };
-  }, [session, state.user, showWarning, recordActivity]);
+  }, [session?.user?.id, state.user?.id]);
 
-  // Timer de verificação periódica de inatividade (roda a cada segundo)
+  // Loop de verificação de inatividade (a cada 1 segundo)
   useEffect(() => {
-    const isUserAuthenticated = !!session || !!state.user;
-    if (!isUserAuthenticated) {
+    const isAuthenticated = !!session || !!state.user;
+    if (!isAuthenticated) {
       if (showWarning) setShowWarning(false);
       return;
     }
 
-    const interval = setInterval(() => {
+    const intervalId = setInterval(() => {
       if (isLoggingOutRef.current) return;
 
       const now = Date.now();
-      
-      // Lê última atividade sincronizada
-      let lastAct = lastActivityRef.current;
+
+      // Verifica se houve atividade recente em outra aba
       try {
         const stored = localStorage.getItem(INACTIVITY_STORAGE_KEY);
         if (stored) {
           const parsed = parseInt(stored, 10);
-          if (!isNaN(parsed) && parsed > 0) {
-            // Se o timestamp for no futuro ou muito no passado (ex: login novo), atualiza
-            if (parsed > lastAct) {
-              lastAct = parsed;
-              lastActivityRef.current = parsed;
-            }
+          if (!isNaN(parsed) && parsed > lastActivityRef.current && parsed <= now) {
+            lastActivityRef.current = parsed;
           }
         }
       } catch (e) {}
@@ -197,27 +199,27 @@ export const InactivityManager: React.FC = () => {
       const totalTimeoutMs = timeoutMinutes * 60 * 1000;
       const warningSeconds = getWarningDurationSeconds(timeoutMinutes);
       const warningThresholdMs = totalTimeoutMs - (warningSeconds * 1000);
-      const elapsed = now - lastAct;
+      const elapsed = now - lastActivityRef.current;
 
       setMaxWarningSeconds(warningSeconds);
 
       if (elapsed >= totalTimeoutMs) {
-        // Tempo totalmente esgotado -> Executa logoff
+        // Tempo totalmente esgotado -> Desconecta imediatamente
         handlePerformLogout();
       } else if (elapsed >= warningThresholdMs) {
-        // Entrou na janela de aviso prévio
-        const remainingSeconds = Math.max(1, Math.ceil((totalTimeoutMs - elapsed) / 1000));
+        // Janela de aviso prévio com contagem regressiva
+        const remaining = Math.max(1, Math.ceil((totalTimeoutMs - elapsed) / 1000));
         setShowWarning(true);
-        setSecondsRemaining(remainingSeconds);
+        setSecondsRemaining(remaining);
       } else {
-        // Usuário está ativo dentro do limite seguro
+        // Usuário dentro do período ativo seguro
         if (showWarning) {
           setShowWarning(false);
         }
       }
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => clearInterval(intervalId);
   }, [session, state.user, showWarning, handlePerformLogout]);
 
   if (!showWarning || (!session && !state.user)) {

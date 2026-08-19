@@ -17,8 +17,6 @@ export const Layout: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-bg-base text-text-base overflow-hidden font-sans selection:bg-[#3B82F6] selection:text-text-base print:block print:h-auto print:bg-white print:text-black">
-      <InactivityManager />
-
       {state.layout === 'sidebar' && (
         <div className="print:hidden">
           <Sidebar isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
