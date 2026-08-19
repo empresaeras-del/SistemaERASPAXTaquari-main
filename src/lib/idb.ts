@@ -1,5 +1,5 @@
 const DB_NAME = 'ERAS_DB';
-const DB_VERSION = 21;
+const DB_VERSION = 22;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -27,87 +27,49 @@ export const initDB = (): Promise<IDBDatabase> => {
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
       
-      // Criação das object stores se não existirem
-      if (!db.objectStoreNames.contains('associados')) {
-        db.createObjectStore('associados', { keyPath: 'id' });
+      const stores = [
+        'tenants',
+        'empresas',
+        'users',
+        'usuarios',
+        'associados',
+        'dependentes',
+        'contratos',
+        'planos',
+        'planos_pax',
+        'planos_pax_coberturas',
+        'planos_pax_faixas',
+        'itens_funerarios',
+        'fornecedores',
+        'procedimentos',
+        'credenciados',
+        'credenciados_planos',
+        'credenciados_procedimentos',
+        'atendimentos',
+        'atendimento_itens',
+        'requisicoes',
+        'requisicao_itens',
+        'remessas_faturamento',
+        'receitas',
+        'parcelas_receber',
+        'despesas',
+        'parcelas_pagar',
+        'financeiro',
+        'contas_bancarias',
+        'lotes_caixa',
+        'movimentacoes_caixa',
+        'documentos_padroes',
+        'notificacoes',
+        'auditoria',
+        'preferencias',
+        'sync_queue'
+      ];
+
+      for (const store of stores) {
+        if (!db.objectStoreNames.contains(store)) {
+          db.createObjectStore(store, { keyPath: 'id' });
+        }
       }
-      if (!db.objectStoreNames.contains('atendimentos')) {
-        db.createObjectStore('atendimentos', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('receitas')) {
-        db.createObjectStore('receitas', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('parcelas_receber')) {
-        db.createObjectStore('parcelas_receber', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('despesas')) {
-        db.createObjectStore('despesas', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('parcelas_pagar')) {
-        db.createObjectStore('parcelas_pagar', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('financeiro')) {
-        db.createObjectStore('financeiro', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('empresas')) {
-        db.createObjectStore('empresas', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('usuarios')) {
-        db.createObjectStore('usuarios', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('auditoria')) {
-        db.createObjectStore('auditoria', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('planos')) {
-        db.createObjectStore('planos', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('planos_pax')) {
-        db.createObjectStore('planos_pax', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('itens_funerarios')) {
-        db.createObjectStore('itens_funerarios', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('credenciados')) {
-        db.createObjectStore('credenciados', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('preferencias')) {
-        db.createObjectStore('preferencias', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('documentos_padroes')) {
-        db.createObjectStore('documentos_padroes', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('credenciados_planos')) {
-        db.createObjectStore('credenciados_planos', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('procedimentos')) {
-        db.createObjectStore('procedimentos', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('credenciados_procedimentos')) {
-        db.createObjectStore('credenciados_procedimentos', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('sync_queue')) { db.createObjectStore('sync_queue', { keyPath: 'id' }); }
-      if (!db.objectStoreNames.contains('notificacoes')) {
-        db.createObjectStore('notificacoes', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('lotes_caixa')) {
-        db.createObjectStore('lotes_caixa', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('movimentacoes_caixa')) {
-        db.createObjectStore('movimentacoes_caixa', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('requisicoes')) {
-        db.createObjectStore('requisicoes', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('remessas_faturamento')) {
-        db.createObjectStore('remessas_faturamento', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('fornecedores')) {
-        db.createObjectStore('fornecedores', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('contas_bancarias')) {
-        db.createObjectStore('contas_bancarias', { keyPath: 'id' });
-      }
-      // Adicionar mais stores conforme a necessidade
     };
   });
 

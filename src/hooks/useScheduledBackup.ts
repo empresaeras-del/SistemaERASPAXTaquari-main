@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { get } from 'idb-keyval';
-import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useAppContext } from '../context/AppContext';
+import { gerarBackupCompleto } from '../services/backupService';
 
 export function useScheduledBackup() {
   const { state } = useAppContext();
@@ -44,61 +44,29 @@ export function useScheduledBackup() {
             }
           }
 
-          const backupData: any = {
-            timestamp: new Date().toISOString(),
-            version: '1.0',
-            dados: {}
-          };
-
-          const tables = [
-            'empresas',
-            'usuarios',
-            'planos',
-            'associados',
-            'dependentes',
-            'contas_bancarias',
-            'caixas',
-            'titulos',
-            'movimentacoes_caixa',
-            'documentos_padroes'
-          ];
-
-          for (const table of tables) {
-            const { data, error } = await supabase.from(table).select('*');
-            if (!error && data) {
-              backupData.dados[table] = data;
-            }
-          }
-
-          const jsonString = JSON.stringify(backupData, null, 2);
-          const fileName = `eras_backup_auto_${currentDate}_${currentHour}${currentMinute}.json`;
+          const { jsonString, fileName } = await gerarBackupCompleto({
+            isOnline: state.isOnline,
+            usuarioNome: state.user?.nome || 'Sistema (Backup Automático)',
+            usuarioId: state.user?.id,
+            empresaId: state.empresaSelecionada || undefined
+          });
+          
+          const scheduledFileName = `eras_backup_auto_${currentDate}_${currentHour}${currentMinute}.json`;
           
           // @ts-ignore
-          const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+          const fileHandle = await directoryHandle.getFileHandle(scheduledFileName, { create: true });
           // @ts-ignore
           const writable = await fileHandle.createWritable();
           await writable.write(jsonString);
           await writable.close();
 
-          console.log(`Backup automático salvo com sucesso em: ${fileName}`);
-          toast.success(`Backup automático gerado: ${fileName}`);
-          
-          if (state.user) {
-            await supabase.rpc('registrar_audit', {
-              p_usuario_id: state.user.id,
-              p_acao: 'BACKUP_AUTOMATICO',
-              p_tabela: 'sistema',
-              p_dados_novos: { file: fileName },
-              p_empresa_id: state.empresaSelecionada || null
-            });
-          }
-
+          console.log(`Backup automático salvo com sucesso em: ${scheduledFileName}`);
+          toast.success(`Backup automático gerado: ${scheduledFileName}`);
         } catch (error) {
           console.error('Erro ao executar backup automático:', error);
         }
       }
-
-    }, 60000); // Verifica a cada minuto
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [state.isOnline, state.user, state.empresaSelecionada]);
