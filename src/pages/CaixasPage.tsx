@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { getLotesCaixa, reabrirLoteCaixa, getMovimentacoesCaixa, abrirLoteCaixa, registrarMovimentacao, estornarMovimentacaoCaixa, fecharLoteCaixa } from '../services/caixasService';
+import { getLotesCaixa, reabrirLoteCaixa, getMovimentacoesCaixa, abrirLoteCaixa, registrarMovimentacao, estornarMovimentacaoCaixa, fecharLoteCaixa, recalcularTotaisLote } from '../services/caixasService';
 import { getEmpresaById, Empresa } from '../services/empresasService';
 import { LoteCaixa, MovimentacaoCaixa } from '../types/caixas';
 import toast from 'react-hot-toast';
@@ -252,7 +252,18 @@ export const CaixasPage: React.FC = () => {
     setModalLoteDetalhes({ isOpen: true, lote, movimentacoes: [], loading: true, autoPrint });
     try {
       const movs = await getMovimentacoesCaixa(state.isOnline, lote.tenant_id, lote.id);
-      setModalLoteDetalhes({ isOpen: true, lote, movimentacoes: movs, loading: false, autoPrint });
+      const loteRecalculado = await recalcularTotaisLote(state.isOnline, lote.id);
+      setModalLoteDetalhes({ 
+        isOpen: true, 
+        lote: loteRecalculado || lote, 
+        movimentacoes: movs, 
+        loading: false, 
+        autoPrint 
+      });
+      // Atualiza também na listagem local de lotes
+      if (loteRecalculado) {
+        setLotes(prev => prev.map(l => l.id === loteRecalculado.id ? loteRecalculado : l));
+      }
     } catch (e: any) {
       toast.error('Erro ao carregar movimentações do lote');
       setModalLoteDetalhes(prev => ({ ...prev, loading: false, autoPrint: false }));
@@ -568,15 +579,37 @@ export const CaixasPage: React.FC = () => {
                 </div>
                 <div className="bg-bg-subtle border border-border-default p-4 rounded-xl">
                   <div className="text-xs text-text-subtle mb-1 uppercase tracking-wider font-semibold">Entradas</div>
-                  <div className="text-lg font-bold text-emerald-500">+{formatCurrency(modalLoteDetalhes.lote.saldo_entradas || 0)}</div>
+                  <div className="text-lg font-bold text-emerald-500">
+                    +{formatCurrency(
+                      modalLoteDetalhes.movimentacoes
+                        .filter(m => m.tipo === 'entrada' && !m.estornado)
+                        .reduce((acc, m) => acc + (Number(m.valor) || 0), 0)
+                    )}
+                  </div>
                 </div>
                 <div className="bg-bg-subtle border border-border-default p-4 rounded-xl">
                   <div className="text-xs text-text-subtle mb-1 uppercase tracking-wider font-semibold">Saídas</div>
-                  <div className="text-lg font-bold text-rose-500">-{formatCurrency(modalLoteDetalhes.lote.saldo_saidas || 0)}</div>
+                  <div className="text-lg font-bold text-rose-500">
+                    -{formatCurrency(
+                      modalLoteDetalhes.movimentacoes
+                        .filter(m => m.tipo === 'saida' && !m.estornado)
+                        .reduce((acc, m) => acc + (Number(m.valor) || 0), 0)
+                    )}
+                  </div>
                 </div>
                 <div className="bg-bg-subtle border border-border-default p-4 rounded-xl">
                   <div className="text-xs text-text-subtle mb-1 uppercase tracking-wider font-semibold">Saldo Esperado</div>
-                  <div className="text-lg font-bold">{formatCurrency(modalLoteDetalhes.lote.saldo_esperado)}</div>
+                  <div className="text-lg font-bold">
+                    {formatCurrency(
+                      Number(modalLoteDetalhes.lote.saldo_inicial || 0) +
+                      modalLoteDetalhes.movimentacoes
+                        .filter(m => m.tipo === 'entrada' && !m.estornado)
+                        .reduce((acc, m) => acc + (Number(m.valor) || 0), 0) -
+                      modalLoteDetalhes.movimentacoes
+                        .filter(m => m.tipo === 'saida' && !m.estornado)
+                        .reduce((acc, m) => acc + (Number(m.valor) || 0), 0)
+                    )}
+                  </div>
                 </div>
               </div>
 

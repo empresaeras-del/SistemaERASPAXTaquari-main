@@ -137,27 +137,17 @@ export const fecharLoteCaixa = async (
 
   // Buscar movimentacoes do lote para recalcular com exatidao
   const movs = await getMovimentacoesCaixa(isOnline, lote.tenant_id, loteId);
-  // Calcula as entradas e saídas considerando a lógica de compensação para estornos
-  const entradas = movs.reduce((acc, m) => {
-    let valor = 0;
-    if (m.tipo === 'entrada') valor += Number(m.valor);
-    if (m.tipo === 'saida' && m.estornado) valor += Number(m.valor); // Compensação
-    return acc + valor;
-  }, 0);
+  const entradas = movs
+    .filter(m => m.tipo === 'entrada' && !m.estornado)
+    .reduce((acc, m) => acc + (Number(m.valor) || 0), 0);
   
-  const saidas = movs.reduce((acc, m) => {
-    let valor = 0;
-    if (m.tipo === 'saida') valor += Number(m.valor);
-    if (m.tipo === 'entrada' && m.estornado) valor += Number(m.valor); // Compensação
-    return acc + valor;
-  }, 0);
+  const saidas = movs
+    .filter(m => m.tipo === 'saida' && !m.estornado)
+    .reduce((acc, m) => acc + (Number(m.valor) || 0), 0);
 
-  const saldoEsperado = Number(lote.saldo_inicial) + entradas - saidas;
+  const saldoEsperado = Number(lote.saldo_inicial || 0) + entradas - saidas;
   const saldoInformado = Number(dados.saldo_fechamento_informado);
   const diferenca = saldoInformado - saldoEsperado;
-
-  
-
 
   const loteAtualizado: LoteCaixa = {
     ...lote,
@@ -189,6 +179,48 @@ export const fecharLoteCaixa = async (
     });
   } else {
     await saveToIDB('lotes_caixa', loteAtualizado);
+    await addToSyncQueue({ storeName: 'lotes_caixa', action: 'update', data: loteAtualizado });
+  }
+
+  return loteAtualizado;
+};
+
+// === RECALCULO PRECISO DE TOTAIS DO LOTE ===
+
+export const recalcularTotaisLote = async (
+  isOnline: boolean, 
+  loteId: string
+): Promise<LoteCaixa | null> => {
+  const lote = await getFromIDB<LoteCaixa>('lotes_caixa', loteId);
+  if (!lote) return null;
+
+  const movs = await getMovimentacoesCaixa(isOnline, lote.tenant_id, loteId);
+  const entradas = movs
+    .filter(m => m.tipo === 'entrada' && !m.estornado)
+    .reduce((acc, m) => acc + (Number(m.valor) || 0), 0);
+
+  const saidas = movs
+    .filter(m => m.tipo === 'saida' && !m.estornado)
+    .reduce((acc, m) => acc + (Number(m.valor) || 0), 0);
+
+  const saldoEsperado = Number(lote.saldo_inicial || 0) + entradas - saidas;
+
+  const loteAtualizado: LoteCaixa = {
+    ...lote,
+    saldo_entradas: entradas,
+    saldo_saidas: saidas,
+    saldo_esperado: saldoEsperado,
+    atualizado_em: new Date().toISOString()
+  };
+
+  await saveToIDB('lotes_caixa', loteAtualizado);
+  if (isOnline) {
+    try {
+      await supabase.from('lotes_caixa').upsert(loteAtualizado);
+    } catch (e) {
+      console.warn('Erro ao atualizar totais do lote no Supabase:', e);
+    }
+  } else {
     await addToSyncQueue({ storeName: 'lotes_caixa', action: 'update', data: loteAtualizado });
   }
 
@@ -258,32 +290,13 @@ export const registrarMovimentacao = async (
     await addToSyncQueue({ storeName: 'movimentacoes_caixa', action: 'update', data: novaMov });
   }
 
-  // Atualiza totais no Lote de Caixa associado se aberto
-  const lote = await getFromIDB<LoteCaixa>('lotes_caixa', mov.lote_id);
-  if (lote) {
-    const valor = Number(mov.valor) || 0;
-    const novasEntradas = mov.tipo === 'entrada' ? lote.saldo_entradas + valor : lote.saldo_entradas;
-    const novasSaidas = mov.tipo === 'saida' ? lote.saldo_saidas + valor : lote.saldo_saidas;
-    const novoEsperado = lote.saldo_inicial + novasEntradas - novasSaidas;
-
-    const loteAtualizado: LoteCaixa = {
-      ...lote,
-      saldo_entradas: novasEntradas,
-      saldo_saidas: novasSaidas,
-      saldo_esperado: novoEsperado,
-      atualizado_em: new Date().toISOString()
-    };
-    await saveToIDB('lotes_caixa', loteAtualizado);
-    if (isOnline) {
-      try {
-        await supabase.from('lotes_caixa').upsert(loteAtualizado);
-      } catch (e) { /* ignore */ }
-    }
+  // Recalcula totais do lote com exatidão
+  if (mov.lote_id) {
+    await recalcularTotaisLote(isOnline, mov.lote_id);
   }
 
   return novaMov;
 };
-
 
 export const estornarMovimentacaoCaixa = async (
   isOnline: boolean,
@@ -299,7 +312,7 @@ export const estornarMovimentacaoCaixa = async (
     throw new Error('Não é possível estornar movimentações de um lote fechado');
   }
 
-  // Se tem referencia, estorna no financeiro
+  // Se tem referencia, estorna no financeiro (reverte status da parcela para pendente/atrasado)
   if (mov.referencia_id) {
     if (mov.origem === 'contas_receber') {
       await estornarRecebimento(isOnline, mov.referencia_id, observacao);
@@ -309,7 +322,11 @@ export const estornarMovimentacaoCaixa = async (
   }
 
   // Atualiza a movimentação para estornada
-  const movAtualizada = { ...mov, estornado: true, observacao: (mov.observacao ? mov.observacao + ' | ' : '') + 'ESTORNADO: ' + observacao };
+  const movAtualizada: MovimentacaoCaixa = { 
+    ...mov, 
+    estornado: true, 
+    observacao: (mov.observacao ? mov.observacao + ' | ' : '') + 'ESTORNADO: ' + observacao 
+  };
   await saveToIDB('movimentacoes_caixa', movAtualizada);
   
   if (isOnline) {
@@ -323,33 +340,8 @@ export const estornarMovimentacaoCaixa = async (
     await addToSyncQueue({ storeName: 'movimentacoes_caixa', action: 'update', data: movAtualizada as any });
   }
 
-  // Atualiza totais no Lote de Caixa (Logica de compensacao)
-  const valor = Number(mov.valor) || 0;
-  
-  // Se for entrada estornada, a entrada original se mantem, mas adicionamos na saida para compensar
-  // Se for saida estornada, a saida original se mantem, mas adicionamos na entrada para compensar
-  const novasEntradas = mov.tipo === 'saida' ? lote.saldo_entradas + valor : lote.saldo_entradas;
-  const novasSaidas = mov.tipo === 'entrada' ? lote.saldo_saidas + valor : lote.saldo_saidas;
-  
-  const novoEsperado = lote.saldo_inicial + novasEntradas - novasSaidas;
-
-  
-
-
-  const loteAtualizado: LoteCaixa = {
-    ...lote,
-    saldo_entradas: novasEntradas,
-    saldo_saidas: novasSaidas,
-    saldo_esperado: novoEsperado,
-    atualizado_em: new Date().toISOString()
-  };
-
-  await saveToIDB('lotes_caixa', loteAtualizado);
-  if (isOnline) {
-    try {
-      await supabase.from('lotes_caixa').upsert(loteAtualizado);
-    } catch (e) { /* ignore */ }
-  }
+  // Recalcula totais reais do lote (entradas e saídas ativas desconsiderando estornos)
+  await recalcularTotaisLote(isOnline, mov.lote_id);
   
   await registrarAuditoria('Estorno Movimentação Caixa', { id: movimentacaoId, valor: mov.valor });
 };
