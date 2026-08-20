@@ -274,9 +274,9 @@ export const ContasPagarPage: React.FC = () => {
       toast.success(`Pagamento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
       setShowBaixaModal(false);
       loadData();
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro ao efetivar pagamento');
+    } catch (err: any) {
+      console.error('Erro ao efetivar pagamento:', err);
+      toast.error(err?.message || 'Erro ao efetivar pagamento');
     } finally {
       setSubmittingBaixa(false);
     }

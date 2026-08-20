@@ -284,9 +284,9 @@ export const ContasReceberPage: React.FC = () => {
       toast.success(`Recebimento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
       setShowBaixaModal(false);
       loadData();
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro ao efetivar recebimento');
+    } catch (err: any) {
+      console.error('Erro ao efetivar recebimento:', err);
+      toast.error(err?.message || 'Erro ao efetivar recebimento');
     } finally {
       setSubmittingBaixa(false);
     }

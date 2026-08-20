@@ -126,31 +126,119 @@ export interface ParcelaPagar {
   deleted_at?: string | null;
 }
 
-export const salvarReceita = async (isOnline: boolean, receita: Receita, parcelas: ParcelaReceber[]): Promise<void> => {
-  const receitaComData = {
-    ...receita,
-    criado_em: receita.criado_em || new Date().toISOString()
+export const sanitizeReceitaForSupabase = (r: Receita, fallbackTenantId?: string) => {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const rId = UUID_REGEX.test(r.id || '') ? r.id : generateUUID();
+  const tId = r.tenant_id || fallbackTenantId || 'default_tenant';
+
+  return {
+    id: rId,
+    tenant_id: tId,
+    empresa_id: tId,
+    tipo_devedor: r.tipo_devedor || 'associado',
+    associado_id: r.associado_id && UUID_REGEX.test(r.associado_id) ? r.associado_id : null,
+    associado_nome: r.associado_nome || null,
+    associado_cpf: r.associado_cpf || null,
+    associado_plano: r.associado_plano || null,
+    associado_valor_contrato: r.associado_valor_contrato !== undefined && r.associado_valor_contrato !== null ? Number(r.associado_valor_contrato) : null,
+    cliente_tipo: r.cliente_tipo || null,
+    cliente_nome: r.cliente_nome || null,
+    cliente_cpf_cnpj: r.cliente_cpf_cnpj || null,
+    cliente_telefone: r.cliente_telefone || null,
+    cliente_email: r.cliente_email || null,
+    descricao: r.descricao || 'Receita',
+    categoria: r.categoria || 'Geral',
+    data_emissao: r.data_emissao ? r.data_emissao.split('T')[0] : new Date().toISOString().split('T')[0],
+    data_inicio_cobranca: r.data_inicio_cobranca ? r.data_inicio_cobranca.split('T')[0] : new Date().toISOString().split('T')[0],
+    valor_total: Number(r.valor_total) || 0,
+    qtd_parcelas: Number(r.qtd_parcelas) || 1,
+    forma_pagamento_padrao: r.forma_pagamento_padrao || 'pix',
+    conta_bancaria_id: r.conta_bancaria_id && UUID_REGEX.test(r.conta_bancaria_id) ? r.conta_bancaria_id : null,
+    observacoes: r.observacoes || null,
+    status: r.status || 'ativo',
+    atendimento_id: r.atendimento_id && UUID_REGEX.test(r.atendimento_id) ? r.atendimento_id : null,
+    criado_em: r.criado_em || new Date().toISOString(),
+    criado_por: r.criado_por && UUID_REGEX.test(r.criado_por) ? r.criado_por : null,
+    updated_at: new Date().toISOString()
   };
+};
+
+export const sanitizeParcelaReceberForSupabase = (p: ParcelaReceber, fallbackReceitaId?: string, fallbackTenantId?: string) => {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const pId = UUID_REGEX.test(p.id || '') ? p.id : generateUUID();
+  const rId = UUID_REGEX.test(p.receita_id || fallbackReceitaId || '') ? (p.receita_id || fallbackReceitaId) : fallbackReceitaId;
+  const tId = p.tenant_id || fallbackTenantId || 'default_tenant';
+
+  const dataVenc = p.data_vencimento ? p.data_vencimento.split('T')[0] : new Date().toISOString().split('T')[0];
+  const isPaid = p.status === 'recebido' || p.status === 'pago';
+
+  const dataPag = p.data_pagamento 
+    ? p.data_pagamento.split('T')[0] 
+    : (p.data_recebimento ? p.data_recebimento.split('T')[0] : (p.recebido_em ? p.recebido_em.split('T')[0] : (isPaid ? new Date().toISOString().split('T')[0] : null)));
+
+  const valRecebido = p.valor_recebido !== undefined && p.valor_recebido !== null 
+    ? Number(p.valor_recebido) 
+    : (p.valor_pago !== undefined && p.valor_pago !== null ? Number(p.valor_pago) : (isPaid ? Number(p.valor) : null));
+
+  const recebidoEm = p.recebido_em 
+    ? p.recebido_em 
+    : (p.data_recebimento ? new Date(p.data_recebimento).toISOString() : (isPaid ? new Date().toISOString() : null));
+
+  return {
+    id: pId,
+    tenant_id: tId,
+    empresa_id: tId,
+    receita_id: rId,
+    numero_parcela: Number(p.numero_parcela) || 1,
+    valor: Number(p.valor) || 0,
+    data_vencimento: dataVenc,
+    data_pagamento: dataPag,
+    valor_pago: valRecebido,
+    valor_recebido: valRecebido,
+    status: p.status || 'pendente',
+    forma_pagamento: p.forma_pagamento || 'pix',
+    forma_pagamento_efetivo: p.forma_pagamento_efetivo || null,
+    conta_bancaria_id: p.conta_bancaria_id && UUID_REGEX.test(p.conta_bancaria_id) ? p.conta_bancaria_id : null,
+    link_pagamento: p.link_pagamento || null,
+    linha_digitavel: p.linha_digitavel || null,
+    comprovante_url: p.comprovante_url || null,
+    observacoes: p.observacoes || null,
+    observacao_recebimento: p.observacao_recebimento || (p as any).observacao || null,
+    tipo_devedor: p.tipo_devedor || null,
+    devedor_nome: p.devedor_nome || null,
+    devedor_cpf_cnpj: p.devedor_cpf_cnpj || null,
+    descricao: p.descricao || null,
+    recebido_em: recebidoEm,
+    recebido_por: p.recebido_por || null,
+    total_parcelas: Number(p.total_parcelas) || 1,
+    criado_em: p.criado_em || new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+};
+
+export const salvarReceita = async (isOnline: boolean, receita: Receita, parcelas: ParcelaReceber[]): Promise<void> => {
+  const sanitizedReceita = sanitizeReceitaForSupabase(receita);
+  const receitaId = sanitizedReceita.id;
 
   if (isOnline) {
     try {
-      const { error } = await supabase.from('receitas').upsert(receitaComData);
-      if (error) console.warn('Supabase save receita error:', error);
+      const { error } = await supabase.from('receitas').upsert(sanitizedReceita);
+      if (error) console.error('Supabase save receita error:', error);
     } catch (e) {
-      console.warn('Supabase save receita threw:', e);
+      console.error('Supabase save receita threw:', e);
     }
   } else {
     await addToSyncQueue({
       storeName: 'receitas',
       action: 'update',
-      data: receitaComData
+      data: sanitizedReceita
     });
   }
-  await saveToIDB('receitas', receitaComData);
+  await saveToIDB('receitas', sanitizedReceita);
 
   // Deletar parcelas órfãs
   const existingParcelas = await getAllFromIDB<ParcelaReceber>('parcelas_receber');
-  const orphanParcelas = existingParcelas.filter(p => p.receita_id === receita.id && !parcelas.find(np => np.id === p.id));
+  const orphanParcelas = existingParcelas.filter(p => p.receita_id === receitaId && !parcelas.find(np => np.id === p.id));
   
   for (const orphan of orphanParcelas) {
     if (isOnline) {
@@ -170,58 +258,74 @@ export const salvarReceita = async (isOnline: boolean, receita: Receita, parcela
   }
 
   for (const p of parcelas) {
-    const pComData = {
-      ...p,
-      criado_em: p.criado_em || new Date().toISOString()
-    };
+    const sanitizedParcela = sanitizeParcelaReceberForSupabase(p, receitaId, sanitizedReceita.tenant_id);
     if (isOnline) {
       try {
-        const { error } = await supabase.from('parcelas_receber').upsert(pComData);
-        if (error) console.warn('Supabase save parcela_receber error:', error);
+        const { error } = await supabase.from('parcelas_receber').upsert(sanitizedParcela);
+        if (error) console.error('Supabase save parcela_receber error:', error);
       } catch (e) {
-        console.warn('Supabase save parcela_receber threw:', e);
+        console.error('Supabase save parcela_receber threw:', e);
       }
     } else {
       await addToSyncQueue({
         storeName: 'parcelas_receber',
         action: 'update',
-        data: pComData
+        data: sanitizedParcela
       });
     }
-    await saveToIDB('parcelas_receber', pComData);
+    await saveToIDB('parcelas_receber', sanitizedParcela);
   }
 
-  await registrarAuditoria('Salvar Receita', { id: receita.id, descricao: receita.descricao });
+  await registrarAuditoria('Salvar Receita', { id: receitaId, descricao: sanitizedReceita.descricao });
 };
 
 export const getParcelasReceber = async (isOnline: boolean, tenantId: string): Promise<ParcelaReceber[]> => {
   let parcelas: ParcelaReceber[] = [];
+  const localParcelas = await getAllFromIDB<ParcelaReceber>('parcelas_receber');
 
   if (isOnline) {
     try {
       let query = supabase.from('parcelas_receber').select('*');
       if (tenantId && tenantId !== 'all') {
-        query = query.eq('tenant_id', tenantId);
+        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
       }
       const { data, error } = await query;
-      if (error) throw error;
-      if (data) {
+      if (!error && data && data.length > 0) {
         for (const item of data) {
           await saveToIDB('parcelas_receber', item);
         }
+
+        // Merge Supabase com os locais
+        const remoteMap = new Map<string, ParcelaReceber>();
+        data.forEach((item: any) => remoteMap.set(item.id, item));
+        (localParcelas || []).forEach(localItem => {
+          if (!remoteMap.has(localItem.id) && !localItem.deleted_at) {
+            remoteMap.set(localItem.id, localItem);
+          }
+        });
+        parcelas = Array.from(remoteMap.values());
+      } else {
+        parcelas = localParcelas || [];
       }
-      parcelas = data || [];
     } catch (error) {
       console.warn('Supabase fetch parcelas_receber failed, using IDB fallback.', error);
-      parcelas = await getAllFromIDB<ParcelaReceber>('parcelas_receber');
+      parcelas = localParcelas || [];
     }
   } else {
-    parcelas = await getAllFromIDB<ParcelaReceber>('parcelas_receber');
+    parcelas = localParcelas || [];
   }
 
-  return parcelas.filter(p => {
+  return (parcelas || []).filter(p => {
     if (!p) return false;
-    if (tenantId && tenantId !== 'all' && p.tenant_id && p.tenant_id !== tenantId) return false;
+    if (p.deleted_at) return false;
+    if (tenantId && tenantId !== 'all') {
+      const matchTenant = !p.tenant_id || 
+        p.tenant_id === tenantId || 
+        p.tenant_id === 'all' || 
+        p.tenant_id === 'default_tenant' || 
+        p.tenant_id === 'empresa_padrao';
+      if (!matchTenant) return false;
+    }
     return true;
   });
 };
@@ -411,52 +515,95 @@ export const getParcelasPagar = async (isOnline: boolean, tenantId: string): Pro
 };
 
 export const registrarRecebimento = async (isOnline: boolean, parcelaId: string, dadosRecebimento: any): Promise<void> => {
-  const parcela = await getFromIDB<ParcelaReceber>('parcelas_receber', parcelaId);
-  if (!parcela) return;
+  let parcela = await getFromIDB<ParcelaReceber>('parcelas_receber', parcelaId);
+
+  if (!parcela && isOnline) {
+    try {
+      const { data, error } = await supabase.from('parcelas_receber').select('*').eq('id', parcelaId).maybeSingle();
+      if (!error && data) {
+        parcela = data;
+      }
+    } catch (e) {
+      console.warn('Falha ao buscar parcela remota no Supabase:', e);
+    }
+  }
+
+  if (!parcela) {
+    throw new Error('Parcela não encontrada para efetivar recebimento.');
+  }
+
+  const dataRecebimentoISO = dadosRecebimento.data_recebimento || new Date().toISOString();
+  const valorRecebidoNum = Number(dadosRecebimento.valor_recebido) || parcela.valor;
 
   const parcelaAtualizada: ParcelaReceber = {
     ...parcela,
     status: 'recebido',
-    data_recebimento: dadosRecebimento.data_recebimento || new Date().toISOString(),
-    valor_recebido: dadosRecebimento.valor_recebido || parcela.valor,
+    data_recebimento: dataRecebimentoISO,
+    recebido_em: dataRecebimentoISO,
+    data_pagamento: dataRecebimentoISO.split('T')[0],
+    valor_recebido: valorRecebidoNum,
+    valor_pago: valorRecebidoNum,
     forma_pagamento_efetivo: dadosRecebimento.forma_pagamento_efetivo || parcela.forma_pagamento,
     conta_bancaria_id: dadosRecebimento.conta_bancaria_id || parcela.conta_bancaria_id,
     recebido_por: dadosRecebimento.recebido_por || 'Sistema',
-    observacao_recebimento: dadosRecebimento.observacao
+    observacao_recebimento: dadosRecebimento.observacao || dadosRecebimento.observacao_recebimento
   };
+
+  const sanitized = sanitizeParcelaReceberForSupabase(parcelaAtualizada);
 
   if (isOnline) {
     try {
-      const { error } = await supabase.from('parcelas_receber').upsert(parcelaAtualizada);
-      if (error) console.warn('Supabase update parcela_receber error:', error);
-    } catch (e) {
-      console.warn('Supabase update error:', e);
+      const { error } = await supabase.from('parcelas_receber').upsert(sanitized);
+      if (error) {
+        console.error('Supabase update parcela_receber error:', error);
+        throw new Error(`Erro ao atualizar parcela no Supabase: ${error.message}`);
+      }
+    } catch (e: any) {
+      console.error('Supabase update error:', e);
+      throw e;
     }
   } else {
     await addToSyncQueue({
       storeName: 'parcelas_receber',
       action: 'update',
-      data: parcelaAtualizada
+      data: sanitized
     });
   }
 
-  await saveToIDB('parcelas_receber', parcelaAtualizada);
-  await registrarAuditoria('Registrar Recebimento', { id: parcelaId, valor: parcelaAtualizada.valor_recebido });
+  await saveToIDB('parcelas_receber', { ...parcelaAtualizada, ...sanitized });
+  await registrarAuditoria('Registrar Recebimento', { id: parcelaId, valor: sanitized.valor_recebido });
 };
 
 export const registrarPagamento = async (isOnline: boolean, parcelaId: string, dadosPagamento: any): Promise<void> => {
-  const parcela = await getFromIDB<ParcelaPagar>('parcelas_pagar', parcelaId);
-  if (!parcela) return;
+  let parcela = await getFromIDB<ParcelaPagar>('parcelas_pagar', parcelaId);
+
+  if (!parcela && isOnline) {
+    try {
+      const { data, error } = await supabase.from('parcelas_pagar').select('*').eq('id', parcelaId).maybeSingle();
+      if (!error && data) {
+        parcela = data;
+      }
+    } catch (e) {
+      console.warn('Falha ao buscar parcela remota no Supabase:', e);
+    }
+  }
+
+  if (!parcela) {
+    throw new Error('Parcela não encontrada para efetivar pagamento.');
+  }
+
+  const dataPagamentoStr = dadosPagamento.data_pagamento ? dadosPagamento.data_pagamento.split('T')[0] : new Date().toISOString().split('T')[0];
+  const valorPagoNum = Number(dadosPagamento.valor_pago) || parcela.valor;
 
   const parcelaAtualizada: ParcelaPagar = {
     ...parcela,
     status: 'pago',
-    data_pagamento: dadosPagamento.data_pagamento ? dadosPagamento.data_pagamento.split('T')[0] : new Date().toISOString().split('T')[0],
-    valor_pago: dadosPagamento.valor_pago || parcela.valor,
+    data_pagamento: dataPagamentoStr,
+    valor_pago: valorPagoNum,
     forma_pagamento_efetivo: dadosPagamento.forma_pagamento_efetivo || parcela.forma_pagamento,
     conta_bancaria_id: dadosPagamento.conta_bancaria_id || parcela.conta_bancaria_id,
     pago_por: dadosPagamento.pago_por || 'Sistema',
-    observacao_pagamento: dadosPagamento.observacao,
+    observacao_pagamento: dadosPagamento.observacao || dadosPagamento.observacao_pagamento,
     pago_em: new Date().toISOString()
   };
 
@@ -465,9 +612,13 @@ export const registrarPagamento = async (isOnline: boolean, parcelaId: string, d
   if (isOnline) {
     try {
       const { error } = await supabase.from('parcelas_pagar').upsert(sanitized);
-      if (error) console.error('Supabase update parcela_pagar error:', error);
-    } catch (e) {
+      if (error) {
+        console.error('Supabase update parcela_pagar error:', error);
+        throw new Error(`Erro ao atualizar parcela no Supabase: ${error.message}`);
+      }
+    } catch (e: any) {
       console.error('Supabase update error:', e);
+      throw e;
     }
   } else {
     await addToSyncQueue({
@@ -477,13 +628,25 @@ export const registrarPagamento = async (isOnline: boolean, parcelaId: string, d
     });
   }
 
-  await saveToIDB('parcelas_pagar', sanitized);
+  await saveToIDB('parcelas_pagar', { ...parcelaAtualizada, ...sanitized });
   await registrarAuditoria('Registrar Pagamento', { id: parcelaId, valor: sanitized.valor_pago });
 };
 
 
 export const estornarRecebimento = async (isOnline: boolean, parcelaId: string, observacao: string): Promise<void> => {
-  const parcela = await getFromIDB<ParcelaReceber>('parcelas_receber', parcelaId);
+  let parcela = await getFromIDB<ParcelaReceber>('parcelas_receber', parcelaId);
+
+  if (!parcela && isOnline) {
+    try {
+      const { data, error } = await supabase.from('parcelas_receber').select('*').eq('id', parcelaId).maybeSingle();
+      if (!error && data) {
+        parcela = data;
+      }
+    } catch (e) {
+      console.warn('Falha ao buscar parcela remota no Supabase:', e);
+    }
+  }
+
   if (!parcela) return;
 
   const dataVencimento = new Date(parcela.data_vencimento + 'T12:00:00');
@@ -494,28 +657,37 @@ export const estornarRecebimento = async (isOnline: boolean, parcelaId: string, 
     ...parcela,
     status: novoStatus,
     data_recebimento: null as any,
+    data_pagamento: null as any,
+    recebido_em: null as any,
     valor_recebido: null as any,
+    valor_pago: null as any,
     forma_pagamento_efetivo: null as any,
     recebido_por: null as any,
     observacao_recebimento: `Estornado: ${observacao}`
   };
 
+  const sanitized = sanitizeParcelaReceberForSupabase(parcelaAtualizada);
+
   if (isOnline) {
     try {
-      const { error } = await supabase.from('parcelas_receber').upsert(parcelaAtualizada);
-      if (error) console.warn('Supabase update parcela_receber error:', error);
-    } catch (e) {
-      console.warn('Supabase update error:', e);
+      const { error } = await supabase.from('parcelas_receber').upsert(sanitized);
+      if (error) {
+        console.error('Supabase update parcela_receber error:', error);
+        throw new Error(`Erro ao estornar parcela no Supabase: ${error.message}`);
+      }
+    } catch (e: any) {
+      console.error('Supabase update error:', e);
+      throw e;
     }
   } else {
     await addToSyncQueue({
       storeName: 'parcelas_receber',
       action: 'update',
-      data: parcelaAtualizada
+      data: sanitized
     });
   }
 
-  await saveToIDB('parcelas_receber', parcelaAtualizada);
+  await saveToIDB('parcelas_receber', { ...parcelaAtualizada, ...sanitized });
   await registrarAuditoria('Estorno Recebimento', { id: parcelaId, valor: parcela.valor_recebido });
 };
 
