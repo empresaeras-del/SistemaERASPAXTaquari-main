@@ -20,7 +20,7 @@ export const PrivateRoute: React.FC = () => {
     );
   }
 
-  if (!session && !user) {
+  if (!session) {
     return <Navigate to="/login" replace />;
   }
 

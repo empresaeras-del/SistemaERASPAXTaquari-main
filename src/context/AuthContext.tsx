@@ -85,23 +85,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSupabaseUser(s.user);
         const profile = await loadUserProfile(s.user);
         setUser(profile);
-      } else {
-        // Se offline, tenta restaurar último perfil em cache
-        try {
-          const cached = localStorage.getItem('cached_user_profile');
-          if (cached) {
-            setUser(JSON.parse(cached));
-          }
-        } catch (e) {}
       }
       setLoading(false);
     }).catch(() => {
-      try {
-        const cached = localStorage.getItem('cached_user_profile');
-        if (cached) {
-          setUser(JSON.parse(cached));
-        }
-      } catch (e) {}
       setLoading(false);
     });
 

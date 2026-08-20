@@ -49,8 +49,8 @@ export const LoginPage: React.FC = () => {
     }).catch(() => { });
   }, []);
 
-  // Se já logado (online ou perfil offline restaurado), redireciona para o sistema
-  if (!loading && (session || user)) {
+  // Se já logado, redireciona para o sistema
+  if (!loading && session) {
     return <Navigate to="/" replace />;
   }
 
