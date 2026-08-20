@@ -77,6 +77,10 @@ export const CaixasPage: React.FC = () => {
 
   const handleConfirmReabrirLote = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error("Operação de caixa bloqueada no Modo de Visualização (Offline).");
+      return;
+    }
     if (!justificativaReabertura.trim()) {
       toast.error("A justificativa é obrigatória para reabrir o lote.");
       return;
@@ -109,6 +113,10 @@ export const CaixasPage: React.FC = () => {
 
   const handleConfirmEstorno = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error("Operação de caixa bloqueada no Modo de Visualização (Offline).");
+      return;
+    }
     if (!motivoEstorno.trim()) {
       toast.error("O motivo é obrigatório para estornar a movimentação.");
       return;
@@ -142,6 +150,10 @@ export const CaixasPage: React.FC = () => {
 
   const handleAbrirLote = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error("Operação de caixa bloqueada no Modo de Visualização (Offline).");
+      return;
+    }
     try {
       setLoading(true);
       await abrirLoteCaixa(state.isOnline, {
@@ -166,6 +178,10 @@ export const CaixasPage: React.FC = () => {
 
   const handleFecharLote = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error("Operação de caixa bloqueada no Modo de Visualização (Offline).");
+      return;
+    }
     if (!loteAberto) return;
     try {
       setLoading(true);
@@ -191,6 +207,10 @@ export const CaixasPage: React.FC = () => {
 
   const handleMovimentacao = async (e: React.FormEvent, tipo: 'entrada' | 'saida') => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error("Operação de caixa bloqueada no Modo de Visualização (Offline).");
+      return;
+    }
     if (!loteAberto) return;
     try {
       setLoading(true);
@@ -277,18 +297,38 @@ export const CaixasPage: React.FC = () => {
             <h2 className="text-lg font-semibold">Caixa Atual: {loteAberto ? loteAberto.codigo_lote : 'Nenhum caixa aberto'}</h2>
             <div className="flex gap-2">
               {!loteAberto ? (
-                <button onClick={() => setModalAbrirLote(true)} className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl font-medium text-sm">
+                <button 
+                  disabled={!state.isOnline}
+                  onClick={() => setModalAbrirLote(true)} 
+                  title={!state.isOnline ? "Abertura bloqueada no Modo Offline" : "Abrir Caixa"}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <Plus className="w-4 h-4" /> Abrir Caixa
                 </button>
               ) : (
                 <>
-                  <button onClick={() => setModalSuprimento(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium text-sm transition-colors">
+                  <button 
+                    disabled={!state.isOnline}
+                    onClick={() => setModalSuprimento(true)} 
+                    title={!state.isOnline ? "Operação bloqueada no Modo Offline" : "Suprimento"}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <ArrowUpRight className="w-4 h-4" /> Suprimento
                   </button>
-                  <button onClick={() => setModalSangria(true)} className="flex items-center gap-2 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-medium text-sm transition-colors">
+                  <button 
+                    disabled={!state.isOnline}
+                    onClick={() => setModalSangria(true)} 
+                    title={!state.isOnline ? "Operação bloqueada no Modo Offline" : "Sangria"}
+                    className="flex items-center gap-2 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <ArrowDownRight className="w-4 h-4" /> Sangria
                   </button>
-                  <button onClick={() => setModalFecharLote(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-medium text-sm transition-colors">
+                  <button 
+                    disabled={!state.isOnline}
+                    onClick={() => setModalFecharLote(true)} 
+                    title={!state.isOnline ? "Fechamento bloqueado no Modo Offline" : "Fechar Caixa"}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <X className="w-4 h-4" /> Fechar Caixa
                   </button>
                 </>

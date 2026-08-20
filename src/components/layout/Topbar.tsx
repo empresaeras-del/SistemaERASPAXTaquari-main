@@ -116,9 +116,9 @@ export const Topbar: React.FC = () => {
               </span>
             )
           ) : (
-            <span className="flex items-center gap-1.5 text-rose-400 bg-rose-400/10 px-2.5 py-1 rounded-full border border-rose-400/20">
+            <span className="flex items-center gap-1.5 text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20 text-xs font-semibold" title="O sistema está em modo de somente visualização sem acesso à internet.">
               <WifiOff className="w-4 h-4" />
-              Aguardando Sincronização ({pendingCount})
+              Modo Offline (Visualização)
             </span>
           )}
         </div>

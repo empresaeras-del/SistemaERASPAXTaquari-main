@@ -99,6 +99,10 @@ export const CredenciadosPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error('Operação bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     if (!isValidCPFOrCNPJ(formData.cnpj_cpf || '')) {
       toast.error('CPF ou CNPJ inválido.');
       return;
@@ -141,6 +145,10 @@ export const CredenciadosPage: React.FC = () => {
 
   const handleLinkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error('Operação bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     try {
       await vincularPlano({
         credenciado_id: selectedCredenciado.id,
@@ -257,7 +265,9 @@ export const CredenciadosPage: React.FC = () => {
             <span>Exportar PDF</span>
           </button>
           <button
+            disabled={!state.isOnline}
             onClick={handleOpenCreate}
+            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Credenciado"}
             className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary to-blue-400 text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-lg shadow-primary/25 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />

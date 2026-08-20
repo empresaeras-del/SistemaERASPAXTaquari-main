@@ -5,7 +5,7 @@ import { getEmpresas, Empresa } from '../services/empresasService';
 import { Clock } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { signIn, signUp, resetPassword, session, loading } = useAuth();
+  const { signIn, signUp, resetPassword, session, user, loading } = useAuth();
   const [searchParams] = useSearchParams();
   const [isInactivity, setIsInactivity] = useState(() => {
     return searchParams.get('reason') === 'inactivity' || sessionStorage.getItem('eras_logout_reason') === 'inactivity';
@@ -49,8 +49,8 @@ export const LoginPage: React.FC = () => {
     }).catch(() => { });
   }, []);
 
-  // Se já logado, redireciona
-  if (!loading && session) {
+  // Se já logado (online ou perfil offline restaurado), redireciona para o sistema
+  if (!loading && (session || user)) {
     return <Navigate to="/" replace />;
   }
 

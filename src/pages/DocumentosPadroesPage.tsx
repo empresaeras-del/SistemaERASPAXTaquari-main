@@ -355,8 +355,8 @@ export const DocumentosPadroesPage = () => {
   };
 
   const handleDelete = async (doc: DocumentoPadrao) => {
-    if (!canDelete(state.user)) {
-      alert('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+    if (!canDelete(state.user, state.isOnline)) {
+      alert(!state.isOnline ? 'Exclusão bloqueada no Modo de Visualização (Offline).' : 'Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
       return;
     }
     if (window.confirm(`Tem certeza que deseja excluir o modelo "${doc.nome}"?`)) {
@@ -370,6 +370,10 @@ export const DocumentosPadroesPage = () => {
   };
 
   const handleToggleStatus = async (doc: DocumentoPadrao) => {
+    if (!state.isOnline) {
+      alert('Alteração de status bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     try {
       await editar(doc.id, { ativo: !doc.ativo });
     } catch (err) {
@@ -380,6 +384,10 @@ export const DocumentosPadroesPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      alert('Operação bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     
     try {
       if (editingDoc?.id) {
@@ -444,9 +452,10 @@ export const DocumentosPadroesPage = () => {
           <p className="text-text-subtle text-sm mt-1">Gerencie os modelos de contratos e termos</p>
         </div>
         <button 
-          
+          disabled={!state.isOnline}
           onClick={() => handleOpenForm()}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+          title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Modelo"}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-5 h-5" />
           Novo Modelo

@@ -68,8 +68,12 @@ export const RequisicoesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const handleExcluirGuia = (req: Requisicao) => {
-    if (!canDelete(state.user)) {
-      toast.error('Permissão negada. Somente administradores podem excluir guias de requisição.');
+    if (!canDelete(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? 'Exclusão bloqueada no Modo de Visualização (Offline).'
+          : 'Permissão negada. Somente administradores podem excluir guias de requisição.'
+      );
       return;
     }
 
@@ -328,6 +332,11 @@ export const RequisicoesPage: React.FC = () => {
     const valorTotal = itensGuia.reduce((acc, i) => acc + i.valor_total, 0);
     const tenantId = state.empresaSelecionada || 'default_tenant';
 
+    if (!state.isOnline) {
+      toast.error('Emissão de guias bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
+
     try {
       const reqData: Partial<Requisicao> = {
         tenant_id: tenantId,
@@ -438,6 +447,10 @@ export const RequisicoesPage: React.FC = () => {
 
   // Change Status
   const handleAlterarStatus = async (reqId: string, novoStatus: StatusRequisicao) => {
+    if (!state.isOnline) {
+      toast.error('Alteração de status bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     try {
       await atualizarStatusRequisicao(state.isOnline, reqId, novoStatus, {
         autorizado_por: state.user?.nome || 'Operador'
@@ -538,11 +551,13 @@ export const RequisicoesPage: React.FC = () => {
         </div>
 
         <button
+          disabled={!state.isOnline}
           onClick={() => {
             resetForm();
             setModalNovaGuia(true);
           }}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl font-medium text-sm transition-colors shadow-sm shrink-0"
+          title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Nova Guia de Requisição"}
+          className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl font-medium text-sm transition-colors shadow-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-4 h-4" />
           <span>Nova Guia de Requisição</span>

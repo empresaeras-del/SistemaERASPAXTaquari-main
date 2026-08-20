@@ -1100,6 +1100,10 @@ export const AssociadosPage: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error("Operação bloqueada no Modo de Visualização (Offline).");
+      return;
+    }
     if (!editingAssociado || !editingAssociado.id) return;
     if (!executarValidacaoOuAlertar()) return;
     try {
@@ -1223,8 +1227,12 @@ export const AssociadosPage: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    if (!canDelete(state.user)) {
-      toast.error("Permissão negada. Somente usuários Administradores podem excluir registros no sistema.");
+    if (!canDelete(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? "Exclusão bloqueada no Modo de Visualização (Offline)."
+          : "Permissão negada. Somente usuários Administradores podem excluir registros no sistema."
+      );
       return;
     }
 
@@ -1283,8 +1291,9 @@ export const AssociadosPage: React.FC = () => {
             <span>Exportar PDF</span>
           </button>
           <button
-            disabled={!state.isOnline && false}
+            disabled={!state.isOnline}
             onClick={() => handleOpenModal()}
+            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Associado"}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(59,130,246,0.25)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             <Plus className="w-4 h-4" />

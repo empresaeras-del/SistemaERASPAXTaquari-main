@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
  * - Se autenticado: renderiza a rota filha (Outlet)
  */
 export const PrivateRoute: React.FC = () => {
-  const { session, loading } = useAuth();
+  const { session, user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -20,7 +20,7 @@ export const PrivateRoute: React.FC = () => {
     );
   }
 
-  if (!session) {
+  if (!session && !user) {
     return <Navigate to="/login" replace />;
   }
 

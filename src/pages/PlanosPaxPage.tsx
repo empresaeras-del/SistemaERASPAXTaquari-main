@@ -194,10 +194,12 @@ export const PlanosPaxPage: React.FC = () => {
   };
 
   const handleDelete = async (plano: PlanoPaxCompleto) => {
-    if (!canDelete(state.user)) {
+    if (!canDelete(state.user, state.isOnline)) {
       systemAlert(
-        'Permissão Negada',
-        'Somente usuários Administradores e Super Administradores possuem permissão para excluir planos no sistema.',
+        'Exclusão Não Permitida',
+        !state.isOnline
+          ? 'Operações de exclusão estão bloqueadas no Modo de Visualização (Offline).'
+          : 'Somente usuários Administradores e Super Administradores possuem permissão para excluir planos no sistema.',
         'warning'
       );
       return;
@@ -244,16 +246,20 @@ export const PlanosPaxPage: React.FC = () => {
   };
 
   const handleToggleStatus = async (plano: PlanoPaxCompleto) => {
+    if (!state.isOnline) {
+      toast.error('Alteração de status bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     try {
       if (plano.ativo) {
         await desativar(plano.id);
         toast.success('Plano desativado.');
       } else {
         await reativar(plano.id);
-        toast.success('Plano ativado.');
+        toast.success('Plano ativado com sucesso!');
       }
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao alterar status.');
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao alterar status do plano.');
     }
   };
 
@@ -296,8 +302,10 @@ export const PlanosPaxPage: React.FC = () => {
         
         <div className="flex items-center gap-3">
           <button
+            disabled={!state.isOnline}
             onClick={() => handleOpenForm()}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(59,130,246,0.25)]"
+            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Plano"}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(59,130,246,0.25)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
             Novo Plano

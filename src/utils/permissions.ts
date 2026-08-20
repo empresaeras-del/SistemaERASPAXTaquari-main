@@ -104,37 +104,51 @@ export const canManageUserModules = (
 };
 
 /**
- * Regra Global: Somente Super Admin e Admin podem realizar exclusões de registros no sistema.
+ * Regra Global de Conectividade: Quando offline, o sistema opera em Modo de Visualização (Read-Only).
+ * Nenhuma inclusão, alteração ou exclusão é permitida sem conexão com a internet.
  */
-export const canDelete = (user: Usuario | null | undefined): boolean => {
+export const isOfflineReadOnly = (isOnline?: boolean): boolean => {
+  return isOnline === false;
+};
+
+/**
+ * Regra Global: Somente Super Admin e Admin podem realizar exclusões de registros no sistema.
+ * Bloqueado automaticamente quando offline.
+ */
+export const canDelete = (user: Usuario | null | undefined, isOnline?: boolean): boolean => {
+  if (isOnline === false) return false;
   if (!user) return false;
   return user.nivel === 'super_admin' || user.nivel === 'admin';
 };
 
 /**
- * Regra: Somente Super Admin pode incluir novas empresas no sistema.
+ * Regra: Somente Super Admin pode incluir novas empresas no sistema (online).
  */
-export const canCreateEmpresa = (user: Usuario | null | undefined): boolean => {
+export const canCreateEmpresa = (user: Usuario | null | undefined, isOnline?: boolean): boolean => {
+  if (isOnline === false) return false;
   if (!user) return false;
   return user.nivel === 'super_admin';
 };
 
 /**
- * Regra: Somente Super Admin pode excluir empresas.
+ * Regra: Somente Super Admin pode excluir empresas (online).
  */
-export const canDeleteEmpresa = (user: Usuario | null | undefined): boolean => {
+export const canDeleteEmpresa = (user: Usuario | null | undefined, isOnline?: boolean): boolean => {
+  if (isOnline === false) return false;
   if (!user) return false;
   return user.nivel === 'super_admin';
 };
 
 /**
  * Regra: Somente o Super Admin pode editar qualquer empresa,
- * e o Admin pode editar os dados de sua respectiva empresa.
+ * e o Admin pode editar os dados de sua respectiva empresa (online).
  */
 export const canEditEmpresa = (
   user: Usuario | null | undefined,
-  empresaId: string | null | undefined
+  empresaId: string | null | undefined,
+  isOnline?: boolean
 ): boolean => {
+  if (isOnline === false) return false;
   if (!user || !empresaId) return false;
   if (user.nivel === 'super_admin') return true;
   if (user.nivel === 'admin') {
@@ -146,12 +160,14 @@ export const canEditEmpresa = (
 /**
  * Regra: Permitir somente ao usuário Super Admin editar usuários do mesmo nível (Super Admin e Admin).
  * Admin só pode gerenciar usuários de nível inferior (Gerente e Funcionário) pertencentes à sua empresa.
- * O próprio usuário autenticado pode editar seus dados de perfil e alterar sua senha.
+ * O próprio usuário autenticado pode editar seus dados de perfil e alterar sua senha (somente online).
  */
 export const canEditUser = (
   currentUser: Usuario | null | undefined,
-  targetUser: { id?: string; nivel: NivelAcesso; tenant_id?: string }
+  targetUser: { id?: string; nivel: NivelAcesso; tenant_id?: string },
+  isOnline?: boolean
 ): boolean => {
+  if (isOnline === false) return false;
   if (!currentUser) return false;
   if (currentUser.nivel === 'super_admin') {
     return true;
@@ -161,13 +177,12 @@ export const canEditUser = (
     return true;
   }
   if (currentUser.nivel === 'admin') {
+    // Admin NÃO pode editar outros Admins nem Super Admins
     if (targetUser.nivel === 'super_admin' || targetUser.nivel === 'admin') {
       return false;
     }
-    if (currentUser.tenant_id && targetUser.tenant_id) {
-      return currentUser.tenant_id === targetUser.tenant_id || targetUser.tenant_id === 'all';
-    }
-    return true;
+    // Admin só pode editar gerentes e funcionários do seu próprio tenant
+    return currentUser.tenant_id === targetUser.tenant_id;
   }
   return false;
 };
@@ -178,8 +193,10 @@ export const canEditUser = (
  */
 export const canChangeUserPassword = (
   currentUser: Usuario | null | undefined,
-  targetUser: { id?: string; nivel?: NivelAcesso; tenant_id?: string } | null | undefined
+  targetUser: { id?: string; nivel?: NivelAcesso; tenant_id?: string } | null | undefined,
+  isOnline?: boolean
 ): boolean => {
+  if (isOnline === false) return false;
   if (!currentUser || !targetUser) return false;
   // Super admin pode alterar senha de qualquer usuário independente do nível
   if (currentUser.nivel === 'super_admin') return true;
@@ -197,9 +214,15 @@ export const canChangeUserPassword = (
  */
 export const canDeleteUser = (
   currentUser: Usuario | null | undefined,
-  targetUser: { id?: string; nivel: NivelAcesso; tenant_id?: string }
+  targetUser: { id?: string; nivel: NivelAcesso; tenant_id?: string },
+  isOnline?: boolean
 ): boolean => {
+  if (isOnline === false) return false;
   if (!currentUser) return false;
+  // Não pode excluir a si mesmo
+  if (targetUser.id && currentUser.id === targetUser.id) {
+    return false;
+  }
   if (currentUser.nivel === 'super_admin') {
     return true;
   }
@@ -207,10 +230,7 @@ export const canDeleteUser = (
     if (targetUser.nivel === 'super_admin' || targetUser.nivel === 'admin') {
       return false;
     }
-    if (currentUser.tenant_id && targetUser.tenant_id) {
-      return currentUser.tenant_id === targetUser.tenant_id;
-    }
-    return true;
+    return currentUser.tenant_id === targetUser.tenant_id;
   }
   return false;
 };

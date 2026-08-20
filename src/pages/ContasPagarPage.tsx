@@ -237,6 +237,10 @@ export const ContasPagarPage: React.FC = () => {
   };
 
   const handleEfetivarPagamento = async () => {
+    if (!state.isOnline) {
+      toast.error('Baixa de pagamento bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     if (!parcelaSelecionada || !loteAberto) return;
 
     setSubmittingBaixa(true);
@@ -290,8 +294,12 @@ export const ContasPagarPage: React.FC = () => {
   };
 
   const handleExcluirParcela = (parcela: ParcelaPagar) => {
-    if (!canDelete(state.user)) {
-      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+    if (!canDelete(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? 'Exclusão bloqueada no Modo de Visualização (Offline).'
+          : 'Permissão negada. Somente usuários Administradores podem excluir registros no sistema.'
+      );
       return;
     }
 
@@ -315,8 +323,12 @@ export const ContasPagarPage: React.FC = () => {
   };
 
   const handleExcluirDespesaCompleta = (despesaId: string, descricao: string) => {
-    if (!canDelete(state.user)) {
-      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+    if (!canDelete(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? 'Exclusão bloqueada no Modo de Visualização (Offline).'
+          : 'Permissão negada. Somente usuários Administradores podem excluir registros no sistema.'
+      );
       return;
     }
 
@@ -355,7 +367,7 @@ export const ContasPagarPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 print:hidden">
         <div>
           <h1 className="text-2xl font-bold text-text-base">Contas a Pagar</h1>
-          <p className="text-text-subtle mt-1">Gestão de despesas e pagamentos</p>
+          <p className="text-text-subtle mt-1">Gestão de despesas, fornecedores e vencimentos</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -366,10 +378,15 @@ export const ContasPagarPage: React.FC = () => {
             <Printer className="w-4 h-4" />
             <span>Exportar PDF</span>
           </button>
-          <button onClick={() => navigate('/financeiro/contas-a-pagar/nova')} className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-medium transition-colors shadow-lg shadow-emerald-500/20">
-          <Plus className="w-5 h-5" />
-          Nova Despesa
-        </button>
+          <button 
+            disabled={!state.isOnline}
+            onClick={() => navigate('/financeiro/contas-a-pagar/nova')} 
+            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Nova Despesa"}
+            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-medium transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-5 h-5" />
+            Nova Despesa
+          </button>
         </div>
       </div>
 

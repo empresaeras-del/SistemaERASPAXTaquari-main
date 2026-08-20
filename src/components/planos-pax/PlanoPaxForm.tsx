@@ -189,6 +189,10 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   if (!isOpen) return null;
 
   const onSubmit = async (data: any) => {
+    if (!state.isOnline) {
+      toast.error('Operação bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     setIsSubmitting(true);
     try {
       let km = null;

@@ -193,14 +193,18 @@ export const ConfiguracoesPage: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error("Operação bloqueada no Modo de Visualização (Offline).");
+      return;
+    }
     if (!editingEmpresa || !editingEmpresa.id) return;
 
     const isNew = !empresas.some(emp => emp.id === editingEmpresa.id);
-    if (isNew && !canCreateEmpresa(state.user)) {
+    if (isNew && !canCreateEmpresa(state.user, state.isOnline)) {
       toast.error("Somente o Super Admin pode incluir novas empresas no sistema.");
       return;
     }
-    if (!isNew && !canEditEmpresa(state.user, editingEmpresa.id)) {
+    if (!isNew && !canEditEmpresa(state.user, editingEmpresa.id, state.isOnline)) {
       toast.error("Você só tem permissão para editar os dados da sua respectiva empresa.");
       return;
     }
@@ -218,8 +222,12 @@ export const ConfiguracoesPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!canDeleteEmpresa(state.user)) {
-      toast.error("Somente o Super Admin pode excluir empresas.");
+    if (!canDeleteEmpresa(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? "Exclusão bloqueada no Modo de Visualização (Offline)."
+          : "Somente o Super Admin pode excluir empresas."
+      );
       return;
     }
 
@@ -354,6 +362,10 @@ export const ConfiguracoesPage: React.FC = () => {
 
   const handleSaveUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error("Operação bloqueada no Modo de Visualização (Offline).");
+      return;
+    }
     if (!editingUsuario || !editingUsuario.id) return;
 
     const isNew = !usuarios.some(u => u.id === editingUsuario.id);
@@ -372,7 +384,7 @@ export const ConfiguracoesPage: React.FC = () => {
         return;
       }
     } else {
-      if (!canEditUser(state.user, editingUsuario as UsuarioCadastro)) {
+      if (!canEditUser(state.user, editingUsuario as UsuarioCadastro, state.isOnline)) {
         toast.error("Você não tem permissão para editar usuários deste nível.");
         return;
       }
@@ -407,8 +419,12 @@ export const ConfiguracoesPage: React.FC = () => {
 
   const handleDeleteUsuario = async (id: string) => {
     const userToDelete = usuarios.find(u => u.id === id);
-    if (userToDelete && !canDeleteUser(state.user, userToDelete)) {
-      toast.error("Permissão negada. Somente o Super Admin pode excluir usuários do mesmo nível ou superiores.");
+    if (userToDelete && !canDeleteUser(state.user, userToDelete, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? "Exclusão bloqueada no Modo de Visualização (Offline)."
+          : "Permissão negada. Somente o Super Admin pode excluir usuários do mesmo nível ou superiores."
+      );
       return;
     }
 

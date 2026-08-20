@@ -54,15 +54,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      return {
-        id: data.id,
-        nome: data.nome,
-        email: data.email,
-        nivel: data.nivel as NivelAcesso,
-        modulos_permitidos: data.modulos_permitidos || ['*'],
-        tenant_id: data.tenant_id,
+      const finalProfile = {
+        id: data?.id || authUser.id,
+        nome: data?.nome || (authUser.user_metadata?.nome || authUser.email?.split('@')[0] || 'Usuário'),
+        email: data?.email || authUser.email || '',
+        nivel: (data?.nivel || authUser.app_metadata?.nivel || authUser.user_metadata?.nivel || 'funcionario') as NivelAcesso,
+        modulos_permitidos: data?.modulos_permitidos || authUser.app_metadata?.modulos_permitidos || ['*'],
+        tenant_id: data?.tenant_id || authUser.app_metadata?.tenant_id || authUser.user_metadata?.tenant_id,
       };
+
+      try {
+        localStorage.setItem('cached_user_profile', JSON.stringify(finalProfile));
+      } catch (e) {}
+
+      return finalProfile;
     } catch {
+      try {
+        const cached = localStorage.getItem('cached_user_profile');
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
       return null;
     }
   };
@@ -75,7 +85,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSupabaseUser(s.user);
         const profile = await loadUserProfile(s.user);
         setUser(profile);
+      } else {
+        // Se offline, tenta restaurar último perfil em cache
+        try {
+          const cached = localStorage.getItem('cached_user_profile');
+          if (cached) {
+            setUser(JSON.parse(cached));
+          }
+        } catch (e) {}
       }
+      setLoading(false);
+    }).catch(() => {
+      try {
+        const cached = localStorage.getItem('cached_user_profile');
+        if (cached) {
+          setUser(JSON.parse(cached));
+        }
+      } catch (e) {}
       setLoading(false);
     });
 

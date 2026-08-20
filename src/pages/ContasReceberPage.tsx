@@ -247,6 +247,10 @@ export const ContasReceberPage: React.FC = () => {
   };
 
   const handleEfetivarRecebimento = async () => {
+    if (!state.isOnline) {
+      toast.error('Baixa de recebimento bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     if (!parcelaSelecionada || !loteAberto) return;
 
     setSubmittingBaixa(true);
@@ -300,8 +304,12 @@ export const ContasReceberPage: React.FC = () => {
   };
 
   const handleExcluirParcela = (parcela: ParcelaReceber) => {
-    if (!canDelete(state.user)) {
-      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+    if (!canDelete(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? 'Exclusão bloqueada no Modo de Visualização (Offline).'
+          : 'Permissão negada. Somente usuários Administradores podem excluir registros no sistema.'
+      );
       return;
     }
 
@@ -325,8 +333,12 @@ export const ContasReceberPage: React.FC = () => {
   };
 
   const handleExcluirReceitaCompleta = (receitaId: string, descricao: string) => {
-    if (!canDelete(state.user)) {
-      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+    if (!canDelete(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? 'Exclusão bloqueada no Modo de Visualização (Offline).'
+          : 'Permissão negada. Somente usuários Administradores podem excluir registros no sistema.'
+      );
       return;
     }
 
@@ -377,10 +389,15 @@ export const ContasReceberPage: React.FC = () => {
             <Printer className="w-4 h-4" />
             <span>Exportar PDF</span>
           </button>
-          <button onClick={() => navigate('/financeiro/contas-a-receber/nova')} className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-medium transition-colors shadow-lg shadow-emerald-500/20">
-          <Plus className="w-5 h-5" />
-          Nova Receita
-        </button>
+          <button 
+            disabled={!state.isOnline}
+            onClick={() => navigate('/financeiro/contas-a-receber/nova')} 
+            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Nova Receita"}
+            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-medium transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-5 h-5" />
+            Nova Receita
+          </button>
         </div>
       </div>
 

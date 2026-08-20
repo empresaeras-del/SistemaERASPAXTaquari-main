@@ -108,6 +108,10 @@ export const FornecedoresPage: React.FC = () => {
   };
 
   const handleSaveFornecedor = async (data: any) => {
+    if (!state.isOnline) {
+      toast.error('Operação bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     if (editingFornecedor) {
       await editar(editingFornecedor.id, data);
     } else {
@@ -116,8 +120,12 @@ export const FornecedoresPage: React.FC = () => {
   };
 
   const handleExcluir = (fornecedor: Fornecedor) => {
-    if (!canDelete(state.user)) {
-      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+    if (!canDelete(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? 'Exclusão bloqueada no Modo de Visualização (Offline).'
+          : 'Permissão negada. Somente usuários Administradores podem excluir registros no sistema.'
+      );
       return;
     }
 
@@ -240,7 +248,9 @@ export const FornecedoresPage: React.FC = () => {
           </button>
 
           <button
+            disabled={!state.isOnline}
             onClick={handleOpenCreate}
+            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Fornecedor"}
             className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary to-blue-400 text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-lg shadow-primary/25 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />

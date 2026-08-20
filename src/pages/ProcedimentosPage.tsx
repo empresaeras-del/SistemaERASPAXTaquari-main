@@ -80,6 +80,10 @@ export const ProcedimentosPage = () => {
   };
 
   const handleToggleStatus = async (proc: Procedimento) => {
+    if (!state.isOnline) {
+      toast.error('Alteração de status bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     try {
       await editar(proc.id, { ativo: !proc.ativo });
       toast.success(`Procedimento ${!proc.ativo ? 'ativado' : 'inativado'} com sucesso!`);
@@ -89,8 +93,12 @@ export const ProcedimentosPage = () => {
   };
 
   const handleDelete = (proc: Procedimento) => {
-    if (!canDelete(state.user)) {
-      toast.error('Permissão negada. Somente usuários Administradores podem excluir registros no sistema.');
+    if (!canDelete(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? 'Exclusão bloqueada no Modo de Visualização (Offline).'
+          : 'Permissão negada. Somente usuários Administradores podem excluir registros no sistema.'
+      );
       return;
     }
 
@@ -112,6 +120,10 @@ export const ProcedimentosPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!state.isOnline) {
+      toast.error('Operação bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     if (!empresaSelecionada) {
       toast.error("Selecione uma empresa primeiro.");
       return;
@@ -144,7 +156,8 @@ export const ProcedimentosPage = () => {
         {activeTab === 'lista' && (
           <button 
             onClick={() => handleOpenForm()}
-            disabled={!empresaSelecionada}
+            disabled={!empresaSelecionada || !state.isOnline}
+            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Procedimento"}
             className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-5 h-5" />

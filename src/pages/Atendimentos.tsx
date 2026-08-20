@@ -39,6 +39,10 @@ export const AtendimentosPage: React.FC = () => {
   };
 
   const confirmStatusChange = async () => {
+    if (!state.isOnline) {
+      toast.error('Operação bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     const { atendimento, newStatus, justificativa } = statusChangeModal;
     if (!atendimento || !newStatus) return;
     if (justificativa.trim().length < 5) {
@@ -331,8 +335,10 @@ export const AtendimentosPage: React.FC = () => {
           </button>
 
           <button
+            disabled={!state.isOnline}
             onClick={() => setIsWizardOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary to-blue-400 text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-lg shadow-primary/25"
+            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Atendimento"}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary to-blue-400 text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-lg shadow-primary/25 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
             <span>Novo Atendimento</span>

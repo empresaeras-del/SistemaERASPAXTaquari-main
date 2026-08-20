@@ -193,6 +193,11 @@ export const FaturamentosPage: React.FC = () => {
   const handleCriarRemessa = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!state.isOnline) {
+      toast.error('Operação bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
+
     if (tipoPrestador === 'credenciado' && !selCredenciadoId) {
       toast.error('Selecione um Credenciado da rede.');
       return;
@@ -280,6 +285,10 @@ export const FaturamentosPage: React.FC = () => {
   
   const [submitting, setSubmitting] = useState(false);
   const handleConfirmarReabertura = async () => {
+    if (!state.isOnline) {
+      toast.error('Reabertura bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     const tenantId = state.empresaSelecionada || 'default_tenant';
     if (!modalReabrirRemessa) return;
     if (!justificativaReabertura.trim()) {
@@ -309,6 +318,10 @@ export const FaturamentosPage: React.FC = () => {
   };
 
   const handleConfirmarFechamentoRemessa = async () => {
+    if (!state.isOnline) {
+      toast.error('Fechamento de faturamento bloqueado no Modo de Visualização (Offline).');
+      return;
+    }
     if (!modalFecharRemessa) return;
 
     if (!dataVencimentoFinanceiro) {
@@ -347,8 +360,12 @@ export const FaturamentosPage: React.FC = () => {
   };
 
   const handleExcluirRemessa = (rem: RemessaFaturamento) => {
-    if (!canDelete(state.user)) {
-      toast.error('Permissão negada. Somente administradores podem excluir remessas.');
+    if (!canDelete(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? 'Exclusão bloqueada no Modo de Visualização (Offline).'
+          : 'Permissão negada. Somente administradores podem excluir remessas.'
+      );
       return;
     }
 
@@ -422,11 +439,13 @@ export const FaturamentosPage: React.FC = () => {
           </button>
           
           <button
+            disabled={!state.isOnline}
             onClick={() => {
               resetNovaRemessaForm();
               setModalNovaRemessa(true);
             }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl font-medium text-sm transition-colors shadow-sm shrink-0 no-print"
+            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Nova Remessa"}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl font-medium text-sm transition-colors shadow-sm shrink-0 no-print disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <PlusIcon className="w-4 h-4" />
             <span className="hidden sm:inline">Nova Remessa</span>

@@ -3,6 +3,7 @@ import { useItensFunerarios } from '../hooks/useItensFunerarios';
 import { ItemFunerarioForm } from '../components/itens-funerarios/ItemFunerarioForm';
 import { ItemFunerarioDetailsModal } from '../components/itens-funerarios/ItemFunerarioDetailsModal';
 import { ItemFunerario } from '../types/itensFunerarios';
+import { useAppContext } from '../context/AppContext';
 import { Building2, Plus, Search, Pencil, Power, PowerOff, Package, CheckCircle, XCircle, LayoutGrid, List, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -16,6 +17,7 @@ const categoriaCores: Record<string, string> = {
 };
 
 export const ItensFunerariosPage: React.FC = () => {
+  const { state } = useAppContext();
   const { itens, loading, filtros, setFiltros, criar, editar, desativar, reativar } = useItensFunerarios();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ItemFunerario | null>(null);
@@ -28,6 +30,10 @@ export const ItensFunerariosPage: React.FC = () => {
   };
 
   const handleSave = async (data: any) => {
+    if (!state.isOnline) {
+      toast.error('Operação bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     if (editingItem) {
       await editar(editingItem.id, data);
     } else {
@@ -36,6 +42,10 @@ export const ItensFunerariosPage: React.FC = () => {
   };
 
   const handleToggleStatus = async (item: ItemFunerario) => {
+    if (!state.isOnline) {
+      toast.error('Alteração de status bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
     try {
       if (item.ativo) {
         await desativar(item.id);
@@ -77,8 +87,10 @@ export const ItensFunerariosPage: React.FC = () => {
         
         <div className="flex items-center gap-3">
           <button
+            disabled={!state.isOnline}
             onClick={() => handleOpenForm()}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(59,130,246,0.25)]"
+            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Item"}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] text-white text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(59,130,246,0.25)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
             Novo Item
