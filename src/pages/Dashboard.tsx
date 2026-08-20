@@ -107,15 +107,44 @@ export const Dashboard: React.FC = () => {
     );
   }
 
+  const formatCurrencyTick = (val: number) => {
+    if (!val || val === 0) return 'R$ 0';
+    const abs = Math.abs(val);
+    if (abs >= 1000000) return `R$ ${(val / 1000000).toFixed(1)}M`;
+    if (abs >= 1000) return `R$ ${(val / 1000).toFixed(1).replace('.0', '')}k`;
+    return `R$ ${val.toLocaleString('pt-BR')}`;
+  };
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-text-base">Dashboard</h2>
-          <p className="text-text-subtle mt-2 text-base">Visão geral do sistema e indicadores de performance.</p>
+          <p className="text-text-subtle mt-2 text-base">Visão geral do sistema e indicadores de performance em tempo real.</p>
         </div>
         
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center bg-bg-subtle border border-border-default rounded-xl p-1 shadow-sm">
+            <button
+              onClick={() => setPeriod('mensal')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${period === 'mensal' ? 'bg-[#3B82F6] text-white shadow-sm' : 'text-text-subtle hover:text-text-base'}`}
+            >
+              Mensal
+            </button>
+            <button
+              onClick={() => setPeriod('trimestral')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${period === 'trimestral' ? 'bg-[#3B82F6] text-white shadow-sm' : 'text-text-subtle hover:text-text-base'}`}
+            >
+              Trimestral
+            </button>
+            <button
+              onClick={() => setPeriod('anual')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${period === 'anual' ? 'bg-[#3B82F6] text-white shadow-sm' : 'text-text-subtle hover:text-text-base'}`}
+            >
+              Anual
+            </button>
+          </div>
+
           <button 
             onClick={() => setIsSettingsOpen(true)}
             className="p-2 h-[42px] w-[42px] flex items-center justify-center bg-bg-subtle border border-border-default text-text-subtle hover:text-text-base rounded-xl shadow-sm transition-colors"
@@ -197,7 +226,7 @@ export const Dashboard: React.FC = () => {
                   </div>
                   <div className="relative z-10">
                     <h3 className="text-3xl font-bold text-text-base tracking-tight">{stats?.atendimentosPeriodo || 0}</h3>
-                    <p className="text-sm font-medium text-text-subtle mt-1">Atendimentos (Mensal)</p>
+                    <p className="text-sm font-medium text-text-subtle mt-1">Atendimentos ({period === 'anual' ? 'Anual' : period === 'trimestral' ? 'Trimestral' : 'Mensal'})</p>
                   </div>
                 </div>
               );
@@ -253,8 +282,8 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="relative z-10">
-                    <h3 className="text-3xl font-bold text-text-base tracking-tight">R$ {(stats?.faturamentoEstimado || 0).toLocaleString('pt-BR')}</h3>
-                    <p className="text-sm font-medium text-text-subtle mt-1">Faturamento (Mensal)</p>
+                    <h3 className="text-3xl font-bold text-text-base tracking-tight">R$ {(stats?.faturamentoEstimado || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</h3>
+                    <p className="text-sm font-medium text-text-subtle mt-1">Faturamento Mensal Estimado</p>
                   </div>
                 </div>
               );
@@ -310,8 +339,8 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
                   <div className="relative z-10">
-                    <h3 className="text-3xl font-bold text-text-base tracking-tight">{stats?.taxaConversao || 8.4}%</h3>
-                    <p className="text-sm font-medium text-text-subtle mt-1">Conversão</p>
+                    <h3 className="text-3xl font-bold text-text-base tracking-tight">{stats?.taxaConversao || 0}%</h3>
+                    <p className="text-sm font-medium text-text-subtle mt-1">Taxa de Ativos</p>
                   </div>
                 </div>
               );
@@ -336,7 +365,7 @@ export const Dashboard: React.FC = () => {
                       stats.vidasPorPlano.map((vp, i) => (
                         <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-bg-surface/50 border border-border-default">
                           <span className="font-medium text-text-muted">{vp.plano}</span>
-                          <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-bold">{vp.vidas} vidas</span>
+                          <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-bold">{vp.vidas} {vp.vidas === 1 ? 'vida' : 'vidas'}</span>
                         </div>
                       ))
                     ) : (
@@ -351,7 +380,7 @@ export const Dashboard: React.FC = () => {
                   <div className="absolute top-0 right-0 w-64 h-64 bg-[#3B82F6] opacity-[0.03] blur-3xl rounded-full" />
                   <div className="mb-6 relative z-10">
                     <h3 className="text-lg font-bold text-text-base">Atendimentos Mensais</h3>
-                    <p className="text-sm text-text-subtle">Volume de serviços funerários</p>
+                    <p className="text-sm text-text-subtle">Volume de serviços funerários realizados</p>
                   </div>
                   <div className="flex-1 min-h-[250px] w-full relative z-10">
                     <ResponsiveContainer width="100%" height="100%">
@@ -362,13 +391,14 @@ export const Dashboard: React.FC = () => {
                             <stop offset="100%" stopColor="#60A5FA" stopOpacity={1}/>
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#64748B" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#8B95A5', fontSize: 12 }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#8B95A5', fontSize: 12 }} />
+                        <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{ fill: '#8B95A5', fontSize: 12 }} />
                         <Tooltip 
-                          cursor={{ fill: '#475569', opacity: 0.5 }}
+                          cursor={{ fill: '#475569', opacity: 0.3 }}
                           contentStyle={{ backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #475569', color: '#fff' }}
                           itemStyle={{ color: '#fff' }}
+                          formatter={(value: any) => [`${value} atendimento(s)`, 'Total']}
                         />
                         <Bar dataKey="total" radius={[8, 8, 8, 8]} maxBarSize={40}>
                           {
@@ -393,14 +423,14 @@ export const Dashboard: React.FC = () => {
                   <div className="flex-1 min-h-[250px] w-full relative z-10">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={stats?.recebimentosGrafico || []} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#64748B" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#8B95A5', fontSize: 12 }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#8B95A5', fontSize: 12 }} tickFormatter={(val) => `R$ ${val/1000}k`} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#8B95A5', fontSize: 12 }} tickFormatter={formatCurrencyTick} />
                         <Tooltip 
-                          cursor={{ fill: '#475569', opacity: 0.5 }}
+                          cursor={{ fill: '#475569', opacity: 0.3 }}
                           contentStyle={{ backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #475569', color: '#fff' }}
                           itemStyle={{ color: '#fff' }}
-                          formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, undefined]}
+                          formatter={(value: any) => [`R$ ${Number(value || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, undefined]}
                         />
                         <Bar dataKey="projetado" name="Projetado" fill="#94A3B8" radius={[4, 4, 0, 0]} maxBarSize={30} />
                         <Bar dataKey="recebido" name="Recebido" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={30} />
@@ -420,14 +450,14 @@ export const Dashboard: React.FC = () => {
                   <div className="flex-1 min-h-[250px] w-full relative z-10">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={stats?.financeiroGrafico || []} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#64748B" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#8B95A5', fontSize: 12 }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#8B95A5', fontSize: 12 }} tickFormatter={(val) => `R$ ${val/1000}k`} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#8B95A5', fontSize: 12 }} tickFormatter={formatCurrencyTick} />
                         <Tooltip 
-                          cursor={{ fill: '#475569', opacity: 0.5 }}
+                          cursor={{ fill: '#475569', opacity: 0.3 }}
                           contentStyle={{ backgroundColor: '#1E293B', borderRadius: '12px', border: '1px solid #475569', color: '#fff' }}
                           itemStyle={{ color: '#fff' }}
-                          formatter={(value: number, name: string) => [`R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, name.charAt(0).toUpperCase() + name.slice(1)]}
+                          formatter={(value: any, name: any) => [`R$ ${Number(value || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, String(name || '').charAt(0).toUpperCase() + String(name || '').slice(1)]}
                         />
                         <Bar dataKey="receitas" name="Receitas" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={30} />
                         <Bar dataKey="despesas" name="Despesas" fill="#F43F5E" radius={[4, 4, 0, 0]} maxBarSize={30} />

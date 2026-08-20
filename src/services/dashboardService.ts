@@ -1,9 +1,10 @@
 import { supabase } from '../lib/supabase';
 import { getAssociados } from './associadosService';
+import { getAtendimentos } from './atendimentosService';
 import { getLogsAuditoria } from './auditoriaService';
-import { getAllFromIDB, saveToIDB } from '../lib/idb';
+import { getAllFromIDB } from '../lib/idb';
 import { getParcelasReceber, getParcelasPagar } from './financeiroService';
-import { isSameMonth, parseISO } from 'date-fns';
+import { isSameMonth } from 'date-fns';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -29,8 +30,12 @@ export interface DashboardStats {
   parcelasPagarRaw: any[];
 }
 
-export const getDashboardStats = async (isOnline: boolean, tenantId: string | null, period: DashboardPeriod = 'mensal'): Promise<DashboardStats> => {
-  let stats: DashboardStats = {
+export const getDashboardStats = async (
+  isOnline: boolean, 
+  tenantId: string | null, 
+  period: DashboardPeriod = 'mensal'
+): Promise<DashboardStats> => {
+  const stats: DashboardStats = {
     totalAssociados: 0,
     associadosAtivos: 0,
     novosAssociados: 0,
@@ -65,18 +70,18 @@ export const getDashboardStats = async (isOnline: boolean, tenantId: string | nu
       numMonthsChart = 12;
     }
 
+    // 1. Associados e Planos
     const allAssociados = await getAssociados(isOnline, tenantId);
     let allPlanos: any[] = [];
     if (isOnline) {
       try {
         let query = supabase.from('planos_pax').select('*').is('deleted_at', null);
         if (tenantId && tenantId !== 'all') {
-           query = query.eq('tenant_id', tenantId);
+          query = query.eq('tenant_id', tenantId);
         }
         const { data } = await query;
-        if (data) {
-           allPlanos = data;
-        }
+        if (data) allPlanos = data;
+        else allPlanos = await getAllFromIDB('planos_pax');
       } catch (e) {
         allPlanos = await getAllFromIDB('planos_pax');
       }
@@ -87,112 +92,93 @@ export const getDashboardStats = async (isOnline: boolean, tenantId: string | nu
     stats.totalAssociados = allAssociados.length;
     stats.associadosAtivos = allAssociados.filter(a => a.status === 'ativo').length;
 
-    // Filter associados by period for 'novosAssociados'
+    // Novos associados no período selecionado
     const associadosInPeriod = allAssociados.filter(a => {
-      if (!a.data_adesao && !a.created_at) return true; // keep if no date
-      const d = new Date(a.data_adesao || a.created_at!);
+      const dataRef = a.data_adesao || a.created_at;
+      if (!dataRef) return false;
+      const d = new Date(dataRef);
       return d >= limitDate;
     });
-
     stats.novosAssociados = associadosInPeriod.length;
     
-    // Faturamento Estimado (geral de ativos)
+    // Faturamento Mensal Estimado de associados ativos
     stats.faturamentoEstimado = allAssociados
       .filter(a => a.status === 'ativo')
-      .reduce((sum, a) => sum + (a.valor_plano || 0), 0);
+      .reduce((sum, a) => {
+        const plano = allPlanos.find(p => p.id === a.plano_pax_id);
+        const valor = Number(a.valor_plano) || Number(plano?.valor_mensalidade) || Number(plano?.preco_mensal) || 0;
+        return sum + valor;
+      }, 0);
 
-    // Taxa de Conversão (Ativos / Total)
+    // Taxa de Conversão / Retenção (% de Ativos em relação ao Total)
     if (stats.totalAssociados > 0) {
       stats.taxaConversao = Number(((stats.associadosAtivos / stats.totalAssociados) * 100).toFixed(1));
     }
 
-
-    const parcelas = await getParcelasReceber(isOnline, tenantId || '');
-    const parcelasPagar = await getParcelasPagar(isOnline, tenantId || '');
-    const hoje = new Date();
-    
-    parcelas.forEach(p => {
-      const dataVenc = new Date(p.data_vencimento + 'T12:00:00');
-      if (isSameMonth(dataVenc, hoje)) {
-        if (p.status !== 'cancelado') {
-          stats.receitaProjetadaMes += p.valor;
-        }
-        if (p.status === 'recebido') {
-          stats.receitaArrecadadaMes += (p.valor_recebido || p.valor);
-        }
-      }
-    });
-
-
-    parcelasPagar.forEach(p => {
-      const dataVenc = new Date(p.data_vencimento + 'T12:00:00');
-      if (isSameMonth(dataVenc, hoje)) {
-        if (p.status !== 'cancelado') {
-          stats.despesaProjetadaMes += p.valor;
-        }
-        if (p.status === 'pago') {
-          stats.despesaPagaMes += (p.valor_pago || p.valor);
-        }
-      }
-    });
-
-    // Calcular vidas por plano
-
+    // 2. Vidas por Plano (Titulares + Dependentes)
     const vidasMap: Record<string, number> = {};
     allAssociados.forEach(a => {
-       if (a.status !== 'ativo') return;
-       
-       let nomePlano = a.plano_nome;
-       if (a.plano_pax_id) {
-          const planoDb = allPlanos.find(p => p.id === a.plano_pax_id);
-          if (planoDb) nomePlano = planoDb.nome;
-       }
-       if (!nomePlano) nomePlano = 'Sem Plano';
-       
-       const vidas = 1 + (a.dependentes ? a.dependentes.length : (a.n_vidas || 0));
-       vidasMap[nomePlano] = (vidasMap[nomePlano] || 0) + vidas;
+      if (a.status !== 'ativo') return;
+      
+      let nomePlano = a.plano_nome;
+      if (a.plano_pax_id) {
+        const planoDb = allPlanos.find(p => p.id === a.plano_pax_id);
+        if (planoDb?.nome) nomePlano = planoDb.nome;
+      }
+      if (!nomePlano) nomePlano = 'Plano Padrão';
+      
+      const vidas = 1 + (a.dependentes ? a.dependentes.length : (Number(a.n_vidas) || 0));
+      vidasMap[nomePlano] = (vidasMap[nomePlano] || 0) + vidas;
     });
     
     stats.vidasPorPlano = Object.keys(vidasMap)
       .map(k => ({ plano: k, vidas: vidasMap[k] }))
       .sort((a, b) => b.vidas - a.vidas);
 
-    // Atendimentos
-    let atendimentosData: any[] = [];
-    if (isOnline) {
-      try {
-        let query = supabase.from('atendimentos').select('*').is('deleted_at', null);
-        if (tenantId && tenantId !== 'all') {
-           query = query.eq('tenant_id', tenantId);
-        }
-        const { data, error } = await query;
-        if (!error && data) {
-           atendimentosData = data;
-           for (const item of data) {
-             await saveToIDB('atendimentos', item);
-           }
-        }
-      } catch (e) {
-        console.warn('Atendimentos query failed');
-        atendimentosData = await getAllFromIDB('atendimentos');
-      }
-    } else {
-      atendimentosData = await getAllFromIDB('atendimentos');
-    }
+    // 3. Contas a Receber e a Pagar
+    const parcelasReceber = await getParcelasReceber(isOnline, tenantId || '');
+    const parcelasPagar = await getParcelasPagar(isOnline, tenantId || '');
+    const hoje = new Date();
     
-    if (tenantId && tenantId !== 'all') {
-      atendimentosData = atendimentosData.filter(a => a.tenant_id === tenantId);
-    }
-    atendimentosData = atendimentosData.filter(a => !a.deleted_at && a.status !== 'cancelado');
+    parcelasReceber.forEach(p => {
+      if (p.deleted_at) return;
+      const dataVenc = new Date(p.data_vencimento + 'T12:00:00');
+      if (isSameMonth(dataVenc, hoje)) {
+        if (p.status !== 'cancelado') {
+          stats.receitaProjetadaMes += Number(p.valor) || 0;
+        }
+        if (p.status === 'recebido') {
+          stats.receitaArrecadadaMes += Number(p.valor_recebido || p.valor) || 0;
+        }
+      }
+    });
 
-    // Atendimentos in period
-    const atendimentosInPeriod = atendimentosData.filter(a => {
-      const d = new Date(a.data || a.created_at);
+    parcelasPagar.forEach(p => {
+      if (p.deleted_at) return;
+      const dataVenc = new Date(p.data_vencimento + 'T12:00:00');
+      if (isSameMonth(dataVenc, hoje)) {
+        if (p.status !== 'cancelado') {
+          stats.despesaProjetadaMes += Number(p.valor) || 0;
+        }
+        if (p.status === 'pago') {
+          stats.despesaPagaMes += Number(p.valor_pago || p.valor) || 0;
+        }
+      }
+    });
+
+    // 4. Atendimentos Funerários
+    const atendimentosData = await getAtendimentos(isOnline, tenantId || undefined);
+    const atendimentosValidos = atendimentosData.filter(a => a.status !== 'cancelado');
+
+    const atendimentosInPeriod = atendimentosValidos.filter(a => {
+      const dataRef = a.data_obito || a.data_sepultamento || a.created_at;
+      if (!dataRef) return false;
+      const d = new Date(dataRef);
       return d >= limitDate;
     });
     stats.atendimentosPeriodo = atendimentosInPeriod.length;
     
-    // Grafico
+    // 5. Histórico e Gráficos Mensais
     const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     for (let i = numMonthsChart - 1; i >= 0; i--) {
       const d = new Date();
@@ -200,53 +186,64 @@ export const getDashboardStats = async (isOnline: boolean, tenantId: string | nu
       const m = d.getMonth();
       const y = d.getFullYear();
       
-      const total = atendimentosData.filter(a => {
-          const ad = new Date(a.data || a.created_at);
-          return ad.getMonth() === m && ad.getFullYear() === y;
+      const totalAtend = atendimentosValidos.filter(a => {
+        const dataRef = a.data_obito || a.data_sepultamento || a.created_at;
+        if (!dataRef) return false;
+        const ad = new Date(dataRef);
+        return ad.getMonth() === m && ad.getFullYear() === y;
       }).length;
       
-      stats.atendimentosGrafico.push({ name: meses[m], total });
+      stats.atendimentosGrafico.push({ name: meses[m], total: totalAtend });
 
       let projetado = 0;
       let recebido = 0;
-      
-      parcelas.forEach(p => {
+      parcelasReceber.forEach(p => {
+        if (p.deleted_at) return;
         const ad = new Date(p.data_vencimento + 'T12:00:00');
         if (ad.getMonth() === m && ad.getFullYear() === y) {
-           if (p.status !== 'cancelado') projetado += p.valor;
-           if (p.status === 'recebido') recebido += (p.valor_recebido || p.valor);
+          if (p.status !== 'cancelado') projetado += Number(p.valor) || 0;
+          if (p.status === 'recebido') recebido += Number(p.valor_recebido || p.valor) || 0;
         }
       });
-      
       stats.recebimentosGrafico.push({ name: meses[m], projetado, recebido });
 
       let despesas = 0;
+      let despesasPagas = 0;
       parcelasPagar.forEach(p => {
+        if (p.deleted_at) return;
         const ad = new Date(p.data_vencimento + 'T12:00:00');
         if (ad.getMonth() === m && ad.getFullYear() === y) {
-           if (p.status !== 'cancelado') despesas += p.valor;
+          if (p.status !== 'cancelado') despesas += Number(p.valor) || 0;
+          if (p.status === 'pago') despesasPagas += Number(p.valor_pago || p.valor) || 0;
         }
       });
       
-      stats.financeiroGrafico.push({ name: meses[m], receitas: projetado, despesas, saldo: projetado - despesas });
-
+      stats.financeiroGrafico.push({ 
+        name: meses[m], 
+        receitas: projetado, 
+        despesas, 
+        saldo: projetado - despesas 
+      });
     }
 
-    // Ações recentes
+    // 6. Ações Recentes (Auditoria)
     try {
       const logs = await getLogsAuditoria(isOnline, tenantId);
-      stats.acoesRecentes = logs.slice(0, 4).map(log => {
+      stats.acoesRecentes = logs.slice(0, 5).map(log => {
         let color = 'bg-[#60A5FA]';
-        if (log.acao.toLowerCase().includes('excluir')) color = 'bg-[#F43F5E]';
-        else if (log.acao.toLowerCase().includes('atualizar') || log.acao.toLowerCase().includes('editar')) color = 'bg-[#F59E0B]';
-        else if (log.acao.toLowerCase().includes('salvar') || log.acao.toLowerCase().includes('criar')) color = 'bg-[#10B981]';
+        const acaoLower = (log.acao || '').toLowerCase();
+        if (acaoLower.includes('excluir') || acaoLower.includes('cancel')) color = 'bg-[#F43F5E]';
+        else if (acaoLower.includes('atualizar') || acaoLower.includes('editar') || acaoLower.includes('estorno')) color = 'bg-[#F59E0B]';
+        else if (acaoLower.includes('salvar') || acaoLower.includes('criar') || acaoLower.includes('recebimento') || acaoLower.includes('abertura')) color = 'bg-[#10B981]';
         
-        let userName = log.usuarios?.nome || 'Usuário';
+        const userName = log.usuarios?.nome || 'Usuário';
         let desc = `${userName} realizou esta ação`;
         
         if (log.detalhes) {
-          if (typeof log.detalhes === 'object' && log.detalhes.nome) {
-            desc = `Em: ${log.detalhes.nome}`;
+          if (typeof log.detalhes === 'object') {
+            if (log.detalhes.descricao) desc = log.detalhes.descricao;
+            else if (log.detalhes.nome) desc = `Em: ${log.detalhes.nome}`;
+            else if (log.detalhes.codigo) desc = `Lote: ${log.detalhes.codigo}`;
           } else if (typeof log.detalhes === 'string') {
             desc = log.detalhes;
           }
@@ -260,10 +257,10 @@ export const getDashboardStats = async (isOnline: boolean, tenantId: string | nu
         };
       });
     } catch (e) {
-      console.warn('Falha ao carregar auditoria', e);
+      console.warn('Falha ao carregar auditoria para dashboard', e);
     }
 
-    stats.parcelasReceberRaw = parcelas;
+    stats.parcelasReceberRaw = parcelasReceber;
     stats.parcelasPagarRaw = parcelasPagar;
   } catch (error) {
     console.error('Erro ao buscar stats do dashboard', error);
