@@ -1434,7 +1434,7 @@ export const ConfiguracoesPage: React.FC = () => {
                 ) : null}
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {state.user?.nivel === 'super_admin' && (
+                  {(state.user?.nivel === 'super_admin' || state.user?.nivel === 'admin') && (
                     <div>
                       <label className="block text-sm font-semibold text-slate-400 mb-1">
                         Empresa Vinculada *
@@ -1448,10 +1448,20 @@ export const ConfiguracoesPage: React.FC = () => {
                             tenant_id: e.target.value,
                           })
                         }
-                        className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                        disabled={state.user?.nivel === 'admin'}
+                        className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all disabled:opacity-50"
                       >
-                        <option className="bg-[#101223]" value="all">Todas as Empresas (Acesso Global)</option>
-                        {empresas.map(e => <option className="bg-[#101223]" key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
+                        {state.user?.nivel === 'super_admin' && (
+                          <option className="bg-[#101223]" value="all">Todas as Empresas (Acesso Global)</option>
+                        )}
+                        {empresas
+                          .filter(e => state.user?.nivel === 'super_admin' || e.id === state.user?.tenant_id)
+                          .map(e => (
+                            <option className="bg-[#101223]" key={e.id} value={e.id}>
+                              {e.nome_fantasia}
+                            </option>
+                          ))
+                        }
                       </select>
                     </div>
                   )}

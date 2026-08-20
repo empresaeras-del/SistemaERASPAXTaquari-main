@@ -1049,9 +1049,10 @@ export const AssociadosPage: React.FC = () => {
 
   const handleFieldChange = (field: keyof Associado, value: any) => {
     if (editingAssociado) {
+      const finalValue = (typeof value === 'string' && field !== 'email' && field !== 'senha') ? value.toUpperCase() : value;
       setEditingAssociado({
         ...editingAssociado,
-        [field]: value
+        [field]: finalValue
       });
       if (fieldErrors[field as string]) {
         setFieldErrors(prev => {
@@ -2475,8 +2476,8 @@ export const AssociadosPage: React.FC = () => {
                                   const idx = editingAssociado.dependentes?.findIndex(d => d.id === selectedDependenteId);
                                   if (idx !== undefined && idx !== -1) {
                                       const dep = editingAssociado.dependentes![idx];
-                                      if (!dep.nome || !dep.parentesco) {
-                                          toast.error("Preencha pelo menos o Nome e o Parentesco do dependente antes de confirmar.");
+                                      if (!dep.nome) {
+                                          toast.error("Preencha pelo menos o Nome do dependente antes de confirmar.");
                                           return;
                                       }
                                       // Valida CPF apenas se foi preenchido
@@ -2531,7 +2532,7 @@ export const AssociadosPage: React.FC = () => {
                                         ];
                                         novosDeps[index] = {
                                           ...dep,
-                                          nome: e.target.value,
+                                          nome: e.target.value.toUpperCase(),
                                         };
                                         setEditingAssociado({
                                           ...editingAssociado,
@@ -2602,7 +2603,7 @@ export const AssociadosPage: React.FC = () => {
                                         ];
                                         novosDeps[index] = {
                                           ...dep,
-                                          parentesco: e.target.value,
+                                          parentesco: e.target.value.toUpperCase(),
                                         };
                                         setEditingAssociado({
                                           ...editingAssociado,

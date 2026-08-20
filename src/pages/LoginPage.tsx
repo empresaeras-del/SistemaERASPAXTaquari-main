@@ -304,16 +304,7 @@ export const LoginPage: React.FC = () => {
                     )}
                   </button>
 
-                  <div className="pt-2 text-center">
-                    <span className="text-xs text-slate-400">Não tem acesso? </span>
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
-                      onClick={() => { setMode('register'); setError(null); setRegisterSuccess(false); }}
-                    >
-                      Cadastre-se agora
-                    </button>
-                  </div>
+
                 </form>
               </>
             )}
