@@ -1,5 +1,5 @@
 import { SystemAlertProvider } from './utils/systemAlert';
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
@@ -44,6 +44,56 @@ const FornecedoresPage = lazy(() => import('./pages/FornecedoresPage').then(m =>
 const CaixasPage = lazy(() => import('./pages/CaixasPage').then(m => ({ default: m.CaixasPage })));
 
 export default function App() {
+  useEffect(() => {
+    const handleInput = (e: Event) => {
+      const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+      
+      if (
+        target &&
+        ((target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'search')) ||
+          target.tagName === 'TEXTAREA')
+      ) {
+        if (target.type === 'email' || target.type === 'password' || target.type === 'url') return;
+        if (target.dataset.noUppercase === 'true') return;
+
+        const upper = target.value.toUpperCase();
+        if (target.value !== upper) {
+          const start = target.selectionStart;
+          const end = target.selectionEnd;
+          
+          target.value = upper;
+          
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype,
+            'value'
+          )?.set;
+          const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLTextAreaElement.prototype,
+            'value'
+          )?.set;
+          
+          if (target.tagName === 'INPUT' && nativeInputValueSetter) {
+            nativeInputValueSetter.call(target, upper);
+          } else if (target.tagName === 'TEXTAREA' && nativeTextAreaValueSetter) {
+            nativeTextAreaValueSetter.call(target, upper);
+          }
+          
+          target.dispatchEvent(new Event('input', { bubbles: true }));
+          
+          if (start !== null && end !== null) {
+             target.setSelectionRange(start, end);
+          }
+        }
+      }
+    };
+
+    document.addEventListener('input', handleInput, true);
+
+    return () => {
+      document.removeEventListener('input', handleInput, true);
+    };
+  }, []);
+
   return (
     <ToastProvider>
       <ConfirmProvider>

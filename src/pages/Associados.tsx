@@ -37,7 +37,11 @@ import { RegrasCalculoInfo } from "../components/associados/RegrasCalculoInfo";
 import { contratoSchema } from "../schemas/contratoSchema";
 import { VisualizadorDocumentoModal } from "../components/associados/VisualizadorDocumentoModal";
 import { downloadDocumento, isPdfDocument, isImageDocument } from "../utils/documentUtils";
-
+import { exportToPDF } from "../lib/pdfExport";
+import { getEmpresaById } from "../services/empresasService";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { fetchImageWithDimensions } from '../utils/imageUtils';
 
 const formatDateSafe = (dateStr: string | undefined) => {
   if (!dateStr) return "";
@@ -1258,10 +1262,149 @@ export const AssociadosPage: React.FC = () => {
     });
   };
 
+  const handleExportPDF = async () => {
+    if (filtered.length === 0) {
+      toast.error('Nenhum registro encontrado para gerar relatório.');
+      return;
+    }
+
+    toast.info('Gerando relatório em PDF...');
+    try {
+      const tenantId = state.empresaSelecionada || 'default_tenant';
+      const empresa = await getEmpresaById(tenantId, state.isOnline);
+      
+      const doc = new jsPDF('landscape', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      let currentY = 14;
+
+      const nomeEmpresa = empresa?.nome_fantasia || empresa?.razao_social || 'PAX e Funerária Taquari';
+      const docEmpresa = empresa?.cnpj ? `CNPJ: ${empresa.cnpj}` : '';
+      const contatoEmpresa = [empresa?.telefone, empresa?.email].filter(Boolean).join(' | ');
+
+      if (empresa?.logo_url) {
+        try {
+          const imgData = await fetchImageWithDimensions(empresa.logo_url);
+          if (imgData && imgData.base64) {
+            const maxWidth = pageWidth - 28;
+            let imgWidth = maxWidth;
+            let imgHeight = (imgData.height * maxWidth) / imgData.width;
+            if (imgHeight > 45) {
+              imgHeight = 45;
+              imgWidth = (imgData.width * 45) / imgData.height;
+            }
+            const xOffset = 14 + (maxWidth - imgWidth) / 2;
+            doc.addImage(imgData.base64, 'PNG', xOffset, currentY, imgWidth, imgHeight, '', 'FAST');
+            currentY += imgHeight + 8;
+          }
+        } catch (e) {
+          console.warn('Erro ao carregar logo para PDF', e);
+        }
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(30, 41, 59);
+      doc.text(nomeEmpresa, 14, currentY + 6);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      if (docEmpresa) doc.text(docEmpresa, 14, currentY + 11);
+      if (contatoEmpresa) doc.text(contatoEmpresa, 14, currentY + 15);
+
+      currentY += 22;
+      doc.setFillColor(241, 245, 249);
+      doc.rect(14, currentY, pageWidth - 28, 14, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(15, 23, 42);
+      doc.text('RELATÓRIO DE ASSOCIADOS', 18, currentY + 6.5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+
+      const filtroStatusTexto = statusFilter ? statusFilter.toUpperCase() : 'TODOS';
+      const filtroPlanoTexto = planoFilter ? planosCompletos.find(p => p.id === planoFilter)?.nome || 'TODOS' : 'TODOS';
+
+      doc.text(`Status: ${filtroStatusTexto}  |  Plano: ${filtroPlanoTexto}`, 18, currentY + 11);
+      doc.text(`Emissão: ${format(new Date(), 'dd/MM/yyyy HH:mm:ss')}  |  Total: ${filtered.length} registros`, pageWidth - 18, currentY + 11, { align: 'right' });
+
+      currentY += 18;
+
+      const tableData = filtered.map((a, index) => {
+        return [
+          (index + 1).toString(),
+          a.nome || "-",
+          a.cpf || "-",
+          a.plano_nome || "-",
+          a.n_vidas?.toString() || "1",
+          a.status?.toUpperCase() || "-",
+          a.telefone || "-",
+          formatDateSafe(a.data_adesao) || "-"
+        ];
+      });
+
+      autoTable(doc, {
+        startY: currentY,
+        head: [['#', 'Nome', 'CPF', 'Plano', 'Vidas', 'Status', 'Telefone', 'Adesão']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [59, 130, 246],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8.5,
+          halign: 'left'
+        },
+        styles: {
+          fontSize: 7.5,
+          cellPadding: 2.5,
+          valign: 'middle',
+          overflow: 'linebreak'
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252]
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 60, fontStyle: 'bold' },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 50 },
+          4: { cellWidth: 15, halign: 'center' },
+          5: { cellWidth: 25 },
+          6: { cellWidth: 30 },
+          7: { cellWidth: 25 }
+        },
+        margin: { left: 14, right: 14, bottom: 16 },
+        didDrawPage: (data) => {
+          const totalPages = doc.getNumberOfPages();
+          doc.setFontSize(7.5);
+          doc.setTextColor(148, 163, 184);
+          doc.text(
+            `Página ${data.pageNumber} de ${totalPages}  •  Sistema ERAS`,
+            pageWidth - 14,
+            202,
+            { align: 'right' }
+          );
+        }
+      });
+
+      const filename = `Relatorio_Associados_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
+      doc.save(filename);
+      toast.success('Relatório em PDF gerado com sucesso!');
+    } catch (err) {
+      console.error('Erro ao gerar relatório', err);
+      toast.error('Erro ao gerar relatório em PDF.');
+    }
+  };
+
   const totalTitulares = associados.length;
   const totalDependentes = associados.reduce((acc, a) => acc + (a.dependentes?.length || 0), 0);
   const vidasProtegidas = totalTitulares + totalDependentes;
   const inadimplentes = associados.filter((a) => a.status === "inadimplente").length;
+  const qtdAssociadosAtivosSemParcelas = associados.filter((a) => a.status === 'ativo' && (parcelasAbertasMap[a.id] || 0) === 0).length;
 
   return (
     <div className="space-y-6">
@@ -1284,7 +1427,7 @@ export const AssociadosPage: React.FC = () => {
         
         <div className="flex items-center gap-3">
           <button
-            onClick={() => window.print()}
+            onClick={handleExportPDF}
             className="flex items-center gap-2 px-4 py-2.5 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors"
             title="Exportar listagem para PDF"
           >
@@ -1346,6 +1489,16 @@ export const AssociadosPage: React.FC = () => {
               <p className="text-xs font-semibold text-text-subtle">Inadimplentes</p>
               <p className="text-xl font-extrabold text-rose-400 mt-0.5">{inadimplentes}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {qtdAssociadosAtivosSemParcelas > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl flex items-start gap-3 mt-4 mb-2">
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-amber-500">Atenção: Associados sem mensalidades geradas</p>
+            <p className="text-sm text-amber-500/80 mt-1">Existem {qtdAssociadosAtivosSemParcelas} associado(s) ativo(s) sem nenhuma parcela ou faturamento gerado em aberto no financeiro. Verifique e gere os faturamentos para evitar perda de receitas.</p>
           </div>
         </div>
       )}
