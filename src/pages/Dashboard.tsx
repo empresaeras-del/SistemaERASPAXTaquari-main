@@ -548,6 +548,45 @@ export const Dashboard: React.FC = () => {
                   </div>
                 </div>
               );
+            case 'widget_assoc_sem_mensalidade': {
+              const assocs = stats?.associadosSemMensalidadesAberto || [];
+              if (assocs.length === 0) return null;
+              
+              return (
+                <div key="widget_assoc_sem_mensalidade" className="bg-bg-subtle rounded-3xl shadow-lg border border-amber-500/30 p-6 lg:col-span-4 flex flex-col relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500 opacity-[0.03] blur-3xl rounded-full" />
+                  <div className="flex items-center gap-3 mb-4 relative z-10">
+                    <div className="p-3 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-lg">
+                      <ShieldAlert className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-text-base">Atenção: Associados sem Mensalidade</h3>
+                      <p className="text-sm text-text-subtle">Existem {assocs.length} associado(s) ativo(s) sem mensalidades em aberto geradas.</p>
+                    </div>
+                  </div>
+                  
+                  <div className="relative z-10 flex-1 min-h-[150px] max-h-[300px] overflow-y-auto pr-2 custom-scrollbar space-y-3 mt-2">
+                    {assocs.map((assoc, i) => (
+                      <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-bg-surface/50 border border-border-default hover:border-amber-500/50 transition-colors">
+                        <div>
+                          <p className="font-bold text-text-base">{assoc.nome}</p>
+                          <p className="text-xs text-text-subtle mt-0.5">
+                            {assoc.telefone || assoc.celular_whatsapp || 'Sem telefone'} • Adesão: {assoc.data_adesao ? new Date(assoc.data_adesao + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
+                          </p>
+                        </div>
+                        <Link
+                          to={`/associados`}
+                          state={{ search: assoc.nome }}
+                          className="px-4 py-2 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:text-amber-400 border border-amber-500/20 rounded-xl font-bold transition-colors text-sm text-center shrink-0"
+                        >
+                          Ver Associado
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
             default:
               return null;
           }

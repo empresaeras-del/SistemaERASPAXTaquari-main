@@ -28,6 +28,7 @@ export interface DashboardStats {
   vidasPorPlano: { plano: string; vidas: number }[];
   parcelasReceberRaw: any[];
   parcelasPagarRaw: any[];
+  associadosSemMensalidadesAberto: { id: string; nome: string; telefone?: string; celular_whatsapp?: string; data_adesao?: string }[];
 }
 
 export const getDashboardStats = async (
@@ -52,7 +53,8 @@ export const getDashboardStats = async (
     acoesRecentes: [],
     vidasPorPlano: [],
     parcelasReceberRaw: [],
-    parcelasPagarRaw: []
+    parcelasPagarRaw: [],
+    associadosSemMensalidadesAberto: []
   };
 
   try {
@@ -140,6 +142,46 @@ export const getDashboardStats = async (
     const parcelasPagar = await getParcelasPagar(isOnline, tenantId || '');
     const hoje = new Date();
     
+    // 3.1. Associados sem mensalidades em aberto
+    let allReceitas: any[] = [];
+    if (isOnline) {
+      try {
+        let query = supabase.from('receitas').select('id, associado_id').is('deleted_at', null).eq('tipo_devedor', 'associado');
+        if (tenantId && tenantId !== 'all') {
+          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+        }
+        const { data } = await query;
+        if (data) allReceitas = data;
+        else allReceitas = await getAllFromIDB('receitas');
+      } catch (e) {
+        allReceitas = await getAllFromIDB('receitas');
+      }
+    } else {
+      allReceitas = await getAllFromIDB('receitas');
+    }
+
+    const parcelasAbertasIds = new Set(
+      parcelasReceber
+        .filter(p => !p.deleted_at && ['pendente', 'atrasado', 'vencido'].includes(p.status))
+        .map(p => p.receita_id)
+    );
+
+    const associadosComAberto = new Set(
+      allReceitas
+        .filter(r => parcelasAbertasIds.has(r.id) && r.associado_id)
+        .map(r => r.associado_id)
+    );
+
+    stats.associadosSemMensalidadesAberto = allAssociados
+      .filter(a => a.status === 'ativo' && !associadosComAberto.has(a.id))
+      .map(a => ({
+        id: a.id,
+        nome: a.nome,
+        telefone: a.telefone,
+        celular_whatsapp: (a as any).celular_whatsapp,
+        data_adesao: a.data_adesao
+      }));
+
     parcelasReceber.forEach(p => {
       if (p.deleted_at) return;
       const dataVenc = new Date(p.data_vencimento + 'T12:00:00');

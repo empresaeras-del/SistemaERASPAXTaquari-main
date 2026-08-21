@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, GripVertical, Check, Eye, EyeOff } from 'lucide-react';
 
-export type WidgetId = 'atalhos_rapidos' | 'stat_associados' | 'stat_atendimentos' | 'stat_faturamento' | 'stat_conversao' | 'stat_vidas_planos' | 'chart_atendimentos' | 'chart_recebimentos' | 'acoes_recentes' | 'status_sistema' | 'stat_receitas' | 'stat_despesas' | 'chart_saude_financeira';
+export type WidgetId = 'atalhos_rapidos' | 'stat_associados' | 'stat_atendimentos' | 'stat_faturamento' | 'stat_conversao' | 'stat_vidas_planos' | 'chart_atendimentos' | 'chart_recebimentos' | 'acoes_recentes' | 'status_sistema' | 'stat_receitas' | 'stat_despesas' | 'chart_saude_financeira' | 'widget_assoc_sem_mensalidade';
 
 export interface WidgetConfig {
   id: WidgetId;
@@ -11,6 +11,7 @@ export interface WidgetConfig {
 
 export const defaultWidgets: WidgetConfig[] = [
   { id: 'atalhos_rapidos', visible: true, title: 'Atalhos Rápidos' },
+  { id: 'widget_assoc_sem_mensalidade', visible: true, title: 'Alertas: Sem Mensalidade' },
   { id: 'stat_associados', visible: true, title: 'Total Associados' },
   { id: 'stat_atendimentos', visible: true, title: 'Atendimentos (Período)' },
   { id: 'stat_faturamento', visible: true, title: 'Faturamento Estimado' },
