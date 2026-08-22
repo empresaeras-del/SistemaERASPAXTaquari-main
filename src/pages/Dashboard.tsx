@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, FileText, DollarSign, Activity, TrendingUp, ShieldAlert, Settings2, Heart, Zap, UserPlus, Stethoscope } from 'lucide-react';
+import { Users, FileText, DollarSign, Activity, TrendingUp, ShieldAlert, Settings2, Heart, Zap, UserPlus, Stethoscope, ArrowRight } from 'lucide-react';
 import { DashboardSettingsModal, WidgetConfig, defaultWidgets } from '../components/DashboardSettingsModal';
 import { useAppContext } from '../context/AppContext';
 import { getDashboardStats, DashboardStats, DashboardPeriod } from '../services/dashboardService';
@@ -22,6 +22,7 @@ export const Dashboard: React.FC = () => {
   const [layout, setLayout] = useState<WidgetConfig[]>(defaultWidgets);
   const [filtroReceitas, setFiltroReceitas] = useState('todos');
   const [filtroDespesas, setFiltroDespesas] = useState('todos');
+  const [isAssocExpanded, setIsAssocExpanded] = useState(true);
   
   const getValoresFinanceiros = (
     parcelas: any[],
@@ -553,37 +554,52 @@ export const Dashboard: React.FC = () => {
               if (assocs.length === 0) return null;
               
               return (
-                <div key="widget_assoc_sem_mensalidade" className="bg-bg-subtle rounded-3xl shadow-lg border border-amber-500/30 p-6 lg:col-span-4 flex flex-col relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500 opacity-[0.03] blur-3xl rounded-full" />
-                  <div className="flex items-center gap-3 mb-4 relative z-10">
-                    <div className="p-3 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white shadow-lg">
-                      <ShieldAlert className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-text-base">Atenção: Associados sem Mensalidade</h3>
-                      <p className="text-sm text-text-subtle">Existem {assocs.length} associado(s) ativo(s) sem mensalidades em aberto geradas.</p>
+                <div key="widget_assoc_sem_mensalidade" className="bg-bg-surface border-l-4 border-l-amber-500 border-y border-r border-border-default rounded-2xl p-4 shadow-sm lg:col-span-4 flex flex-col relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500 opacity-[0.02] blur-2xl rounded-full" />
+                  
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 relative z-10">
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="relative cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                        onClick={() => setIsAssocExpanded(!isAssocExpanded)}
+                        title={isAssocExpanded ? "Ocultar itens" : "Expandir itens"}
+                      >
+                        <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
+                        <div className="bg-amber-500/10 p-2.5 rounded-xl shrink-0 text-amber-500">
+                          <ShieldAlert className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="text-text-base font-bold text-base tracking-tight">Associados sem Mensalidade</h3>
+                        <p className="text-amber-500/80 text-xs mt-0.5 font-medium">
+                          {assocs.length} associado(s) ativo(s) sem mensalidades geradas.
+                        </p>
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="relative z-10 flex-1 min-h-[150px] max-h-[300px] overflow-y-auto pr-2 custom-scrollbar space-y-3 mt-2">
-                    {assocs.map((assoc, i) => (
-                      <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-bg-surface/50 border border-border-default hover:border-amber-500/50 transition-colors">
+                  {isAssocExpanded && (
+                    <div className="relative z-10 flex-1 min-h-[150px] max-h-[200px] overflow-y-auto pr-2 custom-scrollbar space-y-2 mt-1">
+                      {assocs.map((assoc, i) => (
+                        <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 rounded-xl bg-bg-subtle border border-transparent hover:border-amber-500/30 transition-colors">
                         <div>
-                          <p className="font-bold text-text-base">{assoc.nome}</p>
-                          <p className="text-xs text-text-subtle mt-0.5">
+                          <p className="font-semibold text-sm text-text-base">{assoc.nome}</p>
+                          <p className="text-[11px] text-text-muted mt-0.5 font-medium">
                             {assoc.telefone || assoc.celular_whatsapp || 'Sem telefone'} • Adesão: {assoc.data_adesao ? new Date(assoc.data_adesao + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
                           </p>
                         </div>
                         <Link
                           to={`/associados`}
                           state={{ search: assoc.nome }}
-                          className="px-4 py-2 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:text-amber-400 border border-amber-500/20 rounded-xl font-bold transition-colors text-sm text-center shrink-0"
+                          className="px-3 py-1.5 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg font-bold transition-colors text-xs text-center shrink-0 flex items-center gap-1.5"
                         >
-                          Ver Associado
+                          Ver
+                          <ArrowRight className="w-3.5 h-3.5" />
                         </Link>
                       </div>
                     ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             }
