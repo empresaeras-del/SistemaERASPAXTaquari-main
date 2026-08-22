@@ -859,17 +859,19 @@ export const AssociadosPage: React.FC = () => {
   }, [editingAssociado, planosCompletos, calcularValor]);
 
   const todosDependentes = React.useMemo(() => {
-    const list: any[] = [];
-    (associados || []).forEach(a => {
+    let deps: any[] = [];
+    associados.forEach(a => {
       if (a && a.dependentes && Array.isArray(a.dependentes)) {
         a.dependentes.forEach(d => {
-          if (d) {
-            list.push({ ...d, titular_nome: a.nome || '', titular_cpf: a.cpf || '' });
-          }
+          deps.push({
+            ...d,
+            titular_nome: a.nome,
+            titular_status: a.status
+          });
         });
       }
     });
-    return list;
+    return deps;
   }, [associados]);
 
   const dependentesFiltrados = todosDependentes.filter(d => {
@@ -1421,6 +1423,144 @@ export const AssociadosPage: React.FC = () => {
       toast.success('Relatório em PDF gerado com sucesso!');
     } catch (err) {
       console.error('Erro ao gerar relatório', err);
+      toast.error('Erro ao gerar relatório em PDF.');
+    }
+  };
+
+  const handleExportDependentesPDF = async () => {
+    // Filter only active dependents for the report, if not already filtered
+    const ativosParaRelatorio = dependentesFiltrados.filter(d => d.titular_status === 'ativo');
+
+    if (ativosParaRelatorio.length === 0) {
+      toast.error('Nenhum dependente ativo encontrado para gerar relatório.');
+      return;
+    }
+
+    toast.info('Gerando relatório em PDF...');
+    try {
+      const tenantId = state.empresaSelecionada || 'default_tenant';
+      const empresa = await getEmpresaById(tenantId, state.isOnline);
+      
+      const doc = new jsPDF('landscape', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      let currentY = 14;
+
+      const nomeEmpresa = empresa?.nome_fantasia || empresa?.razao_social || 'PAX e Funerária Taquari';
+      const docEmpresa = empresa?.cnpj ? `CNPJ: ${empresa.cnpj}` : '';
+      const contatoEmpresa = [empresa?.telefone, empresa?.email].filter(Boolean).join(' | ');
+
+      let headerTextX = 14;
+
+      if (empresa?.logo_url) {
+        try {
+          const imgData = await fetchImageWithDimensions(empresa.logo_url);
+          if (imgData && imgData.base64) {
+            let imgHeight = 20;
+            let imgWidth = (imgData.width * 20) / imgData.height;
+            if (imgWidth > 60) {
+              imgWidth = 60;
+              imgHeight = (imgData.height * 60) / imgData.width;
+            }
+            doc.addImage(imgData.base64, 'PNG', 14, currentY, imgWidth, imgHeight, '', 'FAST');
+            headerTextX = 14 + imgWidth + 10;
+          }
+        } catch (e) {
+          console.warn('Erro ao carregar logo para PDF', e);
+        }
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.setTextColor(15, 23, 42);
+      doc.text(nomeEmpresa, headerTextX, currentY + 6);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      if (docEmpresa) doc.text(docEmpresa, headerTextX, currentY + 11);
+      if (contatoEmpresa) doc.text(contatoEmpresa, headerTextX, currentY + 16);
+
+      currentY += 24;
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, currentY, pageWidth - 14, currentY);
+      
+      currentY += 6;
+      
+      doc.setFillColor(248, 250, 252);
+      doc.rect(14, currentY, pageWidth - 28, 12, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(30, 41, 59);
+      doc.text('RELATÓRIO DE DEPENDENTES', 18, currentY + 8.5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+
+      const buscaTexto = buscaDependentes ? `Busca: ${buscaDependentes}` : 'TODOS';
+      
+      doc.text(`Filtro: ${buscaTexto}`, pageWidth / 2, currentY + 8.5, { align: 'center' });
+      doc.text(`Emissão: ${format(new Date(), 'dd/MM/yyyy HH:mm')}  |  Total: ${ativosParaRelatorio.length} registros`, pageWidth - 18, currentY + 8.5, { align: 'right' });
+
+      currentY += 16;
+
+      const tableData = ativosParaRelatorio.map((d, index) => {
+        return [
+          (index + 1).toString(),
+          d.nome || "-",
+          d.parentesco ? (d.parentesco.charAt(0).toUpperCase() + d.parentesco.slice(1)) : "Não informado",
+          d.titular_nome || "-",
+        ];
+      });
+
+      autoTable(doc, {
+        startY: currentY,
+        head: [['#', 'Nome do Dependente', 'Parentesco', 'Titular']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [59, 130, 246],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8.5,
+          halign: 'left'
+        },
+        styles: {
+          fontSize: 7.5,
+          cellPadding: 2.5,
+          valign: 'middle',
+          overflow: 'linebreak'
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252]
+        },
+        columnStyles: {
+          0: { cellWidth: 15, halign: 'center' },
+          1: { cellWidth: 100, fontStyle: 'bold' },
+          2: { cellWidth: 40 },
+          3: { cellWidth: 110 }
+        },
+        margin: { left: 14, right: 14, bottom: 16 },
+        didDrawPage: (data) => {
+          const totalPages = doc.getNumberOfPages();
+          doc.setFontSize(7.5);
+          doc.setTextColor(148, 163, 184);
+          doc.text(
+            `Página ${data.pageNumber} de ${totalPages}  •  Sistema ERAS`,
+            pageWidth - 14,
+            202,
+            { align: 'right' }
+          );
+        }
+      });
+
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      window.open(pdfUrl, '_blank');
+      toast.success('Relatório em PDF gerado com sucesso!');
+    } catch (err) {
+      console.error('Erro ao gerar relatório de dependentes', err);
       toast.error('Erro ao gerar relatório em PDF.');
     }
   };
@@ -3489,7 +3629,15 @@ export const AssociadosPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="p-4 border-t border-border-default flex justify-end bg-bg-subtle/50">
+            <div className="p-4 border-t border-border-default flex justify-between bg-bg-subtle/50">
+              <button
+                onClick={handleExportDependentesPDF}
+                className="flex items-center gap-2 px-6 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors"
+                title="Gerar relatório em PDF"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Gerar Relatório</span>
+              </button>
               <button
                 onClick={() => setShowDependentesModal(false)}
                 className="px-6 py-2 bg-bg-hover border border-[#64748B] text-text-muted rounded-xl font-medium hover:bg-[#64748B] hover:text-text-base transition-colors"
