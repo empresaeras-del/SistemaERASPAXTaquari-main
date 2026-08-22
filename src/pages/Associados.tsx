@@ -751,24 +751,43 @@ export const AssociadosPage: React.FC = () => {
   ];
   const [statusFilter, setStatusFilter] = useState("");
   const [planoFilter, setPlanoFilter] = useState("");
+  const [sortBy, setSortBy] = useState("nome_asc");
   const [showFilters, setShowFilters] = useState(false);
 
-  const filtered = associados.filter((a) => {
-    if (!a) return false;
-    const s = (searchTerm || '').trim().toLowerCase();
-    const sDigits = s.replace(/\D/g, '');
-    const nome = (a.nome || '').toLowerCase();
-    const cpf = a.cpf || '';
-    const cpfDigits = cpf.replace(/\D/g, '');
+  const filtered = React.useMemo(() => {
+    let result = associados.filter((a) => {
+      if (!a) return false;
+      const s = (searchTerm || '').trim().toLowerCase();
+      const sDigits = s.replace(/\D/g, '');
+      const nome = (a.nome || '').toLowerCase();
+      const cpf = a.cpf || '';
+      const cpfDigits = cpf.replace(/\D/g, '');
 
-    const matchesSearch = !s || 
-      nome.includes(s) || 
-      (sDigits.length > 0 && cpfDigits.includes(sDigits)) || 
-      cpf.includes(s);
-    const matchesStatus = statusFilter ? a.status === statusFilter : true;
-    const matchesPlano = planoFilter ? a.plano_pax_id === planoFilter : true;
-    return matchesSearch && matchesStatus && matchesPlano;
-  });
+      const matchesSearch = !s || 
+        nome.includes(s) || 
+        (sDigits.length > 0 && cpfDigits.includes(sDigits)) || 
+        cpf.includes(s);
+      const matchesStatus = statusFilter ? a.status === statusFilter : true;
+      const matchesPlano = planoFilter ? a.plano_pax_id === planoFilter : true;
+      return matchesSearch && matchesStatus && matchesPlano;
+    });
+
+    switch (sortBy) {
+      case 'nome_asc':
+        result.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+        break;
+      case 'nome_desc':
+        result.sort((a, b) => (b.nome || '').localeCompare(a.nome || ''));
+        break;
+      case 'adesao_asc':
+        result.sort((a, b) => new Date(a.data_adesao || 0).getTime() - new Date(b.data_adesao || 0).getTime());
+        break;
+      case 'adesao_desc':
+        result.sort((a, b) => new Date(b.data_adesao || 0).getTime() - new Date(a.data_adesao || 0).getTime());
+        break;
+    }
+    return result;
+  }, [associados, searchTerm, statusFilter, planoFilter, sortBy]);
 
   const [activeTab, setActiveTab] = useState<
     "resumo" | "principal" | "dependentes" | "contratos" | "mensalidades" | "documentos" | "requisicoes" | "atendimentos"
@@ -1281,20 +1300,20 @@ export const AssociadosPage: React.FC = () => {
       const docEmpresa = empresa?.cnpj ? `CNPJ: ${empresa.cnpj}` : '';
       const contatoEmpresa = [empresa?.telefone, empresa?.email].filter(Boolean).join(' | ');
 
+      let headerTextX = 14;
+
       if (empresa?.logo_url) {
         try {
           const imgData = await fetchImageWithDimensions(empresa.logo_url);
           if (imgData && imgData.base64) {
-            const maxWidth = pageWidth - 28;
-            let imgWidth = maxWidth;
-            let imgHeight = (imgData.height * maxWidth) / imgData.width;
-            if (imgHeight > 45) {
-              imgHeight = 45;
-              imgWidth = (imgData.width * 45) / imgData.height;
+            let imgHeight = 20;
+            let imgWidth = (imgData.width * 20) / imgData.height;
+            if (imgWidth > 60) {
+              imgWidth = 60;
+              imgHeight = (imgData.height * 60) / imgData.width;
             }
-            const xOffset = 14 + (maxWidth - imgWidth) / 2;
-            doc.addImage(imgData.base64, 'PNG', xOffset, currentY, imgWidth, imgHeight, '', 'FAST');
-            currentY += imgHeight + 8;
+            doc.addImage(imgData.base64, 'PNG', 14, currentY, imgWidth, imgHeight, '', 'FAST');
+            headerTextX = 14 + imgWidth + 10;
           }
         } catch (e) {
           console.warn('Erro ao carregar logo para PDF', e);
@@ -1302,24 +1321,29 @@ export const AssociadosPage: React.FC = () => {
       }
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.setTextColor(30, 41, 59);
-      doc.text(nomeEmpresa, 14, currentY + 6);
+      doc.setFontSize(16);
+      doc.setTextColor(15, 23, 42);
+      doc.text(nomeEmpresa, headerTextX, currentY + 6);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(9);
       doc.setTextColor(100, 116, 139);
-      if (docEmpresa) doc.text(docEmpresa, 14, currentY + 11);
-      if (contatoEmpresa) doc.text(contatoEmpresa, 14, currentY + 15);
+      if (docEmpresa) doc.text(docEmpresa, headerTextX, currentY + 11);
+      if (contatoEmpresa) doc.text(contatoEmpresa, headerTextX, currentY + 16);
 
-      currentY += 22;
-      doc.setFillColor(241, 245, 249);
-      doc.rect(14, currentY, pageWidth - 28, 14, 'F');
+      currentY += 24;
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, currentY, pageWidth - 14, currentY);
+      
+      currentY += 6;
+      
+      doc.setFillColor(248, 250, 252);
+      doc.rect(14, currentY, pageWidth - 28, 12, 'F');
       
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
-      doc.setTextColor(15, 23, 42);
-      doc.text('RELATÓRIO DE ASSOCIADOS', 18, currentY + 6.5);
+      doc.setTextColor(30, 41, 59);
+      doc.text('RELATÓRIO DE ASSOCIADOS', 18, currentY + 8.5);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
@@ -1328,10 +1352,10 @@ export const AssociadosPage: React.FC = () => {
       const filtroStatusTexto = statusFilter ? statusFilter.toUpperCase() : 'TODOS';
       const filtroPlanoTexto = planoFilter ? planosCompletos.find(p => p.id === planoFilter)?.nome || 'TODOS' : 'TODOS';
 
-      doc.text(`Status: ${filtroStatusTexto}  |  Plano: ${filtroPlanoTexto}`, 18, currentY + 11);
-      doc.text(`Emissão: ${format(new Date(), 'dd/MM/yyyy HH:mm:ss')}  |  Total: ${filtered.length} registros`, pageWidth - 18, currentY + 11, { align: 'right' });
+      doc.text(`Status: ${filtroStatusTexto}  |  Plano: ${filtroPlanoTexto}`, pageWidth / 2, currentY + 8.5, { align: 'center' });
+      doc.text(`Emissão: ${format(new Date(), 'dd/MM/yyyy HH:mm')}  |  Total: ${filtered.length} registros`, pageWidth - 18, currentY + 8.5, { align: 'right' });
 
-      currentY += 18;
+      currentY += 16;
 
       const tableData = filtered.map((a, index) => {
         return [
@@ -1391,8 +1415,9 @@ export const AssociadosPage: React.FC = () => {
         }
       });
 
-      const filename = `Relatorio_Associados_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
-      doc.save(filename);
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      window.open(pdfUrl, '_blank');
       toast.success('Relatório em PDF gerado com sucesso!');
     } catch (err) {
       console.error('Erro ao gerar relatório', err);
@@ -1429,10 +1454,10 @@ export const AssociadosPage: React.FC = () => {
           <button
             onClick={handleExportPDF}
             className="flex items-center gap-2 px-4 py-2.5 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors"
-            title="Exportar listagem para PDF"
+            title="Gerar relatório em PDF"
           >
             <Printer className="w-4 h-4" />
-            <span>Exportar PDF</span>
+            <span>Gerar Relatório</span>
           </button>
           <button
             disabled={!state.isOnline}
@@ -1512,51 +1537,81 @@ export const AssociadosPage: React.FC = () => {
             pageKey="associados"
             showFilters={showFilters}
             setShowFilters={setShowFilters}
-            currentFilters={{ searchTerm, statusFilter, planoFilter }}
+            currentFilters={{ searchTerm, statusFilter, planoFilter, sortBy }}
             onApplyFilters={(filters) => {
               setSearchTerm(filters.searchTerm || '');
               setStatusFilter(filters.statusFilter || '');
               setPlanoFilter(filters.planoFilter || '');
+              setSortBy(filters.sortBy || 'nome_asc');
             }}
             onClearFilters={() => {
               setSearchTerm('');
               setStatusFilter('');
               setPlanoFilter('');
+              setSortBy('nome_asc');
             }}
           >
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-subtle">Busca Rápida</label>
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle" />
-                <input
-                  type="text"
-                  placeholder="Nome ou CPF..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
-                />
+            <>
+              <div className="space-y-1.5 flex flex-col">
+                <label className="text-[11px] font-bold text-text-subtle uppercase tracking-wider">Busca Rápida</label>
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle" />
+                  <input
+                    type="text"
+                    placeholder="Nome ou CPF..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-sm text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                  />
+                </div>
               </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-subtle">Status</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
-              >
-                <option value="">Todos os Status</option>
-                <option value="ativo">Ativos</option>
-                <option value="inativo">Encerrados</option>
-                <option value="inadimplente">Inadimplentes</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-subtle">Plano</label>
-              <PlanoPaxSelect
-                value={planoFilter}
-                onChange={setPlanoFilter}
-              />
-            </div>
+              <div className="space-y-1.5 flex flex-col">
+                <label className="text-[11px] font-bold text-text-subtle uppercase tracking-wider">Status</label>
+                <div className="relative">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-sm text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="">Todos os Status</option>
+                    <option value="ativo">Ativos</option>
+                    <option value="inativo">Encerrados</option>
+                    <option value="inadimplente">Inadimplentes</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-text-subtle">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-1.5 flex flex-col">
+                <label className="text-[11px] font-bold text-text-subtle uppercase tracking-wider">Plano PAX</label>
+                <div className="[&>div]:mt-0 [&>div>button]:py-2.5 [&>div>button]:h-auto [&>div>button]:rounded-xl [&>div>button]:border-border-default [&>div>button]:bg-bg-surface h-full">
+                  <PlanoPaxSelect
+                    value={planoFilter}
+                    onChange={setPlanoFilter}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5 flex flex-col">
+                <label className="text-[11px] font-bold text-text-subtle uppercase tracking-wider">Ordenação</label>
+                <div className="relative">
+                  <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle" />
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full pl-9 pr-10 py-2.5 bg-bg-surface border border-border-default rounded-xl text-sm text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="nome_asc">Nome (A-Z)</option>
+                    <option value="nome_desc">Nome (Z-A)</option>
+                    <option value="adesao_desc">Adesão (Mais Recente)</option>
+                    <option value="adesao_asc">Adesão (Mais Antigo)</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-text-subtle">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                </div>
+              </div>
+            </>
           </AdvancedFilterBar>
           </div>
           <div className="flex items-center bg-bg-subtle border border-border-default p-1 rounded-xl shrink-0">

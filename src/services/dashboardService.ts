@@ -14,6 +14,7 @@ export interface DashboardStats {
   totalAssociados: number;
   associadosAtivos: number;
   novosAssociados: number;
+  totalDependentes: number;
   atendimentosPeriodo: number;
   faturamentoEstimado: number;
   taxaConversao: number;
@@ -40,6 +41,7 @@ export const getDashboardStats = async (
     totalAssociados: 0,
     associadosAtivos: 0,
     novosAssociados: 0,
+    totalDependentes: 0,
     atendimentosPeriodo: 0,
     faturamentoEstimado: 0,
     taxaConversao: 0,
@@ -92,7 +94,18 @@ export const getDashboardStats = async (
     }
     
     stats.totalAssociados = allAssociados.length;
-    stats.associadosAtivos = allAssociados.filter(a => a.status === 'ativo').length;
+    
+    let ativos = 0;
+    let dependentes = 0;
+    allAssociados.forEach(a => {
+      if (a.status === 'ativo') {
+        ativos++;
+        dependentes += a.dependentes ? a.dependentes.length : (Number(a.n_vidas) || 0);
+      }
+    });
+    
+    stats.associadosAtivos = ativos;
+    stats.totalDependentes = dependentes;
 
     // Novos associados no período selecionado
     const associadosInPeriod = allAssociados.filter(a => {

@@ -213,6 +213,9 @@ export const Dashboard: React.FC = () => {
                   <div className="relative z-10">
                     <h3 className="text-3xl font-bold text-text-base tracking-tight">{stats?.associadosAtivos || 0}</h3>
                     <p className="text-sm font-medium text-text-subtle mt-1">Associados Ativos</p>
+                    <p className="text-[11px] font-medium text-text-muted mt-0.5 opacity-80" title="Total de dependentes ativos">
+                      + {stats?.totalDependentes || 0} dependentes
+                    </p>
                   </div>
                 </div>
               );

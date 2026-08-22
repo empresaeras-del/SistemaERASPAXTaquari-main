@@ -2,7 +2,8 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, Calendar, ArrowRight, TrendingDown, TrendingUp } from 'lucide-react';
 import { useAlertasFinanceiros } from '../hooks/useAlertasFinanceiros';
-import { format } from 'date-fns';
+import { formatLocalDate } from '../utils/dateUtils';
+import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 
 const formatCurrency = (value: number) => {
@@ -10,12 +11,17 @@ const formatCurrency = (value: number) => {
 };
 
 export const AlertasFinanceiros: React.FC = () => {
+  const { state } = useAppContext();
   const { alertasPagar, alertasReceber, loading } = useAlertasFinanceiros(7); // 7 dias
   const navigate = useNavigate();
   const [isPagarExpanded, setIsPagarExpanded] = React.useState(true);
   const [isReceberExpanded, setIsReceberExpanded] = React.useState(true);
 
   if (loading || (alertasPagar.length === 0 && alertasReceber.length === 0)) return null;
+
+  // Ocultar widgets financeiros para usuários que não são Admin ou Super Admin
+  const isAuthorized = state.user?.nivel === 'super_admin' || state.user?.nivel === 'admin';
+  if (!isAuthorized) return null;
 
   return (
     <div className={`grid grid-cols-1 ${alertasPagar.length > 0 && alertasReceber.length > 0 ? "lg:grid-cols-2" : ""} gap-6 mb-8`}>
@@ -66,7 +72,7 @@ export const AlertasFinanceiros: React.FC = () => {
                   <span className="font-semibold text-sm text-text-base truncate" title={conta.descricao || 'Despesa/Repasse'}>{conta.descricao || 'Despesa/Repasse'}</span>
                   <div className="flex items-center gap-1.5 text-[11px] text-text-muted font-medium mt-0.5">
                     <Calendar className="w-3 h-3" />
-                    {conta.data_vencimento ? format(new Date(conta.data_vencimento), 'dd/MM/yyyy') : 'Sem data'}
+                    {conta.data_vencimento ? formatLocalDate(conta.data_vencimento) : 'Sem data'}
                   </div>
                 </div>
                 <span className="font-bold text-rose-500 text-sm whitespace-nowrap">
@@ -137,7 +143,7 @@ export const AlertasFinanceiros: React.FC = () => {
                   <span className="font-semibold text-sm text-text-base truncate" title={conta.descricao || 'Mensalidade/Receita'}>{conta.descricao || 'Mensalidade/Receita'}</span>
                   <div className="flex items-center gap-1.5 text-[11px] text-text-muted font-medium mt-0.5">
                     <Calendar className="w-3 h-3" />
-                    {conta.data_vencimento ? format(new Date(conta.data_vencimento), 'dd/MM/yyyy') : 'Sem data'}
+                    {conta.data_vencimento ? formatLocalDate(conta.data_vencimento) : 'Sem data'}
                   </div>
                 </div>
                 <span className="font-bold text-emerald-500 text-sm whitespace-nowrap">
