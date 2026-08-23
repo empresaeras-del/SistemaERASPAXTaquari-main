@@ -1074,7 +1074,7 @@ export const AssociadosPage: React.FC = () => {
 
   const handleFieldChange = (field: keyof Associado, value: any) => {
     if (editingAssociado) {
-      const finalValue = (typeof value === 'string' && field !== 'email' && field !== 'senha') ? value.toUpperCase() : value;
+      const finalValue = (typeof value === 'string' && field !== 'email' && field !== 'senha' && field !== 'status') ? value.toUpperCase() : value;
       setEditingAssociado({
         ...editingAssociado,
         [field]: finalValue
