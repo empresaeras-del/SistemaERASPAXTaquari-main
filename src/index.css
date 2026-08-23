@@ -336,619 +336,442 @@
 }
 
 /* ============================================================
-   LOGIN PAGE — Premium Design
+   ERAS V1 LOGIN PAGE
    ============================================================ */
-
-/* PrivateRoute loading screen */
-.private-route-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.eras-v1-login-page {
+  --red: #9B1B30; --red-dk: #5C0D1C;
+  --gold: #C8A84B; --gold-lt: #ECD47A;
+  --ink: #07090E;
+  --t-off: rgba(255,255,255,0.58); --t-muted: rgba(255,255,255,0.32);
+  --bdr: rgba(200,168,75,0.18); --bdr-hi: rgba(200,168,75,0.55);
+  --ease: cubic-bezier(0.22,1,0.36,1);
+  
   min-height: 100vh;
-  gap: 1rem;
-  background: #0F172A;
-  color: #94a3b8;
-  font-size: 0.9rem;
-}
-.private-route-spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid rgba(99, 102, 241, 0.25);
-  border-top-color: #6366f1;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-/* Page wrapper */
-.login-page {
-  min-height: 100vh;
-  background: #050811;
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: stretch;
-}
-
-/* Animated background orbs */
-.login-bg {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-.login-bg-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.3;
-}
-.login-bg-orb-1 {
-  width: 650px;
-  height: 650px;
-  background: radial-gradient(circle, #e11d48, #881337 40%, transparent 70%);
-  top: -180px;
-  left: -120px;
-  animation: float1 10s ease-in-out infinite;
-}
-.login-bg-orb-2 {
-  width: 550px;
-  height: 550px;
-  background: radial-gradient(circle, #2563eb, #1e3a8a 40%, transparent 70%);
-  bottom: -120px;
-  right: -80px;
-  animation: float2 12s ease-in-out infinite;
-}
-.login-bg-orb-3 {
-  width: 450px;
-  height: 450px;
-  background: radial-gradient(circle, #0ea5e9, #0369a1 40%, transparent 70%);
-  top: 45%;
-  left: 28%;
-  opacity: 0.18;
-  animation: float3 14s ease-in-out infinite;
-}
-
-/* Grid overlay */
-.login-bg-grid {
-  position: absolute;
-  inset: 0;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
-  mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
-  -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
-}
-
-@keyframes float1 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(35px, 25px) scale(1.05); }
-}
-@keyframes float2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-25px, -35px) scale(1.08); }
-}
-@keyframes float3 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(20px, -20px) scale(1.1); }
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Two-panel layout */
-.login-container {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  width: 100%;
-  min-height: 100vh;
-}
-
-/* === LEFT: Branding Panel === */
-.login-brand {
-  display: none;
-  flex: 1;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 3.5rem 4rem;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.75) 0%, rgba(8, 12, 28, 0.9) 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  position: relative;
-  animation: fadeUp 0.6s ease both;
-  backdrop-filter: blur(10px);
-}
-@media (min-width: 1024px) {
-  .login-brand { display: flex; }
-}
-
-.login-brand-content {
-  max-width: 520px;
-}
-
-/* === ERAS ANIMATED CYBER EMBLEM === */
-.eras-emblem-showcase {
-  position: relative;
-  display: inline-block;
-  margin-bottom: 2.2rem;
-  perspective: 1000px;
-}
-
-.eras-emblem-halo {
-  position: absolute;
-  inset: -20px;
-  background: radial-gradient(circle, rgba(225, 29, 72, 0.45) 0%, rgba(37, 99, 235, 0.25) 50%, transparent 75%);
-  filter: blur(28px);
-  border-radius: 50%;
-  animation: erasPulseGlow 4s ease-in-out infinite alternate;
-  pointer-events: none;
-}
-
-.eras-emblem-cyber-ring {
-  position: absolute;
-  inset: -12px;
-  border-radius: 28px;
-  border: 1px dashed rgba(225, 29, 72, 0.4);
-  animation: erasRotateRing 25s linear infinite;
-  pointer-events: none;
-}
-
-.eras-emblem-cyber-ring::before {
-  content: '';
-  position: absolute;
-  top: -4px;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  background: #38bdf8;
-  border-radius: 50%;
-  box-shadow: 0 0 10px #38bdf8, 0 0 20px #38bdf8;
-  transform: translateX(-50%);
-}
-
-.eras-emblem-card {
-  position: relative;
-  width: 190px;
-  height: 190px;
-  border-radius: 26px;
-  padding: 8px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 
-    0 20px 50px rgba(0, 0, 0, 0.6),
-    0 0 30px rgba(225, 29, 72, 0.35),
-    inset 0 0 20px rgba(225, 29, 72, 0.2);
-  backdrop-filter: blur(12px);
-  animation: erasFloat 5s ease-in-out infinite;
-  transform-style: preserve-3d;
-  overflow: hidden;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.eras-emblem-card:hover {
-  transform: scale(1.04) rotateY(5deg);
-  box-shadow: 
-    0 25px 60px rgba(0, 0, 0, 0.7),
-    0 0 45px rgba(225, 29, 72, 0.55),
-    0 0 25px rgba(56, 189, 248, 0.4);
-}
-
-.eras-emblem-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 18px;
-  filter: contrast(1.1) brightness(1.05);
-  transition: filter 0.3s ease;
-}
-
-/* Holographic Laser Scanline effect */
-.eras-emblem-scanline {
-  position: absolute;
-  top: -100%;
-  left: 0;
-  right: 0;
-  height: 40%;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(56, 189, 248, 0.2) 50%,
-    rgba(225, 29, 72, 0.6) 95%,
-    rgba(255, 255, 255, 0.9) 100%
-  );
-  box-shadow: 0 0 15px rgba(225, 29, 72, 0.8);
-  animation: erasLaserScan 3.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  pointer-events: none;
-}
-
-/* Light sheen reflection sweep */
-.eras-emblem-sheen {
-  position: absolute;
-  top: 0;
-  left: -150%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    115deg,
-    transparent 20%,
-    rgba(255, 255, 255, 0.4) 50%,
-    transparent 80%
-  );
-  transform: skewX(-25deg);
-  animation: erasSheen 4.5s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes erasFloat {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-10px) rotate(1deg);
-  }
-}
-
-@keyframes erasPulseGlow {
-  0% {
-    opacity: 0.6;
-    transform: scale(0.95);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-}
-
-@keyframes erasRotateRing {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes erasLaserScan {
-  0% {
-    top: -100%;
-    opacity: 0;
-  }
-  15% {
-    opacity: 1;
-  }
-  75% {
-    opacity: 1;
-  }
-  100% {
-    top: 200%;
-    opacity: 0;
-  }
-}
-
-@keyframes erasSheen {
-  0%, 40% {
-    left: -150%;
-  }
-  80%, 100% {
-    left: 200%;
-  }
-}
-
-/* Brand text */
-.login-brand-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.85rem;
-  background: rgba(225, 29, 72, 0.12);
-  border: 1px solid rgba(225, 29, 72, 0.35);
-  border-radius: 9999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #f43f5e;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 0.75rem;
-  box-shadow: 0 0 15px rgba(225, 29, 72, 0.15);
-}
-
-.login-brand-tag-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #f43f5e;
-  box-shadow: 0 0 8px #f43f5e;
-  animation: erasPulseGlow 1.5s infinite alternate;
-}
-
-.login-brand-title {
-  font-size: 2.75rem;
-  font-weight: 900;
+  font-family: 'Inter', sans-serif;
+  background: var(--ink);
   color: #fff;
-  letter-spacing: -0.04em;
-  margin: 0 0 0.4rem;
-  background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 40%, #cbd5e1 70%, #94a3b8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-shadow: 0 0 30px rgba(255, 255, 255, 0.15);
-}
-
-.login-brand-subtitle {
-  font-size: 1.1rem;
-  color: #94a3b8;
-  margin: 0 0 2.2rem;
-  font-weight: 500;
-}
-
-.login-brand-features {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.login-feature-item {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  color: #cbd5e1;
-  font-size: 0.95rem;
-  font-weight: 500;
-}
-
-.login-feature-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #f43f5e, #38bdf8);
-  flex-shrink: 0;
-  box-shadow: 0 0 10px rgba(244, 63, 94, 0.7);
-}
-
-.login-brand-footer {
-  color: #64748b;
-  font-size: 0.82rem;
-  font-weight: 500;
-}
-
-/* Mobile animated emblem on top of form */
-.login-mobile-emblem {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-@media (min-width: 1024px) {
-  .login-mobile-emblem { display: none; }
-}
-
-.login-mobile-emblem-card {
-  position: relative;
-  width: 58px;
-  height: 58px;
-  border-radius: 14px;
-  padding: 3px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
-  border: 1px solid rgba(225, 29, 72, 0.3);
-  box-shadow: 0 0 15px rgba(225, 29, 72, 0.4);
   overflow: hidden;
+  cursor: none;
 }
 
-.login-mobile-emblem-card img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 10px;
+/* ══ CUSTOM CURSOR ═══════════════════════════════════════════════ */
+.eras-v1-login-page #cursor {
+  position: fixed; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--gold); pointer-events: none; z-index: 9999;
+  transform: translate(-50%,-50%);
+  transition: width 200ms, height 200ms, background 200ms;
+  mix-blend-mode: difference;
+}
+.eras-v1-login-page #cursor-ring {
+  position: fixed; width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid rgba(200,168,75,0.5); pointer-events: none; z-index: 9998;
+  transform: translate(-50%,-50%);
+  transition: transform 80ms linear, width 250ms, height 250ms, border-color 250ms, opacity 250ms;
+}
+.eras-v1-login-page #cursor-trail { position: fixed; pointer-events: none; z-index: 9997; }
+
+/* ══ SCENE ═══════════════════════════════════════════════════════ */
+.eras-v1-login-page .scene {
+  position: fixed; inset: 0;
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
 }
 
-/* === RIGHT: Form Panel === */
-.login-form-side {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1.5rem;
-  animation: fadeUp 0.5s ease 0.1s both;
-}
-@media (min-width: 1024px) {
-  .login-form-side { flex: none; width: 480px; }
+/* ══ LAYER SYSTEM (parallax depth) ══════════════════════════════ */
+.eras-v1-login-page .layer {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 80ms linear;
 }
 
-/* Card */
-.login-card {
-  width: 100%;
-  max-width: 420px;
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 20px;
-  padding: 2.5rem 2rem;
-  box-shadow: 0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(99,102,241,0.05);
+/* ══ BACKGROUND LAYERS ═══════════════════════════════════════════ */
+.eras-v1-login-page .bg-deepest {
+  position: absolute; inset: -6%;
+  background:
+    radial-gradient(ellipse 100% 80% at 50% 0%, rgba(80,8,20,0.6) 0%, transparent 50%),
+    radial-gradient(ellipse 70% 60% at 5% 95%, rgba(0,20,50,0.5) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 70% at 95% 90%, rgba(30,5,60,0.4) 0%, transparent 55%),
+    linear-gradient(160deg,#07090E 0%,#0A0C16 100%);
 }
 
-.login-card-header {
-  margin-bottom: 2rem;
-}
-
-.login-card-title {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: #f1f5f9;
-  margin: 0 0 0.5rem;
-  letter-spacing: -0.02em;
-}
-
-.login-card-desc {
-  font-size: 0.9rem;
-  color: #64748b;
-  margin: 0;
-}
-
-/* Form */
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.login-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.login-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.login-input-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.login-input-icon {
-  position: absolute;
-  left: 0.875rem;
-  width: 16px;
-  height: 16px;
-  color: #475569;
-  flex-shrink: 0;
+.eras-v1-login-page #spotlight {
+  position: absolute; inset: -6%;
+  background: radial-gradient(circle 600px at 50% 50%, rgba(140,15,30,0.18) 0%, transparent 70%);
   pointer-events: none;
+  transition: background 60ms linear;
 }
 
-.login-input {
-  width: 100%;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  padding: 0.75rem 0.875rem 0.75rem 2.5rem;
-  color: #f1f5f9;
-  font-size: 0.95rem;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  box-sizing: border-box;
-}
-.login-input::placeholder {
-  color: #334155;
-}
-.login-input:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
-}
-.login-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.login-input-password {
-  padding-right: 2.75rem;
+.eras-v1-login-page .bg-grid {
+  position: absolute; inset: -6%; opacity: 0.055;
+  background-image:
+    linear-gradient(rgba(0,180,210,0.6) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,180,210,0.6) 1px, transparent 1px);
+  background-size: 60px 60px;
 }
 
-.login-toggle-password {
+.eras-v1-login-page .orb { position: absolute; border-radius: 50%; filter: blur(100px); pointer-events: none; }
+.eras-v1-login-page .o1 { width: 700px; height: 700px; top: -250px; left: 50%; transform: translateX(-50%); background: radial-gradient(circle,rgba(110,10,25,0.3) 0%,transparent 70%); }
+.eras-v1-login-page .o2 { width: 500px; height: 500px; bottom: -150px; left: -150px; background: radial-gradient(circle,rgba(0,25,60,0.35) 0%,transparent 70%); }
+.eras-v1-login-page .o3 { width: 450px; height: 450px; bottom: -120px; right: -120px; background: radial-gradient(circle,rgba(30,5,70,0.3) 0%,transparent 70%); }
+
+.eras-v1-login-page .debris { position: absolute; pointer-events: none; will-change: transform; }
+
+/* ══ LEFT PANEL ═══════════════════════════════════════════════════ */
+.eras-v1-login-page .left {
+  position: absolute; top: 0; left: 0; bottom: 0; right: 50%;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 60px 64px;
+}
+.eras-v1-login-page .brand-group { margin-bottom: 44px; }
+.eras-v1-login-page .brand-tag {
+  font-size: 10px; font-weight: 600; letter-spacing: 3.5px; text-transform: uppercase;
+  color: var(--gold); opacity: 0.8; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 10px;
+}
+.eras-v1-login-page .brand-tag::before { content: ''; width: 20px; height: 1px; background: var(--gold); opacity: 0.6; }
+.eras-v1-login-page .brand-name {
+  font-family: 'Cinzel', serif; font-size: 52px; font-weight: 700;
+  line-height: 1; letter-spacing: -1px; color: #fff;
+  text-shadow: 0 0 40px rgba(200,168,75,0.15);
+}
+.eras-v1-login-page .brand-name .em {
+  background: linear-gradient(90deg,var(--gold) 0%,var(--gold-lt) 50%,var(--gold) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-size: 200%; animation: eras-shim 5s linear infinite;
+}
+@keyframes eras-shim { from { background-position: 200%; } to { background-position: -200%; } }
+
+.eras-v1-login-page .brand-ver { font-size: 11px; color: var(--t-muted); letter-spacing: 2px; margin-top: 4px; }
+
+.eras-v1-login-page .hero-line {
+  width: 48px; height: 2px; margin-bottom: 24px;
+  background: linear-gradient(90deg,var(--red),transparent);
+  position: relative; overflow: hidden;
+}
+.eras-v1-login-page .hero-line::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg,transparent,rgba(255,255,255,0.6),transparent);
+  animation: eras-lineShine 3s ease-in-out infinite;
+}
+@keyframes eras-lineShine { 0%, 100% { transform: translateX(-100%); } 50% { transform: translateX(200%); } }
+
+.eras-v1-login-page .tagline {
+  font-size: clamp(20px,2.2vw,28px); font-weight: 300; line-height: 1.4;
+  color: var(--t-off); max-width: 380px; margin-bottom: 40px;
+  letter-spacing: -0.3px;
+}
+.eras-v1-login-page .tagline strong { color: #fff; font-weight: 500; }
+
+.eras-v1-login-page .features { display: flex; flex-direction: column; gap: 12px; }
+.eras-v1-login-page .feat {
+  display: flex; align-items: center; gap: 12px;
+  opacity: 0; animation: eras-featIn 0.5s var(--ease) both;
+}
+.eras-v1-login-page .feat:nth-child(1) { animation-delay: 0.4s; }
+.eras-v1-login-page .feat:nth-child(2) { animation-delay: 0.55s; }
+.eras-v1-login-page .feat:nth-child(3) { animation-delay: 0.7s; }
+.eras-v1-login-page .feat:nth-child(4) { animation-delay: 0.85s; }
+@keyframes eras-featIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+
+.eras-v1-login-page .feat-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  background: var(--red);
+  box-shadow: 0 0 8px rgba(155,27,48,0.7);
+  position: relative;
+}
+.eras-v1-login-page .feat-dot::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 50%;
+  border: 1px solid rgba(155,27,48,0.4);
+  animation: eras-dotPulse 2.2s ease-in-out infinite;
+}
+.eras-v1-login-page .feat-dot:nth-child(1)::after { animation-delay: 0s; }
+@keyframes eras-dotPulse { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(2.2); opacity: 0; } }
+.eras-v1-login-page .feat-text { font-size: 14px; color: var(--t-off); }
+
+/* ══ CENTER LOGO (parallax hero) ════════════════════════════════ */
+.eras-v1-login-page .logo-center {
   position: absolute;
-  right: 0.875rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  color: #475569;
-  display: flex;
-  align-items: center;
-  transition: color 0.2s;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: none;
+  z-index: 20;
 }
-.login-toggle-password:hover { color: #94a3b8; }
-.login-toggle-password svg { width: 18px; height: 18px; }
+.eras-v1-login-page .logo-aura {
+  position: absolute; top: 50%; left: 50%;
+  width: 340px; height: 340px; border-radius: 50%;
+  transform: translate(-50%,-50%);
+  background: radial-gradient(circle,rgba(155,27,48,0.35) 0%,transparent 65%);
+  filter: blur(30px);
+  animation: eras-auraPulse 3.5s ease-in-out infinite;
+}
+@keyframes eras-auraPulse { 0%, 100% { transform: translate(-50%,-50%) scale(1); opacity: 0.7; } 50% { transform: translate(-50%,-50%) scale(1.15); opacity: 1; } }
 
-/* Forgot row */
-.login-forgot-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: -0.5rem;
+.eras-v1-login-page .logo-ring-1,
+.eras-v1-login-page .logo-ring-2,
+.eras-v1-login-page .logo-ring-3 {
+  position: absolute; top: 50%; left: 50%; border-radius: 50%; border: 1px solid;
+  transform: translate(-50%,-50%); pointer-events: none;
 }
-.login-forgot-link {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #6366f1;
-  font-size: 0.85rem;
-  padding: 0;
-  transition: color 0.2s;
+.eras-v1-login-page .logo-ring-1 {
+  width: 240px; height: 240px;
+  border-color: rgba(200,168,75,0.4);
+  animation: eras-ringRot1 12s linear infinite;
 }
-.login-forgot-link:hover { color: #818cf8; text-decoration: underline; }
+.eras-v1-login-page .logo-ring-2 {
+  width: 290px; height: 290px;
+  border-color: rgba(155,27,48,0.25);
+  animation: eras-ringRot2 20s linear infinite reverse;
+  border-style: dashed;
+}
+.eras-v1-login-page .logo-ring-3 {
+  width: 350px; height: 350px;
+  border-color: rgba(0,180,210,0.12);
+  animation: eras-ringRot1 35s linear infinite;
+}
+@keyframes eras-ringRot1 { from { transform: translate(-50%,-50%) rotate(0); } to { transform: translate(-50%,-50%) rotate(360deg); } }
+@keyframes eras-ringRot2 { from { transform: translate(-50%,-50%) rotate(0); } to { transform: translate(-50%,-50%) rotate(-360deg); } }
 
-/* Primary button */
-.login-btn-primary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 4px 20px rgba(99,102,241,0.35);
-  margin-top: 0.5rem;
-  width: 100%;
+.eras-v1-login-page .logo-ring-1::before,
+.eras-v1-login-page .logo-ring-1::after {
+  content: ''; position: absolute;
+  background: var(--gold);
 }
-.login-btn-primary:hover:not(:disabled) {
-  opacity: 0.92;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(99,102,241,0.45);
-}
-.login-btn-primary:active:not(:disabled) {
-  transform: translateY(0);
-}
-.login-btn-primary:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-.login-btn-arrow { width: 16px; height: 16px; }
+.eras-v1-login-page .logo-ring-1::before { width: 6px; height: 1px; top: -1px; left: 50%; transform: translateX(-50%); }
+.eras-v1-login-page .logo-ring-1::after { width: 6px; height: 1px; bottom: -1px; left: 50%; transform: translateX(-50%); }
 
-/* Secondary button */
-.login-btn-secondary {
-  display: block;
-  width: 100%;
-  padding: 0.75rem;
-  background: rgba(99,102,241,0.12);
-  border: 1px solid rgba(99,102,241,0.3);
-  border-radius: 10px;
-  color: #a5b4fc;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
-  margin-top: 1rem;
+.eras-v1-login-page .logo-img {
+  width: 200px; height: 200px; object-fit: contain;
+  position: relative; z-index: 2;
+  filter:
+    drop-shadow(0 0 20px rgba(155,27,48,0.9))
+    drop-shadow(0 0 60px rgba(155,27,48,0.4))
+    drop-shadow(0 0 100px rgba(155,27,48,0.2));
+  animation: eras-logoBreath 5s ease-in-out infinite;
+  will-change: transform;
 }
-.login-btn-secondary:hover { background: rgba(99,102,241,0.2); }
+@keyframes eras-logoBreath { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
 
-/* Spinner inside button */
-.login-btn-spinner {
+/* ══ RIGHT PANEL (login) ═════════════════════════════════════════ */
+.eras-v1-login-page .right {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 50%;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: 40px 60px;
+}
+
+.eras-v1-login-page .card {
+  width: 100%; max-width: 400px;
+  background: rgba(10,12,20,0.82);
+  border: 1px solid rgba(200,168,75,0.2);
+  border-radius: 20px;
+  padding: 38px 40px;
+  position: relative; overflow: hidden;
+  backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+  box-shadow:
+    0 32px 80px rgba(0,0,0,0.6),
+    0 0 0 1px rgba(255,255,255,0.03) inset,
+    0 1px 0 rgba(200,168,75,0.25) inset;
+  transform-style: preserve-3d;
+  will-change: transform;
+  animation: eras-cardIn 0.8s var(--ease) 0.2s both;
+  transition: box-shadow 300ms;
+}
+@keyframes eras-cardIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+
+.eras-v1-login-page .card:hover {
+  box-shadow:
+    0 40px 100px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(255,255,255,0.05) inset,
+    0 1px 0 rgba(200,168,75,0.4) inset,
+    0 0 60px rgba(155,27,48,0.1);
+}
+
+.eras-v1-login-page .card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(200,168,75,0.2) 15%,
+    rgba(200,168,75,0.8) 35%,
+    rgba(155,27,48,0.9) 50%,
+    rgba(200,168,75,0.8) 65%,
+    rgba(200,168,75,0.2) 85%,
+    transparent 100%
+  );
+  animation: eras-topSweep 4s ease-in-out infinite;
+}
+@keyframes eras-topSweep {
+  0%, 100% { opacity: 0.5; transform: scaleX(0.7); }
+  50% { opacity: 1; transform: scaleX(1); }
+}
+
+.eras-v1-login-page .card-glow {
+  position: absolute; width: 300px; height: 300px; border-radius: 50%;
+  background: radial-gradient(circle,rgba(155,27,48,0.12) 0%,transparent 70%);
+  pointer-events: none; transform: translate(-50%,-50%);
+  transition: left 60ms linear, top 60ms linear;
+  filter: blur(20px);
+}
+
+.eras-v1-login-page .c { position: absolute; width: 14px; height: 14px; }
+.eras-v1-login-page .c-tl { top: -1px; left: -1px; border-top: 2px solid var(--gold); border-left: 2px solid var(--gold); border-radius: 4px 0 0 0; }
+.eras-v1-login-page .c-tr { top: -1px; right: -1px; border-top: 2px solid var(--gold); border-right: 2px solid var(--gold); border-radius: 0 4px 0 0; }
+.eras-v1-login-page .c-bl { bottom: -1px; left: -1px; border-bottom: 2px solid var(--gold); border-left: 2px solid var(--gold); border-radius: 0 0 0 4px; }
+.eras-v1-login-page .c-br { bottom: -1px; right: -1px; border-bottom: 2px solid var(--gold); border-right: 2px solid var(--gold); border-radius: 0 0 4px 0; }
+
+.eras-v1-login-page .ch { text-align: center; margin-bottom: 28px; }
+.eras-v1-login-page .ch-eye {
+  font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--gold); opacity: 0.75; margin-bottom: 8px;
+}
+.eras-v1-login-page .ch-title { font-family: 'Cinzel', serif; font-size: 22px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+.eras-v1-login-page .ch-sub { font-size: 13px; color: var(--t-muted); }
+
+.eras-v1-login-page .fields { display: flex; flex-direction: column; gap: 15px; margin-bottom: 8px; }
+.eras-v1-login-page .field { display: flex; flex-direction: column; gap: 5px; }
+.eras-v1-login-page label { font-size: 10px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(200,168,75,0.65); }
+.eras-v1-login-page .iw { position: relative; display: flex; align-items: center; }
+.eras-v1-login-page .ico { position: absolute; left: 14px; color: rgba(255,255,255,0.28); pointer-events: none; transition: color 250ms; }
+.eras-v1-login-page .iw:focus-within .ico { color: var(--gold); }
+.eras-v1-login-page input[type=email], 
+.eras-v1-login-page input[type=password],
+.eras-v1-login-page input[type=text],
+.eras-v1-login-page select {
+  width: 100%; height: 48px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(200,168,75,0.15);
+  border-radius: 10px; color: #fff;
+  font-family: 'Inter', sans-serif; font-size: 14px;
+  padding: 0 46px; outline: none; caret-color: var(--gold);
+  transition: border-color 250ms, background 250ms, box-shadow 250ms;
+}
+.eras-v1-login-page input::placeholder { color: rgba(255,255,255,0.25); }
+.eras-v1-login-page input:hover, .eras-v1-login-page select:hover { border-color: rgba(200,168,75,0.3); background: rgba(255,255,255,0.06); }
+.eras-v1-login-page input:focus, .eras-v1-login-page select:focus {
+  border-color: rgba(200,168,75,0.55);
+  background: rgba(200,168,75,0.04);
+  box-shadow: 0 0 0 3px rgba(200,168,75,0.1), 0 0 16px rgba(200,168,75,0.06);
+}
+.eras-v1-login-page select option {
+  background: var(--ink);
+  color: #fff;
+}
+.eras-v1-login-page .eyebtn { position: absolute; right: 12px; background: none; border: none; cursor: none;
+  color: rgba(255,255,255,0.3); padding: 6px; transition: color 200ms; line-height: 1; }
+.eras-v1-login-page .eyebtn:hover { color: var(--gold); }
+
+.eras-v1-login-page .forgot-row { display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
+.eras-v1-login-page .lnk { font-size: 12px; color: var(--gold); text-decoration: none; opacity: 0.7; transition: opacity 200ms; background: none; border: none; padding: 0; cursor: none; }
+.eras-v1-login-page .lnk:hover { opacity: 1; }
+
+.eras-v1-login-page .btn {
+  width: 100%; height: 50px;
+  background: linear-gradient(135deg,var(--red-dk) 0%,var(--red) 55%,#C02040 100%);
+  border: 1px solid rgba(155,27,48,0.45); border-radius: 10px;
+  color: #fff; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: 0.8px;
+  cursor: none; position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  transition: all 280ms var(--ease); margin-bottom: 18px;
+}
+.eras-v1-login-page .btn:disabled {
+  opacity: 0.6;
+}
+.eras-v1-login-page .btn-shine {
+  position: absolute; top: 0; left: -80%; width: 55%; height: 100%;
+  background: linear-gradient(90deg,transparent,rgba(255,255,255,0.14),transparent);
+  transform: skewX(-20deg); animation: eras-bshine 4s ease-in-out infinite;
+}
+@keyframes eras-bshine { 0%, 65%, 100% { left: -80%; } 40% { left: 130%; } }
+.eras-v1-login-page .btn:hover:not(:disabled) {
+  background: linear-gradient(135deg,#8B1525,#C02040,#D83050);
+  box-shadow: 0 8px 36px rgba(155,27,48,0.55), 0 0 60px rgba(155,27,48,0.2);
+  transform: translateY(-2px);
+}
+.eras-v1-login-page .btn:active:not(:disabled) { transform: translateY(0) scale(0.99); }
+.eras-v1-login-page .barrow { transition: transform 280ms var(--ease); }
+.eras-v1-login-page .btn:hover:not(:disabled) .barrow { transform: translateX(5px); }
+
+.eras-v1-login-page .btn-spinner {
   width: 16px;
   height: 16px;
   border: 2px solid rgba(255,255,255,0.3);
   border-top-color: white;
   border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+  animation: eras-spin 0.7s linear infinite;
 }
 
-/* Error message */
-.login-error {
+@keyframes eras-spin { to { transform: rotate(360deg); } }
+
+.eras-v1-login-page .secbar {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px; border: 1px solid rgba(0,200,224,0.12); border-radius: 8px;
+  background: rgba(0,200,224,0.03);
+}
+.eras-v1-login-page .secdot { width: 5px; height: 5px; border-radius: 50%; background: #22D3A0;
+  box-shadow: 0 0 7px rgba(34,211,160,0.8); animation: eras-scp 2.5s ease-in-out infinite; }
+@keyframes eras-scp { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.eras-v1-login-page .sectext { font-size: 11px; color: rgba(0,200,224,0.55); letter-spacing: 0.5px; margin: 0; }
+.eras-v1-login-page .sectext strong { color: rgba(0,200,224,0.8); font-weight: 500; }
+
+.eras-v1-login-page .divider {
+  position: absolute; top: 0; bottom: 0; left: 50%; width: 1px;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(200,168,75,0.12) 20%,
+    rgba(200,168,75,0.35) 45%,
+    rgba(155,27,48,0.45) 55%,
+    rgba(200,168,75,0.12) 80%,
+    transparent 100%
+  );
+  animation: eras-dvGlow 4s ease-in-out infinite;
+  z-index: 5; pointer-events: none;
+}
+@keyframes eras-dvGlow { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+
+.eras-v1-login-page .hud { position: fixed; z-index: 30; pointer-events: none; }
+.eras-v1-login-page .hud-tl { top: 20px; left: 20px; width: 40px; height: 40px; border-top: 1px solid rgba(200,168,75,0.3); border-left: 1px solid rgba(200,168,75,0.3); border-radius: 3px 0 0 0; }
+.eras-v1-login-page .hud-tr { top: 20px; right: 20px; width: 40px; height: 40px; border-top: 1px solid rgba(200,168,75,0.3); border-right: 1px solid rgba(200,168,75,0.3); border-radius: 0 3px 0 0; }
+.eras-v1-login-page .hud-bl { bottom: 20px; left: 20px; width: 40px; height: 40px; border-bottom: 1px solid rgba(200,168,75,0.3); border-left: 1px solid rgba(200,168,75,0.3); border-radius: 0 0 0 3px; }
+.eras-v1-login-page .hud-br { bottom: 20px; right: 20px; width: 40px; height: 40px; border-bottom: 1px solid rgba(200,168,75,0.3); border-right: 1px solid rgba(200,168,75,0.3); border-radius: 0 0 3px 0; }
+
+.eras-v1-login-page .hud-data {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 20px; z-index: 30;
+  font-size: 10px; letter-spacing: 1.5px; color: var(--t-muted); text-transform: uppercase;
+}
+.eras-v1-login-page .hud-sep { width: 3px; height: 3px; border-radius: 50%; background: rgba(200,168,75,0.3); }
+.eras-v1-login-page .hud-live { color: rgba(34,211,160,0.7); display: flex; align-items: center; gap: 4px; }
+.eras-v1-login-page .hud-live::before { content: '●'; font-size: 10px; animation: eras-scp 2s infinite; }
+
+.eras-v1-login-page .particles { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+.eras-v1-login-page .p { position: absolute; border-radius: 50%; animation: eras-pdrift linear infinite; }
+@keyframes eras-pdrift {
+  0% { transform: translateY(105vh) scale(0); opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 0.6; }
+  100% { transform: translateY(-5vh) scale(1.8); opacity: 0; }
+}
+
+.eras-v1-login-page .geo { position: absolute; pointer-events: none; animation: eras-geoFloat linear infinite; }
+@keyframes eras-geoFloat {
+  0% { transform: translateY(110vh) rotate(0deg); opacity: 0; }
+  5% { opacity: 0.6; }
+  95% { opacity: 0.2; }
+  100% { transform: translateY(-10vh) rotate(360deg); opacity: 0; }
+}
+
+.eras-v1-login-page .left { animation: eras-leftIn 0.9s var(--ease) both; }
+@keyframes eras-leftIn { from { opacity: 0; transform: translateX(-36px); } to { opacity: 1; transform: translateX(0); } }
+
+.eras-v1-login-page #coords {
+  position: fixed; top: 24px; right: 80px;
+  font-size: 9px; letter-spacing: 1.5px; color: rgba(200,168,75,0.35);
+  font-family: 'Inter', monospace;
+  z-index: 30; pointer-events: none;
+  transition: color 300ms;
+}
+
+.eras-v1-login-page .login-error {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
@@ -959,21 +782,23 @@
   color: #fca5a5;
   font-size: 0.85rem;
   line-height: 1.4;
+  margin-bottom: 0.5rem;
+  z-index: 10;
 }
-.login-error-icon {
+.eras-v1-login-page .login-error-icon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
   margin-top: 1px;
 }
 
-/* Success block (forgot password sent) */
-.login-success {
+.eras-v1-login-page .login-success {
   text-align: center;
   padding: 1rem 0;
-  animation: fadeUp 0.4s ease;
+  animation: eras-featIn 0.4s ease;
+  z-index: 10;
 }
-.login-success-icon {
+.eras-v1-login-page .login-success-icon {
   width: 52px;
   height: 52px;
   background: rgba(34,197,94,0.15);
@@ -985,42 +810,25 @@
   margin: 0 auto 1rem;
   color: #4ade80;
 }
-.login-success-icon svg { width: 24px; height: 24px; }
-.login-success h3 {
+.eras-v1-login-page .login-success h3 {
   color: #f1f5f9;
   font-size: 1.1rem;
   font-weight: 600;
   margin: 0 0 0.5rem;
 }
-.login-success p {
-  color: #64748b;
+.eras-v1-login-page .login-success p {
+  color: var(--t-off);
   font-size: 0.875rem;
   line-height: 1.5;
-  margin: 0;
+  margin: 0 0 1.5rem 0;
 }
 
-/* Back button */
-.login-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: none;
-  border: none;
-  color: #64748b;
-  font-size: 0.85rem;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.2s;
-}
-.login-back-btn:hover { color: #94a3b8; }
-.login-back-btn svg { width: 16px; height: 16px; }
-
-/* Footer text */
-.login-card-footer-text {
-  color: #1e293b;
-  font-size: 0.72rem;
-  text-align: center;
-  margin-top: 2rem;
-  margin-bottom: 0;
+@media (max-width: 1024px) {
+  .eras-v1-login-page .left { display: none; }
+  .eras-v1-login-page .divider { display: none; }
+  .eras-v1-login-page .right { left: 0; padding: 20px; justify-content: center; }
+  .eras-v1-login-page .logo-center { display: none; }
+  .eras-v1-login-page #coords { display: none; }
+  .eras-v1-login-page .hud-data { display: none; }
 }
 
