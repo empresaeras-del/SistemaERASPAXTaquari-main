@@ -29,10 +29,6 @@ export const LoginPage: React.FC = () => {
   const [mode, setMode] = useState<'login' | 'forgot'>('login');
   const [forgotSent, setForgotSent] = useState(false);
 
-  // Se já logado, redireciona para o sistema
-  if (!loading && session) {
-    return <Navigate to="/" replace />;
-  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,6 +279,11 @@ export const LoginPage: React.FC = () => {
       />
     );
   });
+
+  // Se já logado, redireciona para o sistema
+  if (!loading && session) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="eras-v1-login-page">

@@ -22,6 +22,12 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
     case 'SET_EMPRESA':
+      // Se for usuário comum, força sempre o tenant_id do próprio usuário
+      if (state.user && state.user.nivel !== 'super_admin' && state.user.tenant_id) {
+        if (action.payload !== state.user.tenant_id) {
+          return { ...state, empresaSelecionada: state.user.tenant_id };
+        }
+      }
       return { ...state, empresaSelecionada: action.payload };
     case 'SET_THEME':
       return { ...state, theme: action.payload };
@@ -47,6 +53,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sincroniza o usuário autenticado com o AppState
   useEffect(() => {
     dispatch({ type: 'SET_USER', payload: user });
+    
+    // Garante que assim que o usuário logar, o tenant seja definido corretamente,
+    // evitando que o Dashboard carregue com estado null ou tenant em cache.
+    if (user && user.nivel !== 'super_admin' && user.tenant_id) {
+      dispatch({ type: 'SET_EMPRESA', payload: user.tenant_id });
+    }
   }, [user]);
 
   // Inicializa preferências do IDB
