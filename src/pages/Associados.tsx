@@ -9,7 +9,7 @@ import { sendWhatsAppMessage, generateBoasVindasTemplate, generateRenovacaoTempl
 import { formatPhone } from "../utils/formatters";
 import { isValidCPFOrCNPJ, maskCPFOrCNPJ } from "../utils/validators";
 import { v4 as uuidv4 } from "uuid";
-import { salvarReceita, ParcelaReceber, getParcelasReceber, excluirParcelaReceber } from "../services/financeiroService";
+import { salvarReceita, ParcelaReceber, getParcelasReceber, excluirParcelaReceber, registrarRecebimento, Receita, getReceitaById } from "../services/financeiroService";
 import {
   getAssociados,
   saveAssociado,
@@ -24,7 +24,7 @@ import { ColumnVisibilityToggle } from "../components/ColumnVisibilityToggle";
 import { useFornecedores } from "../hooks/useFornecedores";
 import { registrarAuditoria } from "../lib/supabase";
 import { canDelete } from "../utils/permissions";
-import { MessageCircle, Phone, ClipboardList, Activity, MapPin, User, FileText, CreditCard, FolderOpen, Folder, File, Plus, Search, Filter, Edit2, Trash2, X, Users, Heart, AlertCircle, ShieldCheck, CheckCircle, Clock, XCircle, DollarSign, Calendar, LayoutGrid, List , Printer, Eye, Download, UploadCloud, AlertTriangle, Image as ImageIcon } from "lucide-react";
+import { MessageCircle, Phone, ClipboardList, Activity, MapPin, User, FileText, CreditCard, FolderOpen, Folder, File, Plus, Search, Filter, Edit2, Trash2, X, Users, Heart, AlertCircle, ShieldCheck, CheckCircle, Clock, XCircle, DollarSign, Calendar, LayoutGrid, List , Printer, Eye, Download, UploadCloud, AlertTriangle, Image as ImageIcon, Lock, Wallet, ArrowRight, CheckCircle2 } from "lucide-react";
 import { PlanoPaxSelect } from "../components/planos-pax/PlanoPaxSelect";
 import { AssociadoRequisicoesTab } from "../components/associados/AssociadoRequisicoesTab";
 import { AssociadoResumoFinanceiroTab } from "../components/associados/AssociadoResumoFinanceiroTab";
@@ -38,7 +38,11 @@ import { contratoSchema } from "../schemas/contratoSchema";
 import { VisualizadorDocumentoModal } from "../components/associados/VisualizadorDocumentoModal";
 import { downloadDocumento, isPdfDocument, isImageDocument } from "../utils/documentUtils";
 import { exportToPDF } from "../lib/pdfExport";
-import { getEmpresaById } from "../services/empresasService";
+import { getEmpresaById, Empresa } from '../services/empresasService';
+import { getContasBancariasAtivas } from '../services/contasBancariasService';
+import { ContaBancaria } from '../types/contasBancarias';
+import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
+import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { fetchImageWithDimensions } from '../utils/imageUtils';
@@ -379,6 +383,7 @@ const MensalidadesTab = ({ associado, onSuccess }: { associado: any, onSuccess: 
   const { state } = useAppContext();
   const confirm = useConfirm();
   const toast = useToast();
+  const navigate = useNavigate();
   const [loading, setLoading] = React.useState(false);
   const [parcelas, setParcelas] = React.useState<any[]>([]);
   const [showGeracao, setShowGeracao] = React.useState(false);
@@ -390,7 +395,21 @@ const MensalidadesTab = ({ associado, onSuccess }: { associado: any, onSuccess: 
   const [showJustificativa, setShowJustificativa] = React.useState(false);
   const [justificativa, setJustificativa] = React.useState('');
 
-  
+  // Modal de Baixa/Recebimento
+  const [showBaixaModal, setShowBaixaModal] = React.useState(false);
+  const [parcelaSelecionada, setParcelaSelecionada] = React.useState<any | null>(null);
+  const [dataRecebimento, setDataRecebimento] = React.useState(format(new Date(), 'yyyy-MM-dd'));
+  const [valorRecebido, setValorRecebido] = React.useState<number>(0);
+  const [formaPagamentoEfetiva, setFormaPagamentoEfetiva] = React.useState<string>('pix');
+  const [observacaoRecebimento, setObservacaoRecebimento] = React.useState<string>('');
+  const [contasBancarias, setContasBancarias] = React.useState<ContaBancaria[]>([]);
+  const [contaBancariaId, setContaBancariaId] = React.useState<string>('');
+  const [modalStage, setModalStage] = React.useState<'form' | 'confirmacao' | 'bloqueio'>('form');
+  const [loteAberto, setLoteAberto] = React.useState<any | null>(null);
+  const [checkingLote, setCheckingLote] = React.useState(false);
+  const [submittingBaixa, setSubmittingBaixa] = React.useState(false);
+  const [empresaData, setEmpresaData] = React.useState<Empresa | null>(null);
+
   const handleMassDelete = async () => {
     if (!justificativa.trim()) {
       toast.error('Informe a justificativa');
@@ -421,7 +440,7 @@ const MensalidadesTab = ({ associado, onSuccess }: { associado: any, onSuccess: 
     }
   };
 
-const carregarMensalidades = React.useCallback(async () => {
+  const carregarMensalidades = React.useCallback(async () => {
     setLoading(true);
     try {
       const allParcelas = await getParcelasReceber(state.isOnline, state.empresaSelecionada || 'all');
@@ -444,6 +463,259 @@ const carregarMensalidades = React.useCallback(async () => {
   React.useEffect(() => {
     carregarMensalidades();
   }, [carregarMensalidades]);
+
+  // Carregar dados da empresa e contas bancárias para recibo e modal de baixa
+  React.useEffect(() => {
+    const loadExtras = async () => {
+      if (state.empresaSelecionada) {
+        try {
+          const [contas, emp] = await Promise.all([
+            getContasBancariasAtivas(state.empresaSelecionada, state.isOnline),
+            getEmpresaById(state.empresaSelecionada, state.isOnline)
+          ]);
+          setContasBancarias(contas);
+          if (emp) setEmpresaData(emp);
+        } catch (e) {
+          console.error('Erro ao carregar extras de mensalidades:', e);
+        }
+      }
+    };
+    loadExtras();
+  }, [state.empresaSelecionada, state.isOnline]);
+
+  // Abre modal de recebimento com dados pré-preenchidos
+  const openBaixaModal = (parcela: any) => {
+    setParcelaSelecionada(parcela);
+    setDataRecebimento(format(new Date(), 'yyyy-MM-dd'));
+    setValorRecebido(parcela.valor);
+    setFormaPagamentoEfetiva(parcela.forma_pagamento || 'pix');
+    setContaBancariaId(parcela.conta_bancaria_id || (contasBancarias.length > 0 ? contasBancarias[0].id : ''));
+    setObservacaoRecebimento('');
+    setLoteAberto(null);
+    setModalStage('form');
+    setShowBaixaModal(true);
+  };
+
+  // Etapa 1: verifica se há lote de caixa aberto
+  const handleBaixa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!parcelaSelecionada) return;
+    setCheckingLote(true);
+    try {
+      const activeLote = await getLoteAbertoAtivo(state.isOnline, state.empresaSelecionada || 'tenant-default');
+      if (!activeLote) {
+        setLoteAberto(null);
+        setModalStage('bloqueio');
+      } else {
+        setLoteAberto(activeLote);
+        setModalStage('confirmacao');
+      }
+    } catch (err) {
+      console.error('Erro ao verificar lote de caixa:', err);
+      toast.error('Erro ao verificar status do Lote de Caixa');
+    } finally {
+      setCheckingLote(false);
+    }
+  };
+
+  // Etapa 3: efetiva o recebimento e registra no caixa
+  const handleEfetivarRecebimento = async () => {
+    if (!state.isOnline) {
+      toast.error('Baixa de recebimento bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
+    if (!parcelaSelecionada || !loteAberto) return;
+    setSubmittingBaixa(true);
+    try {
+      await registrarRecebimento(state.isOnline, parcelaSelecionada.id, {
+        data_recebimento: dataRecebimento ? new Date(dataRecebimento + "T12:00:00").toISOString() : new Date().toISOString(),
+        valor_recebido: Number(valorRecebido) || parcelaSelecionada.valor,
+        forma_pagamento_efetivo: formaPagamentoEfetiva,
+        conta_bancaria_id: formaPagamentoEfetiva !== 'dinheiro' ? contaBancariaId : null,
+        recebido_por: state.user?.nome || 'Sistema',
+        observacao: observacaoRecebimento
+      });
+
+      await registrarMovimentacao(state.isOnline, {
+        tenant_id: state.empresaSelecionada || 'tenant-default',
+        lote_id: loteAberto.id,
+        tipo: 'entrada',
+        origem: 'contas_receber',
+        categoria: 'Receita / Mensalidade',
+        descricao: `Recebimento: ${parcelaSelecionada.devedor_nome} - ${parcelaSelecionada.descricao}`,
+        valor: Number(valorRecebido) || parcelaSelecionada.valor,
+        forma_pagamento: formaPagamentoEfetiva as any,
+        data_movimentacao: dataRecebimento ? new Date(dataRecebimento + "T12:00:00").toISOString() : new Date().toISOString(),
+        referencia_id: parcelaSelecionada.id,
+        documento_ref: `Parc. ${parcelaSelecionada.numero_parcela}/${parcelaSelecionada.total_parcelas || 1}`,
+        operador_nome: state.user?.nome || loteAberto.operador_nome || 'Sistema',
+        observacao: observacaoRecebimento
+      });
+
+      toast.success(`Recebimento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
+      setShowBaixaModal(false);
+      carregarMensalidades();
+    } catch (err: any) {
+      console.error('Erro ao efetivar recebimento:', err);
+      toast.error(err?.message || 'Erro ao efetivar recebimento');
+    } finally {
+      setSubmittingBaixa(false);
+    }
+  };
+
+  // Gera e imprime recibo em nova janela (mesmo padrão do módulo financeiro)
+  const handleImprimirRecibo = (parcela: any) => {
+    const valorFormatado = Number(parcela.valor_recebido || parcela.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const dataEmissao = format(new Date(), 'dd/MM/yyyy');
+    const dataVenc = parcela.data_vencimento ? format(new Date(parcela.data_vencimento + 'T12:00:00'), 'dd/MM/yyyy') : '-';
+    const dataRec = (parcela.data_recebimento || parcela.recebido_em)
+      ? formatLocalDateTime(parcela.data_recebimento || parcela.recebido_em)
+      : '-';
+    const numRecibo = (parcela.id || '').substring(0, 8).toUpperCase();
+    const devedorNome = parcela.devedor_nome || associado.nome || 'Cliente';
+    const devedorDoc = parcela.devedor_cpf_cnpj || associado.cpf || 'Não informado';
+    const formaEfetiva = (parcela.forma_pagamento_efetivo || parcela.forma_pagamento || 'PIX').toUpperCase();
+    const recebidoPor = parcela.recebido_por || state.user?.nome || 'Sistema';
+    const obsRecebimento = parcela.observacao_recebimento
+      ? `<div style="margin-top: 14px; padding: 12px 14px; background: #f8fafc; border-left: 4px solid #3b82f6; border-radius: 4px; font-size: 12px; color: #334155;"><strong>Observações do Recebimento:</strong> ${parcela.observacao_recebimento}</div>`
+      : '';
+    const logoHtml = empresaData?.logo_url
+      ? `<img src="${empresaData.logo_url}" alt="Logotipo" style="max-height: 75px; max-width: 240px; object-fit: contain; margin-bottom: 8px;" />`
+      : `<h2 style="margin: 0 0 4px 0; font-size: 20px; text-transform: uppercase; color: #0f172a; font-weight: 800;">${empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}</h2>`;
+    const assinaturaHtml = empresaData?.assinatura_url
+      ? `<img src="${empresaData.assinatura_url}" alt="Assinatura" style="max-height: 65px; max-width: 220px; object-fit: contain; margin-bottom: 4px;" />`
+      : `<div style="height: 50px;"></div>`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Recibo de Pagamento - Nº ${numRecibo}</title>
+          <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            *, *::before, *::after { box-sizing: border-box; }
+            body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; margin: 0; padding: 10px; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .recibo-wrapper { max-width: 800px; margin: 0 auto; border: 2px solid #0f172a; border-radius: 12px; padding: 28px; background: #ffffff; }
+            .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 18px; margin-bottom: 20px; }
+            .title-box { text-align: right; }
+            .title-main { font-size: 24px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 6px 0; color: #0f172a; }
+            .badge-num { display: inline-block; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: bold; color: #334155; }
+            .valor-highlight { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 10px; padding: 16px 24px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+            .valor-title { font-size: 13px; font-weight: bold; text-transform: uppercase; color: #15803d; }
+            .valor-num { font-size: 28px; font-weight: 900; color: #166534; }
+            .section-box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; background: #f8fafc; }
+            .section-title { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+            .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; font-size: 13px; }
+            .grid-item span.label { display: block; color: #64748b; font-size: 11px; text-transform: uppercase; margin-bottom: 2px; }
+            .grid-item span.val { font-weight: 600; color: #0f172a; }
+            .declaracao-box { background: #ffffff; border: 1px dashed #94a3b8; border-radius: 8px; padding: 16px 18px; margin: 22px 0; font-size: 13px; line-height: 1.6; color: #1e293b; text-align: justify; }
+            .footer-table { width: 100%; margin-top: 36px; page-break-inside: avoid; }
+            .signature-col { text-align: center; width: 50%; padding: 0 20px; vertical-align: bottom; }
+            .signature-line { border-top: 1px solid #0f172a; margin-top: 6px; padding-top: 6px; font-size: 12px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="recibo-wrapper">
+            <table class="header-table">
+              <tr>
+                <td style="vertical-align: top; width: 55%;">
+                  ${logoHtml}
+                  <div style="font-size: 12px; color: #475569; line-height: 1.4;">
+                    ${empresaData?.cnpj ? `<strong>CNPJ:</strong> ${empresaData.cnpj}<br/>` : ''}
+                    ${empresaData?.endereco ? `${empresaData.endereco}<br/>` : ''}
+                    ${empresaData?.telefone ? `<strong>Tel:</strong> ${empresaData.telefone}` : ''}
+                    ${empresaData?.email ? ` | <strong>E-mail:</strong> ${empresaData.email}` : ''}
+                  </div>
+                </td>
+                <td style="vertical-align: top; width: 45%;" class="title-box">
+                  <div class="title-main">Recibo de Pagamento</div>
+                  <div class="badge-num">Nº ${numRecibo}</div>
+                  <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
+                    <strong>Data de Emissão:</strong> ${dataEmissao}
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <div class="valor-highlight">
+              <div>
+                <div class="valor-title">Valor Recebido / Quitado</div>
+                <div style="font-size: 12px; color: #166534; margin-top: 2px;">Pagamento confirmado e compensado</div>
+              </div>
+              <div class="valor-num">${valorFormatado}</div>
+            </div>
+
+            <div class="section-box">
+              <div class="section-title">Identificação do Pagador (Devedor)</div>
+              <div class="grid-2">
+                <div class="grid-item"><span class="label">Nome / Razão Social:</span><span class="val">${devedorNome}</span></div>
+                <div class="grid-item"><span class="label">CPF / CNPJ:</span><span class="val">${devedorDoc}</span></div>
+              </div>
+            </div>
+
+            <div class="section-box">
+              <div class="section-title">Dados da Cobrança / Parcela</div>
+              <div class="grid-2">
+                <div class="grid-item"><span class="label">Descrição do Título:</span><span class="val">${parcela.descricao}</span></div>
+                <div class="grid-item"><span class="label">Parcela:</span><span class="val">Parcela ${parcela.numero_parcela} de ${parcela.total_parcelas || 1}</span></div>
+                <div class="grid-item"><span class="label">Categoria:</span><span class="val">Mensalidades</span></div>
+                <div class="grid-item"><span class="label">Vencimento Original:</span><span class="val">${dataVenc}</span></div>
+              </div>
+            </div>
+
+            <div class="section-box">
+              <div class="section-title">Informações do Recebimento Efetivado</div>
+              <div class="grid-2">
+                <div class="grid-item"><span class="label">Data e Hora da Liquidação:</span><span class="val">${dataRec}</span></div>
+                <div class="grid-item"><span class="label">Forma Efetiva de Pagamento:</span><span class="val">${formaEfetiva}</span></div>
+                <div class="grid-item"><span class="label">Recebido Por (Operador):</span><span class="val">${recebidoPor}</span></div>
+                <div class="grid-item"><span class="label">Situação do Título:</span><span class="val" style="color: #15803d; font-weight: bold;">QUITADO / LIQUIDADO</span></div>
+              </div>
+              ${obsRecebimento}
+            </div>
+
+            <div class="declaracao-box">
+              Recebemos de <strong>${devedorNome}</strong> a quantia de <strong>${valorFormatado}</strong> referente à liquidação da <strong>Parcela ${parcela.numero_parcela}/${parcela.total_parcelas || 1}</strong> (${parcela.descricao}), dando plena, rasa e irrevogável quitação deste valor.
+            </div>
+
+            <table class="footer-table">
+              <tr>
+                <td class="signature-col">
+                  <div style="height: 50px;"></div>
+                  <div class="signature-line">
+                    ${devedorNome}<br/>
+                    <span style="font-size: 10px; color: #64748b; font-weight: normal;">Assinatura do Pagador</span>
+                  </div>
+                </td>
+                <td class="signature-col">
+                  ${assinaturaHtml}
+                  <div class="signature-line">
+                    ${empresaData?.nome_fantasia || empresaData?.razao_social || 'EMPRESA EMISSORA'}<br/>
+                    <span style="font-size: 10px; color: #64748b; font-weight: normal;">Recebedor Autorizado / Carimbo</span>
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <div style="text-align: center; margin-top: 24px; font-size: 11px; color: #94a3b8;">
+              Documento emitido eletronicamente em ${dataEmissao}.
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
+    } else {
+      window.print();
+    }
+  };
 
   if (showGeracao) {
     return <MensalidadesGeracaoTab associado={associado} defaultDataInicio={initialDataInicio} onSuccess={() => {
@@ -638,17 +910,20 @@ const carregarMensalidades = React.useCallback(async () => {
               <th className="px-4 py-3">Descrição</th>
               <th className="px-4 py-3">Vencimento</th>
               <th className="px-4 py-3">Valor</th>
-              <th className="px-4 py-3 text-right">Status</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-default">
             {loading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center">Carregando...</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center">Carregando...</td></tr>
             ) : filtradas.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-text-muted">Nenhuma mensalidade encontrada.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-text-muted">Nenhuma mensalidade encontrada.</td></tr>
             ) : (
               filtradas.map(p => {
                 const isSelectable = ['pendente', 'vencido'].includes(p.status);
+                const isPendente = p.status === 'pendente' || p.status === 'vencido';
+                const isRecebido = p.status === 'recebido';
                 return (
                 <tr key={p.id} className="hover:bg-bg-subtle/50 transition-colors">
                   <td className="px-4 py-3">
@@ -670,7 +945,7 @@ const carregarMensalidades = React.useCallback(async () => {
                   <td className="px-4 py-3 text-text-base font-medium">{p.descricao}</td>
                   <td className="px-4 py-3">{format(new Date(p.data_vencimento + 'T12:00:00'), 'dd/MM/yyyy')}</td>
                   <td className="px-4 py-3 font-medium text-text-base">{formatCurrency(p.valor)}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
                       p.status === 'recebido' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
                       p.status === 'pendente' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
@@ -679,6 +954,32 @@ const carregarMensalidades = React.useCallback(async () => {
                     }`}>
                       {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-2">
+                      {isPendente && (
+                        <button
+                          type="button"
+                          onClick={() => openBaixaModal(p)}
+                          title="Registrar recebimento desta parcela"
+                          className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <DollarSign className="w-3.5 h-3.5" />
+                          Receber
+                        </button>
+                      )}
+                      {isRecebido && (
+                        <button
+                          type="button"
+                          onClick={() => handleImprimirRecibo(p)}
+                          title="Imprimir recibo desta parcela"
+                          className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          Recibo
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )})
@@ -723,10 +1024,314 @@ const carregarMensalidades = React.useCallback(async () => {
           </div>
         </div>
       )}
+
+      {/* MODAL DE BAIXA / RECEBIMENTO DE MENSALIDADE */}
+      {showBaixaModal && parcelaSelecionada && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-bg-subtle border border-border-default rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+
+            {/* ETAPA 1: FORMULÁRIO DE RECEBIMENTO */}
+            {modalStage === 'form' && (
+              <>
+                <div className="flex items-center justify-between p-6 border-b border-border-default">
+                  <h3 className="text-xl font-bold text-text-base flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-emerald-500" />
+                    Registrar Recebimento
+                  </h3>
+                  <button
+                    onClick={() => setShowBaixaModal(false)}
+                    className="text-text-subtle hover:text-text-base transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleBaixa} className="p-6 space-y-4">
+                  <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-1">
+                    <p className="text-xs text-text-subtle uppercase tracking-wider">Parcela {parcelaSelecionada.numero_parcela}/{parcelaSelecionada.total_parcelas || 1}</p>
+                    <p className="text-lg font-bold text-text-base">{parcelaSelecionada.descricao}</p>
+                    <p className="text-sm text-text-subtle">Associado: <span className="text-text-base font-medium">{associado.nome}</span></p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-subtle mb-1">Data do Recebimento *</label>
+                    <input
+                      type="date"
+                      value={dataRecebimento}
+                      onChange={(e) => setDataRecebimento(e.target.value)}
+                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-subtle mb-1">Valor Recebido (R$) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={valorRecebido}
+                      onChange={(e) => setValorRecebido(Number(e.target.value))}
+                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-subtle mb-1">Forma de Pagamento Efetiva *</label>
+                    <select
+                      value={formaPagamentoEfetiva}
+                      onChange={(e) => setFormaPagamentoEfetiva(e.target.value)}
+                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
+                    >
+                      <option value="pix">PIX</option>
+                      <option value="boleto">Boleto</option>
+                      <option value="cartao_credito">Cartão de Crédito</option>
+                      <option value="cartao_debito">Cartão de Débito</option>
+                      <option value="transferencia">Transferência</option>
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="cheque">Cheque</option>
+                      <option value="outro">Outro</option>
+                    </select>
+                  </div>
+
+                  {formaPagamentoEfetiva !== 'dinheiro' && contasBancarias.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-text-subtle mb-1">Conta Bancária Referencial</label>
+                      <select
+                        value={contaBancariaId}
+                        onChange={(e) => setContaBancariaId(e.target.value)}
+                        className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
+                      >
+                        <option value="">Selecione...</option>
+                        {contasBancarias.map(conta => (
+                          <option key={conta.id} value={conta.id}>{conta.nome} ({conta.banco})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-text-subtle mb-1">Observações do Recebimento</label>
+                    <textarea
+                      rows={2}
+                      value={observacaoRecebimento}
+                      onChange={(e) => setObservacaoRecebimento(e.target.value)}
+                      placeholder="Ex: Recebido em dinheiro no balcão"
+                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none text-sm"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-border-default">
+                    <button
+                      type="button"
+                      onClick={() => setShowBaixaModal(false)}
+                      className="px-5 py-2.5 rounded-xl text-text-muted hover:text-text-base hover:bg-bg-hover transition-colors font-medium"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={checkingLote}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-medium transition-colors shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                    >
+                      {checkingLote ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Verificando Caixa...
+                        </>
+                      ) : (
+                        'Confirmar Recebimento'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {/* ETAPA 2: BLOQUEIO — SEM LOTE DE CAIXA ABERTO */}
+            {modalStage === 'bloqueio' && (
+              <div className="p-6 space-y-6">
+                <div className="flex items-start justify-between border-b border-border-default pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 shrink-0">
+                      <Lock className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-text-base">Operação Bloqueada</h3>
+                      <p className="text-xs text-rose-400 font-semibold">Nenhum Lote de Caixa Aberto Encontrado</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowBaixaModal(false)}
+                    className="text-text-subtle hover:text-text-base transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl space-y-2">
+                    <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
+                      <AlertTriangle className="w-5 h-5 shrink-0" />
+                      Não é possível registrar o recebimento
+                    </div>
+                    <p className="text-sm text-text-subtle leading-relaxed">
+                      Para efetivar este registro de recebimento, o sistema exige que exista um <strong>Lote de Caixa aberto</strong> ativo para receber a movimentação financeira.
+                    </p>
+                  </div>
+
+                  <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-2">
+                    <p className="text-sm font-semibold text-text-base flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-[#3B82F6]" />
+                      Orientação ao Usuário:
+                    </p>
+                    <p className="text-xs text-text-subtle leading-relaxed">
+                      Por favor, acesse o módulo de <strong>Caixas / Lotes</strong> e realize a abertura de um novo lote de caixa antes de realizar este recebimento.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-default">
+                  <button
+                    type="button"
+                    onClick={() => setModalStage('form')}
+                    className="px-5 py-2.5 rounded-xl text-text-muted hover:text-text-base hover:bg-bg-hover transition-colors font-medium text-sm"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBaixaModal(false);
+                      navigate('/financeiro/caixas');
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-[#3B82F6] hover:bg-blue-600 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-500/20 flex items-center gap-2"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    Abrir Lote de Caixa
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ETAPA 3: CONFIRMAÇÃO COM DADOS DO LOTE */}
+            {modalStage === 'confirmacao' && loteAberto && (
+              <div className="p-6 space-y-5">
+                <div className="flex items-center justify-between border-b border-border-default pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-text-base">Confirmação de Registro no Lote</h3>
+                      <p className="text-xs text-text-subtle">Confira as informações do Lote de Caixa antes de efetivar</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowBaixaModal(false)}
+                    className="text-text-subtle hover:text-text-base transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* INFO DO LOTE DE CAIXA */}
+                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1.5">
+                      <Wallet className="w-4 h-4" /> Lote de Caixa Destino
+                    </span>
+                    <span className="px-2.5 py-1 text-xs font-bold bg-emerald-500/20 text-emerald-300 rounded-lg border border-emerald-500/30">
+                      {loteAberto.codigo_lote}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs text-text-subtle pt-2 border-t border-emerald-500/20">
+                    <div>
+                      <span className="block text-text-muted">Terminal / Caixa:</span>
+                      <strong className="text-text-base font-semibold">{loteAberto.terminal_caixa}</strong>
+                    </div>
+                    <div>
+                      <span className="block text-text-muted">Operador Responsável:</span>
+                      <strong className="text-text-base font-semibold">{loteAberto.operador_nome}</strong>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="block text-text-muted">Data/Hora de Abertura:</span>
+                      <strong className="text-text-base font-semibold">
+                        {format(new Date(loteAberto.data_abertura), "dd/MM/yyyy 'às' HH:mm")}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RESUMO DA TRANSAÇÃO */}
+                <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-2.5 text-sm">
+                  <p className="text-xs text-text-subtle uppercase tracking-wider font-semibold">Resumo do Recebimento</p>
+
+                  <div className="flex justify-between items-center py-1 border-b border-border-default">
+                    <span className="text-text-subtle text-xs">Associado:</span>
+                    <span className="font-semibold text-text-base text-xs">{associado.nome}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-1 border-b border-border-default">
+                    <span className="text-text-subtle text-xs">Descrição / Parcela:</span>
+                    <span className="font-medium text-text-base text-xs">
+                      {parcelaSelecionada.descricao} ({parcelaSelecionada.numero_parcela}/{parcelaSelecionada.total_parcelas || 1})
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-1 border-b border-border-default">
+                    <span className="text-text-subtle text-xs">Forma de Pagamento:</span>
+                    <span className="uppercase font-bold text-xs text-[#3B82F6] bg-blue-500/10 px-2 py-0.5 rounded">
+                      {formaPagamentoEfetiva}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-text-subtle font-medium text-sm">Valor a Efetivar:</span>
+                    <span className="text-xl font-bold text-emerald-400">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorRecebido)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-default">
+                  <button
+                    type="button"
+                    onClick={() => setModalStage('form')}
+                    className="px-5 py-2.5 rounded-xl text-text-muted hover:text-text-base hover:bg-bg-hover transition-colors font-medium text-sm"
+                  >
+                    Ajustar Dados
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEfetivarRecebimento}
+                    disabled={submittingBaixa}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-medium text-sm transition-colors shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                  >
+                    {submittingBaixa ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Efetivando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Confirmar e Registrar no Lote
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-
 
 export const AssociadosPage: React.FC = () => {
   const { state } = useAppContext();
@@ -1074,7 +1679,7 @@ export const AssociadosPage: React.FC = () => {
 
   const handleFieldChange = (field: keyof Associado, value: any) => {
     if (editingAssociado) {
-      const finalValue = (typeof value === 'string' && field !== 'email' && field !== 'senha' && field !== 'status') ? value.toUpperCase() : value;
+      const finalValue = (typeof value === 'string' && (field as string) !== 'email' && (field as string) !== 'senha' && (field as string) !== 'status') ? value.toUpperCase() : value;
       setEditingAssociado({
         ...editingAssociado,
         [field]: finalValue
