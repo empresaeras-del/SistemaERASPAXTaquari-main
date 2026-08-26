@@ -7,6 +7,7 @@ import { ContaBancaria } from '../types/contasBancarias';
 import { useConfirm } from '../context/ConfirmContext';
 import {
   getParcelasReceber,
+  getReceitas,
   ParcelaReceber,
   registrarRecebimento,
   excluirParcelaReceber,
@@ -19,6 +20,7 @@ import { getEmpresaById, Empresa } from '../services/empresasService';
 import { getAssociados, Associado } from '../services/associadosService';
 import { RelatorioContasReceberModal } from '../components/financeiro/RelatorioContasReceberModal';
 import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
+import { IndicadoresContasReceber } from '../components/financeiro/IndicadoresContasReceber';
 import { LoteCaixa } from '../types/caixas';
 import { canDelete } from '../utils/permissions';
 import {
@@ -70,6 +72,7 @@ export const ContasReceberPage: React.FC = () => {
 
 
   const [parcelas, setParcelas] = useState<ParcelaReceber[]>([]);
+  const [receitas, setReceitas] = useState<Receita[]>([]);
   const [loading, setLoading] = useState(true);
   const [showReciboModal, setShowReciboModal] = useState(false);
   const [reciboModalData, setReciboModalData] = useState<ReciboDados | null>(null);
@@ -143,8 +146,12 @@ export const ContasReceberPage: React.FC = () => {
         const assocs = await getAssociados(state.isOnline, 'all');
         if (assocs) setAssociados(assocs);
       }
-      const data = await getParcelasReceber(state.isOnline, state.empresaSelecionada);
-      setParcelas(data);
+      const [dataParcelas, dataReceitas] = await Promise.all([
+        getParcelasReceber(state.isOnline, state.empresaSelecionada),
+        getReceitas(state.isOnline, state.empresaSelecionada)
+      ]);
+      setParcelas(dataParcelas);
+      setReceitas(dataReceitas);
     } catch (error) {
       console.error(error);
       toast.error('Erro ao carregar parcelas a receber');
@@ -162,7 +169,24 @@ export const ContasReceberPage: React.FC = () => {
       const matchesSearch = (p.devedor_nome || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (p.descricao || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (p.devedor_cpf_cnpj || '').includes(searchTerm);
-      const matchesStatus = statusFilter ? p.status === statusFilter : true;
+      
+      let matchesStatus = true;
+      if (statusFilter === 'pendente') {
+        matchesStatus = p.status === 'pendente';
+      } else if (statusFilter === 'vencido') {
+        matchesStatus = p.status === 'pendente' && isDateBeforeToday(p.data_vencimento);
+      } else if (statusFilter === 'vence_hoje') {
+        matchesStatus = p.status === 'pendente' && isDateToday(p.data_vencimento);
+      } else if (statusFilter === 'a_vencer') {
+        matchesStatus = p.status === 'pendente' && !isDateBeforeToday(p.data_vencimento) && !isDateToday(p.data_vencimento);
+      } else if (statusFilter === 'recebido' || statusFilter === 'pago') {
+        matchesStatus = p.status === 'recebido' || p.status === 'pago';
+      } else if (statusFilter === 'cancelado') {
+        matchesStatus = p.status === 'cancelado';
+      } else if (statusFilter) {
+        matchesStatus = p.status === statusFilter;
+      }
+
       const matchesForma = formaPagamentoFilter ? p.forma_pagamento === formaPagamentoFilter : true;
       
       let matchesData = true;
@@ -207,22 +231,6 @@ export const ContasReceberPage: React.FC = () => {
       return 0;
     });
   }, [filteredParcelas, sortField, sortDirection]);
-
-  const totais = useMemo(() => {
-    return parcelas.reduce((acc, p) => {
-      if (p.status === 'pendente') {
-        acc.aReceber += p.valor;
-        if (isDateBeforeToday(p.data_vencimento)) {
-          acc.vencidas += p.valor;
-        } else if (isDateToday(p.data_vencimento)) {
-          acc.venceHoje += p.valor;
-        }
-      } else if (p.status === 'recebido') {
-        acc.recebidas += p.valor_recebido || p.valor;
-      }
-      return acc;
-    }, { aReceber: 0, vencidas: 0, venceHoje: 0, recebidas: 0 });
-  }, [parcelas]);
 
   const openBaixaModal = (parcela: ParcelaReceber) => {
     setParcelaSelecionada(parcela);
@@ -375,7 +383,7 @@ export const ContasReceberPage: React.FC = () => {
   };
 
   const getStatusBadge = (status: string, vencimento: string) => {
-    if (status === 'recebido') return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-500">Recebido</span>;
+    if (status === 'recebido' || status === 'pago') return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-500">Recebido</span>;
     if (status === 'cancelado') return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-text-subtle">Cancelado</span>;
 
     if (isDateBeforeToday(vencimento)) {
@@ -385,18 +393,19 @@ export const ContasReceberPage: React.FC = () => {
   };
 
   const handleImprimirRecibo = (parcela: ParcelaReceber) => {
+    const receitaPai = receitas.find(r => r.id === parcela.receita_id);
     const dataVenc = formatLocalDate(parcela.data_vencimento);
-    const dataRec = formatLocalDateTime(parcela.data_recebimento || parcela.recebido_em);
-    const numRecibo = (parcela.id || '').substring(0, 8).toUpperCase();
-    const devedorNome = parcela.devedor_nome || 'Cliente';
-    const devedorDoc = parcela.devedor_cpf_cnpj || 'Não informado';
+    const dataRec = formatLocalDateTime(parcela.data_recebimento || parcela.recebido_em || parcela.data_pagamento);
+    const numDoc = (parcela.id || '').substring(0, 8).toUpperCase();
+    const devedorNome = parcela.devedor_nome || receitaPai?.associado_nome || receitaPai?.cliente_nome || 'Cliente / Associado';
+    const devedorDoc = parcela.devedor_cpf_cnpj || receitaPai?.associado_cpf || receitaPai?.cliente_cpf_cnpj || 'Não informado';
     const formaEfetiva = (parcela.forma_pagamento_efetivo || parcela.forma_pagamento || 'PIX').toUpperCase();
     const recebidoPor = parcela.recebido_por || state.user?.nome || 'Sistema';
 
     setReciboModalData({
-      numRecibo,
+      numRecibo: numDoc,
       tipo: 'recebimento',
-      titulo: 'Recibo de Pagamento',
+      titulo: 'Comprovante de Recebimento',
       pagadorNome: devedorNome,
       pagadorDoc: devedorDoc,
       descricao: parcela.descricao || 'Mensalidade',
@@ -416,7 +425,7 @@ export const ContasReceberPage: React.FC = () => {
   return (
     <>
     <div className={`p-6 max-w-7xl mx-auto flex flex-col h-full overflow-hidden`}>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 print:hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 print:hidden">
         <div>
           <h1 className="text-2xl font-bold text-text-base">Contas a Receber</h1>
           <p className="text-text-subtle mt-1">Gestão de recebimentos e mensalidades</p>
@@ -442,53 +451,14 @@ export const ContasReceberPage: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 print:hidden">
-        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-text-subtle font-medium">Total a Receber</span>
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-text-base">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.aReceber)}
-          </div>
-        </div>
-        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-text-subtle font-medium">Vencidas</span>
-            <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500">
-              <AlertCircle className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-text-base">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.vencidas)}
-          </div>
-        </div>
-        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-text-subtle font-medium">Vence Hoje</span>
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-text-base">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.venceHoje)}
-          </div>
-        </div>
-        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-text-subtle font-medium">Recebidas</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-text-base">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.recebidas)}
-          </div>
-        </div>
-      </div>
+      {/* PAINEL DE INDICADORES FINANCEIROS PROFISSIONAIS */}
+      <IndicadoresContasReceber 
+        parcelas={parcelas}
+        receitas={receitas}
+        associados={associados}
+        activeStatusFilter={statusFilter}
+        onSelectStatusFilter={(st) => setStatusFilter(st)}
+      />
 
       <div className="bg-bg-subtle border border-border-default rounded-2xl flex-1 flex flex-col overflow-hidden print:hidden">
         <div className="p-4 border-b border-border-default">

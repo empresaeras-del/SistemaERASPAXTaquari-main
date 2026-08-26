@@ -29,6 +29,7 @@ import {
 import { useAppContext } from '../context/AppContext';
 import { 
   getParcelasPagar, 
+  getDespesas,
   getDespesaById,
   registrarPagamento, 
   excluirParcelaPagar, 
@@ -50,6 +51,7 @@ import { useColumnVisibility } from '../hooks/useColumnVisibility';
 import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
 import { RelatorioContasPagarModal } from '../components/financeiro/RelatorioContasPagarModal';
 import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
+import { IndicadoresContasPagar } from '../components/financeiro/IndicadoresContasPagar';
 
 export const ContasPagarPage: React.FC = () => {
   const navigate = useNavigate();
@@ -127,8 +129,12 @@ export const ContasPagarPage: React.FC = () => {
         setContasBancarias(contas);
         if (emp) setEmpresaData(emp);
       }
-      const data = await getParcelasPagar(state.isOnline, state.empresaSelecionada);
-      setParcelas(data);
+      const [dataParcelas, dataDespesas] = await Promise.all([
+        getParcelasPagar(state.isOnline, state.empresaSelecionada),
+        getDespesas(state.isOnline, state.empresaSelecionada)
+      ]);
+      setParcelas(dataParcelas);
+      setDespesas(dataDespesas);
     } catch (error) {
       console.error(error);
       toast.error('Erro ao carregar parcelas a pagar');
@@ -146,7 +152,24 @@ export const ContasPagarPage: React.FC = () => {
       const matchesSearch = (p.credor_nome || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (p.descricao || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                             (p.credor_cpf_cnpj || '').includes(searchTerm);
-      const matchesStatus = statusFilter ? p.status === statusFilter : true;
+      
+      let matchesStatus = true;
+      if (statusFilter === 'pendente') {
+        matchesStatus = p.status === 'pendente';
+      } else if (statusFilter === 'vencido') {
+        matchesStatus = p.status === 'pendente' && isDateBeforeToday(p.data_vencimento);
+      } else if (statusFilter === 'vence_hoje') {
+        matchesStatus = p.status === 'pendente' && isDateToday(p.data_vencimento);
+      } else if (statusFilter === 'a_vencer') {
+        matchesStatus = p.status === 'pendente' && !isDateBeforeToday(p.data_vencimento) && !isDateToday(p.data_vencimento);
+      } else if (statusFilter === 'pago') {
+        matchesStatus = p.status === 'pago';
+      } else if (statusFilter === 'cancelado') {
+        matchesStatus = p.status === 'cancelado';
+      } else if (statusFilter) {
+        matchesStatus = p.status === statusFilter;
+      }
+
       const matchesForma = formaPagamentoFilter ? p.forma_pagamento === formaPagamentoFilter : true;
       
       let matchesData = true;
@@ -191,22 +214,6 @@ export const ContasPagarPage: React.FC = () => {
       return 0;
     });
   }, [filteredParcelas, sortField, sortDirection]);
-
-  const totais = useMemo(() => {
-    return parcelas.reduce((acc, p) => {
-      if (p.status === 'pendente') {
-        acc.aPagar += p.valor;
-        if (isDateBeforeToday(p.data_vencimento)) {
-          acc.vencidas += p.valor;
-        } else if (isDateToday(p.data_vencimento)) {
-          acc.venceHoje += p.valor;
-        }
-      } else if (p.status === 'pago') {
-        acc.pagas += p.valor_pago || p.valor;
-      }
-      return acc;
-    }, { aPagar: 0, vencidas: 0, venceHoje: 0, pagas: 0 });
-  }, [parcelas]);
 
   const openBaixaModal = (parcela: ParcelaPagar) => {
     setParcelaSelecionada(parcela);
@@ -400,7 +407,7 @@ export const ContasPagarPage: React.FC = () => {
 
   return (
     <div className="p-6 max-w-7xl mx-auto flex flex-col h-full overflow-hidden">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 print:hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 print:hidden">
         <div>
           <h1 className="text-2xl font-bold text-text-base">Contas a Pagar</h1>
           <p className="text-text-subtle mt-1">Gestão de despesas, fornecedores e vencimentos</p>
@@ -426,53 +433,13 @@ export const ContasPagarPage: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 print:hidden">
-        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-text-subtle font-medium">Total a Pagar</span>
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-text-base">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.aPagar)}
-          </div>
-        </div>
-        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-text-subtle font-medium">Vencidas</span>
-            <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500">
-              <AlertCircle className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-text-base">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.vencidas)}
-          </div>
-        </div>
-        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-text-subtle font-medium">Vence Hoje</span>
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-text-base">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.venceHoje)}
-          </div>
-        </div>
-        <div className="bg-bg-subtle border border-border-default p-5 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-text-subtle font-medium">Pagas</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-text-base">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.pagas)}
-          </div>
-        </div>
-      </div>
+      {/* PAINEL DE INDICADORES FINANCEIROS PROFISSIONAIS */}
+      <IndicadoresContasPagar 
+        parcelas={parcelas}
+        despesas={despesas}
+        activeStatusFilter={statusFilter}
+        onSelectStatusFilter={(st) => setStatusFilter(st)}
+      />
 
       <div className="bg-bg-subtle border border-border-default rounded-2xl flex-1 flex flex-col overflow-hidden print:hidden">
         <div className="p-4 border-b border-border-default">

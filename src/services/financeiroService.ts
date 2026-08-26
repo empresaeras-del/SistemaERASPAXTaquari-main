@@ -1284,3 +1284,101 @@ export const getParcelasReceberPorAtendimento = async (atendimentoId: string, is
   
   return parcelas;
 };
+
+export const getDespesas = async (isOnline: boolean, tenantId: string): Promise<Despesa[]> => {
+  let despesas: Despesa[] = [];
+  const localDespesas = await getAllFromIDB<Despesa>('despesas');
+
+  if (isOnline) {
+    try {
+      let query = supabase.from('despesas').select('*');
+      if (tenantId && tenantId !== 'all') {
+        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+      }
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        for (const item of data) {
+          await saveToIDB('despesas', item);
+        }
+        const remoteMap = new Map<string, Despesa>();
+        data.forEach((item: any) => remoteMap.set(item.id, item));
+        (localDespesas || []).forEach(localItem => {
+          if (!remoteMap.has(localItem.id) && !localItem.deleted_at) {
+            remoteMap.set(localItem.id, localItem);
+          }
+        });
+        despesas = Array.from(remoteMap.values());
+      } else {
+        despesas = localDespesas || [];
+      }
+    } catch (error) {
+      console.warn('Supabase fetch despesas failed, using IDB fallback.', error);
+      despesas = localDespesas || [];
+    }
+  } else {
+    despesas = localDespesas || [];
+  }
+
+  return (despesas || []).filter(d => {
+    if (!d) return false;
+    if (d.deleted_at) return false;
+    if (tenantId && tenantId !== 'all') {
+      const matchTenant = !d.tenant_id || 
+        d.tenant_id === tenantId || 
+        d.tenant_id === 'all' || 
+        d.tenant_id === 'default_tenant' || 
+        d.tenant_id === 'empresa_padrao';
+      if (!matchTenant) return false;
+    }
+    return true;
+  });
+};
+
+export const getReceitas = async (isOnline: boolean, tenantId: string): Promise<Receita[]> => {
+  let receitas: Receita[] = [];
+  const localReceitas = await getAllFromIDB<Receita>('receitas');
+
+  if (isOnline) {
+    try {
+      let query = supabase.from('receitas').select('*');
+      if (tenantId && tenantId !== 'all') {
+        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+      }
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        for (const item of data) {
+          await saveToIDB('receitas', item);
+        }
+        const remoteMap = new Map<string, Receita>();
+        data.forEach((item: any) => remoteMap.set(item.id, item));
+        (localReceitas || []).forEach(localItem => {
+          if (!remoteMap.has(localItem.id) && !localItem.deleted_at) {
+            remoteMap.set(localItem.id, localItem);
+          }
+        });
+        receitas = Array.from(remoteMap.values());
+      } else {
+        receitas = localReceitas || [];
+      }
+    } catch (error) {
+      console.warn('Supabase fetch receitas failed, using IDB fallback.', error);
+      receitas = localReceitas || [];
+    }
+  } else {
+    receitas = localReceitas || [];
+  }
+
+  return (receitas || []).filter(r => {
+    if (!r) return false;
+    if (r.deleted_at) return false;
+    if (tenantId && tenantId !== 'all') {
+      const matchTenant = !r.tenant_id || 
+        r.tenant_id === tenantId || 
+        r.tenant_id === 'all' || 
+        r.tenant_id === 'default_tenant' || 
+        r.tenant_id === 'empresa_padrao';
+      if (!matchTenant) return false;
+    }
+    return true;
+  });
+};
