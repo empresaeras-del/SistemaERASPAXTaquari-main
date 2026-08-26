@@ -5,7 +5,8 @@ import { useConfirm } from '../context/ConfirmContext';
 import { Plus, AlertTriangle, Search, Filter, CheckCircle, Clock, XCircle, Edit2, X, Download, FileText, AlertOctagon, Building2, CheckCircle2, Archive, Ban, LayoutGrid, List, Kanban } from 'lucide-react';
 import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
 import { exportToPDF } from "../lib/pdfExport";
-import { getEmpresaById } from "../services/empresasService";
+import { getEmpresaById, Empresa } from "../services/empresasService";
+import { RelatorioAtendimentosModal } from '../components/atendimentos/RelatorioAtendimentosModal';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -30,6 +31,8 @@ export const AtendimentosPage: React.FC = () => {
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
+  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
+  const [showRelatorioModal, setShowRelatorioModal] = useState(false);
   const [viewAtendimento, setViewAtendimento] = useState<Atendimento | null>(null);
 
   const [statusChangeModal, setStatusChangeModal] = useState<{ isOpen: boolean, atendimento: Atendimento | null, newStatus: Atendimento['status'] | null, justificativa: string }>({ isOpen: false, atendimento: null, newStatus: null, justificativa: '' });
@@ -83,8 +86,12 @@ export const AtendimentosPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getAtendimentos(state.isOnline, state.empresaSelecionada);
-      setAtendimentos(data);
+      const [data, emp] = await Promise.all([
+        getAtendimentos(state.isOnline, state.empresaSelecionada),
+        getEmpresaById(state.empresaSelecionada || 'default_tenant', state.isOnline)
+      ]);
+      setAtendimentos(data || []);
+      if (emp) setEmpresaData(emp);
     } catch (e) {
       console.error(e);
       toast.error('Erro ao carregar atendimentos');
@@ -288,20 +295,8 @@ export const AtendimentosPage: React.FC = () => {
 
 
   const [viewMode, setViewMode] = useState<'grid'|'list'|'kanban'>('kanban');
-  const handleExportPDF = async () => {
-    const tenantId = state.empresaSelecionada || 'default_tenant';
-    const empresa = await getEmpresaById(tenantId, state.isOnline);
-    const columns = ["Data", "Falecido", "Tipo", "Status", "Valor Extra"];
-    const data = filtered.map(a => [
-      formatLocalDate(a.created_at || new Date()),
-      a.falecido_nome,
-      a.tipo_cliente.toUpperCase(),
-      a.status.toUpperCase(),
-      `R$ ${a.valor_total.toFixed(2)}`
-    ]);
-    
-    await exportToPDF("Relatório de Atendimentos Funerários", columns, data, "atendimentos_export", empresa?.logo_url);
-    toast.success('PDF exportado com sucesso!');
+  const handleExportPDF = () => {
+    setShowRelatorioModal(true);
   };
 
   return (
@@ -611,6 +606,19 @@ export const AtendimentosPage: React.FC = () => {
           }}
         />
       )}
+
+      {/* Relatório Interativo Modal */}
+      <RelatorioAtendimentosModal
+        isOpen={showRelatorioModal}
+        onClose={() => setShowRelatorioModal(false)}
+        atendimentos={filtered}
+        empresaData={empresaData}
+        currentFilters={{
+          searchTerm,
+          statusFilter
+        }}
+        userName={state.user?.nome || 'Operador'}
+      />
     </div>
   );
 };

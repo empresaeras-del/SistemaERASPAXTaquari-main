@@ -14,9 +14,10 @@ import { useProcedimentos } from '../hooks/useProcedimentos';
 import { ProcedimentosCredenciado } from '../components/credenciados/ProcedimentosCredenciado';
 import { exportToPDF, exportFichasToPDF } from "../lib/pdfExport";
 import { isValidCPFOrCNPJ, maskCPFOrCNPJ } from "../utils/validators";
-import { getEmpresaById } from "../services/empresasService";
+import { getEmpresaById, Empresa } from "../services/empresasService";
 import { useAppContext } from "../context/AppContext";
 import { useConfirm } from '../context/ConfirmContext';
+import { RelatorioCredenciadosModal } from '../components/credenciados/RelatorioCredenciadosModal';
 import toast from 'react-hot-toast';
 
 export const CredenciadosPage: React.FC = () => {
@@ -46,6 +47,8 @@ export const CredenciadosPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dados' | 'procedimentos'>('dados');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isLinkOpen, setIsLinkOpen] = useState(false);
+  const [showRelatorioModal, setShowRelatorioModal] = useState(false);
+  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedCredenciado, setSelectedCredenciado] = useState<any>(null);
   
@@ -165,18 +168,20 @@ export const CredenciadosPage: React.FC = () => {
     }
   };
 
-  const handleExportPDF = async () => {
-    const tenantId = state.empresaSelecionada || 'default_tenant';
-    const empresa = await getEmpresaById(tenantId, state.isOnline);
-    const columns = ["Razão Social", "Documento", "Ramo", "Status"];
-    const data = filtered.map(c => [
-      c.razao_social,
-      c.cnpj_cpf,
-      c.ramo_atividade.replace('_', ' ').toUpperCase(),
-      c.status.toUpperCase()
-    ]);
-    await exportToPDF("Relatório de Rede Credenciada", columns, data, "credenciados_export", empresa?.logo_url);
-    toast.success('PDF exportado com sucesso!');
+  useEffect(() => {
+    const loadEmpresa = async () => {
+      try {
+        const emp = await getEmpresaById(state.empresaSelecionada || 'default_tenant', state.isOnline);
+        if (emp) setEmpresaData(emp);
+      } catch (err) {
+        console.warn('Erro ao carregar empresa:', err);
+      }
+    };
+    loadEmpresa();
+  }, [state.empresaSelecionada, state.isOnline]);
+
+  const handleExportPDF = () => {
+    setShowRelatorioModal(true);
   };
 
   const handlePrintFichas = async () => {
@@ -939,6 +944,20 @@ export const CredenciadosPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Relatório Interativo Modal */}
+      <RelatorioCredenciadosModal
+        isOpen={showRelatorioModal}
+        onClose={() => setShowRelatorioModal(false)}
+        credenciados={filtered}
+        empresaData={empresaData}
+        currentFilters={{
+          searchTerm,
+          statusFilter,
+          ramoFilter: ramoFilter !== 'todos' ? ramoFilter : undefined
+        }}
+        userName={state.user?.nome || 'Operador'}
+      />
     </div>
   );
 };

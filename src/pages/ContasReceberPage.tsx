@@ -18,6 +18,7 @@ import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasSer
 import { getEmpresaById, Empresa } from '../services/empresasService';
 import { getAssociados, Associado } from '../services/associadosService';
 import { RelatorioContasReceberModal } from '../components/financeiro/RelatorioContasReceberModal';
+import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
 import { LoteCaixa } from '../types/caixas';
 import { canDelete } from '../utils/permissions';
 import {
@@ -70,6 +71,8 @@ export const ContasReceberPage: React.FC = () => {
 
   const [parcelas, setParcelas] = useState<ParcelaReceber[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showReciboModal, setShowReciboModal] = useState(false);
+  const [reciboModalData, setReciboModalData] = useState<ReciboDados | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -382,314 +385,32 @@ export const ContasReceberPage: React.FC = () => {
   };
 
   const handleImprimirRecibo = (parcela: ParcelaReceber) => {
-    const valorFormatado = Number(parcela.valor_recebido || parcela.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const dataEmissao = format(new Date(), 'dd/MM/yyyy');
     const dataVenc = formatLocalDate(parcela.data_vencimento);
     const dataRec = formatLocalDateTime(parcela.data_recebimento || parcela.recebido_em);
     const numRecibo = (parcela.id || '').substring(0, 8).toUpperCase();
     const devedorNome = parcela.devedor_nome || 'Cliente';
     const devedorDoc = parcela.devedor_cpf_cnpj || 'Não informado';
-    const planoInfo = receitaPai?.associado_plano ? `<div style="margin-top: 6px; font-size: 13px; color: #047857;"><strong>Plano do Associado:</strong> ${receitaPai.associado_plano}</div>` : '';
-    const categoriaInfo = receitaPai?.categoria || 'Mensalidades';
     const formaEfetiva = (parcela.forma_pagamento_efetivo || parcela.forma_pagamento || 'PIX').toUpperCase();
     const recebidoPor = parcela.recebido_por || state.user?.nome || 'Sistema';
-    const obsRecebimento = parcela.observacao_recebimento 
-      ? `<div style="margin-top: 14px; padding: 12px 14px; background: #f8fafc; border-left: 4px solid #3b82f6; border-radius: 4px; font-size: 12px; color: #334155;"><strong>Observações do Recebimento:</strong> ${parcela.observacao_recebimento}</div>` 
-      : '';
 
-    const logoHtml = empresaData?.logo_url 
-      ? `<img src="${empresaData.logo_url}" alt="Logotipo" style="max-height: 75px; max-width: 240px; object-fit: contain; margin-bottom: 8px;" />` 
-      : `<h2 style="margin: 0 0 4px 0; font-size: 20px; text-transform: uppercase; color: #0f172a; font-weight: 800;">${empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}</h2>`;
-
-    const assinaturaHtml = empresaData?.assinatura_url
-      ? `<img src="${empresaData.assinatura_url}" alt="Assinatura" style="max-height: 65px; max-width: 220px; object-fit: contain; margin-bottom: 4px;" />`
-      : `<div style="height: 50px;"></div>`;
-
-    const html = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <title>Recibo de Pagamento - Nº ${numRecibo}</title>
-          <style>
-            @page {
-              size: A4 portrait;
-              margin: 15mm;
-            }
-            *, *::before, *::after {
-              box-sizing: border-box;
-            }
-            body {
-              font-family: Arial, Helvetica, sans-serif;
-              color: #0f172a;
-              margin: 0;
-              padding: 10px;
-              background-color: #ffffff;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            .recibo-wrapper {
-              max-width: 800px;
-              margin: 0 auto;
-              border: 2px solid #0f172a;
-              border-radius: 12px;
-              padding: 28px;
-              background: #ffffff;
-            }
-            .header-table {
-              width: 100%;
-              border-bottom: 2px solid #0f172a;
-              padding-bottom: 18px;
-              margin-bottom: 20px;
-            }
-            .title-box {
-              text-align: right;
-            }
-            .title-main {
-              font-size: 24px;
-              font-weight: 900;
-              text-transform: uppercase;
-              letter-spacing: 1px;
-              margin: 0 0 6px 0;
-              color: #0f172a;
-            }
-            .badge-num {
-              display: inline-block;
-              background: #f1f5f9;
-              border: 1px solid #cbd5e1;
-              padding: 4px 12px;
-              border-radius: 6px;
-              font-size: 13px;
-              font-weight: bold;
-              color: #334155;
-            }
-            .valor-highlight {
-              background: #f0fdf4;
-              border: 2px solid #22c55e;
-              border-radius: 10px;
-              padding: 16px 24px;
-              margin-bottom: 20px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            }
-            .valor-title {
-              font-size: 13px;
-              font-weight: bold;
-              text-transform: uppercase;
-              color: #15803d;
-            }
-            .valor-num {
-              font-size: 28px;
-              font-weight: 900;
-              color: #166534;
-            }
-            .section-box {
-              border: 1px solid #cbd5e1;
-              border-radius: 8px;
-              padding: 14px 18px;
-              margin-bottom: 16px;
-              background: #f8fafc;
-            }
-            .section-title {
-              font-size: 11px;
-              font-weight: bold;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              color: #64748b;
-              margin-bottom: 10px;
-              border-bottom: 1px solid #e2e8f0;
-              padding-bottom: 4px;
-            }
-            .grid-2 {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 12px 24px;
-              font-size: 13px;
-            }
-            .grid-item span.label {
-              display: block;
-              color: #64748b;
-              font-size: 11px;
-              text-transform: uppercase;
-              margin-bottom: 2px;
-            }
-            .grid-item span.val {
-              font-weight: 600;
-              color: #0f172a;
-            }
-            .declaracao-box {
-              background: #ffffff;
-              border: 1px dashed #94a3b8;
-              border-radius: 8px;
-              padding: 16px 18px;
-              margin: 22px 0;
-              font-size: 13px;
-              line-height: 1.6;
-              color: #1e293b;
-              text-align: justify;
-            }
-            .footer-table {
-              width: 100%;
-              margin-top: 36px;
-              page-break-inside: avoid;
-            }
-            .signature-col {
-              text-align: center;
-              width: 50%;
-              padding: 0 20px;
-              vertical-align: bottom;
-            }
-            .signature-line {
-              border-top: 1px solid #0f172a;
-              margin-top: 6px;
-              padding-top: 6px;
-              font-size: 12px;
-              font-weight: bold;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="recibo-wrapper">
-            <!-- Header -->
-            <table class="header-table">
-              <tr>
-                <td style="vertical-align: top; width: 55%;">
-                  ${logoHtml}
-                  <div style="font-size: 12px; color: #475569; line-height: 1.4;">
-                    ${empresaData?.cnpj ? `<strong>CNPJ:</strong> ${empresaData.cnpj}<br/>` : ''}
-                    ${empresaData?.endereco ? `${empresaData.endereco}<br/>` : ''}
-                    ${empresaData?.telefone ? `<strong>Tel:</strong> ${empresaData.telefone}` : ''}
-                    ${empresaData?.email ? ` | <strong>E-mail:</strong> ${empresaData.email}` : ''}
-                  </div>
-                </td>
-                <td style="vertical-align: top; width: 45%;" class="title-box">
-                  <div class="title-main">Recibo de Pagamento</div>
-                  <div class="badge-num">Nº ${numRecibo}</div>
-                  <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                    <strong>Data de Emissão:</strong> ${dataEmissao}
-                  </div>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Valor Destaque -->
-            <div class="valor-highlight">
-              <div>
-                <div class="valor-title">Valor Recebido / Quitado</div>
-                <div style="font-size: 12px; color: #166534; margin-top: 2px;">Pagamento confirmado e compensado</div>
-              </div>
-              <div class="valor-num">${valorFormatado}</div>
-            </div>
-
-            <!-- Dados do Pagador -->
-            <div class="section-box">
-              <div class="section-title">Identificação do Pagador (Devedor)</div>
-              <div class="grid-2">
-                <div class="grid-item">
-                  <span class="label">Nome / Razão Social:</span>
-                  <span class="val">${devedorNome}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">CPF / CNPJ:</span>
-                  <span class="val">${devedorDoc}</span>
-                </div>
-              </div>
-              ${planoInfo}
-            </div>
-
-            <!-- Dados da Cobrança / Parcela -->
-            <div class="section-box">
-              <div class="section-title">Dados da Cobrança / Parcela</div>
-              <div class="grid-2">
-                <div class="grid-item">
-                  <span class="label">Descrição do Título:</span>
-                  <span class="val">${parcela.descricao}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Parcela:</span>
-                  <span class="val">Parcela ${parcela.numero_parcela} de ${parcela.total_parcelas || 1}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Categoria:</span>
-                  <span class="val">${categoriaInfo}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Vencimento Original:</span>
-                  <span class="val">${dataVenc}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Informações do Recebimento -->
-            <div class="section-box">
-              <div class="section-title">Informações do Recebimento Efetivado</div>
-              <div class="grid-2">
-                <div class="grid-item">
-                  <span class="label">Data e Hora da Liquidação:</span>
-                  <span class="val">${dataRec}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Forma Efetiva de Pagamento:</span>
-                  <span class="val">${formaEfetiva}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Recebido Por (Operador):</span>
-                  <span class="val">${recebidoPor}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Situação do Título:</span>
-                  <span class="val" style="color: #15803d; font-weight: bold;">QUITADO / LIQUIDADO</span>
-                </div>
-              </div>
-              ${obsRecebimento}
-            </div>
-
-            <!-- Declaração de Quitação -->
-            <div class="declaracao-box">
-              Recebemos de <strong>${devedorNome}</strong> a quantia de <strong>${valorFormatado}</strong> referente à liquidação da <strong>Parcela ${parcela.numero_parcela}/${parcela.total_parcelas || 1}</strong> (${parcela.descricao}), dando plena, rasa e irrevogável quitação deste valor.
-            </div>
-
-            <!-- Assinaturas -->
-            <table class="footer-table">
-              <tr>
-                <td class="signature-col">
-                  <div style="height: 50px;"></div>
-                  <div class="signature-line">
-                    ${devedorNome}<br/>
-                    <span style="font-size: 10px; color: #64748b; font-weight: normal;">Assinatura do Pagador</span>
-                  </div>
-                </td>
-                <td class="signature-col">
-                  ${assinaturaHtml}
-                  <div class="signature-line">
-                    ${empresaData?.nome_fantasia || empresaData?.razao_social || 'EMPRESA EMISSORA'}<br/>
-                    <span style="font-size: 10px; color: #64748b; font-weight: normal;">Recebedor Autorizado / Carimbo</span>
-                  </div>
-                </td>
-              </tr>
-            </table>
-
-            <div style="text-align: center; margin-top: 24px; font-size: 11px; color: #94a3b8;">
-              Documento emitido eletronicamente em ${dataEmissao}.
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 300);
-    } else {
-      window.print();
-    }
+    setReciboModalData({
+      numRecibo,
+      tipo: 'recebimento',
+      titulo: 'Recibo de Pagamento',
+      pagadorNome: devedorNome,
+      pagadorDoc: devedorDoc,
+      descricao: parcela.descricao || 'Mensalidade',
+      parcelaInfo: `Parcela ${parcela.numero_parcela} de ${parcela.total_parcelas || 1}`,
+      categoria: receitaPai?.categoria || 'Mensalidades',
+      vencimentoOriginal: dataVenc,
+      dataLiquidacao: dataRec,
+      formaPagamento: formaEfetiva,
+      valor: Number(parcela.valor_recebido || parcela.valor),
+      operadorNome: recebidoPor,
+      observacoes: parcela.observacao_recebimento,
+      planoInfo: receitaPai?.associado_plano
+    });
+    setShowReciboModal(true);
   };
 
   return (
@@ -1538,6 +1259,16 @@ export const ContasReceberPage: React.FC = () => {
         }}
         userName={state.user?.nome || 'Administrador'}
       />
+
+      {/* MODAL DE RECIBO PROFISSIONAL (PREVIEW / VISUALIZADOR) */}
+      {showReciboModal && reciboModalData && (
+        <VisualizadorReciboModal
+          isOpen={showReciboModal}
+          onClose={() => setShowReciboModal(false)}
+          dados={reciboModalData}
+          empresaData={empresaData}
+        />
+      )}
     </>
   );
 };

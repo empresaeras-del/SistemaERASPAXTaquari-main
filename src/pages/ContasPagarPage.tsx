@@ -48,6 +48,8 @@ import { canDelete } from '../utils/permissions';
 import { useConfirm } from '../context/ConfirmContext';
 import { useColumnVisibility } from '../hooks/useColumnVisibility';
 import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
+import { RelatorioContasPagarModal } from '../components/financeiro/RelatorioContasPagarModal';
+import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
 
 export const ContasPagarPage: React.FC = () => {
   const navigate = useNavigate();
@@ -57,7 +59,11 @@ export const ContasPagarPage: React.FC = () => {
 
 
   const [parcelas, setParcelas] = useState<ParcelaPagar[]>([]);
+  const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showRelatorioModal, setShowRelatorioModal] = useState(false);
+  const [showReciboModal, setShowReciboModal] = useState(false);
+  const [reciboModalData, setReciboModalData] = useState<ReciboDados | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -363,312 +369,33 @@ export const ContasPagarPage: React.FC = () => {
   };
 
   const handleImprimirComprovante = (parcela: ParcelaPagar) => {
-    const valorFormatado = Number(parcela.valor_pago || parcela.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const dataEmissao = format(new Date(), 'dd/MM/yyyy');
+    const despesaPai = despesas.find(d => d.id === parcela.despesa_id);
     const dataVenc = formatLocalDate(parcela.data_vencimento);
     const dataPag = formatLocalDateTime(parcela.data_pagamento || parcela.pago_em);
     const numDoc = (parcela.id || '').substring(0, 8).toUpperCase();
-    const credorNome = parcela.credor_nome || 'Credor / Fornecedor';
-    const credorDoc = parcela.credor_cpf_cnpj || 'Não informado';
+    const credorNome = parcela.credor_nome || despesaPai?.fornecedor_nome || despesaPai?.funcionario_nome || despesaPai?.credor_nome || 'Credor / Fornecedor';
+    const credorDoc = parcela.credor_cpf_cnpj || despesaPai?.fornecedor_cnpj_cpf || despesaPai?.funcionario_cpf || despesaPai?.credor_cpf_cnpj || 'Não informado';
     const categoriaInfo = despesaPai?.categoria || 'Despesas';
     const formaEfetiva = (parcela.forma_pagamento_efetivo || parcela.forma_pagamento || 'PIX').toUpperCase();
     const pagoPor = parcela.pago_por || state.user?.nome || 'Sistema';
-    const obsPagamento = parcela.observacao_pagamento 
-      ? `<div style="margin-top: 14px; padding: 12px 14px; background: #f8fafc; border-left: 4px solid #3b82f6; border-radius: 4px; font-size: 12px; color: #334155;"><strong>Observações do Pagamento:</strong> ${parcela.observacao_pagamento}</div>` 
-      : '';
 
-    const logoHtml = empresaData?.logo_url 
-      ? `<img src="${empresaData.logo_url}" alt="Logotipo" style="max-height: 75px; max-width: 240px; object-fit: contain; margin-bottom: 8px;" />` 
-      : `<h2 style="margin: 0 0 4px 0; font-size: 20px; text-transform: uppercase; color: #0f172a; font-weight: 800;">${empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}</h2>`;
-
-    const assinaturaHtml = empresaData?.assinatura_url
-      ? `<img src="${empresaData.assinatura_url}" alt="Assinatura" style="max-height: 65px; max-width: 220px; object-fit: contain; margin-bottom: 4px;" />`
-      : `<div style="height: 50px;"></div>`;
-
-    const html = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <title>Comprovante de Pagamento - Nº ${numDoc}</title>
-          <style>
-            @page {
-              size: A4 portrait;
-              margin: 15mm;
-            }
-            *, *::before, *::after {
-              box-sizing: border-box;
-            }
-            body {
-              font-family: Arial, Helvetica, sans-serif;
-              color: #0f172a;
-              margin: 0;
-              padding: 10px;
-              background-color: #ffffff;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            .recibo-wrapper {
-              max-width: 800px;
-              margin: 0 auto;
-              border: 2px solid #0f172a;
-              border-radius: 12px;
-              padding: 28px;
-              background: #ffffff;
-            }
-            .header-table {
-              width: 100%;
-              border-bottom: 2px solid #0f172a;
-              padding-bottom: 18px;
-              margin-bottom: 20px;
-            }
-            .title-box {
-              text-align: right;
-            }
-            .title-main {
-              font-size: 24px;
-              font-weight: 900;
-              text-transform: uppercase;
-              letter-spacing: 1px;
-              margin: 0 0 6px 0;
-              color: #0f172a;
-            }
-            .badge-num {
-              display: inline-block;
-              background: #f1f5f9;
-              border: 1px solid #cbd5e1;
-              padding: 4px 12px;
-              border-radius: 6px;
-              font-size: 13px;
-              font-weight: bold;
-              color: #334155;
-            }
-            .valor-highlight {
-              background: #f0fdf4;
-              border: 2px solid #22c55e;
-              border-radius: 10px;
-              padding: 16px 24px;
-              margin-bottom: 20px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            }
-            .valor-title {
-              font-size: 13px;
-              font-weight: bold;
-              text-transform: uppercase;
-              color: #15803d;
-            }
-            .valor-num {
-              font-size: 28px;
-              font-weight: 900;
-              color: #166534;
-            }
-            .section-box {
-              border: 1px solid #cbd5e1;
-              border-radius: 8px;
-              padding: 14px 18px;
-              margin-bottom: 16px;
-              background: #f8fafc;
-            }
-            .section-title {
-              font-size: 11px;
-              font-weight: bold;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              color: #64748b;
-              margin-bottom: 10px;
-              border-bottom: 1px solid #e2e8f0;
-              padding-bottom: 4px;
-            }
-            .grid-2 {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 12px 24px;
-              font-size: 13px;
-            }
-            .grid-item span.label {
-              display: block;
-              color: #64748b;
-              font-size: 11px;
-              text-transform: uppercase;
-              margin-bottom: 2px;
-            }
-            .grid-item span.val {
-              font-weight: 600;
-              color: #0f172a;
-            }
-            .declaracao-box {
-              background: #ffffff;
-              border: 1px dashed #94a3b8;
-              border-radius: 8px;
-              padding: 16px 18px;
-              margin: 22px 0;
-              font-size: 13px;
-              line-height: 1.6;
-              color: #1e293b;
-              text-align: justify;
-            }
-            .footer-table {
-              width: 100%;
-              margin-top: 36px;
-              page-break-inside: avoid;
-            }
-            .signature-col {
-              text-align: center;
-              width: 50%;
-              padding: 0 20px;
-              vertical-align: bottom;
-            }
-            .signature-line {
-              border-top: 1px solid #0f172a;
-              margin-top: 6px;
-              padding-top: 6px;
-              font-size: 12px;
-              font-weight: bold;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="recibo-wrapper">
-            <!-- Header -->
-            <table class="header-table">
-              <tr>
-                <td style="vertical-align: top; width: 55%;">
-                  ${logoHtml}
-                  <div style="font-size: 12px; color: #475569; line-height: 1.4;">
-                    ${empresaData?.cnpj ? `<strong>CNPJ:</strong> ${empresaData.cnpj}<br/>` : ''}
-                    ${empresaData?.endereco ? `${empresaData.endereco}<br/>` : ''}
-                    ${empresaData?.telefone ? `<strong>Tel:</strong> ${empresaData.telefone}` : ''}
-                    ${empresaData?.email ? ` | <strong>E-mail:</strong> ${empresaData.email}` : ''}
-                  </div>
-                </td>
-                <td style="vertical-align: top; width: 45%;" class="title-box">
-                  <div class="title-main">Comprovante de Pagamento</div>
-                  <div class="badge-num">Nº ${numDoc}</div>
-                  <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                    <strong>Data de Emissão:</strong> ${dataEmissao}
-                  </div>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Valor Destaque -->
-            <div class="valor-highlight">
-              <div>
-                <div class="valor-title">Valor Pago / Liquidado</div>
-                <div style="font-size: 12px; color: #166534; margin-top: 2px;">Pagamento efetuado com sucesso</div>
-              </div>
-              <div class="valor-num">${valorFormatado}</div>
-            </div>
-
-            <!-- Dados do Credor / Favorecido -->
-            <div class="section-box">
-              <div class="section-title">Favorecido (Credor / Fornecedor)</div>
-              <div class="grid-2">
-                <div class="grid-item">
-                  <span class="label">Nome / Razão Social:</span>
-                  <span class="val">${credorNome}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">CPF / CNPJ:</span>
-                  <span class="val">${credorDoc}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Dados da Despesa / Parcela -->
-            <div class="section-box">
-              <div class="section-title">Dados da Despesa / Parcela</div>
-              <div class="grid-2">
-                <div class="grid-item">
-                  <span class="label">Descrição do Título:</span>
-                  <span class="val">${parcela.descricao}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Parcela:</span>
-                  <span class="val">Parcela ${parcela.numero_parcela} de ${parcela.total_parcelas || 1}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Categoria:</span>
-                  <span class="val">${categoriaInfo}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Vencimento Original:</span>
-                  <span class="val">${dataVenc}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Informações do Pagamento -->
-            <div class="section-box">
-              <div class="section-title">Informações da Liquidação / Pagamento</div>
-              <div class="grid-2">
-                <div class="grid-item">
-                  <span class="label">Data e Hora da Liquidação:</span>
-                  <span class="val">${dataPag}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Forma Efetiva de Pagamento:</span>
-                  <span class="val">${formaEfetiva}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Efetuado Por (Operador):</span>
-                  <span class="val">${pagoPor}</span>
-                </div>
-                <div class="grid-item">
-                  <span class="label">Situação do Título:</span>
-                  <span class="val" style="color: #15803d; font-weight: bold;">PAGO / LIQUIDADO</span>
-                </div>
-              </div>
-              ${obsPagamento}
-            </div>
-
-            <!-- Declaração -->
-            <div class="declaracao-box">
-              Comprovamos que foi efetuado o pagamento a <strong>${credorNome}</strong> da quantia de <strong>${valorFormatado}</strong> referente à liquidação da <strong>Parcela ${parcela.numero_parcela}/${parcela.total_parcelas || 1}</strong> (${parcela.descricao}).
-            </div>
-
-            <!-- Assinaturas -->
-            <table class="footer-table">
-              <tr>
-                <td class="signature-col">
-                  ${assinaturaHtml}
-                  <div class="signature-line">
-                    ${empresaData?.nome_fantasia || empresaData?.razao_social || 'EMPRESA PAGADORA'}<br/>
-                    <span style="font-size: 10px; color: #64748b; font-weight: normal;">Emitente Autorizado</span>
-                  </div>
-                </td>
-                <td class="signature-col">
-                  <div style="height: 50px;"></div>
-                  <div class="signature-line">
-                    ${credorNome}<br/>
-                    <span style="font-size: 10px; color: #64748b; font-weight: normal;">Assinatura do Favorecido / Recebedor</span>
-                  </div>
-                </td>
-              </tr>
-            </table>
-
-            <div style="text-align: center; margin-top: 24px; font-size: 11px; color: #94a3b8;">
-              Comprovante emitido eletronicamente em ${dataEmissao}.
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 300);
-    } else {
-      window.print();
-    }
+    setReciboModalData({
+      numRecibo: numDoc,
+      tipo: 'pagamento',
+      titulo: 'Comprovante de Pagamento',
+      pagadorNome: credorNome,
+      pagadorDoc: credorDoc,
+      descricao: parcela.descricao || despesaPai?.descricao || 'Despesa',
+      parcelaInfo: `Parcela ${parcela.numero_parcela} de ${parcela.total_parcelas || 1}`,
+      categoria: categoriaInfo,
+      vencimentoOriginal: dataVenc,
+      dataLiquidacao: dataPag,
+      formaPagamento: formaEfetiva,
+      valor: Number(parcela.valor_pago || parcela.valor),
+      operadorNome: pagoPor,
+      observacoes: parcela.observacao_pagamento
+    });
+    setShowReciboModal(true);
   };
 
   return (
@@ -680,7 +407,7 @@ export const ContasPagarPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => window.print()}
+            onClick={() => setShowRelatorioModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors"
             title="Exportar listagem para PDF"
           >
@@ -1485,6 +1212,33 @@ export const ContasPagarPage: React.FC = () => {
 
           </div>
         </div>
+      )}
+
+      {/* Relatório Interativo Modal */}
+      <RelatorioContasPagarModal
+        isOpen={showRelatorioModal}
+        onClose={() => setShowRelatorioModal(false)}
+        parcelas={filteredParcelas}
+        despesas={despesas}
+        empresaData={empresaData}
+        currentFilters={{
+          searchTerm,
+          statusFilter,
+          formaPagamentoFilter,
+          dataInicial,
+          dataFinal
+        }}
+        userName={state.user?.nome || 'Operador'}
+      />
+
+      {/* Visualizador de Comprovante / Recibo Modal */}
+      {showReciboModal && reciboModalData && (
+        <VisualizadorReciboModal
+          isOpen={showReciboModal}
+          onClose={() => setShowReciboModal(false)}
+          dados={reciboModalData}
+          empresaData={empresaData}
+        />
       )}
     </div>
   );

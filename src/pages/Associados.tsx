@@ -37,12 +37,13 @@ import { RegrasCalculoInfo } from "../components/associados/RegrasCalculoInfo";
 import { contratoSchema } from "../schemas/contratoSchema";
 import { VisualizadorDocumentoModal } from "../components/associados/VisualizadorDocumentoModal";
 import { downloadDocumento, isPdfDocument, isImageDocument } from "../utils/documentUtils";
-import { exportToPDF } from "../lib/pdfExport";
 import { getEmpresaById, Empresa } from '../services/empresasService';
 import { getContasBancariasAtivas } from '../services/contasBancariasService';
 import { ContaBancaria } from '../types/contasBancarias';
 import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
 import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
+import { RelatorioAssociadosModal } from '../components/associados/RelatorioAssociadosModal';
+import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { fetchImageWithDimensions } from '../utils/imageUtils';
@@ -563,158 +564,38 @@ const MensalidadesTab = ({ associado, onSuccess }: { associado: any, onSuccess: 
     }
   };
 
-  // Gera e imprime recibo em nova janela (mesmo padrão do módulo financeiro)
+  const [reciboModalData, setReciboModalData] = useState<ReciboDados | null>(null);
+  const [showReciboModal, setShowReciboModal] = useState(false);
+
+  // Gera e imprime recibo em visualizador profissional interativo
   const handleImprimirRecibo = (parcela: any) => {
-    const valorFormatado = Number(parcela.valor_recebido || parcela.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const dataEmissao = format(new Date(), 'dd/MM/yyyy');
     const dataVenc = parcela.data_vencimento ? format(new Date(parcela.data_vencimento + 'T12:00:00'), 'dd/MM/yyyy') : '-';
     const dataRec = (parcela.data_recebimento || parcela.recebido_em)
       ? formatLocalDateTime(parcela.data_recebimento || parcela.recebido_em)
-      : '-';
+      : formatLocalDateTime(new Date());
     const numRecibo = (parcela.id || '').substring(0, 8).toUpperCase();
     const devedorNome = parcela.devedor_nome || associado.nome || 'Cliente';
     const devedorDoc = parcela.devedor_cpf_cnpj || associado.cpf || 'Não informado';
     const formaEfetiva = (parcela.forma_pagamento_efetivo || parcela.forma_pagamento || 'PIX').toUpperCase();
-    const recebidoPor = parcela.recebido_por || state.user?.nome || 'Sistema';
-    const obsRecebimento = parcela.observacao_recebimento
-      ? `<div style="margin-top: 14px; padding: 12px 14px; background: #f8fafc; border-left: 4px solid #3b82f6; border-radius: 4px; font-size: 12px; color: #334155;"><strong>Observações do Recebimento:</strong> ${parcela.observacao_recebimento}</div>`
-      : '';
-    const logoHtml = empresaData?.logo_url
-      ? `<img src="${empresaData.logo_url}" alt="Logotipo" style="max-height: 75px; max-width: 240px; object-fit: contain; margin-bottom: 8px;" />`
-      : `<h2 style="margin: 0 0 4px 0; font-size: 20px; text-transform: uppercase; color: #0f172a; font-weight: 800;">${empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}</h2>`;
-    const assinaturaHtml = empresaData?.assinatura_url
-      ? `<img src="${empresaData.assinatura_url}" alt="Assinatura" style="max-height: 65px; max-width: 220px; object-fit: contain; margin-bottom: 4px;" />`
-      : `<div style="height: 50px;"></div>`;
 
-    const html = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <title>Recibo de Pagamento - Nº ${numRecibo}</title>
-          <style>
-            @page { size: A4 portrait; margin: 15mm; }
-            *, *::before, *::after { box-sizing: border-box; }
-            body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; margin: 0; padding: 10px; background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .recibo-wrapper { max-width: 800px; margin: 0 auto; border: 2px solid #0f172a; border-radius: 12px; padding: 28px; background: #ffffff; }
-            .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 18px; margin-bottom: 20px; }
-            .title-box { text-align: right; }
-            .title-main { font-size: 24px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 6px 0; color: #0f172a; }
-            .badge-num { display: inline-block; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: bold; color: #334155; }
-            .valor-highlight { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 10px; padding: 16px 24px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-            .valor-title { font-size: 13px; font-weight: bold; text-transform: uppercase; color: #15803d; }
-            .valor-num { font-size: 28px; font-weight: 900; color: #166534; }
-            .section-box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; background: #f8fafc; }
-            .section-title { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
-            .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; font-size: 13px; }
-            .grid-item span.label { display: block; color: #64748b; font-size: 11px; text-transform: uppercase; margin-bottom: 2px; }
-            .grid-item span.val { font-weight: 600; color: #0f172a; }
-            .declaracao-box { background: #ffffff; border: 1px dashed #94a3b8; border-radius: 8px; padding: 16px 18px; margin: 22px 0; font-size: 13px; line-height: 1.6; color: #1e293b; text-align: justify; }
-            .footer-table { width: 100%; margin-top: 36px; page-break-inside: avoid; }
-            .signature-col { text-align: center; width: 50%; padding: 0 20px; vertical-align: bottom; }
-            .signature-line { border-top: 1px solid #0f172a; margin-top: 6px; padding-top: 6px; font-size: 12px; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <div class="recibo-wrapper">
-            <table class="header-table">
-              <tr>
-                <td style="vertical-align: top; width: 55%;">
-                  ${logoHtml}
-                  <div style="font-size: 12px; color: #475569; line-height: 1.4;">
-                    ${empresaData?.cnpj ? `<strong>CNPJ:</strong> ${empresaData.cnpj}<br/>` : ''}
-                    ${empresaData?.endereco ? `${empresaData.endereco}<br/>` : ''}
-                    ${empresaData?.telefone ? `<strong>Tel:</strong> ${empresaData.telefone}` : ''}
-                    ${empresaData?.email ? ` | <strong>E-mail:</strong> ${empresaData.email}` : ''}
-                  </div>
-                </td>
-                <td style="vertical-align: top; width: 45%;" class="title-box">
-                  <div class="title-main">Recibo de Pagamento</div>
-                  <div class="badge-num">Nº ${numRecibo}</div>
-                  <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
-                    <strong>Data de Emissão:</strong> ${dataEmissao}
-                  </div>
-                </td>
-              </tr>
-            </table>
-
-            <div class="valor-highlight">
-              <div>
-                <div class="valor-title">Valor Recebido / Quitado</div>
-                <div style="font-size: 12px; color: #166534; margin-top: 2px;">Pagamento confirmado e compensado</div>
-              </div>
-              <div class="valor-num">${valorFormatado}</div>
-            </div>
-
-            <div class="section-box">
-              <div class="section-title">Identificação do Pagador (Devedor)</div>
-              <div class="grid-2">
-                <div class="grid-item"><span class="label">Nome / Razão Social:</span><span class="val">${devedorNome}</span></div>
-                <div class="grid-item"><span class="label">CPF / CNPJ:</span><span class="val">${devedorDoc}</span></div>
-              </div>
-            </div>
-
-            <div class="section-box">
-              <div class="section-title">Dados da Cobrança / Parcela</div>
-              <div class="grid-2">
-                <div class="grid-item"><span class="label">Descrição do Título:</span><span class="val">${parcela.descricao}</span></div>
-                <div class="grid-item"><span class="label">Parcela:</span><span class="val">Parcela ${parcela.numero_parcela} de ${parcela.total_parcelas || 1}</span></div>
-                <div class="grid-item"><span class="label">Categoria:</span><span class="val">Mensalidades</span></div>
-                <div class="grid-item"><span class="label">Vencimento Original:</span><span class="val">${dataVenc}</span></div>
-              </div>
-            </div>
-
-            <div class="section-box">
-              <div class="section-title">Informações do Recebimento Efetivado</div>
-              <div class="grid-2">
-                <div class="grid-item"><span class="label">Data e Hora da Liquidação:</span><span class="val">${dataRec}</span></div>
-                <div class="grid-item"><span class="label">Forma Efetiva de Pagamento:</span><span class="val">${formaEfetiva}</span></div>
-                <div class="grid-item"><span class="label">Recebido Por (Operador):</span><span class="val">${recebidoPor}</span></div>
-                <div class="grid-item"><span class="label">Situação do Título:</span><span class="val" style="color: #15803d; font-weight: bold;">QUITADO / LIQUIDADO</span></div>
-              </div>
-              ${obsRecebimento}
-            </div>
-
-            <div class="declaracao-box">
-              Recebemos de <strong>${devedorNome}</strong> a quantia de <strong>${valorFormatado}</strong> referente à liquidação da <strong>Parcela ${parcela.numero_parcela}/${parcela.total_parcelas || 1}</strong> (${parcela.descricao}), dando plena, rasa e irrevogável quitação deste valor.
-            </div>
-
-            <table class="footer-table">
-              <tr>
-                <td class="signature-col">
-                  <div style="height: 50px;"></div>
-                  <div class="signature-line">
-                    ${devedorNome}<br/>
-                    <span style="font-size: 10px; color: #64748b; font-weight: normal;">Assinatura do Pagador</span>
-                  </div>
-                </td>
-                <td class="signature-col">
-                  ${assinaturaHtml}
-                  <div class="signature-line">
-                    ${empresaData?.nome_fantasia || empresaData?.razao_social || 'EMPRESA EMISSORA'}<br/>
-                    <span style="font-size: 10px; color: #64748b; font-weight: normal;">Recebedor Autorizado / Carimbo</span>
-                  </div>
-                </td>
-              </tr>
-            </table>
-
-            <div style="text-align: center; margin-top: 24px; font-size: 11px; color: #94a3b8;">
-              Documento emitido eletronicamente em ${dataEmissao}.
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
-    } else {
-      window.print();
-    }
+    setReciboModalData({
+      numRecibo,
+      tipo: 'recebimento',
+      titulo: 'Recibo de Pagamento',
+      pagadorNome: devedorNome,
+      pagadorDoc: devedorDoc,
+      descricao: parcela.descricao || 'Mensalidade',
+      parcelaInfo: `Parcela ${parcela.numero_parcela} de ${parcela.total_parcelas || 1}`,
+      categoria: 'Mensalidades',
+      vencimentoOriginal: dataVenc,
+      dataLiquidacao: dataRec,
+      formaPagamento: formaEfetiva,
+      valor: Number(parcela.valor_recebido || parcela.valor),
+      operadorNome: parcela.recebido_por || state.user?.nome || 'Sistema',
+      observacoes: parcela.observacao_recebimento,
+      planoInfo: associado.plano_nome
+    });
+    setShowReciboModal(true);
   };
 
   if (showGeracao) {
@@ -1329,6 +1210,16 @@ const MensalidadesTab = ({ associado, onSuccess }: { associado: any, onSuccess: 
           </div>
         </div>
       )}
+
+      {/* MODAL DE VISUALIZAÇÃO DE RECIBO */}
+      {showReciboModal && reciboModalData && (
+        <VisualizadorReciboModal
+          isOpen={showReciboModal}
+          onClose={() => setShowReciboModal(false)}
+          dados={reciboModalData}
+          empresaData={empresaData}
+        />
+      )}
     </div>
   );
 };
@@ -1343,6 +1234,9 @@ export const AssociadosPage: React.FC = () => {
   const [associados, setAssociados] = useState<Associado[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewAssociado, setPreviewAssociado] = useState<Associado | null>(null);
+  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
+  const [showRelatorioModal, setShowRelatorioModal] = useState(false);
+  const [relatorioReportType, setRelatorioReportType] = useState<'titulares' | 'dependentes'>('titulares');
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [searchTerm, setSearchTerm] = useState("");
   const { visibleColumns, isVisible, setVisibleColumns } = useColumnVisibility(['nome', 'cpf', 'plano', 'status', 'adesao', 'acoes']);
@@ -1490,11 +1384,12 @@ export const AssociadosPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getAssociados(
-        state.isOnline,
-        state.empresaSelecionada,
-      );
+      const [data, emp] = await Promise.all([
+        getAssociados(state.isOnline, state.empresaSelecionada),
+        getEmpresaById(state.empresaSelecionada || 'default_tenant', state.isOnline)
+      ]);
       setAssociados(data || []);
+      if (emp) setEmpresaData(emp);
 
       try {
         const allParcelas = await getParcelasReceber(state.isOnline, state.empresaSelecionada || 'all');
@@ -1888,286 +1783,14 @@ export const AssociadosPage: React.FC = () => {
     });
   };
 
-  const handleExportPDF = async () => {
-    if (filtered.length === 0) {
-      toast.error('Nenhum registro encontrado para gerar relatório.');
-      return;
-    }
-
-    toast.info('Gerando relatório em PDF...');
-    try {
-      const tenantId = state.empresaSelecionada || 'default_tenant';
-      const empresa = await getEmpresaById(tenantId, state.isOnline);
-      
-      const doc = new jsPDF('landscape', 'mm', 'a4');
-      const pageWidth = doc.internal.pageSize.getWidth();
-      let currentY = 14;
-
-      const nomeEmpresa = empresa?.nome_fantasia || empresa?.razao_social || 'PAX e Funerária Taquari';
-      const docEmpresa = empresa?.cnpj ? `CNPJ: ${empresa.cnpj}` : '';
-      const contatoEmpresa = [empresa?.telefone, empresa?.email].filter(Boolean).join(' | ');
-
-      let headerTextX = 14;
-
-      if (empresa?.logo_url) {
-        try {
-          const imgData = await fetchImageWithDimensions(empresa.logo_url);
-          if (imgData && imgData.base64) {
-            let imgHeight = 20;
-            let imgWidth = (imgData.width * 20) / imgData.height;
-            if (imgWidth > 60) {
-              imgWidth = 60;
-              imgHeight = (imgData.height * 60) / imgData.width;
-            }
-            doc.addImage(imgData.base64, 'PNG', 14, currentY, imgWidth, imgHeight, '', 'FAST');
-            headerTextX = 14 + imgWidth + 10;
-          }
-        } catch (e) {
-          console.warn('Erro ao carregar logo para PDF', e);
-        }
-      }
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.setTextColor(15, 23, 42);
-      doc.text(nomeEmpresa, headerTextX, currentY + 6);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      if (docEmpresa) doc.text(docEmpresa, headerTextX, currentY + 11);
-      if (contatoEmpresa) doc.text(contatoEmpresa, headerTextX, currentY + 16);
-
-      currentY += 24;
-      doc.setDrawColor(226, 232, 240);
-      doc.line(14, currentY, pageWidth - 14, currentY);
-      
-      currentY += 6;
-      
-      doc.setFillColor(248, 250, 252);
-      doc.rect(14, currentY, pageWidth - 28, 12, 'F');
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.setTextColor(30, 41, 59);
-      doc.text('RELATÓRIO DE ASSOCIADOS', 18, currentY + 8.5);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(71, 85, 105);
-
-      const filtroStatusTexto = statusFilter ? statusFilter.toUpperCase() : 'TODOS';
-      const filtroPlanoTexto = planoFilter ? planosCompletos.find(p => p.id === planoFilter)?.nome || 'TODOS' : 'TODOS';
-
-      doc.text(`Status: ${filtroStatusTexto}  |  Plano: ${filtroPlanoTexto}`, pageWidth / 2, currentY + 8.5, { align: 'center' });
-      doc.text(`Emissão: ${format(new Date(), 'dd/MM/yyyy HH:mm')}  |  Total: ${filtered.length} registros`, pageWidth - 18, currentY + 8.5, { align: 'right' });
-
-      currentY += 16;
-
-      const tableData = filtered.map((a, index) => {
-        return [
-          (index + 1).toString(),
-          a.nome || "-",
-          a.cpf || "-",
-          a.plano_nome || "-",
-          a.n_vidas?.toString() || "1",
-          a.status?.toUpperCase() || "-",
-          a.telefone || "-",
-          formatDateSafe(a.data_adesao) || "-"
-        ];
-      });
-
-      autoTable(doc, {
-        startY: currentY,
-        head: [['#', 'Nome', 'CPF', 'Plano', 'Vidas', 'Status', 'Telefone', 'Adesão']],
-        body: tableData,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [59, 130, 246],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-          fontSize: 8.5,
-          halign: 'left'
-        },
-        styles: {
-          fontSize: 7.5,
-          cellPadding: 2.5,
-          valign: 'middle',
-          overflow: 'linebreak'
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252]
-        },
-        columnStyles: {
-          0: { cellWidth: 10, halign: 'center' },
-          1: { cellWidth: 60, fontStyle: 'bold' },
-          2: { cellWidth: 30 },
-          3: { cellWidth: 50 },
-          4: { cellWidth: 15, halign: 'center' },
-          5: { cellWidth: 25 },
-          6: { cellWidth: 30 },
-          7: { cellWidth: 25 }
-        },
-        margin: { left: 14, right: 14, bottom: 16 },
-        didDrawPage: (data) => {
-          const totalPages = doc.getNumberOfPages();
-          doc.setFontSize(7.5);
-          doc.setTextColor(148, 163, 184);
-          doc.text(
-            `Página ${data.pageNumber} de ${totalPages}  •  Sistema ERAS`,
-            pageWidth - 14,
-            202,
-            { align: 'right' }
-          );
-        }
-      });
-
-      const pdfBlob = doc.output('blob');
-      const pdfUrl = URL.createObjectURL(pdfBlob);
-      window.open(pdfUrl, '_blank');
-      toast.success('Relatório em PDF gerado com sucesso!');
-    } catch (err) {
-      console.error('Erro ao gerar relatório', err);
-      toast.error('Erro ao gerar relatório em PDF.');
-    }
+  const handleExportPDF = () => {
+    setRelatorioReportType('titulares');
+    setShowRelatorioModal(true);
   };
 
-  const handleExportDependentesPDF = async () => {
-    // Filter only active dependents for the report, if not already filtered
-    const ativosParaRelatorio = dependentesFiltrados.filter(d => d.titular_status === 'ativo');
-
-    if (ativosParaRelatorio.length === 0) {
-      toast.error('Nenhum dependente ativo encontrado para gerar relatório.');
-      return;
-    }
-
-    toast.info('Gerando relatório em PDF...');
-    try {
-      const tenantId = state.empresaSelecionada || 'default_tenant';
-      const empresa = await getEmpresaById(tenantId, state.isOnline);
-      
-      const doc = new jsPDF('landscape', 'mm', 'a4');
-      const pageWidth = doc.internal.pageSize.getWidth();
-      let currentY = 14;
-
-      const nomeEmpresa = empresa?.nome_fantasia || empresa?.razao_social || 'PAX e Funerária Taquari';
-      const docEmpresa = empresa?.cnpj ? `CNPJ: ${empresa.cnpj}` : '';
-      const contatoEmpresa = [empresa?.telefone, empresa?.email].filter(Boolean).join(' | ');
-
-      let headerTextX = 14;
-
-      if (empresa?.logo_url) {
-        try {
-          const imgData = await fetchImageWithDimensions(empresa.logo_url);
-          if (imgData && imgData.base64) {
-            let imgHeight = 20;
-            let imgWidth = (imgData.width * 20) / imgData.height;
-            if (imgWidth > 60) {
-              imgWidth = 60;
-              imgHeight = (imgData.height * 60) / imgData.width;
-            }
-            doc.addImage(imgData.base64, 'PNG', 14, currentY, imgWidth, imgHeight, '', 'FAST');
-            headerTextX = 14 + imgWidth + 10;
-          }
-        } catch (e) {
-          console.warn('Erro ao carregar logo para PDF', e);
-        }
-      }
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.setTextColor(15, 23, 42);
-      doc.text(nomeEmpresa, headerTextX, currentY + 6);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      if (docEmpresa) doc.text(docEmpresa, headerTextX, currentY + 11);
-      if (contatoEmpresa) doc.text(contatoEmpresa, headerTextX, currentY + 16);
-
-      currentY += 24;
-      doc.setDrawColor(226, 232, 240);
-      doc.line(14, currentY, pageWidth - 14, currentY);
-      
-      currentY += 6;
-      
-      doc.setFillColor(248, 250, 252);
-      doc.rect(14, currentY, pageWidth - 28, 12, 'F');
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.setTextColor(30, 41, 59);
-      doc.text('RELATÓRIO DE DEPENDENTES', 18, currentY + 8.5);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(71, 85, 105);
-
-      const buscaTexto = buscaDependentes ? `Busca: ${buscaDependentes}` : 'TODOS';
-      
-      doc.text(`Filtro: ${buscaTexto}`, pageWidth / 2, currentY + 8.5, { align: 'center' });
-      doc.text(`Emissão: ${format(new Date(), 'dd/MM/yyyy HH:mm')}  |  Total: ${ativosParaRelatorio.length} registros`, pageWidth - 18, currentY + 8.5, { align: 'right' });
-
-      currentY += 16;
-
-      const tableData = ativosParaRelatorio.map((d, index) => {
-        return [
-          (index + 1).toString(),
-          d.nome || "-",
-          d.parentesco ? (d.parentesco.charAt(0).toUpperCase() + d.parentesco.slice(1)) : "Não informado",
-          d.titular_nome || "-",
-        ];
-      });
-
-      autoTable(doc, {
-        startY: currentY,
-        head: [['#', 'Nome do Dependente', 'Parentesco', 'Titular']],
-        body: tableData,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [59, 130, 246],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-          fontSize: 8.5,
-          halign: 'left'
-        },
-        styles: {
-          fontSize: 7.5,
-          cellPadding: 2.5,
-          valign: 'middle',
-          overflow: 'linebreak'
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252]
-        },
-        columnStyles: {
-          0: { cellWidth: 15, halign: 'center' },
-          1: { cellWidth: 100, fontStyle: 'bold' },
-          2: { cellWidth: 40 },
-          3: { cellWidth: 110 }
-        },
-        margin: { left: 14, right: 14, bottom: 16 },
-        didDrawPage: (data) => {
-          const totalPages = doc.getNumberOfPages();
-          doc.setFontSize(7.5);
-          doc.setTextColor(148, 163, 184);
-          doc.text(
-            `Página ${data.pageNumber} de ${totalPages}  •  Sistema ERAS`,
-            pageWidth - 14,
-            202,
-            { align: 'right' }
-          );
-        }
-      });
-
-      const pdfBlob = doc.output('blob');
-      const pdfUrl = URL.createObjectURL(pdfBlob);
-      window.open(pdfUrl, '_blank');
-      toast.success('Relatório em PDF gerado com sucesso!');
-    } catch (err) {
-      console.error('Erro ao gerar relatório de dependentes', err);
-      toast.error('Erro ao gerar relatório em PDF.');
-    }
+  const handleExportDependentesPDF = () => {
+    setRelatorioReportType('dependentes');
+    setShowRelatorioModal(true);
   };
 
   const totalTitulares = associados.length;
@@ -4410,6 +4033,21 @@ export const AssociadosPage: React.FC = () => {
           onClose={() => setDocumentoVisualizando(null)}
         />
       )}
+
+      {/* Relatório Profissional Modal */}
+      <RelatorioAssociadosModal
+        isOpen={showRelatorioModal}
+        onClose={() => setShowRelatorioModal(false)}
+        associados={filtered}
+        empresaData={empresaData}
+        currentFilters={{
+          searchTerm,
+          statusFilter,
+          planoFilter
+        }}
+        userName={state.user?.nome || 'Administrador'}
+        initialReportType={relatorioReportType}
+      />
     </div>
   );
 };
