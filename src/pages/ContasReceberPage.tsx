@@ -16,6 +16,8 @@ import {
 } from '../services/financeiroService';
 import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
 import { getEmpresaById, Empresa } from '../services/empresasService';
+import { getAssociados, Associado } from '../services/associadosService';
+import { RelatorioContasReceberModal } from '../components/financeiro/RelatorioContasReceberModal';
 import { LoteCaixa } from '../types/caixas';
 import { canDelete } from '../utils/permissions';
 import {
@@ -119,17 +121,24 @@ export const ContasReceberPage: React.FC = () => {
   const [parcelaDetalhes, setParcelaDetalhes] = useState<ParcelaReceber | null>(null);
   const [receitaPai, setReceitaPai] = useState<Receita | null>(null);
   const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
+  const [associados, setAssociados] = useState<Associado[]>([]);
+  const [showRelatorioModal, setShowRelatorioModal] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
     try {
       if (state.empresaSelecionada) {
-        const [contas, emp] = await Promise.all([
+        const [contas, emp, assocs] = await Promise.all([
           getContasBancariasAtivas(state.empresaSelecionada, state.isOnline),
-          getEmpresaById(state.empresaSelecionada, state.isOnline)
+          getEmpresaById(state.empresaSelecionada, state.isOnline),
+          getAssociados(state.isOnline, state.empresaSelecionada)
         ]);
         setContasBancarias(contas);
         if (emp) setEmpresaData(emp);
+        if (assocs) setAssociados(assocs);
+      } else {
+        const assocs = await getAssociados(state.isOnline, 'all');
+        if (assocs) setAssociados(assocs);
       }
       const data = await getParcelasReceber(state.isOnline, state.empresaSelecionada);
       setParcelas(data);
@@ -693,11 +702,11 @@ export const ContasReceberPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 px-4 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors"
-            title="Exportar listagem para PDF"
+            onClick={() => setShowRelatorioModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors shadow-sm cursor-pointer"
+            title="Visualizar e Exportar Relatório Profissional em PDF"
           >
-            <Printer className="w-4 h-4" />
+            <Printer className="w-4 h-4 text-blue-500" />
             <span>Exportar PDF</span>
           </button>
           <button 
@@ -1512,6 +1521,23 @@ export const ContasReceberPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* MODAL DE RELATÓRIO PROFISSIONAL (PREVIEW / VISUALIZADOR) */}
+      <RelatorioContasReceberModal
+        isOpen={showRelatorioModal}
+        onClose={() => setShowRelatorioModal(false)}
+        parcelas={sortedParcelas}
+        empresaData={empresaData}
+        associados={associados}
+        currentFilters={{
+          searchTerm,
+          statusFilter,
+          formaPagamentoFilter,
+          dataInicial,
+          dataFinal
+        }}
+        userName={state.user?.nome || 'Administrador'}
+      />
     </>
   );
 };
