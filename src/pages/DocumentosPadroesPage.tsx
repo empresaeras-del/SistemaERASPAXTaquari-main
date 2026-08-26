@@ -8,6 +8,7 @@ import { DocumentoPadrao, TipoDocumento } from '../types/documentos';
 import { canDelete } from '../utils/permissions';
 import { formatLocalDate } from '../utils/dateUtils';
 import { FileText, Plus, Search, Pencil, Power, PowerOff, UploadCloud, X, Download, FileCheck, Eye, Maximize, Minimize, Trash2, Printer, Building2, ChevronDown, ChevronRight, Copy, Tag, Info } from 'lucide-react';
+import { VisualizadorDocumentoPadraoModal } from '../components/documentos/VisualizadorDocumentoPadraoModal';
 
 /* ─── Tipos para o painel de variáveis ─── */
 interface VariavelInfo {
@@ -832,7 +833,18 @@ export const DocumentosPadroesPage = () => {
               )}
             </div>
             <div className="p-4 border-t border-border-default bg-bg-surface/50 flex gap-2">
-              <button onClick={() => { handleOpenForm(previewDoc); setPreviewDoc(null); }} className="flex-1 py-2 bg-bg-hover hover:bg-[#64748B] text-text-base rounded-lg text-sm font-medium transition-colors border border-[#64748B]">
+              <button 
+                onClick={() => setDocToPrint(previewDoc)} 
+                className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 shadow-sm shadow-blue-500/20"
+              >
+                <Eye className="w-4 h-4" />
+                Visualizar
+              </button>
+              <button 
+                onClick={() => { handleOpenForm(previewDoc); setPreviewDoc(null); }} 
+                className="flex-1 py-2 bg-bg-hover hover:bg-[#64748B] text-text-base rounded-lg text-sm font-medium transition-colors border border-[#64748B] flex items-center justify-center gap-1.5"
+              >
+                <Pencil className="w-4 h-4" />
                 Editar
               </button>
             </div>
@@ -840,182 +852,18 @@ export const DocumentosPadroesPage = () => {
         )}
       </div>
 
-      {/* Print Modal */}
-      {docToPrint && (
-        <div className="fixed inset-0 z-[60] bg-white flex overflow-hidden print:static print:block print:overflow-visible">
-          {/* Sidebar for variables */}
-          <div className="w-80 bg-bg-surface border-r border-border-default flex flex-col print:hidden h-full">
-             <div className="p-6 border-b border-border-default bg-[#1A1D36]">
-                <h3 className="font-bold text-lg text-text-base mb-1">{docToPrint.nome}</h3>
-                <p className="text-sm text-[#3B82F6]">Preencha as variáveis do documento</p>
-             </div>
-             <div className="p-6 overflow-y-auto flex-1 space-y-5 custom-scrollbar bg-bg-base">
-
-                {/* Seleção de Empresa Emissora */}
-                <div className="bg-bg-surface p-3.5 rounded-xl border border-border-default space-y-2">
-                  <label className="block text-xs font-bold text-[#3B82F6] uppercase tracking-wider flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5" />
-                    Empresa Emissora
-                  </label>
-                  <select
-                    value={selectedEmpresaId}
-                    onChange={(e) => handleEmpresaChange(e.target.value)}
-                    className="w-full bg-bg-base border border-border-default rounded-lg px-3 py-2 text-text-base text-sm focus:border-[#3B82F6] outline-none"
-                  >
-                    <option value="">Selecione a empresa...</option>
-                    {empresas.map(emp => (
-                      <option key={emp.id} value={emp.id}>{emp.nome_fantasia || emp.razao_social}</option>
-                    ))}
-                  </select>
-                  {currentEmpresa && (
-                    <div className="text-[11px] text-text-subtle pt-1 flex flex-col gap-0.5 border-t border-border-default/50">
-                      <span>Logotipo: {currentEmpresa.logo_url ? '✅ Vinculado' : '⚠️ Sem logotipo'}</span>
-                      <span>Assinatura: {currentEmpresa.assinatura_url ? '✅ Vinculada' : '⚠️ Sem assinatura'}</span>
-                    </div>
-                  )}
-                </div>
-
-                {Object.keys(placeholderValues).length > 0 ? (
-                  Object.keys(placeholderValues).map(variable => {
-                    const isAssociadoNome = variable === '{{associado_nome}}';
-                    const isEmpresaNome = variable === '{{empresa_nome}}';
-                    
-                    return (
-                      <div key={variable}>
-                        <label className="block text-xs font-semibold text-text-subtle mb-1.5 uppercase tracking-wider">{variable.replace(/[{}]/g, '').replace(/_/g, ' ')}</label>
-                        {isAssociadoNome ? (
-                          <select
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setPlaceholderValues(prev => ({ ...prev, [variable]: val ? associados.find(a => a.id === val)?.nome || '' : '' }));
-                              if (val) handleAssociadoChange(val);
-                            }}
-                            className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base text-sm focus:border-[#3B82F6] outline-none transition-colors"
-                          >
-                            <option value="">Selecionar associado...</option>
-                            {associados.map(a => (
-                              <option key={a.id} value={a.id}>{a.nome} ({a.cpf})</option>
-                            ))}
-                          </select>
-                        ) : isEmpresaNome ? (
-                          <select
-                            value={selectedEmpresaId}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setPlaceholderValues(prev => ({ ...prev, [variable]: val ? (empresas.find(emp => emp.id === val)?.nome_fantasia || '') : '' }));
-                              if (val) handleEmpresaChange(val);
-                            }}
-                            className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base text-sm focus:border-[#3B82F6] outline-none transition-colors"
-                          >
-                            <option value="">Selecionar empresa...</option>
-                            {empresas.map(emp => (
-                              <option key={emp.id} value={emp.id}>{emp.nome_fantasia || emp.razao_social}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input 
-                            type="text"
-                            value={placeholderValues[variable]}
-                            onChange={(e) => setPlaceholderValues(prev => ({ ...prev, [variable]: e.target.value }))}
-                            className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base text-sm focus:border-[#3B82F6] outline-none transition-colors"
-                            placeholder="Valor..."
-                          />
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
-
-                  <div className="text-center py-8">
-                    <FileCheck className="w-8 h-8 text-emerald-500 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm text-text-muted">Nenhuma variável encontrada neste documento.</p>
-                  </div>
-                )}
-             </div>
-             <div className="p-6 border-t border-border-default bg-bg-surface space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-               <button 
-                  onClick={handlePrint}
-                  className="w-full flex justify-center items-center gap-2 px-4 py-3 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl transition-all font-bold shadow-lg shadow-blue-500/20 active:scale-[0.98]"
-                >
-                  <Printer className="w-5 h-5" />
-                  Imprimir Documento
-                </button>
-                <button 
-                  onClick={() => setDocToPrint(null)}
-                  className="w-full flex justify-center items-center gap-2 px-4 py-3 bg-bg-hover hover:bg-[#323654] text-text-base rounded-xl transition-colors font-medium active:scale-[0.98]"
-                >
-                  <X className="w-5 h-5" />
-                  Cancelar
-                </button>
-             </div>
-          </div>
-          
-          {/* Document Preview & Print Area */}
-          <div className="flex-1 overflow-y-auto bg-[#0F1123] flex justify-center p-8 print:p-0 print:bg-white custom-scrollbar">
-            <div id="print-area" className="w-full max-w-4xl bg-white text-black p-10 lg:p-14 min-h-[1056px] shadow-2xl print:max-w-none print:w-full print:min-h-0 print:my-0 print:shadow-none print:p-0 flex flex-col justify-between">
-              <div>
-                {/* Cabeçalho com Logotipo da Empresa alinhado às margens */}
-                {currentEmpresa?.logo_url ? (
-                  <div className="doc-header w-full pb-4 mb-6 border-b-2 border-slate-900 flex items-center justify-center text-center">
-                    <img 
-                      src={currentEmpresa.logo_url} 
-                      alt={currentEmpresa.nome_fantasia || "Logotipo"} 
-                      className="w-full max-h-24 object-contain mx-auto"
-                      style={{ maxHeight: '95px', width: '100%', objectFit: 'contain' }}
-                    />
-                  </div>
-                ) : (
-                  <div className="doc-header w-full pb-3 mb-6 border-b-2 border-slate-900 text-center">
-                    <h2 className="text-xl font-bold uppercase tracking-wider text-slate-900">
-                      {currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social || 'DOCUMENTO OFICIAL'}
-                    </h2>
-                    {currentEmpresa?.cnpj && (
-                      <p className="text-xs text-slate-600 font-medium">CNPJ: {currentEmpresa.cnpj}</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Conteúdo do Documento */}
-                <div 
-                  className="prose max-w-none print:prose-p:m-0 print:prose-p:leading-normal"
-                  style={{ fontSize: '12pt', lineHeight: '1.6', fontFamily: 'Arial, sans-serif' }}
-                  dangerouslySetInnerHTML={{ 
-                    __html: (() => {
-                      let html = docToPrint.conteudo ? docToPrint.conteudo : '<p class="text-center italic text-gray-500">Documento vazio</p>';
-                      Object.entries(placeholderValues).forEach(([key, value]) => {
-                        const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                        const displayValue = value ? `<strong>${value}</strong>` : `<span class="text-rose-500 font-bold bg-rose-50 px-1 rounded print:bg-transparent print:text-black">${key}</span>`;
-                        html = html.replace(regex, displayValue);
-                      });
-                      return html;
-                    })()
-                  }} 
-                />
-              </div>
-
-              {/* Rodapé com Assinatura da Empresa */}
-              <div className="doc-footer w-full mt-12 pt-6 border-t border-slate-200 flex flex-col items-center justify-center text-center print:break-inside-avoid">
-                {currentEmpresa?.assinatura_url && (
-                  <div className="mb-2 flex justify-center">
-                    <img 
-                      src={currentEmpresa.assinatura_url} 
-                      alt="Assinatura da Empresa" 
-                      style={{ maxHeight: '80px', maxWidth: '280px', objectFit: 'contain' }}
-                    />
-                  </div>
-                )}
-                <div className="w-72 border-t border-slate-900 my-1"></div>
-                <p className="text-xs font-bold text-slate-900 uppercase">
-                  {currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social || 'Assinatura Autorizada'}
-                </p>
-                {currentEmpresa?.cnpj && (
-                  <p className="text-[10px] text-slate-600">CNPJ: {currentEmpresa.cnpj}</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Visualizador Profissional Interativo de Documentos Padrões */}
+      <VisualizadorDocumentoPadraoModal
+        isOpen={Boolean(docToPrint)}
+        onClose={() => setDocToPrint(null)}
+        documento={docToPrint}
+        empresaData={currentEmpresa}
+        empresas={empresas}
+        associados={associados}
+        initialPlaceholderValues={placeholderValues}
+        onEmpresaSelect={handleEmpresaChange}
+        onAssociadoSelect={handleAssociadoChange}
+      />
 {/* Form Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-base/90 backdrop-blur-sm p-4">
