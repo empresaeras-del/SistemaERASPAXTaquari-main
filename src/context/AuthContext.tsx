@@ -78,40 +78,106 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // 1. Verifica sessão existente ao montar
+    let isMounted = true;
+
+    // 1. Tenta recuperar perfil em cache imediatamente para carregamento instantâneo
+    const getCachedProfile = (): Usuario | null => {
+      try {
+        const cached = localStorage.getItem('cached_user_profile');
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+      return null;
+    };
+
+    const initialCached = getCachedProfile();
+    if (initialCached) {
+      setUser(initialCached);
+    }
+
+    // 2. Verifica sessão existente ao montar
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
-      setSession(s);
-      if (s?.user) {
-        setSupabaseUser(s.user);
-        const profile = await loadUserProfile(s.user);
-        setUser(profile);
+      if (!isMounted) return;
+      if (s) {
+        setSession(s);
+        if (s.user) {
+          setSupabaseUser(s.user);
+          const profile = await loadUserProfile(s.user);
+          setUser(profile || initialCached);
+        }
+      } else {
+        // Se estiver sem sessão online mas tiver perfil salvo em cache, mantém sessão offline ativa
+        if (initialCached) {
+          setSession({
+            access_token: 'offline-token',
+            token_type: 'bearer',
+            expires_in: 3600,
+            refresh_token: 'offline-refresh',
+            user: {
+              id: initialCached.id,
+              app_metadata: { nivel: initialCached.nivel, tenant_id: initialCached.tenant_id },
+              user_metadata: { nome: initialCached.nome },
+              aud: 'authenticated',
+              created_at: new Date().toISOString(),
+              email: initialCached.email
+            } as any
+          } as Session);
+          setUser(initialCached);
+        } else {
+          setSession(null);
+          setUser(null);
+        }
       }
       setLoading(false);
     }).catch(() => {
+      if (!isMounted) return;
+      // Fallback total se a conexão falhar
+      if (initialCached) {
+        setSession({
+          access_token: 'offline-token',
+          token_type: 'bearer',
+          expires_in: 3600,
+          refresh_token: 'offline-refresh',
+          user: {
+            id: initialCached.id,
+            app_metadata: { nivel: initialCached.nivel, tenant_id: initialCached.tenant_id },
+            user_metadata: { nome: initialCached.nome },
+            aud: 'authenticated',
+            created_at: new Date().toISOString(),
+            email: initialCached.email
+          } as any
+        } as Session);
+        setUser(initialCached);
+      }
       setLoading(false);
     });
 
-    // 2. Listener para mudanças de auth state
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, s) => {
-      setSession(s);
+    // 3. Listener para mudanças de auth state
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
+      if (!isMounted) return;
       if (s?.user) {
+        setSession(s);
         setSupabaseUser(s.user);
         const profile = await loadUserProfile(s.user);
         setUser(profile);
         try {
           localStorage.setItem('eras_last_activity', String(Date.now()));
         } catch (e) {}
-      } else {
+      } else if (event === 'SIGNED_OUT') {
+        setSession(null);
         setSupabaseUser(null);
         setUser(null);
         try {
           localStorage.removeItem('eras_last_activity');
+          localStorage.removeItem('cached_user_profile');
         } catch (e) {}
       }
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
@@ -188,6 +254,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       try {
         localStorage.removeItem('eras_last_activity');
+        localStorage.removeItem('cached_user_profile');
       } catch (e) {}
     }
   };

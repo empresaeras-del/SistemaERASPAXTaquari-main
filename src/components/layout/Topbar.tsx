@@ -5,9 +5,11 @@ import { getEmpresas, Empresa } from '../../services/empresasService';
 import { NotificationCenter } from './NotificationCenter';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
-import { RefreshCw, CheckCircle2, LogOut } from 'lucide-react';
+import { useOfflineSync } from '../../hooks/useOfflineSync';
+import { RefreshCw, CheckCircle2, LogOut, Database } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../context/ConfirmContext';
+import toast from 'react-hot-toast';
 
 export const Topbar: React.FC = () => {
   const { state, dispatch } = useAppContext();
@@ -15,9 +17,28 @@ export const Topbar: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const { totalAlertsCount } = useNotifications();
-  const { pendingCount, isSyncing } = useSyncStatus();
+  const { pendingCount, isSyncing: isQueueSyncing } = useSyncStatus();
+  const { isPriming, lastSyncFormatted, syncNow } = useOfflineSync();
   const { signOut } = useAuth();
   const { confirm } = useConfirm();
+
+  const handleManualSync = async () => {
+    if (!state.isOnline) {
+      toast.error('Sem conexão para sincronização.');
+      return;
+    }
+    const toastId = toast.loading('Sincronizando dados para uso offline...');
+    try {
+      const res = await syncNow();
+      if (res?.success) {
+        toast.success('Base de dados atualizada para uso offline!', { id: toastId });
+      } else {
+        toast.error(res?.error || 'Erro ao sincronizar base.', { id: toastId });
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha na sincronização.', { id: toastId });
+    }
+  };
 
   const handleLogout = () => {
     confirm({
@@ -73,6 +94,8 @@ export const Topbar: React.FC = () => {
     }
   };
 
+  const isAnySyncing = isQueueSyncing || isPriming;
+
   return (
     <header className="h-16 bg-bg-base/80 backdrop-blur-xl border-b border-border-default flex items-center justify-between px-6 shrink-0 z-50 sticky top-0">
       <div className="flex items-center gap-4">
@@ -101,23 +124,32 @@ export const Topbar: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4 sm:gap-6">
         <div className="flex items-center gap-2 text-sm font-medium">
           {state.isOnline ? (
-            pendingCount > 0 ? (
-              <span className="flex items-center gap-1.5 text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20">
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                Sincronizando...
+            isAnySyncing ? (
+              <span className="flex items-center gap-1.5 text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20 text-xs">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                Sincronizando base...
               </span>
             ) : (
-              <span className="flex items-center gap-1.5 text-emerald-400 bg-emerald-400/10 px-2.5 py-1 rounded-full border border-emerald-400/20">
-                <CheckCircle2 className="w-4 h-4" />
-                Sincronizado
-              </span>
+              <button
+                onClick={handleManualSync}
+                className="flex items-center gap-1.5 text-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/20 px-2.5 py-1 rounded-full border border-emerald-400/20 text-xs transition-colors cursor-pointer group"
+                title={`Última sincronização completa: ${lastSyncFormatted}. Clique para forçar nova atualização local.`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden md:inline">Base Offline:</span>
+                <span className="font-semibold">{lastSyncFormatted}</span>
+                <RefreshCw className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 text-emerald-300" />
+              </button>
             )
           ) : (
-            <span className="flex items-center gap-1.5 text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20 text-xs font-semibold" title="O sistema está em modo de somente visualização sem acesso à internet.">
-              <WifiOff className="w-4 h-4" />
+            <span
+              className="flex items-center gap-1.5 text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20 text-xs font-semibold"
+              title={`O sistema está em modo offline de visualização. Dados sincronizados: ${lastSyncFormatted}`}
+            >
+              <WifiOff className="w-3.5 h-3.5" />
               Modo Offline (Visualização)
             </span>
           )}

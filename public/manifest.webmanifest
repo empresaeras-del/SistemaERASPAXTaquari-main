@@ -1,0 +1,18 @@
+{
+  "name": "Sistema ERAS",
+  "short_name": "ERAS",
+  "description": "Sistema de Gestão Funerária, Planos e Atendimentos PAX",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B111E",
+  "theme_color": "#0F172A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/eras-cyber-emblem.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

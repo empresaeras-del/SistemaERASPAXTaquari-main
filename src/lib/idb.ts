@@ -120,6 +120,42 @@ export const saveToIDB = async <T>(storeName: string, data: T): Promise<void> =>
   });
 };
 
+export const bulkSaveToIDB = async <T>(storeName: string, items: T[]): Promise<void> => {
+  if (!items || items.length === 0) return;
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+      
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+
+      for (const item of items) {
+        store.put(item);
+      }
+    });
+  } catch (e) {
+    console.warn(`IDB bulkSaveToIDB failed for ${storeName}`, e);
+  }
+};
+
+export const clearStoreInIDB = async (storeName: string): Promise<void> => {
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const request = store.clear();
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.warn(`IDB clearStoreInIDB failed for ${storeName}`, e);
+  }
+};
+
 export const deleteFromIDB = async (storeName: string, id: string): Promise<void> => {
   try {
     const db = await initDB();
@@ -134,3 +170,4 @@ export const deleteFromIDB = async (storeName: string, id: string): Promise<void
     console.warn('IDB deleteFromIDB failed', e);
   }
 };
+
