@@ -201,24 +201,59 @@ export const deleteUsuario = async (
     throw new Error("Não é possível excluir enquanto estiver offline.");
   }
 
-  const { error } = await supabase
-    .from("users")
-    .update({ 
-      deleted_at: new Date().toISOString(),
-      status: 'inativo'
-    })
-    .eq("id", id);
+  // 1. Tenta via RPC seguro (com verificação de nível e suporte a auth ban)
+  let rpcSuccess = false;
+  try {
+    const { data, error: rpcError } = await supabase.rpc('admin_excluir_usuario', {
+      target_user_id: id,
+      hard_delete: false
+    });
 
-  if (error) {
-    console.error("Erro ao excluir usuário no Supabase:", error);
-    throw new Error(error.message || "Falha ao excluir usuário.");
+    if (!rpcError) {
+      rpcSuccess = true;
+    } else {
+      console.warn("RPC admin_excluir_usuario não executou ou falhou, tentando fallback direto:", rpcError);
+    }
+  } catch (err) {
+    console.warn("Erro ao invocar RPC admin_excluir_usuario:", err);
   }
 
+  // 2. Fallback direto caso o RPC não esteja criado ainda no banco
+  if (!rpcSuccess) {
+    let { error } = await supabase
+      .from("users")
+      .update({ 
+        deleted_at: new Date().toISOString(),
+        status: 'inativo'
+      })
+      .eq("id", id);
+
+    if (error) {
+      // Se a coluna deleted_at não existir no banco legado, tenta atualizar apenas status
+      if (error.message?.includes('deleted_at') || error.code === '42703') {
+        const fallbackUpdate = await supabase
+          .from("users")
+          .update({ status: 'inativo' })
+          .eq("id", id);
+        error = fallbackUpdate.error;
+      }
+    }
+
+    if (error) {
+      console.error("Erro ao excluir usuário no Supabase:", error);
+      throw new Error(error.message || "Falha ao excluir usuário no Supabase.");
+    }
+  }
+
+  // 3. Atualiza localmente no IndexedDB
   const user = await getFromIDB<UsuarioCadastro>(STORE_NAME, id);
   if (user) {
     user.deleted_at = new Date().toISOString();
     user.status = 'inativo';
     await saveToIDB(STORE_NAME, user);
   }
+  await deleteFromIDB(STORE_NAME, id);
+
   await registrarAuditoria("Excluir Usuário (Soft Delete)", { id });
 };
+

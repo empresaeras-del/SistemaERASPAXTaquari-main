@@ -241,9 +241,9 @@ export const ConfiguracoesPage: React.FC = () => {
           await deleteEmpresa(id, state.isOnline);
           await loadData();
           toast.success("Empresa excluída com sucesso!");
-        } catch (error) {
+        } catch (error: any) {
           console.error("Erro ao excluir", error);
-          toast.error("Erro ao excluir. Verifique se você está online.");
+          toast.error(error?.message || "Erro ao excluir empresa.");
         }
       }
     });
@@ -438,9 +438,9 @@ export const ConfiguracoesPage: React.FC = () => {
           await deleteUsuario(id, state.isOnline);
           await loadData();
           toast.success("Usuário excluído com sucesso!");
-        } catch (error) {
+        } catch (error: any) {
           console.error("Erro ao excluir usuário", error);
-          toast.error("Erro ao excluir usuário. Verifique se você está online.");
+          toast.error(error?.message || "Erro ao excluir usuário.");
         }
       }
     });
