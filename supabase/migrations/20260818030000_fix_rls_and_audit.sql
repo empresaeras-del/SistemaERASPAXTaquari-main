@@ -12,8 +12,7 @@ ON public.users FOR SELECT TO authenticated
 USING (
   deleted_at IS NULL AND (
     id = auth.uid() OR
-    tenant_id = (SELECT tenant_id FROM public.users WHERE id = auth.uid() LIMIT 1) OR
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND nivel = 'super_admin')
+    has_tenant_access(tenant_id)
   )
 );
 

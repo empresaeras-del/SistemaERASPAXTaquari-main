@@ -20,8 +20,8 @@ DECLARE
 BEGIN
   v_current_user_id := auth.uid();
   
-  -- Obtém o nível do usuário solicitante na tabela public.users
-  SELECT nivel INTO v_current_nivel FROM public.users WHERE id = v_current_user_id;
+  -- Obtém o nível do usuário solicitante na tabela public.users ou via JWT
+  v_current_nivel := current_user_nivel();
 
   -- Se for super_admin OU se for o próprio usuário
   IF v_current_nivel = 'super_admin' OR v_current_user_id = target_user_id THEN
