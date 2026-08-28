@@ -21,6 +21,22 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
       }
     });
 
+export const isolatedSupabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false
+  },
+  global: {
+    fetch: (url, options) => {
+      if (supabaseUrl.includes('localhost:9999') || supabaseUrl.includes('placeholder')) {
+         return Promise.resolve(new Response(JSON.stringify({ error: 'Supabase not configured' }), { status: 400, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return fetch(url, options);
+    }
+  }
+});
+
 // Wrapper para auditoria
 export const registrarAuditoria = async (acao: string, detalhes: any) => {
   let userId = 'system';

@@ -140,7 +140,7 @@ export const processSyncQueue = async (isOnline: boolean) => {
             if (payload.plano_pax_id) {
               try {
                 const contratoPayload = {
-                  id: crypto.randomUUID(),
+                  id: generateUUID(),
                   tenant_id: payload.tenant_id || 'default_tenant',
                   empresa_id: payload.empresa_id || payload.tenant_id || 'default_tenant',
                   associado_id: payload.id,

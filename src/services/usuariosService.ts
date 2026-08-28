@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { supabase, registrarAuditoria } from "../lib/supabase";
+import { supabase, isolatedSupabase, registrarAuditoria } from "../lib/supabase";
 import {
   getFromIDB,
   saveToIDB,
@@ -21,18 +21,6 @@ export interface UsuarioCadastro {
 }
 
 const STORE_NAME = "usuarios";
-
-const getIsolatedSupabaseClient = () => {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'http://localhost:9999';
-  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder_key';
-  return createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false
-    }
-  });
-};
 
 export const getUsuarios = async (
   isOnline: boolean,
@@ -91,8 +79,7 @@ export const saveUsuario = async (
 
   if (isNew && password) {
     // 1. Cria a conta de autenticação no Supabase Auth usando cliente isolado (não desloga o admin)
-    const tempClient = getIsolatedSupabaseClient();
-    const { data: authData, error: authError } = await tempClient.auth.signUp({
+    const { data: authData, error: authError } = await isolatedSupabase.auth.signUp({
       email: usuario.email.trim(),
       password: password,
       options: {

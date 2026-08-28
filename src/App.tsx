@@ -42,6 +42,7 @@ const RequisicoesPage = lazy(() => import('./pages/RequisicoesPage').then(m => (
 const FaturamentosPage = lazy(() => import('./pages/FaturamentosPage').then(m => ({ default: m.FaturamentosPage })));
 const FornecedoresPage = lazy(() => import('./pages/FornecedoresPage').then(m => ({ default: m.FornecedoresPage })));
 const CaixasPage = lazy(() => import('./pages/CaixasPage').then(m => ({ default: m.CaixasPage })));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
 
 export default function App() {
   useEffect(() => {
@@ -108,6 +109,7 @@ export default function App() {
                   <Routes>
                     {/* Rota pública: Login */}
                     <Route path="/login" element={<LoginPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                     {/* Rotas protegidas — exigem autenticação */}
                     <Route element={<PrivateRoute />}>
@@ -120,7 +122,6 @@ export default function App() {
                         <Route path="financeiro/contas-a-receber" element={<ContasReceberPage />} />
                         <Route path="financeiro/contas-a-pagar" element={<ContasPagarPage />} />
                         <Route path="financeiro/caixas" element={<CaixasPage />} />
-                        <Route path="caixas" element={<CaixasPage />} />
                         <Route path="financeiro/contas-a-receber/nova" element={<ContasReceberFormPage />} />
                         <Route path="financeiro/contas-a-receber/:id/editar" element={<ContasReceberFormPage />} />
                         <Route path="financeiro/contas-a-pagar/nova" element={<ContasPagarFormPage />} />
@@ -130,7 +131,6 @@ export default function App() {
                         <Route path="credenciados" element={<CredenciadosPage />} />
                         <Route path="procedimentos" element={<ProcedimentosPage />} />
                         <Route path="faturamentos" element={<FaturamentosPage />} />
-                        <Route path="credenciados/faturamentos" element={<FaturamentosPage />} />
                         <Route path="fornecedores" element={<FornecedoresPage />} />
                         <Route path="auditoria" element={<AuditoriaPage />} />
                         <Route path="documentos" element={<DocumentosPadroesPage />} />

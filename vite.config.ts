@@ -25,7 +25,13 @@ export default defineConfig(() => {
               src: '/eras-cyber-emblem.jpg',
               sizes: '192x192 512x512',
               type: 'image/jpeg',
-              purpose: 'any maskable'
+              purpose: 'any'
+            },
+            {
+              src: '/eras-cyber-emblem.jpg',
+              sizes: '192x192 512x512',
+              type: 'image/jpeg',
+              purpose: 'maskable'
             }
           ]
         },
@@ -63,7 +69,7 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(__dirname, './src'),
       },
     },
     build: {

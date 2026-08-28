@@ -105,49 +105,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(profile || initialCached);
         }
       } else {
-        // Se estiver sem sessão online mas tiver perfil salvo em cache, mantém sessão offline ativa
-        if (initialCached) {
-          setSession({
-            access_token: 'offline-token',
-            token_type: 'bearer',
-            expires_in: 3600,
-            refresh_token: 'offline-refresh',
-            user: {
-              id: initialCached.id,
-              app_metadata: { nivel: initialCached.nivel, tenant_id: initialCached.tenant_id },
-              user_metadata: { nome: initialCached.nome },
-              aud: 'authenticated',
-              created_at: new Date().toISOString(),
-              email: initialCached.email
-            } as any
-          } as Session);
-          setUser(initialCached);
-        } else {
-          setSession(null);
-          setUser(null);
-        }
+        // Removido o fallback inseguro (fake session offline)
+        setSession(null);
+        setUser(null);
       }
       setLoading(false);
     }).catch(() => {
       if (!isMounted) return;
-      // Fallback total se a conexão falhar
-      if (initialCached) {
-        setSession({
-          access_token: 'offline-token',
-          token_type: 'bearer',
-          expires_in: 3600,
-          refresh_token: 'offline-refresh',
-          user: {
-            id: initialCached.id,
-            app_metadata: { nivel: initialCached.nivel, tenant_id: initialCached.tenant_id },
-            user_metadata: { nome: initialCached.nome },
-            aud: 'authenticated',
-            created_at: new Date().toISOString(),
-            email: initialCached.email
-          } as any
-        } as Session);
-        setUser(initialCached);
-      }
+      // Removido o fallback inseguro (fake session offline)
+      setSession(null);
+      setUser(null);
       setLoading(false);
     });
 
