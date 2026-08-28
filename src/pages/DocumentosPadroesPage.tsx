@@ -7,7 +7,7 @@ import { useAppContext } from '../context/AppContext';
 import { DocumentoPadrao, TipoDocumento } from '../types/documentos';
 import { canDelete } from '../utils/permissions';
 import { formatLocalDate } from '../utils/dateUtils';
-import { FileText, Plus, Search, Pencil, Power, PowerOff, UploadCloud, X, Download, FileCheck, Eye, Maximize, Minimize, Trash2, Printer, Building2, ChevronDown, ChevronRight, Copy, Tag, Info } from 'lucide-react';
+import { FileText, Plus, Search, Pencil, Power, PowerOff, X, Download, Eye, Maximize, Minimize, Trash2, Printer, ChevronDown, ChevronRight, Copy, Tag, Info } from 'lucide-react';
 import { VisualizadorDocumentoPadraoModal } from '../components/documentos/VisualizadorDocumentoPadraoModal';
 
 /* ─── Tipos para o painel de variáveis ─── */
@@ -210,6 +210,108 @@ const VariavelButton: React.FC<VariavelButtonProps> = ({ v, cor, onInsert, onCop
   );
 };
 
+/* ─── Régua Horizontal (topo do editor) ─── */
+const RulerHorizontal: React.FC = () => {
+  // A4 = 21 cm de largura; exibimos marcas a cada cm e meia-marca a cada 5mm
+  const cms = Array.from({ length: 22 }, (_, i) => i);
+  return (
+    <div
+      style={{
+        height: 22,
+        background: 'linear-gradient(to bottom, #1c2232, #222a3a)',
+        borderBottom: '1px solid #2d3748',
+        flexShrink: 0,
+        position: 'relative',
+        overflow: 'hidden',
+        userSelect: 'none',
+        paddingLeft: 22,
+      }}
+    >
+      <div style={{ position: 'relative', height: '100%' }}>
+        {cms.map(c => (
+          <React.Fragment key={c}>
+            {/* Marca maior (cm) */}
+            <div style={{
+              position: 'absolute',
+              left: `${(c / 21) * 100}%`,
+              bottom: 0,
+              width: 1,
+              height: 11,
+              background: c % 5 === 0 ? '#64748b' : '#374151',
+            }} />
+            {/* Label cm */}
+            {c > 0 && c % 2 === 0 && (
+              <span style={{
+                position: 'absolute',
+                left: `calc(${(c / 21) * 100}% + 2px)`,
+                bottom: 10,
+                fontSize: 7,
+                color: '#64748b',
+                lineHeight: 1,
+                whiteSpace: 'nowrap',
+              }}>{c}</span>
+            )}
+            {/* Meia marca (5mm) */}
+            <div style={{
+              position: 'absolute',
+              left: `calc(${(c / 21) * 100}% + ${(0.5 / 21) * 100}%)`,
+              bottom: 0,
+              width: 1,
+              height: 6,
+              background: '#2d3748',
+            }} />
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ─── Régua Vertical (lateral do editor) ─── */
+const RulerVertical: React.FC = () => {
+  // A4 = ~29.7 cm de altura; exibimos marcas a cada cm
+  const cms = Array.from({ length: 30 }, (_, i) => i);
+  return (
+    <div
+      style={{
+        width: 22,
+        background: 'linear-gradient(to right, #1c2232, #222a3a)',
+        borderRight: '1px solid #2d3748',
+        flexShrink: 0,
+        position: 'relative',
+        overflow: 'hidden',
+        userSelect: 'none',
+      }}
+    >
+      {cms.map(c => (
+        <React.Fragment key={c}>
+          <div style={{
+            position: 'absolute',
+            top: `${(c / 29.7) * 100}%`,
+            right: 0,
+            height: 1,
+            width: c % 5 === 0 ? 11 : 5,
+            background: c % 5 === 0 ? '#64748b' : '#374151',
+          }} />
+          {c > 0 && c % 2 === 0 && (
+            <span style={{
+              position: 'absolute',
+              top: `calc(${(c / 29.7) * 100}% + 2px)`,
+              right: 11,
+              fontSize: 7,
+              color: '#64748b',
+              lineHeight: 1,
+              writingMode: 'vertical-lr',
+              transform: 'rotate(180deg)',
+              whiteSpace: 'nowrap',
+            }}>{c}</span>
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
+
 const TIPO_LABELS: Record<TipoDocumento, string> = {
   'contrato_adesao': 'Contrato de Adesão',
   'termo_rescisao': 'Termo de Rescisão',
@@ -228,7 +330,7 @@ export const DocumentosPadroesPage = () => {
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<Partial<DocumentoPadrao> | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+
   const [previewDoc, setPreviewDoc] = useState<DocumentoPadrao | null>(null);
 
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -253,48 +355,81 @@ export const DocumentosPadroesPage = () => {
   const editorConfig = useMemo(() => ({
     readonly: false,
     language: 'pt_br',
-    height: isFullscreen ? 600 : 400,
-    toolbarButtonSize: 'small' as const,
+    height: isFullscreen ? 518 : 408,
+    toolbarButtonSize: 'middle' as const,
+    toolbarAdaptive: false,
     buttons: [
-      'source', '|',
       'bold', 'italic', 'underline', 'strikethrough', '|',
       'superscript', 'subscript', '|',
+      'font', 'fontsize', 'brush', 'paragraph', '|',
       'ul', 'ol', '|',
       'outdent', 'indent', '|',
-      'font', 'fontsize', 'brush', 'paragraph', '|',
-      'image', 'table', 'link', '|',
-      'align', 'undo', 'redo', '|',
-      'hr', 'eraser', 'copyformat', '|',
-      'fullsize', 'print'
+      'align', '|',
+      'image', 'table', 'link', 'hr', '|',
+      'undo', 'redo', '|',
+      'eraser', 'copyformat', 'source',
     ],
-    uploader: {
-      insertImageAsBase64URI: true
-    },
-    showCharsCounter: false,
+    uploader: { insertImageAsBase64URI: true },
+    showCharsCounter: true,
     showWordsCounter: false,
     showXPathInStatusbar: false,
+    placeholder: 'Comece a digitar o conteúdo do documento aqui...',
     style: {
       background: '#ffffff',
-      color: '#333333',
-      padding: '25mm',
+      color: '#1a1a1a',
+      padding: '20mm 25mm',
       width: '210mm',
       minHeight: '297mm',
-      margin: '20px auto',
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)'
+      margin: '0 auto',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+      fontFamily: 'Arial, Helvetica, sans-serif',
+      fontSize: '11pt',
+      lineHeight: '1.6',
     },
     iframe: true,
     iframeStyle: `
-      html { background: #e5e7eb; padding: 20px 0; }
-      body { 
-         width: 210mm !important;
-         min-height: 297mm !important; 
-         padding: 25mm !important; 
-         margin: 0 auto !important; 
-         background: #ffffff !important; 
-         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
-         box-sizing: border-box !important;
+      html {
+        background: #3a404e;
+        padding: 20px 0 40px;
+        min-height: 100%;
       }
-    `
+      body {
+        width: 210mm !important;
+        min-height: 297mm !important;
+        padding: 20mm 25mm !important;
+        margin: 0 auto !important;
+        background: #ffffff !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+        box-sizing: border-box !important;
+        font-family: Arial, Helvetica, sans-serif !important;
+        font-size: 11pt !important;
+        line-height: 1.6 !important;
+        color: #1a1a1a !important;
+      }
+      table {
+        border-collapse: collapse !important;
+        width: 100% !important;
+      }
+      table td, table th {
+        border: 1px solid #cbd5e1 !important;
+        padding: 6px 10px !important;
+        min-width: 30px !important;
+        vertical-align: top !important;
+      }
+      table th {
+        background: #f1f5f9 !important;
+        font-weight: bold !important;
+        text-align: left !important;
+      }
+      table tr:nth-child(even) td {
+        background: #f8fafc !important;
+      }
+      .jodit-selected-cell {
+        outline: 2px solid #3B82F6 !important;
+      }
+      h1, h2, h3, h4 { color: #0f172a !important; margin-top: 0.8em; }
+      p { margin-bottom: 0.6em; }
+    `,
   }), [isFullscreen]);
 
 
@@ -868,27 +1003,48 @@ export const DocumentosPadroesPage = () => {
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-base/90 backdrop-blur-sm p-4">
           <div className={`bg-bg-subtle ${isFullscreen ? 'rounded-none w-full h-full max-w-none border-0' : 'rounded-3xl shadow-2xl w-full max-w-[95vw] h-[90vh] border border-border-default'} flex flex-col overflow-hidden transition-all duration-300`}>
-            <div className="p-4 sm:p-6 border-b border-border-default flex items-center justify-between shrink-0">
-              <h3 className="text-xl font-bold text-text-base flex items-center gap-3">
-                {editingDoc?.id ? 'Editar Modelo' : 'Novo Modelo de Documento'}
-              </h3>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setShowPreviewModal(!showPreviewModal)} 
-                  className={`hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${showPreviewModal ? "bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/20" : "bg-bg-surface text-text-subtle border-border-default hover:text-white"}`}
+            {/* ── Cabeçalho do modal ── */}
+            <div className="relative p-5 sm:p-6 border-b border-border-default flex items-center justify-between shrink-0 bg-gradient-to-r from-bg-subtle via-bg-surface to-bg-subtle">
+              {/* Barra de acento superior */}
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#3B82F6] via-[#60A5FA] to-transparent" />
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2.5 bg-[#3B82F6]/10 rounded-xl border border-[#3B82F6]/20 shrink-0">
+                  <FileText className="w-5 h-5 text-[#3B82F6]" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-text-base leading-tight">
+                    {editingDoc?.id ? 'Editar Modelo de Documento' : 'Novo Modelo de Documento'}
+                  </h3>
+                  <p className="text-[11px] text-text-subtle mt-0.5 truncate">
+                    {editingDoc?.id ? 'Atualize as informações e o conteúdo do modelo' : 'Configure e crie um novo modelo reutilizável'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 ml-4">
+                <button
+                  onClick={() => setShowPreviewModal(!showPreviewModal)}
+                  className={`hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-sm font-medium ${
+                    showPreviewModal
+                      ? 'bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/30'
+                      : 'bg-bg-base text-text-subtle border-border-default hover:text-[#3B82F6] hover:border-[#3B82F6]/30'
+                  }`}
                 >
                   <Eye className="w-4 h-4" />
-                  <span className="text-sm font-medium">{showPreviewModal ? "Ocultar Preview" : "Mostrar Preview"}</span>
+                  {showPreviewModal ? 'Ocultar Preview' : 'Preview A4'}
                 </button>
-                <button 
-                  onClick={() => setIsFullscreen(!isFullscreen)} 
-                  className="p-2 text-text-subtle hover:text-text-base bg-bg-surface rounded-lg border border-border-default hidden md:block"
-                  title={isFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
+                <button
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="hidden md:flex items-center justify-center p-2 text-text-subtle hover:text-text-base bg-bg-base rounded-lg border border-border-default transition-colors"
+                  title={isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
                 >
-                  {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                  {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                 </button>
-                <button onClick={() => setIsFormOpen(false)} className="p-2 text-text-subtle hover:text-text-base bg-bg-surface rounded-lg border border-border-default">
-                  <X className="w-5 h-5" />
+                <button
+                  onClick={() => setIsFormOpen(false)}
+                  className="flex items-center justify-center p-2 text-text-subtle hover:text-red-400 bg-bg-base rounded-lg border border-border-default transition-colors"
+                  title="Fechar"
+                >
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -998,118 +1154,135 @@ export const DocumentosPadroesPage = () => {
                   )}
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
-                <form id="docForm" onSubmit={handleSubmit} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-1">
-                      <label className="block text-sm font-semibold text-text-subtle mb-1">Nome do Modelo *</label>
-                      <input
-                        required
-                        type="text"
-                        value={editingDoc?.nome || ''}
-                        onChange={e => setEditingDoc({ ...editingDoc, nome: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50"
-                        placeholder="Ex: Contrato Padrão Mensal"
-                      />
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <label className="block text-sm font-semibold text-text-subtle mb-1">Tipo de Documento *</label>
-                      <select
-                        required
-                        value={editingDoc?.tipo || ''}
-                        onChange={e => setEditingDoc({ ...editingDoc, tipo: e.target.value as TipoDocumento })}
-                        className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50"
-                      >
-                        {Object.entries(TIPO_LABELS).map(([val, label]) => (
-                          <option key={val} value={val}>{label}</option>
-                        ))}
-                      </select>
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <form id="docForm" onSubmit={handleSubmit}>
+
+                  {/* ── Seção: Dados básicos ── */}
+                  <div className="p-5 sm:p-6 space-y-4 border-b border-border-default">
+
+                    {/* Nome + Tipo */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="md:col-span-2 space-y-1.5">
+                        <label className="block text-[10px] font-bold text-text-subtle uppercase tracking-widest">Nome do Modelo *</label>
+                        <input
+                          required
+                          type="text"
+                          value={editingDoc?.nome || ''}
+                          onChange={e => setEditingDoc({ ...editingDoc, nome: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-bg-base border border-border-default rounded-xl text-sm text-text-base placeholder-text-subtle/40 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/40 focus:border-[#3B82F6]/50 transition-all"
+                          placeholder="Ex: Contrato Padrão Mensal"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-text-subtle uppercase tracking-widest">Tipo *</label>
+                        <select
+                          required
+                          value={editingDoc?.tipo || ''}
+                          onChange={e => setEditingDoc({ ...editingDoc, tipo: e.target.value as TipoDocumento })}
+                          className="w-full px-4 py-2.5 bg-bg-base border border-border-default rounded-xl text-sm text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/40 focus:border-[#3B82F6]/50 transition-all"
+                        >
+                          {Object.entries(TIPO_LABELS).map(([val, label]) => (
+                            <option key={val} value={val}>{label}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
-                    <div className="space-y-1 md:col-span-2">
-                      <label className="block text-sm font-semibold text-text-subtle mb-1">Descrição</label>
+                    {/* Descrição */}
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-text-subtle uppercase tracking-widest">Descrição</label>
                       <textarea
                         rows={2}
                         value={editingDoc?.descricao || ''}
                         onChange={e => setEditingDoc({ ...editingDoc, descricao: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 resize-none"
+                        className="w-full px-4 py-2.5 bg-bg-base border border-border-default rounded-xl text-sm text-text-base placeholder-text-subtle/40 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/40 focus:border-[#3B82F6]/50 transition-all resize-none"
                         placeholder="Breve descrição do uso deste modelo..."
                       />
                     </div>
-                  </div>
 
-                  <div className="space-y-4 pt-4 border-t border-border-default">
-                    <h4 className="text-sm font-semibold text-[#3B82F6] uppercase tracking-wider flex items-center gap-2">
-                      <FileText className="w-4 h-4" />
-                      Conteúdo do Documento
-                    </h4>
-                    
-                    {/* Info tip */}
-                    <div className="flex items-start gap-2 p-3 bg-[#3B82F6]/5 border border-[#3B82F6]/20 rounded-xl">
-                      <Info className="w-4 h-4 text-[#3B82F6] shrink-0 mt-0.5" />
-                      <p className="text-xs text-text-subtle leading-relaxed">
-                        Use o <strong className="text-text-muted">painel de variáveis</strong> à esquerda para inserir campos dinâmicos.
-                        Ao emitir um documento, os campos serão preenchidos com dados reais do sistema.
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-sm font-semibold text-text-subtle mb-1">Editor de Conteúdo (HTML/Texto)</label>
-                      <div className="border border-border-default rounded-xl overflow-hidden flex flex-col bg-white">
-                        <JoditEditor
-                          ref={editorRef}
-                          value={editingDoc?.conteudo || ''}
-                          config={editorConfig}
-                          onBlur={newContent => setEditingDoc({ ...editingDoc, conteudo: newContent })}
-                          onChange={newContent => setEditingDoc(prev => ({ ...prev, conteudo: newContent }))}
+                    {/* Toggle status */}
+                    <label
+                      htmlFor="docAtivo"
+                      className="flex items-center gap-3 p-3 bg-bg-base rounded-xl border border-border-default cursor-pointer hover:border-[#3B82F6]/30 transition-colors group"
+                    >
+                      <div
+                        className={`relative w-10 h-5 rounded-full transition-colors ${
+                          editingDoc?.ativo ? 'bg-emerald-500' : 'bg-bg-hover border border-border-default'
+                        }`}
+                      >
+                        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+                          editingDoc?.ativo ? 'translate-x-5' : 'translate-x-0.5'
+                        }`} />
+                        <input
+                          type="checkbox"
+                          id="docAtivo"
+                          className="sr-only"
+                          checked={!!editingDoc?.ativo}
+                          onChange={e => setEditingDoc({ ...editingDoc, ativo: e.target.checked })}
                         />
                       </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-sm font-semibold text-text-subtle mb-1">Ou faça upload de um arquivo modelo (PDF/Docx)</label>
-                      <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-border-default border-dashed rounded-xl cursor-pointer bg-bg-surface hover:bg-bg-subtle transition-colors">
-                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            <UploadCloud className="w-6 h-6 text-text-subtle mb-2" />
-                            {isUploading ? <p className="text-sm text-[#3B82F6]">Fazendo upload...</p> : <p className="text-sm text-text-subtle"><span className="font-semibold text-[#3B82F6]">Clique para enviar</span> ou arraste o arquivo</p>}
-                          </div>
-                          <input type="file" className="hidden" onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            try {
-                              setIsUploading(true);
-                              const url = await uploadArquivo(file);
-                              setEditingDoc(prev => prev ? { ...prev, arquivo_url: url } : null);
-                            } catch (err: any) {
-                              console.warn('Falha no upload', err);
-                              alert('Erro ao fazer upload. Verifique sua conexão.');
-                            } finally {
-                              setIsUploading(false);
-                            }
-                          }} disabled={isUploading} />
-                        </label>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-text-base">
+                          {editingDoc?.ativo ? 'Modelo Ativo' : 'Modelo Inativo'}
+                        </p>
+                        <p className="text-[11px] text-text-subtle">
+                          Modelos ativos ficam disponíveis para emissão no sistema
+                        </p>
                       </div>
-                      {editingDoc?.arquivo_url && (
-                        <div className="mt-2 text-sm text-emerald-400 flex items-center gap-2">
-                          <FileCheck className="w-4 h-4" />
-                          Arquivo anexado com sucesso.
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${
+                        editingDoc?.ativo
+                          ? 'bg-emerald-500/15 text-emerald-400'
+                          : 'bg-slate-500/15 text-text-subtle'
+                      }`}>
+                        {editingDoc?.ativo ? 'ATIVO' : 'INATIVO'}
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* ── Seção: Conteúdo ── */}
+                  <div className="p-5 sm:p-6 space-y-4">
+
+                    {/* Cabeçalho da seção */}
+                    <div className="flex items-center gap-3 pb-3 border-b border-border-default">
+                      <div className="p-1.5 rounded-lg bg-[#3B82F6]/10 border border-[#3B82F6]/20">
+                        <FileText className="w-3.5 h-3.5 text-[#3B82F6]" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-[#3B82F6] uppercase tracking-widest">Conteúdo do Documento</h4>
+                        <p className="text-[11px] text-text-subtle mt-0.5">
+                          Use o painel de variáveis à esquerda para inserir campos dinâmicos
+                        </p>
+                      </div>
+                      <div className="ml-auto flex items-center gap-1.5 text-[10px] text-text-subtle bg-bg-base border border-border-default rounded-lg px-2 py-1">
+                        <Info className="w-3 h-3 text-[#3B82F6]" />
+                        <span>Formato A4 · 210mm × 297mm</span>
+                      </div>
+                    </div>
+
+                    {/* Editor com réguas */}
+                    <div
+                      className="rounded-xl overflow-hidden border border-[#2d3748] shadow-xl"
+                      style={{ background: '#1c2232' }}
+                    >
+                      {/* Régua horizontal superior */}
+                      <RulerHorizontal />
+
+                      {/* Corpo: régua vertical + área de edição */}
+                      <div className="flex overflow-hidden" style={{ height: isFullscreen ? 518 : 410 }}>
+                        <RulerVertical />
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <JoditEditor
+                            ref={editorRef}
+                            value={editingDoc?.conteudo || ''}
+                            config={editorConfig}
+                            onBlur={newContent => setEditingDoc({ ...editingDoc, conteudo: newContent })}
+                            onChange={newContent => setEditingDoc(prev => ({ ...prev, conteudo: newContent }))}
+                          />
                         </div>
-                      )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-4">
-                    <input
-                      type="checkbox"
-                      id="docAtivo"
-                      checked={editingDoc?.ativo}
-                      onChange={e => setEditingDoc({ ...editingDoc, ativo: e.target.checked })}
-                      className="w-4 h-4 rounded border-border-default bg-bg-surface text-[#3B82F6] focus:ring-[#3B82F6]/50 focus:ring-offset-0 focus:ring-2"
-                    />
-                    <label htmlFor="docAtivo" className="text-sm text-text-muted">Modelo ativo (disponível para uso)</label>
-                  </div>
                 </form>
               </div>
 
