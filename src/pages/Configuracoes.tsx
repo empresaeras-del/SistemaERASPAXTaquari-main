@@ -1386,6 +1386,13 @@ export const ConfiguracoesPage: React.FC = () => {
                     <div className="relative">
                       <input
                         type={showSenhaUsuario ? "text" : "password"}
+                        id="novo-usuario-senha"
+                        name="senha"
+                        autoComplete="new-password"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        data-no-uppercase="true"
                         required
                         placeholder="Mínimo 6 caracteres"
                         value={senhaUsuario}
@@ -1412,6 +1419,13 @@ export const ConfiguracoesPage: React.FC = () => {
                     <div className="relative">
                       <input
                         type={showSenhaUsuario ? "text" : "password"}
+                        id="alterar-usuario-senha"
+                        name="senha"
+                        autoComplete="new-password"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        data-no-uppercase="true"
                         placeholder="Deixe em branco para manter a atual (mínimo 6 caracteres)"
                         value={senhaUsuario}
                         onChange={(e) => setSenhaUsuario(e.target.value)}

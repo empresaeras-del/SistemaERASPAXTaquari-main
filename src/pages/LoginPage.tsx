@@ -417,8 +417,13 @@ export const LoginPage: React.FC = () => {
                           <input
                             type="email"
                             id="login-email"
+                            name="email"
                             placeholder="seu@email.com"
                             autoComplete="email"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            data-no-uppercase="true"
                             value={email}
                             onChange={e => { setEmail(e.target.value); setError(null); }}
                             disabled={isLoading}
@@ -435,8 +440,13 @@ export const LoginPage: React.FC = () => {
                           <input
                             type={showPassword ? 'text' : 'password'}
                             id="login-password"
+                            name="password"
                             placeholder="••••••••"
                             autoComplete="current-password"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            data-no-uppercase="true"
                             value={password}
                             onChange={e => { setPassword(e.target.value); setError(null); }}
                             disabled={isLoading}
@@ -549,8 +559,13 @@ export const LoginPage: React.FC = () => {
                             </svg>
                             <input
                               id="forgot-email"
+                              name="email"
                               type="email"
                               autoComplete="email"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              spellCheck={false}
+                              data-no-uppercase="true"
                               placeholder="seu@email.com"
                               value={email}
                               onChange={e => { setEmail(e.target.value); setError(null); }}

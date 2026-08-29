@@ -93,6 +93,13 @@ export const ResetPasswordPage = () => {
                 </div>
                 <input
                   type="password"
+                  id="reset-password"
+                  name="password"
+                  autoComplete="new-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  data-no-uppercase="true"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -110,6 +117,13 @@ export const ResetPasswordPage = () => {
                 </div>
                 <input
                   type="password"
+                  id="reset-password-confirm"
+                  name="password_confirm"
+                  autoComplete="new-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  data-no-uppercase="true"
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}

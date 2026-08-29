@@ -54,8 +54,34 @@ export default function App() {
         ((target.tagName === 'INPUT' && (target.type === 'text' || target.type === 'search')) ||
           target.tagName === 'TEXTAREA')
       ) {
-        if (target.type === 'email' || target.type === 'password' || target.type === 'url') return;
-        if (target.dataset.noUppercase === 'true') return;
+        // Ignora campos de senha, email, url ou marcados explicitamente para não converter
+        const inputType = (target.getAttribute('type') || target.type || '').toLowerCase();
+        const inputId = (target.id || '').toLowerCase();
+        const inputName = (target.name || '').toLowerCase();
+        const inputAutocomplete = (target.autocomplete || target.getAttribute('autocomplete') || '').toLowerCase();
+        const inputClass = (target.className || '').toLowerCase();
+
+        if (
+          target.type === 'email' ||
+          target.type === 'password' ||
+          target.type === 'url' ||
+          inputType === 'password' ||
+          inputType === 'email' ||
+          inputType === 'url' ||
+          target.dataset.noUppercase === 'true' ||
+          target.getAttribute('data-no-uppercase') === 'true' ||
+          inputId.includes('password') ||
+          inputId.includes('senha') ||
+          inputId.includes('pass') ||
+          inputId.includes('email') ||
+          inputName.includes('password') ||
+          inputName.includes('senha') ||
+          inputName.includes('pass') ||
+          inputName.includes('email') ||
+          inputAutocomplete.includes('password') ||
+          inputAutocomplete.includes('email') ||
+          inputClass.includes('no-uppercase')
+        ) return;
 
         const upper = target.value.toUpperCase();
         if (target.value !== upper) {
