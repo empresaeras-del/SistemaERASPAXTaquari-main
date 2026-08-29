@@ -461,6 +461,10 @@ export const AssociadosPage: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Previne que submissão de formulários internos ou cliques em botões internos de abas como Mensalidades disparem o salvamento do Associado
+    if (e.target !== e.currentTarget && (e.target as HTMLElement)?.id !== 'associado-form') {
+      return;
+    }
     if (!state.isOnline) {
       toast.error("Operação bloqueada no Modo de Visualização (Offline).");
       return;
@@ -2324,7 +2328,7 @@ export const AssociadosPage: React.FC = () => {
                       )}
                     </div>
                   ) : activeTab === "mensalidades" ? (
-                    <MensalidadesTab associado={editingAssociado} onSuccess={() => setActiveTab("documentos")} />
+                    <MensalidadesTab associado={editingAssociado} onSuccess={!isEditingMode ? () => setActiveTab("documentos") : undefined} />
                   ) : activeTab === "requisicoes" ? (
                     <AssociadoRequisicoesTab associado={editingAssociado} />
                   ) : activeTab === "atendimentos" ? (

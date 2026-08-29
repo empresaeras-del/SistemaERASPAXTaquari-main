@@ -347,6 +347,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
             />
             {canvasSearch && (
               <button
+                type="button"
                 onClick={() => setCanvasSearch('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-subtle hover:text-text-base"
               >
@@ -363,6 +364,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
               Níveis:
             </span>
             <button
+              type="button"
               onClick={() => setNivelExpansao(1)}
               className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-bg-subtle text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors border border-border-default/50"
               title="Mostrar apenas as Receitas Pai"
@@ -370,6 +372,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
               1 · Receitas
             </button>
             <button
+              type="button"
               onClick={() => setNivelExpansao(2)}
               className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#3B82F6]/15 text-[#3B82F6] hover:bg-[#3B82F6]/25 transition-colors border border-[#3B82F6]/30 font-bold"
               title="Expandir Todas as Parcelas"
@@ -377,6 +380,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
               2 · Parcelas
             </button>
             <button
+              type="button"
               onClick={recolherTudo}
               className="p-1 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
               title="Recolher Tudo"
@@ -402,6 +406,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
               {Math.round(zoom * 100)}%
             </span>
             <button
+              type="button"
               onClick={zoomIn}
               className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
               title="Aumentar Zoom (+)"
@@ -409,6 +414,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
             <button
+              type="button"
               onClick={zoomOut}
               className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
               title="Diminuir Zoom (-)"
@@ -416,6 +422,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
             <button
+              type="button"
               onClick={fitView}
               className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
               title="Enquadrar na Tela"
@@ -423,6 +430,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
               <Layers className="w-3.5 h-3.5" />
             </button>
             <button
+              type="button"
               onClick={resetView}
               className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
               title="Resetar Posição (100%)"
@@ -431,6 +439,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
             </button>
             <div className="h-4 w-px bg-border-default/80 mx-1" />
             <button
+              type="button"
               onClick={toggleFullscreen}
               className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
               title={isFullscreen ? "Sair da Tela Cheia" : "Modo Tela Cheia"}
@@ -494,6 +503,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
 
                 {/* Botão de Toggle da Raiz */}
                 <button
+                  type="button"
                   onClick={(e) => toggleNode('root', e)}
                   className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[#3B82F6] border border-[#3B82F6]/20 transition-transform"
                   title={expandedNodes['root'] ? "Recolher Receitas" : "Expandir Receitas"}
@@ -841,6 +851,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedNode(null)}
                 className="p-1 rounded-lg text-text-subtle hover:text-white hover:bg-white/10 transition-colors"
               >
@@ -1084,6 +1095,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
 
           <div className="pt-4 border-t border-white/10 text-center">
             <button
+              type="button"
               onClick={() => setSelectedNode(null)}
               className="text-xs text-text-subtle hover:text-white font-medium"
             >

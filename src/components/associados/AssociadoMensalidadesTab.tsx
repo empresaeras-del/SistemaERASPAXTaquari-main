@@ -521,6 +521,7 @@ export const AssociadoMensalidadesTab: React.FC<{
   // Verificar se há lote de caixa aberto antes de efetivar baixa
   const handleVerificarLoteBaixa = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!parcelaSelecionada) return;
     setCheckingLote(true);
     try {
@@ -619,6 +620,7 @@ export const AssociadoMensalidadesTab: React.FC<{
   // Salvar Edição de Receita Pai
   const handleSalvarEdicaoReceita = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!editingReceita) return;
     if (!isAdmin) {
       toast.error('Apenas Administradores e Super Admins podem editar receitas.');
@@ -674,6 +676,7 @@ export const AssociadoMensalidadesTab: React.FC<{
   // Salvar Edição de Parcela
   const handleSalvarEdicaoParcela = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!editingParcela) return;
     if (!isAdmin) {
       toast.error('Apenas Administradores e Super Admins podem editar parcelas.');
@@ -820,7 +823,14 @@ export const AssociadoMensalidadesTab: React.FC<{
   });
 
   return (
-    <div className="space-y-6">
+    <div
+      className="space-y-6"
+      onClick={(e) => e.stopPropagation()}
+      onSubmit={(e) => {
+        // Previne que submissões internas alcancem o form mestre do associado
+        e.stopPropagation();
+      }}
+    >
       {/* HEADER DA ABA */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border-default pb-4">
         <div>
@@ -1156,7 +1166,11 @@ export const AssociadoMensalidadesTab: React.FC<{
                 <Edit3 className="w-5 h-5 text-blue-400" />
                 Editar Receita Pai
               </h3>
-              <button onClick={() => setEditingReceita(null)} className="text-text-subtle hover:text-text-base">
+              <button
+                type="button"
+                onClick={() => setEditingReceita(null)}
+                className="text-text-subtle hover:text-text-base"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1313,7 +1327,11 @@ export const AssociadoMensalidadesTab: React.FC<{
                 <Edit3 className="w-5 h-5 text-blue-400" />
                 Editar Parcela
               </h3>
-              <button onClick={() => setEditingParcela(null)} className="text-text-subtle hover:text-text-base">
+              <button
+                type="button"
+                onClick={() => setEditingParcela(null)}
+                className="text-text-subtle hover:text-text-base"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1533,7 +1551,11 @@ export const AssociadoMensalidadesTab: React.FC<{
                     <DollarSign className="w-5 h-5 text-emerald-500" />
                     Registrar Recebimento
                   </h3>
-                  <button onClick={() => setShowBaixaModal(false)} className="text-text-subtle hover:text-text-base">
+                  <button
+                    type="button"
+                    onClick={() => setShowBaixaModal(false)}
+                    className="text-text-subtle hover:text-text-base"
+                  >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -1648,8 +1670,12 @@ export const AssociadoMensalidadesTab: React.FC<{
                       <p className="text-[11px] text-rose-400 font-semibold">Nenhum Lote de Caixa Aberto Encontrado</p>
                     </div>
                   </div>
-                  <button onClick={() => setShowBaixaModal(false)} className="text-text-subtle hover:text-text-base">
-                    <X className="w-4 h-4" />
+                  <button
+                    type="button"
+                    onClick={() => setShowBaixaModal(false)}
+                    className="text-text-subtle hover:text-text-base"
+                  >
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -1690,8 +1716,12 @@ export const AssociadoMensalidadesTab: React.FC<{
                     <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                     Confirmar Registro no Caixa
                   </h3>
-                  <button onClick={() => setShowBaixaModal(false)} className="text-text-subtle hover:text-text-base">
-                    <X className="w-4 h-4" />
+                  <button
+                    type="button"
+                    onClick={() => setShowBaixaModal(false)}
+                    className="text-text-subtle hover:text-text-base"
+                  >
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
 
