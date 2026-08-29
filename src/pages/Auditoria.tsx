@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { usePrintPreview } from '../hooks/usePrintPreview';
 import { getLogsAuditoria, LogAuditoria } from '../services/auditoriaService';
-import { getEmpresaById, Empresa } from '../services/empresasService';
+import { getEmpresaById, getEmpresas, Empresa } from '../services/empresasService';
+import { getUsuarios, UsuarioCadastro } from '../services/usuariosService';
 import { fetchImageWithDimensions } from '../utils/imageUtils';
 import { 
   ShieldAlert, 
@@ -33,7 +34,9 @@ import {
   Tag,
   Sparkles,
   ArrowLeft,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Filter,
+  Building2
 } from 'lucide-react';
 import { format, isToday, isWithinInterval, subDays, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -179,6 +182,23 @@ const getActionConfig = (acao: string): ActionConfig => {
   };
 };
 
+const getUserRoleBadge = (nivel?: string) => {
+  switch (nivel) {
+    case 'super_admin':
+      return { label: 'Super Admin', bg: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30' };
+    case 'admin':
+      return { label: 'Administrador', bg: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30' };
+    case 'gerente':
+      return { label: 'Gerente', bg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' };
+    case 'funcionario':
+      return { label: 'Funcionário', bg: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30' };
+    case 'sistema':
+      return { label: 'Sistema', bg: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30' };
+    default:
+      return { label: 'Operador', bg: 'bg-gray-500/15 text-gray-600 dark:text-gray-400 border-gray-500/30' };
+  }
+};
+
 // Format key names for human display
 const formatKeyName = (key: string): string => {
   const map: Record<string, string> = {
@@ -243,7 +263,7 @@ const formatDetalhesParaTexto = (detalhes: any): string => {
   if (detalhes.observacao) parts.push(`Obs: ${detalhes.observacao}`);
 
   Object.entries(detalhes).forEach(([k, v]) => {
-    if (['justificativa', 'motivo', 'observacao', 'dados_anteriores', 'dados_novos'].includes(k)) return;
+    if (['justificativa', 'motivo', 'observacao', 'dados_anteriores', 'dados_novos', 'usuario', 'usuario_email'].includes(k)) return;
     if (v !== undefined && v !== null) {
       if (typeof v === 'number' && k.toLowerCase().includes('valor')) {
         parts.push(`${formatKeyName(k)}: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)}`);
@@ -368,7 +388,7 @@ const LogDetailsViewer: React.FC<{ detalhes: any; acao: string }> = ({ detalhes 
 
   const standardKeys = isObject
     ? Object.keys(detalhes).filter(
-        k => !['dados_anteriores', 'dados_novos', 'justificativa', 'motivo', 'observacao'].includes(k)
+        k => !['dados_anteriores', 'dados_novos', 'justificativa', 'motivo', 'observacao', 'usuario', 'usuario_email'].includes(k)
       )
     : [];
 
@@ -458,9 +478,12 @@ export const AuditoriaPage: React.FC = () => {
   const [logs, setLogs] = useState<LogAuditoria[]>([]);
   const [loading, setLoading] = useState(true);
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [usuariosList, setUsuariosList] = useState<UsuarioCadastro[]>([]);
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
+  const [usuarioFiltro, setUsuarioFiltro] = useState<string>('todos');
   const [isPreviewPrint, setIsPreviewPrint] = useState(false);
   usePrintPreview(isPreviewPrint);
   const [dataInicio, setDataInicio] = useState('');
@@ -471,66 +494,22 @@ export const AuditoriaPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      if (state.empresaSelecionada) {
-        const [logsData, empData] = await Promise.all([
-          getLogsAuditoria(state.isOnline, state.empresaSelecionada),
-          getEmpresaById(state.empresaSelecionada, state.isOnline)
-        ]);
-        
-        setEmpresa(empData);
-
-        // Fallback mock if completely empty
-        if (logsData.length === 0) {
-          setLogs([
-            { 
-              id: '1', 
-              tenant_id: state.empresaSelecionada, 
-              usuario_id: '1', 
-              acao: 'Salvar Plano', 
-              detalhes: { id: 'pln-1', nome: 'Plano Familiar Master', valor: 85.00 }, 
-              created_at: new Date().toISOString(), 
-              usuarios: { nome: 'Super Admin', email: 'superadmin@eras.com' } 
-            },
-            { 
-              id: '2', 
-              tenant_id: state.empresaSelecionada, 
-              usuario_id: '1', 
-              acao: 'Gerar Backup Completo do Sistema', 
-              detalhes: { file: 'eras_backup_completo_2026-08-19.json', tabelas_incluidas: 22, registros_total: 412 }, 
-              created_at: new Date(Date.now() - 3600000).toISOString(), 
-              usuarios: { nome: 'Super Admin', email: 'superadmin@eras.com' } 
-            },
-            { 
-              id: '3', 
-              tenant_id: state.empresaSelecionada, 
-              usuario_id: '1', 
-              acao: 'Excluir Associado (Soft Delete)', 
-              detalhes: { id: 'assoc-1', justificativa: 'Cancelamento a pedido do titular' }, 
-              created_at: new Date(Date.now() - 86400000).toISOString(), 
-              usuarios: { nome: 'Super Admin', email: 'superadmin@eras.com' } 
-            },
-            { 
-              id: '4', 
-              tenant_id: state.empresaSelecionada, 
-              usuario_id: '1', 
-              acao: 'Salvar Empresa', 
-              detalhes: { 
-                dados_anteriores: { nome_fantasia: 'PAX Taquari Antiga' }, 
-                dados_novos: { nome_fantasia: 'PAX e Funerária Taquari' } 
-              }, 
-              created_at: new Date(Date.now() - 172800000).toISOString(), 
-              usuarios: { nome: 'Super Admin', email: 'superadmin@eras.com' } 
-            },
-          ]);
-        } else {
-          setLogs(logsData);
-        }
-      } else {
-        setLogs([]);
-        setEmpresa(null);
-      }
+      const [logsData, empData, empsList, usersData] = await Promise.all([
+        getLogsAuditoria(state.isOnline, state.empresaSelecionada || 'all'),
+        state.empresaSelecionada && state.empresaSelecionada !== 'all'
+          ? getEmpresaById(state.empresaSelecionada, state.isOnline)
+          : Promise.resolve(null),
+        getEmpresas(state.isOnline),
+        getUsuarios(state.isOnline, 'all')
+      ]);
+      
+      setEmpresa(empData);
+      setEmpresas(empsList);
+      setUsuariosList(usersData);
+      setLogs(logsData);
     } catch (error) {
-      console.error(error);
+      console.error('Erro ao carregar auditoria:', error);
+      toast.error('Não foi possível carregar o histórico de auditoria.');
     } finally {
       setLoading(false);
     }
@@ -585,9 +564,20 @@ export const AuditoriaPage: React.FC = () => {
         matchTipo = config.type === tipoAcaoFiltro;
       }
 
-      return matchSearch && matchDate && matchModulo && matchTipo;
+      let matchUsuario = true;
+      if (usuarioFiltro !== 'todos') {
+        if (usuarioFiltro === 'sistema') {
+          matchUsuario = log.usuario_id === 'system' || !log.usuario_id || (Boolean(log.usuarios?.nome) && log.usuarios!.nome.toLowerCase().includes('sistema'));
+        } else {
+          matchUsuario = log.usuario_id === usuarioFiltro || 
+            (Boolean(log.usuarios?.email) && log.usuarios!.email.toLowerCase() === usuarioFiltro.toLowerCase()) ||
+            (Boolean(log.usuarios?.nome) && log.usuarios!.nome.toLowerCase() === usuarioFiltro.toLowerCase());
+        }
+      }
+
+      return matchSearch && matchDate && matchModulo && matchTipo && matchUsuario;
     });
-  }, [logs, searchTerm, dataInicio, dataFim, moduloFiltro, tipoAcaoFiltro]);
+  }, [logs, searchTerm, dataInicio, dataFim, moduloFiltro, tipoAcaoFiltro, usuarioFiltro]);
 
   // Quick period helpers
   const handleSetQuickPeriod = (days: number | 'hoje' | 'limpar') => {
@@ -616,16 +606,20 @@ export const AuditoriaPage: React.FC = () => {
     }
 
     try {
-      const headers = ['ID', 'Data/Hora', 'Ação', 'Módulo', 'Usuário', 'E-mail', 'Detalhes (Texto)', 'JSON Bruto'];
+      const headers = ['ID', 'Data/Hora', 'Ação', 'Módulo', 'Usuário', 'Nível', 'E-mail', 'Empresa / Unidade', 'Detalhes (Texto)', 'JSON Bruto'];
       const rows = filteredLogs.map(log => {
         const config = getActionConfig(log.acao);
+        const role = getUserRoleBadge(log.usuarios?.nivel).label;
+        const empName = empresas.find(e => e.id === log.tenant_id)?.nome_fantasia || log.tenant_id || 'Padrão';
         return [
           `"${log.id}"`,
           `"${format(new Date(log.created_at), 'dd/MM/yyyy HH:mm:ss')}"`,
           `"${log.acao.replace(/"/g, '""')}"`,
           `"${config.categoryLabel.replace(/"/g, '""')}"`,
           `"${(log.usuarios?.nome || 'Desconhecido').replace(/"/g, '""')}"`,
+          `"${role}"`,
           `"${(log.usuarios?.email || 'N/A').replace(/"/g, '""')}"`,
+          `"${empName.replace(/"/g, '""')}"`,
           `"${formatDetalhesParaTexto(log.detalhes).replace(/"/g, '""')}"`,
           `"${JSON.stringify(log.detalhes || {}).replace(/"/g, '""')}"`
         ];
@@ -721,8 +715,16 @@ export const AuditoriaPage: React.FC = () => {
 
       const filtroModuloTexto = moduloFiltro === 'todos' ? 'Todos os Módulos' : moduloFiltro.toUpperCase();
       const filtroTipoTexto = tipoAcaoFiltro === 'todos' ? 'Todos os Tipos' : tipoAcaoFiltro.toUpperCase();
+      
+      let filtroUsuarioTexto = 'Todos os Operadores';
+      if (usuarioFiltro === 'sistema') {
+        filtroUsuarioTexto = 'Sistema (Automações)';
+      } else if (usuarioFiltro !== 'todos') {
+        const u = usuariosList.find(user => user.id === usuarioFiltro || user.email === usuarioFiltro);
+        filtroUsuarioTexto = u ? `${u.nome} (${u.email})` : usuarioFiltro;
+      }
 
-      doc.text(`Período: ${periodoTexto}  |  Módulo: ${filtroModuloTexto}  |  Tipo: ${filtroTipoTexto}`, 18, currentY + 11);
+      doc.text(`Período: ${periodoTexto}  |  Módulo: ${filtroModuloTexto}  |  Operador: ${filtroUsuarioTexto}`, 18, currentY + 11);
       doc.text(`Emissão: ${format(new Date(), 'dd/MM/yyyy HH:mm:ss')}  |  Total: ${filteredLogs.length} registros`, pageWidth - 18, currentY + 11, { align: 'right' });
 
       currentY += 18;
@@ -730,9 +732,10 @@ export const AuditoriaPage: React.FC = () => {
       // Tabela com autoTable
       const tableData = filteredLogs.map((log, index) => {
         const config = getActionConfig(log.acao);
+        const role = getUserRoleBadge(log.usuarios?.nivel).label;
         const dataFormatada = format(new Date(log.created_at), 'dd/MM/yyyy HH:mm:ss');
         const moduloFormatado = `${config.categoryLabel}\n[${config.badgeLabel}]`;
-        const usuarioFormatado = `${log.usuarios?.nome || 'Sistema'}\n(${log.usuarios?.email || 'N/A'})`;
+        const usuarioFormatado = `${log.usuarios?.nome || 'Sistema'}\n(${role})\n${log.usuarios?.email || 'N/A'}`;
         const detalhesTexto = formatDetalhesParaTexto(log.detalhes);
 
         return [
@@ -858,7 +861,9 @@ export const AuditoriaPage: React.FC = () => {
   ).length;
   const usuariosUnicos = new Set(logs.map(log => log.usuario_id || log.usuarios?.email || 'anon')).size;
 
-  const hasActiveFilters = Boolean(searchTerm || dataInicio || dataFim || moduloFiltro !== 'todos' || tipoAcaoFiltro !== 'todos');
+  const hasActiveFilters = Boolean(
+    searchTerm || dataInicio || dataFim || moduloFiltro !== 'todos' || tipoAcaoFiltro !== 'todos' || usuarioFiltro !== 'todos'
+  );
 
   const clearAllFilters = () => {
     setSearchTerm('');
@@ -866,11 +871,11 @@ export const AuditoriaPage: React.FC = () => {
     setDataFim('');
     setModuloFiltro('todos');
     setTipoAcaoFiltro('todos');
+    setUsuarioFiltro('todos');
   };
 
   const handleEntrarModoImpressao = () => {
     setIsPreviewPrint(true);
-    // Também gera ou disponibiliza o PDF
     handleGerarRelatorioPDF();
   };
 
@@ -931,9 +936,16 @@ export const AuditoriaPage: React.FC = () => {
                 <ShieldAlert className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold tracking-tight text-text-base">Ata de Ocorrências</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-bold tracking-tight text-text-base">Ata de Ocorrências</h2>
+                  {state.user?.nivel === 'super_admin' && (
+                    <span className="px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 text-xs font-bold uppercase tracking-wider">
+                      Visão Global
+                    </span>
+                  )}
+                </div>
                 <p className="text-text-subtle text-xs sm:text-sm mt-0.5">
-                  Logs de auditoria e rastreabilidade detalhada de eventos do sistema.
+                  Logs de auditoria e rastreabilidade detalhada de eventos e ações de usuários.
                 </p>
               </div>
             </div>
@@ -1047,7 +1059,7 @@ export const AuditoriaPage: React.FC = () => {
             </div>
             <div className="relative z-10">
               <h3 className="text-3xl font-bold text-text-base tracking-tight">{usuariosUnicos}</h3>
-              <p className="text-xs font-medium text-text-subtle mt-1">Usuários Ativos no Período</p>
+              <p className="text-xs font-medium text-text-subtle mt-1">Operadores no Período</p>
             </div>
           </div>
         </div>
@@ -1094,9 +1106,9 @@ export const AuditoriaPage: React.FC = () => {
               </span>
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase text-slate-500 block">Tipo de Ação</span>
+              <span className="text-[10px] font-bold uppercase text-slate-500 block">Operador / Usuário</span>
               <span className="font-semibold text-slate-800">
-                {tipoAcaoFiltro === 'todos' ? 'Todos os Tipos' : tipoAcaoFiltro.toUpperCase()}
+                {usuarioFiltro === 'todos' ? 'Todos os Usuários' : (usuariosList.find(u => u.id === usuarioFiltro)?.nome || usuarioFiltro)}
               </span>
             </div>
             <div>
@@ -1121,6 +1133,7 @@ export const AuditoriaPage: React.FC = () => {
               <tbody>
                 {filteredLogs.map((log, idx) => {
                   const config = getActionConfig(log.acao);
+                  const role = getUserRoleBadge(log.usuarios?.nivel).label;
                   return (
                     <tr key={log.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                       <td className="p-2 border border-slate-300 text-center font-mono text-slate-500">{idx + 1}</td>
@@ -1135,7 +1148,7 @@ export const AuditoriaPage: React.FC = () => {
                       </td>
                       <td className="p-2 border border-slate-300 text-slate-700">
                         <div className="font-semibold">{log.usuarios?.nome || 'Sistema'}</div>
-                        <div className="text-[10px] text-slate-500">{log.usuarios?.email || 'N/A'}</div>
+                        <div className="text-[10px] text-slate-500">{role} • {log.usuarios?.email || 'N/A'}</div>
                       </td>
                       <td className="p-2 border border-slate-300 text-slate-700 text-[11px] leading-relaxed">
                         {formatDetalhesParaTexto(log.detalhes)}
@@ -1159,7 +1172,7 @@ export const AuditoriaPage: React.FC = () => {
           <div className="p-4 sm:p-5 border-b border-border-default bg-bg-surface space-y-4 shrink-0">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-end">
               {/* Search Input */}
-              <div className="md:col-span-5 relative">
+              <div className="md:col-span-4 relative">
                 <label className="block text-[11px] font-bold text-text-subtle mb-1 uppercase tracking-wider">
                   Busca Livre
                 </label>
@@ -1167,7 +1180,7 @@ export const AuditoriaPage: React.FC = () => {
                   <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-subtle" />
                   <input 
                     type="text" 
-                    placeholder="Buscar ação, usuário, ID, campos..." 
+                    placeholder="Buscar ação, ID, campos..." 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm border border-border-default rounded-xl focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 bg-bg-subtle/50 text-text-base transition-all"
@@ -1182,32 +1195,67 @@ export const AuditoriaPage: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {/* User / Operator Selector */}
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-bold text-text-subtle mb-1 uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <User className="w-3.5 h-3.5 text-blue-500" /> Operador / Usuário
+                  </span>
+                  {usuarioFiltro !== 'todos' && (
+                    <button
+                      onClick={() => setUsuarioFiltro('todos')}
+                      className="text-blue-500 hover:text-blue-600 text-[10px] lowercase font-normal"
+                    >
+                      ver todos
+                    </button>
+                  )}
+                </label>
+                <select
+                  value={usuarioFiltro}
+                  onChange={(e) => setUsuarioFiltro(e.target.value)}
+                  className="w-full px-3 py-2 text-xs sm:text-sm border border-border-default rounded-xl focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 bg-bg-subtle/50 text-text-base transition-all font-medium"
+                >
+                  <option value="todos">Todos os Operadores ({usuariosList.length + 1})</option>
+                  <option value="sistema">🤖 Sistema / Ações Automáticas</option>
+                  <optgroup label="Usuários Cadastrados">
+                    {usuariosList.map((u) => {
+                      const role = getUserRoleBadge(u.nivel).label;
+                      return (
+                        <option key={u.id} value={u.id}>
+                          {u.nome} ({role} - {u.email})
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                </select>
+              </div>
               
               {/* Module Selector */}
-              <div className="md:col-span-3">
+              <div className="md:col-span-2">
                 <label className="block text-[11px] font-bold text-text-subtle mb-1 uppercase tracking-wider">
-                  Módulo do Sistema
+                  Módulo
                 </label>
                 <select
                   value={moduloFiltro}
                   onChange={(e) => setModuloFiltro(e.target.value)}
                   className="w-full px-3 py-2 text-xs sm:text-sm border border-border-default rounded-xl focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 bg-bg-subtle/50 text-text-base transition-all"
                 >
-                  <option value="todos">Todos os Módulos</option>
-                  <option value="contrato">Contratos / Associados</option>
-                  <option value="financeiro">Financeiro / Contas</option>
-                  <option value="caixa">Caixas / Lotes</option>
-                  <option value="remessa">Faturamento / Remessas</option>
-                  <option value="plano">Planos Pax</option>
-                  <option value="backup">Backup & Restauração</option>
-                  <option value="empresa">Empresas & Unidades</option>
-                  <option value="usuario">Usuários & Acesso</option>
-                  <option value="atendimento">Atendimentos / Guias</option>
+                  <option value="todos">Todos</option>
+                  <option value="contrato">Contratos</option>
+                  <option value="financeiro">Financeiro</option>
+                  <option value="caixa">Caixas</option>
+                  <option value="remessa">Remessas</option>
+                  <option value="plano">Planos</option>
+                  <option value="backup">Backup</option>
+                  <option value="empresa">Empresas</option>
+                  <option value="usuario">Usuários</option>
+                  <option value="atendimento">Guias</option>
                 </select>
               </div>
               
               {/* Date Range */}
-              <div className="md:col-span-4 flex items-center gap-2">
+              <div className="md:col-span-3 flex items-center gap-2">
                 <div className="flex-1">
                   <label className="block text-[11px] font-bold text-text-subtle mb-1 uppercase tracking-wider">
                     Início
@@ -1216,7 +1264,7 @@ export const AuditoriaPage: React.FC = () => {
                     type="date"
                     value={dataInicio}
                     onChange={(e) => setDataInicio(e.target.value)}
-                    className="w-full px-2.5 py-2 text-xs border border-border-default rounded-xl focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 bg-bg-subtle/50 text-text-base"
+                    className="w-full px-2 py-2 text-xs border border-border-default rounded-xl focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 bg-bg-subtle/50 text-text-base"
                   />
                 </div>
                 <div className="flex-1">
@@ -1227,7 +1275,7 @@ export const AuditoriaPage: React.FC = () => {
                     type="date"
                     value={dataFim}
                     onChange={(e) => setDataFim(e.target.value)}
-                    className="w-full px-2.5 py-2 text-xs border border-border-default rounded-xl focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 bg-bg-subtle/50 text-text-base"
+                    className="w-full px-2 py-2 text-xs border border-border-default rounded-xl focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 bg-bg-subtle/50 text-text-base"
                   />
                 </div>
               </div>
@@ -1336,9 +1384,9 @@ export const AuditoriaPage: React.FC = () => {
                   <button 
                     type="button"
                     onClick={clearAllFilters}
-                    className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 text-xs font-semibold flex items-center gap-1 ml-1"
+                    className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 text-xs font-semibold flex items-center gap-1 ml-1 transition-colors"
                   >
-                    <X className="w-3 h-3" /> Limpar
+                    <X className="w-3.5 h-3.5" /> Limpar Filtros
                   </button>
                 )}
               </div>
@@ -1347,11 +1395,17 @@ export const AuditoriaPage: React.FC = () => {
 
           {/* Results Counter Bar */}
           <div className="px-5 py-2.5 bg-bg-surface/50 border-b border-border-default flex items-center justify-between text-xs text-text-subtle">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-text-base">
                 Exibindo {filteredLogs.length} de {logs.length} ocorrências
               </span>
-              {hasActiveFilters && (
+              {usuarioFiltro !== 'todos' && (
+                <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px] font-semibold flex items-center gap-1">
+                  <User className="w-3 h-3" />
+                  Operador: {usuariosList.find(u => u.id === usuarioFiltro)?.nome || (usuarioFiltro === 'sistema' ? 'Sistema' : usuarioFiltro)}
+                </span>
+              )}
+              {hasActiveFilters && usuarioFiltro === 'todos' && (
                 <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px] font-medium">
                   Filtros ativos
                 </span>
@@ -1372,12 +1426,6 @@ export const AuditoriaPage: React.FC = () => {
                 <p className="font-medium text-sm text-text-base">Carregando logs de auditoria...</p>
                 <p className="text-xs text-text-subtle">Consultando registros e histórico de operações.</p>
               </div>
-            ) : !state.empresaSelecionada ? (
-              <div className="text-center py-16 text-text-subtle flex flex-col items-center justify-center space-y-2">
-                <ShieldAlert className="w-10 h-10 text-amber-500 mb-1" />
-                <p className="font-semibold text-text-base">Nenhuma empresa selecionada</p>
-                <p className="text-xs text-text-subtle">Selecione uma empresa no topo para visualizar os registros de auditoria correspondentes.</p>
-              </div>
             ) : filteredLogs.length === 0 ? (
               <div className="text-center py-16 text-text-subtle flex flex-col items-center justify-center space-y-3">
                 <div className="p-4 rounded-2xl bg-bg-surface border border-border-default text-text-subtle">
@@ -1385,7 +1433,7 @@ export const AuditoriaPage: React.FC = () => {
                 </div>
                 <p className="font-semibold text-text-base">Nenhum registro encontrado</p>
                 <p className="text-xs text-text-subtle max-w-sm">
-                  Não encontramos ocorrências para os filtros informados. Tente ajustar os termos de busca ou o período selecionado.
+                  Não encontramos ocorrências para os filtros informados. Tente ajustar os termos de busca, o operador ou o período selecionado.
                 </p>
                 {hasActiveFilters && (
                   <button
@@ -1404,6 +1452,8 @@ export const AuditoriaPage: React.FC = () => {
                   const IconComponent = config.icon;
                   const dateObj = new Date(log.created_at);
                   const timeAgo = formatDistanceToNow(dateObj, { addSuffix: true, locale: ptBR });
+                  const roleBadge = getUserRoleBadge(log.usuarios?.nivel);
+                  const empName = empresas.find(e => e.id === log.tenant_id)?.nome_fantasia;
 
                   return (
                     <div key={log.id} className="relative pl-6 sm:pl-8 group">
@@ -1455,23 +1505,44 @@ export const AuditoriaPage: React.FC = () => {
                         </div>
                         
                         {/* User Info Bar */}
-                        <div className="flex items-center justify-between gap-3 text-xs text-text-muted bg-bg-subtle/50 p-2.5 sm:p-3 rounded-xl border border-border-default/70 mb-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-text-muted bg-bg-subtle/50 p-2.5 sm:p-3 rounded-xl border border-border-default/70 mb-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-full bg-blue-600/10 border border-blue-600/20 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0">
-                              {log.usuarios?.nome ? log.usuarios.nome.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                              {log.usuarios?.nome ? log.usuarios.nome.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
                             </div>
                             <div>
-                              <p className="font-semibold text-text-base">
-                                {log.usuarios?.nome || 'Operador / Sistema'}
-                              </p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setUsuarioFiltro(log.usuario_id || log.usuarios?.email || 'todos')}
+                                  className="font-semibold text-text-base hover:text-blue-500 transition-colors text-left flex items-center gap-1.5 group/user"
+                                  title="Clique para filtrar apenas as ações deste operador"
+                                >
+                                  <span>{log.usuarios?.nome || log.usuario_nome || 'Operador / Sistema'}</span>
+                                  <span className="text-[10px] text-blue-500 opacity-0 group-hover/user:opacity-100 transition-opacity font-normal underline">
+                                    (filtrar)
+                                  </span>
+                                </button>
+                                <span className={`px-2 py-0.2 rounded-full text-[10px] font-bold uppercase tracking-wider border ${roleBadge.bg}`}>
+                                  {roleBadge.label}
+                                </span>
+                              </div>
                               <p className="text-[11px] text-text-subtle">
-                                {log.usuarios?.email || 'Ação interna do sistema'}
+                                {log.usuarios?.email || 'Ação registrada no sistema'}
                               </p>
                             </div>
                           </div>
 
-                          <div className="text-[11px] text-text-subtle font-mono px-2 py-1 rounded bg-bg-surface border border-border-default/60 hidden sm:block">
-                            ID: {log.id.slice(0, 8)}
+                          <div className="flex items-center gap-2 flex-wrap shrink-0">
+                            {state.empresaSelecionada === 'all' && empName && (
+                              <span className="text-[10px] font-medium text-text-subtle bg-bg-surface px-2 py-0.5 rounded border border-border-default flex items-center gap-1">
+                                <Building2 className="w-3 h-3 text-blue-500" />
+                                {empName}
+                              </span>
+                            )}
+                            <div className="text-[11px] text-text-subtle font-mono px-2 py-0.5 rounded bg-bg-surface border border-border-default/60">
+                              ID: {log.id.slice(0, 8)}
+                            </div>
                           </div>
                         </div>
                         
