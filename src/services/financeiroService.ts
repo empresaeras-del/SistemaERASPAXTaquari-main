@@ -279,6 +279,98 @@ export const salvarReceita = async (isOnline: boolean, receita: Receita, parcela
   await registrarAuditoria('Salvar Receita', { id: receitaId, descricao: sanitizedReceita.descricao });
 };
 
+export const atualizarReceita = async (isOnline: boolean, receita: Partial<Receita> & { id: string }): Promise<void> => {
+  let existente = await getFromIDB<Receita>('receitas', receita.id);
+  if (!existente && isOnline) {
+    try {
+      const { data } = await supabase.from('receitas').select('*').eq('id', receita.id).maybeSingle();
+      if (data) existente = data;
+    } catch (e) {
+      console.warn('Erro ao buscar receita existente para atualizar:', e);
+    }
+  }
+
+  const mesclada: Receita = {
+    ...(existente || {} as any),
+    ...receita,
+    id: receita.id
+  };
+
+  const sanitized = sanitizeReceitaForSupabase(mesclada);
+
+  if (isOnline) {
+    try {
+      const { error } = await supabase.from('receitas').upsert(sanitized);
+      if (error) {
+        console.error('Supabase update receita error:', error);
+        throw new Error(error.message);
+      }
+    } catch (e: any) {
+      console.warn('Supabase update receita threw, adding to sync queue:', e);
+      await addToSyncQueue({
+        storeName: 'receitas',
+        action: 'update',
+        data: sanitized
+      });
+    }
+  } else {
+    await addToSyncQueue({
+      storeName: 'receitas',
+      action: 'update',
+      data: sanitized
+    });
+  }
+
+  await saveToIDB('receitas', { ...mesclada, ...sanitized });
+  await registrarAuditoria('Atualizar Receita', { id: receita.id, descricao: sanitized.descricao });
+};
+
+export const atualizarParcelaReceber = async (isOnline: boolean, parcela: Partial<ParcelaReceber> & { id: string }): Promise<void> => {
+  let existente = await getFromIDB<ParcelaReceber>('parcelas_receber', parcela.id);
+  if (!existente && isOnline) {
+    try {
+      const { data } = await supabase.from('parcelas_receber').select('*').eq('id', parcela.id).maybeSingle();
+      if (data) existente = data;
+    } catch (e) {
+      console.warn('Erro ao buscar parcela existente para atualizar:', e);
+    }
+  }
+
+  const mesclada: ParcelaReceber = {
+    ...(existente || {} as any),
+    ...parcela,
+    id: parcela.id
+  };
+
+  const sanitized = sanitizeParcelaReceberForSupabase(mesclada);
+
+  if (isOnline) {
+    try {
+      const { error } = await supabase.from('parcelas_receber').upsert(sanitized);
+      if (error) {
+        console.error('Supabase update parcela_receber error:', error);
+        throw new Error(error.message);
+      }
+    } catch (e: any) {
+      console.warn('Supabase update parcela_receber threw, adding to sync queue:', e);
+      await addToSyncQueue({
+        storeName: 'parcelas_receber',
+        action: 'update',
+        data: sanitized
+      });
+    }
+  } else {
+    await addToSyncQueue({
+      storeName: 'parcelas_receber',
+      action: 'update',
+      data: sanitized
+    });
+  }
+
+  await saveToIDB('parcelas_receber', { ...mesclada, ...sanitized });
+  await registrarAuditoria('Atualizar Parcela Receber', { id: parcela.id, numero: sanitized.numero_parcela, valor: sanitized.valor });
+};
+
 export const getParcelasReceber = async (isOnline: boolean, tenantId: string): Promise<ParcelaReceber[]> => {
   let parcelas: ParcelaReceber[] = [];
   const localParcelas = await getAllFromIDB<ParcelaReceber>('parcelas_receber');
