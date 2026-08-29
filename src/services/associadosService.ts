@@ -19,6 +19,13 @@ export interface Associado {
   endereco_bairro?: string;
   endereco_cidade?: string;
   endereco_cep?: string;
+  endereco_estado?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  cidade?: string;
+  cep?: string;
+  uf?: string;
   plano_id?: string;
   tipo_pessoa?: 'PF' | 'PJ';
   fornecedor_id?: string;
@@ -159,11 +166,31 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
         (a as any).empresa_id === tenantId;
       if (!matchTenant) return false;
     }
-    return true;
-  }).map(a => ({
-    ...a,
-    dependentes: Array.isArray(a.dependentes) ? a.dependentes : []
-  }));
+  }).map(a => {
+    const logr = a.endereco_logradouro || a.logradouro || '';
+    const num = a.endereco_numero || a.numero || '';
+    const bai = a.endereco_bairro || a.bairro || '';
+    const cid = a.endereco_cidade || a.cidade || '';
+    const cepVal = a.endereco_cep || a.cep || '';
+    const ufVal = a.endereco_estado || a.uf || '';
+
+    return {
+      ...a,
+      endereco_logradouro: logr,
+      logradouro: logr,
+      endereco_numero: num,
+      numero: num,
+      endereco_bairro: bai,
+      bairro: bai,
+      endereco_cidade: cid,
+      cidade: cid,
+      endereco_cep: cepVal,
+      cep: cepVal,
+      endereco_estado: ufVal,
+      uf: ufVal,
+      dependentes: Array.isArray(a.dependentes) ? a.dependentes : []
+    };
+  });
 };
 
 export const saveAssociado = async (associado: Associado, isOnline: boolean): Promise<void> => {

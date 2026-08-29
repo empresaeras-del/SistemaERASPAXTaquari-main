@@ -262,6 +262,68 @@ export const AssociadosPage: React.FC = () => {
   }, [state.isOnline, state.empresaSelecionada]);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [buscandoCep, setBuscandoCep] = useState(false);
+
+  const buscarCepViaCep = async (cepInput: string) => {
+    const cepLimpo = (cepInput || '').replace(/\D/g, '');
+    if (cepLimpo.length !== 8) {
+      toast.error('Informe um CEP válido com 8 dígitos.');
+      return;
+    }
+
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        toast.error('CEP não encontrado na base postal.');
+      } else {
+        setEditingAssociado(prev => {
+          if (!prev) return prev;
+          const logr = (data.logradouro || '').toUpperCase();
+          const bai = (data.bairro || '').toUpperCase();
+          const cid = (data.localidade ? `${data.localidade}${data.uf ? ' - ' + data.uf : ''}` : '').toUpperCase();
+          const est = (data.uf || '').toUpperCase();
+          const cepFormatado = cepLimpo.replace(/^(\d{5})(\d{3})/, '$1-$2');
+
+          return {
+            ...prev,
+            endereco_cep: cepFormatado,
+            cep: cepFormatado,
+            endereco_logradouro: logr,
+            logradouro: logr,
+            endereco_bairro: bai,
+            bairro: bai,
+            endereco_cidade: cid,
+            cidade: cid,
+            endereco_estado: est,
+            uf: est
+          };
+        });
+
+        // Limpa mensagens de erro dos campos preenchidos
+        setFieldErrors(prev => {
+          const next = { ...prev };
+          delete next.endereco_cep;
+          delete next.cep;
+          delete next.endereco_logradouro;
+          delete next.logradouro;
+          delete next.endereco_bairro;
+          delete next.bairro;
+          delete next.endereco_cidade;
+          delete next.cidade;
+          return next;
+        });
+
+        toast.success('Endereço preenchido com sucesso!');
+      }
+    } catch (e) {
+      console.warn('Erro ao consultar ViaCEP:', e);
+      toast.error('Erro ao consultar CEP.');
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
 
   const validarDadosAssociado = (assoc: Associado | null): { valido: boolean; erros: Array<{ campo: string; label: string; subTab: "basicas" | "filiacao" | "contato" | "endereco" | "sistema"; mensagem: string }> } => {
     if (!assoc) return { valido: false, erros: [] };
@@ -325,7 +387,8 @@ export const AssociadosPage: React.FC = () => {
     }
 
     // Endereço
-    if (!assoc.endereco_cep || !assoc.endereco_cep.trim()) {
+    const cep = ((assoc.endereco_cep || assoc.cep || '') + '').trim();
+    if (!cep) {
       erros.push({
         campo: 'endereco_cep',
         label: 'CEP',
@@ -334,7 +397,8 @@ export const AssociadosPage: React.FC = () => {
       });
     }
 
-    if (!assoc.endereco_logradouro || !assoc.endereco_logradouro.trim()) {
+    const logradouro = ((assoc.endereco_logradouro || assoc.logradouro || '') + '').trim();
+    if (!logradouro) {
       erros.push({
         campo: 'endereco_logradouro',
         label: 'Logradouro',
@@ -343,7 +407,8 @@ export const AssociadosPage: React.FC = () => {
       });
     }
 
-    if (!assoc.endereco_numero || !assoc.endereco_numero.trim()) {
+    const numero = ((assoc.endereco_numero || assoc.numero || '') + '').trim();
+    if (!numero) {
       erros.push({
         campo: 'endereco_numero',
         label: 'Número',
@@ -352,7 +417,8 @@ export const AssociadosPage: React.FC = () => {
       });
     }
 
-    if (!assoc.endereco_bairro || !assoc.endereco_bairro.trim()) {
+    const bairro = ((assoc.endereco_bairro || assoc.bairro || '') + '').trim();
+    if (!bairro) {
       erros.push({
         campo: 'endereco_bairro',
         label: 'Bairro',
@@ -361,7 +427,8 @@ export const AssociadosPage: React.FC = () => {
       });
     }
 
-    if (!assoc.endereco_cidade || !assoc.endereco_cidade.trim()) {
+    const cidade = ((assoc.endereco_cidade || assoc.cidade || '') + '').trim();
+    if (!cidade) {
       erros.push({
         campo: 'endereco_cidade',
         label: 'Cidade / UF',
@@ -409,17 +476,56 @@ export const AssociadosPage: React.FC = () => {
 
   const handleFieldChange = (field: keyof Associado, value: any) => {
     if (editingAssociado) {
-      const finalValue = (typeof value === 'string' && (field as string) !== 'email' && (field as string) !== 'senha' && (field as string) !== 'status') ? value.toUpperCase() : value;
-      setEditingAssociado({
+      let finalValue = (typeof value === 'string' && (field as string) !== 'email' && (field as string) !== 'senha' && (field as string) !== 'status') ? value.toUpperCase() : value;
+      
+      if (field === 'endereco_cep' || field === 'cep') {
+        const rawCep = (value || '').replace(/\D/g, '');
+        finalValue = rawCep.replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9);
+      }
+
+      const updated: any = {
         ...editingAssociado,
         [field]: finalValue
+      };
+
+      // Sincronização dos aliases de endereço
+      if (field === 'endereco_logradouro' || field === 'logradouro') {
+        updated.endereco_logradouro = finalValue;
+        updated.logradouro = finalValue;
+      } else if (field === 'endereco_numero' || field === 'numero') {
+        updated.endereco_numero = finalValue;
+        updated.numero = finalValue;
+      } else if (field === 'endereco_bairro' || field === 'bairro') {
+        updated.endereco_bairro = finalValue;
+        updated.bairro = finalValue;
+      } else if (field === 'endereco_cidade' || field === 'cidade') {
+        updated.endereco_cidade = finalValue;
+        updated.cidade = finalValue;
+      } else if (field === 'endereco_cep' || field === 'cep') {
+        updated.endereco_cep = finalValue;
+        updated.cep = finalValue;
+      } else if (field === 'endereco_estado' || field === 'uf') {
+        updated.endereco_estado = finalValue;
+        updated.uf = finalValue;
+      }
+
+      setEditingAssociado(updated);
+
+      // Limpeza de erros em tempo real
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        delete next[field as string];
+        if (field === 'endereco_logradouro') delete next.logradouro;
+        if (field === 'endereco_numero') delete next.numero;
+        if (field === 'endereco_bairro') delete next.bairro;
+        if (field === 'endereco_cidade') delete next.cidade;
+        if (field === 'endereco_cep') delete next.cep;
+        return next;
       });
-      if (fieldErrors[field as string]) {
-        setFieldErrors(prev => {
-          const next = { ...prev };
-          delete next[field as string];
-          return next;
-        });
+
+      // Auto-busca do CEP ao completar 8 dígitos
+      if ((field === 'endereco_cep' || field === 'cep') && finalValue.replace(/\D/g, '').length === 8) {
+        buscarCepViaCep(finalValue);
       }
     }
   };
@@ -1578,56 +1684,77 @@ export const AssociadosPage: React.FC = () => {
 
                       {/* Section: Endereço */}
                       <div className={`bg-bg-subtle/50 p-6 rounded-2xl border border-border-default/50 space-y-6 ${activeSubTab === "endereco" ? "block animate-in fade-in slide-in-from-bottom-2" : "hidden"}`}>
-                        <div className="flex items-center gap-3 border-b border-border-default/50 pb-4">
-                          <div className="p-2 bg-amber-500/10 rounded-xl text-amber-400">
-                            <MapPin className="w-5 h-5" />
+                        <div className="flex items-center justify-between border-b border-border-default/50 pb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-amber-500/10 rounded-xl text-amber-400">
+                              <MapPin className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <h4 className="text-lg font-bold text-text-base tracking-tight">
+                                Endereço Residencial
+                              </h4>
+                              <p className="text-xs text-text-subtle">Digite o CEP para buscar automaticamente ou preencha os campos abaixo</p>
+                            </div>
                           </div>
-                          <h4 className="text-lg font-bold text-text-base tracking-tight">
-                            Endereço
-                          </h4>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                          <div className="space-y-1 md:col-span-3">
+                          <div className="space-y-1 md:col-span-4">
                             <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
                               CEP *
                             </label>
-                            <input
-                              type="text"
-                              placeholder="00000-000"
-                              value={editingAssociado.endereco_cep || ""}
-                              onChange={(e) => handleFieldChange("endereco_cep", e.target.value)}
-                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
-                                fieldErrors.endereco_cep
-                                  ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
-                                  : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
-                              }`}
-                            />
-                            {fieldErrors.endereco_cep && (
+                            <div className="relative flex items-center">
+                              <input
+                                type="text"
+                                maxLength={9}
+                                placeholder="00000-000"
+                                value={editingAssociado.endereco_cep || editingAssociado.cep || ""}
+                                onChange={(e) => handleFieldChange("endereco_cep", e.target.value)}
+                                className={`w-full px-4 py-2.5 pr-11 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                  fieldErrors.endereco_cep || fieldErrors.cep
+                                    ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
+                                    : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                                }`}
+                              />
+                              <button
+                                type="button"
+                                disabled={buscandoCep}
+                                onClick={() => buscarCepViaCep(editingAssociado.endereco_cep || editingAssociado.cep || "")}
+                                title="Buscar endereço pelo CEP"
+                                className="absolute right-2 p-1.5 text-text-subtle hover:text-[#3B82F6] hover:bg-bg-hover rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                {buscandoCep ? (
+                                  <div className="w-4 h-4 border-2 border-[#3B82F6] border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <Search className="w-4 h-4" />
+                                )}
+                              </button>
+                            </div>
+                            {(fieldErrors.endereco_cep || fieldErrors.cep) && (
                               <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                                {fieldErrors.endereco_cep}
+                                {fieldErrors.endereco_cep || fieldErrors.cep}
                               </p>
                             )}
                           </div>
-                          <div className="space-y-1 md:col-span-7">
+                          <div className="space-y-1 md:col-span-6">
                             <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
                               Logradouro *
                             </label>
                             <input
                               type="text"
                               placeholder="Rua, Avenida, Alameda..."
-                              value={editingAssociado.endereco_logradouro || ""}
+                              value={editingAssociado.endereco_logradouro || editingAssociado.logradouro || ""}
                               onChange={(e) => handleFieldChange("endereco_logradouro", e.target.value)}
                               className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
-                                fieldErrors.endereco_logradouro
+                                fieldErrors.endereco_logradouro || fieldErrors.logradouro
                                   ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
                                   : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
                               }`}
                             />
-                            {fieldErrors.endereco_logradouro && (
+                            {(fieldErrors.endereco_logradouro || fieldErrors.logradouro) && (
                               <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                                {fieldErrors.endereco_logradouro}
+                                {fieldErrors.endereco_logradouro || fieldErrors.logradouro}
                               </p>
                             )}
                           </div>
@@ -1638,18 +1765,18 @@ export const AssociadosPage: React.FC = () => {
                             <input
                               type="text"
                               placeholder="Nº"
-                              value={editingAssociado.endereco_numero || ""}
+                              value={editingAssociado.endereco_numero || editingAssociado.numero || ""}
                               onChange={(e) => handleFieldChange("endereco_numero", e.target.value)}
                               className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
-                                fieldErrors.endereco_numero
+                                fieldErrors.endereco_numero || fieldErrors.numero
                                   ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
                                   : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
                               }`}
                             />
-                            {fieldErrors.endereco_numero && (
+                            {(fieldErrors.endereco_numero || fieldErrors.numero) && (
                               <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                                {fieldErrors.endereco_numero}
+                                {fieldErrors.endereco_numero || fieldErrors.numero}
                               </p>
                             )}
                           </div>
@@ -1660,18 +1787,18 @@ export const AssociadosPage: React.FC = () => {
                             <input
                               type="text"
                               placeholder="Nome do bairro"
-                              value={editingAssociado.endereco_bairro || ""}
+                              value={editingAssociado.endereco_bairro || editingAssociado.bairro || ""}
                               onChange={(e) => handleFieldChange("endereco_bairro", e.target.value)}
                               className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
-                                fieldErrors.endereco_bairro
+                                fieldErrors.endereco_bairro || fieldErrors.bairro
                                   ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
                                   : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
                               }`}
                             />
-                            {fieldErrors.endereco_bairro && (
+                            {(fieldErrors.endereco_bairro || fieldErrors.bairro) && (
                               <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                                {fieldErrors.endereco_bairro}
+                                {fieldErrors.endereco_bairro || fieldErrors.bairro}
                               </p>
                             )}
                           </div>
@@ -1682,18 +1809,18 @@ export const AssociadosPage: React.FC = () => {
                             <input
                               type="text"
                               placeholder="Cidade / UF"
-                              value={editingAssociado.endereco_cidade || ""}
+                              value={editingAssociado.endereco_cidade || editingAssociado.cidade || ""}
                               onChange={(e) => handleFieldChange("endereco_cidade", e.target.value)}
                               className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
-                                fieldErrors.endereco_cidade
+                                fieldErrors.endereco_cidade || fieldErrors.cidade
                                   ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
                                   : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
                               }`}
                             />
-                            {fieldErrors.endereco_cidade && (
+                            {(fieldErrors.endereco_cidade || fieldErrors.cidade) && (
                               <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                                {fieldErrors.endereco_cidade}
+                                {fieldErrors.endereco_cidade || fieldErrors.cidade}
                               </p>
                             )}
                           </div>

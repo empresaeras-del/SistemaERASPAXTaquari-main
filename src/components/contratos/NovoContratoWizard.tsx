@@ -83,10 +83,14 @@ export const NovoContratoWizard: React.FC<{
     };
   };
   
+  // Permissões
+  const isAdminOrSuperAdmin = state.user?.nivel === 'super_admin' || state.user?.nivel === 'admin';
+
   // Mensalidades
   const [dataInicio, setDataInicio] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [qtdParcelas, setQtdParcelas] = useState<number>(12);
   const [valorExtra, setValorExtra] = useState<number>(0);
+  const [valorParcelaManual, setValorParcelaManual] = useState<string>('');
   const [diaVencimento, setDiaVencimento] = useState<number>(10);
   const [parcelas, setParcelas] = useState<any[]>([]);
 
@@ -129,15 +133,25 @@ export const NovoContratoWizard: React.FC<{
     return calcularValor(planoSelecionado, nVidas, depsIds, valorExtra).total;
   }, [planoSelecionado, selectedAssociado, calcularValor, valorExtra]);
 
+  const valorBaseParcela = useMemo(() => {
+    if (isAdminOrSuperAdmin && valorParcelaManual !== '' && !isNaN(Number(valorParcelaManual)) && Number(valorParcelaManual) >= 0) {
+      return Number(valorParcelaManual);
+    }
+    return valorPlano;
+  }, [isAdminOrSuperAdmin, valorParcelaManual, valorPlano]);
+
   const gerarProjecao = useCallback(() => {
     if (!planoSelecionado) return;
     const dt = new Date(dataInicio + "T12:00:00");
     const arr = [];
     const adesao = planoSelecionado.taxa_adesao || 0;
+    const baseParcela = (isAdminOrSuperAdmin && valorParcelaManual !== '' && !isNaN(Number(valorParcelaManual)) && Number(valorParcelaManual) >= 0)
+      ? Number(valorParcelaManual)
+      : valorPlano;
     
     for (let i = 1; i <= qtdParcelas; i++) {
       const vencimento = new Date(dt.getFullYear(), dt.getMonth() + (i-1), diaVencimento);
-      const valorParcela = i === 1 ? (valorPlano + adesao) : valorPlano;
+      const valorParcela = i === 1 ? (baseParcela + adesao) : baseParcela;
       const descAdesao = i === 1 && adesao > 0 ? " (Inc. Adesão)" : "";
       
       arr.push({
@@ -148,7 +162,7 @@ export const NovoContratoWizard: React.FC<{
       });
     }
     setParcelas(arr);
-  }, [planoSelecionado, dataInicio, qtdParcelas, diaVencimento, valorPlano]);
+  }, [planoSelecionado, dataInicio, qtdParcelas, diaVencimento, valorPlano, valorParcelaManual, isAdminOrSuperAdmin]);
 
   useEffect(() => {
     if (step === 3) gerarProjecao();
@@ -158,6 +172,8 @@ export const NovoContratoWizard: React.FC<{
     if (!selectedAssociado || !planoId || parcelas.length === 0) return;
     setLoading(true);
     try {
+      const valorFinalPlano = valorBaseParcela;
+
       // 1. Update Associado
       const associadoAtualizado = {
         ...selectedAssociado,
@@ -165,7 +181,7 @@ export const NovoContratoWizard: React.FC<{
         plano_nome: planoSelecionado?.nome,
         numero_contrato: numeroContrato,
         data_adesao: dataAdesao,
-        valor_plano: valorPlano,
+        valor_plano: valorFinalPlano,
         assinatura_base64: assinaturaBase64 || undefined,
         status: 'ativo'
       } as Associado;
@@ -230,7 +246,8 @@ export const NovoContratoWizard: React.FC<{
         associado_id: associadoAtualizado.id, 
         numero_contrato: numeroContrato,
         receita_mestre_id: mestreId,
-        valor: valorPlano
+        valor: valorFinalPlano,
+        manual_override: isAdminOrSuperAdmin && valorParcelaManual !== '' && Number(valorParcelaManual) >= 0
       });
 
       onSuccess();
@@ -456,18 +473,75 @@ export const NovoContratoWizard: React.FC<{
                 </div>
               )}
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className={`grid grid-cols-1 ${isAdminOrSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
                 <div className="space-y-1">
                   <label className="text-sm font-semibold text-text-subtle">Mês de Início</label>
-                  <input type="month" value={dataInicio.substring(0, 7)} onChange={e => setDataInicio(e.target.value + "-01")} className="w-full p-2.5 bg-bg-subtle border border-border-default rounded-lg text-text-base" />
+                  <input 
+                    type="month" 
+                    value={dataInicio.substring(0, 7)} 
+                    onChange={e => setDataInicio(e.target.value + "-01")} 
+                    className="w-full p-2.5 bg-bg-subtle border border-border-default rounded-lg text-text-base focus:border-[#3B82F6] focus:outline-none" 
+                  />
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm font-semibold text-text-subtle">Qtd. Parcelas</label>
-                  <input type="number" min="1" max="48" value={qtdParcelas} onChange={e => setQtdParcelas(Number(e.target.value))} className="w-full p-2.5 bg-bg-subtle border border-border-default rounded-lg text-text-base" />
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max="48" 
+                    value={qtdParcelas} 
+                    onChange={e => setQtdParcelas(Number(e.target.value))} 
+                    className="w-full p-2.5 bg-bg-subtle border border-border-default rounded-lg text-text-base focus:border-[#3B82F6] focus:outline-none" 
+                  />
                 </div>
+                {isAdminOrSuperAdmin && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-text-subtle flex items-center gap-1.5">
+                        <span>Valor Parcela (R$)</span>
+                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/10 text-amber-500 font-bold rounded border border-amber-500/20">Admin</span>
+                      </label>
+                      {valorParcelaManual !== '' && (
+                        <button
+                          type="button"
+                          onClick={() => setValorParcelaManual('')}
+                          className="text-[11px] text-[#3B82F6] hover:underline"
+                          title="Restaurar cálculo automático"
+                        >
+                          Restaurar auto
+                        </button>
+                      )}
+                    </div>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      step="0.01" 
+                      placeholder={`Auto (R$ ${valorPlano.toFixed(2).replace('.', ',')})`}
+                      value={valorParcelaManual} 
+                      onChange={e => setValorParcelaManual(e.target.value)} 
+                      className={`w-full p-2.5 bg-bg-subtle border rounded-lg text-text-base focus:outline-none transition-all ${
+                        valorParcelaManual !== '' 
+                          ? 'border-amber-500 ring-1 ring-amber-500/30' 
+                          : 'border-border-default focus:border-[#3B82F6]'
+                      }`} 
+                    />
+                    <span className="text-[11px] text-text-muted block truncate">
+                      {valorParcelaManual !== '' 
+                        ? 'Valor manual por parcela' 
+                        : `Automático: R$ ${valorPlano.toFixed(2).replace('.', ',')}`}
+                    </span>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <label className="text-sm font-semibold text-text-subtle">Dia do Vencimento</label>
-                  <input type="number" min="1" max="31" value={diaVencimento} onChange={e => setDiaVencimento(Number(e.target.value))} className="w-full p-2.5 bg-bg-subtle border border-border-default rounded-lg text-text-base" />
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max="31" 
+                    value={diaVencimento} 
+                    onChange={e => setDiaVencimento(Number(e.target.value))} 
+                    className="w-full p-2.5 bg-bg-subtle border border-border-default rounded-lg text-text-base focus:border-[#3B82F6] focus:outline-none" 
+                  />
                 </div>
               </div>
 
