@@ -996,6 +996,7 @@ export const getReceitaCompleta = async (
 ): Promise<{ receita: Receita | null; parcelas: ParcelaReceber[] }> => {
   let receita: Receita | null = null;
   let targetReceitaId = idOrParcelaId;
+  let parcelaRef: ParcelaReceber | null = null;
 
   // 1. Tenta buscar a receita diretamente pelo ID
   if (isOnline) {
@@ -1013,62 +1014,60 @@ export const getReceitaCompleta = async (
     receita = await getFromIDB<Receita>('receitas', targetReceitaId) || null;
   }
 
-  // 2. Se não encontrou receita com esse ID, pode ser que seja o ID de uma parcela_receber
-  if (!receita) {
-    let parcelaRef: ParcelaReceber | null = null;
+  // 2. Se não encontrou receita com esse ID ou temos um hint de parcela, busca a parcela de referência
+  if (isOnline) {
+    try {
+      const { data: pData } = await supabase.from('parcelas_receber').select('*').eq('id', targetReceitaId).maybeSingle();
+      if (pData) parcelaRef = pData;
+    } catch (e) {
+      console.warn('Erro ao buscar parcela por ID no Supabase:', e);
+    }
+  }
+  if (!parcelaRef) {
+    parcelaRef = await getFromIDB<ParcelaReceber>('parcelas_receber', targetReceitaId) || null;
+  }
+
+  if (!parcelaRef && parcelaIdHint) {
     if (isOnline) {
       try {
-        const { data: pData } = await supabase.from('parcelas_receber').select('*').eq('id', targetReceitaId).maybeSingle();
+        const { data: pData } = await supabase.from('parcelas_receber').select('*').eq('id', parcelaIdHint).maybeSingle();
         if (pData) parcelaRef = pData;
       } catch (e) {
-        console.warn('Erro ao buscar parcela por ID no Supabase:', e);
+        console.warn('Erro ao buscar parcelaIdHint no Supabase:', e);
       }
     }
     if (!parcelaRef) {
-      parcelaRef = await getFromIDB<ParcelaReceber>('parcelas_receber', targetReceitaId) || null;
-    }
-
-    // Se ainda não achou e temos um parcelaIdHint
-    if (!parcelaRef && parcelaIdHint) {
-      if (isOnline) {
-        try {
-          const { data: pData } = await supabase.from('parcelas_receber').select('*').eq('id', parcelaIdHint).maybeSingle();
-          if (pData) parcelaRef = pData;
-        } catch (e) {
-          console.warn('Erro ao buscar parcelaIdHint no Supabase:', e);
-        }
-      }
-      if (!parcelaRef) {
-        parcelaRef = await getFromIDB<ParcelaReceber>('parcelas_receber', parcelaIdHint) || null;
-      }
-    }
-
-    if (parcelaRef && parcelaRef.receita_id) {
-      targetReceitaId = parcelaRef.receita_id;
-      if (isOnline) {
-        try {
-          const { data: rData } = await supabase.from('receitas').select('*').eq('id', targetReceitaId).maybeSingle();
-          if (rData) receita = rData;
-        } catch (e) {
-          console.warn('Erro ao buscar receita pai pelo receita_id da parcela:', e);
-        }
-      }
-      if (!receita) {
-        receita = await getFromIDB<Receita>('receitas', targetReceitaId) || null;
-      }
+      parcelaRef = await getFromIDB<ParcelaReceber>('parcelas_receber', parcelaIdHint) || null;
     }
   }
 
-  // 3. Carregar todas as parcelas dessa receita
+  // Se não tínhamos a receita mas a parcela possui receita_id, busca a receita pai
+  if (!receita && parcelaRef && parcelaRef.receita_id) {
+    targetReceitaId = parcelaRef.receita_id;
+    if (isOnline) {
+      try {
+        const { data: rData } = await supabase.from('receitas').select('*').eq('id', targetReceitaId).maybeSingle();
+        if (rData) receita = rData;
+      } catch (e) {
+        console.warn('Erro ao buscar receita pai pelo receita_id da parcela:', e);
+      }
+    }
+    if (!receita) {
+      receita = await getFromIDB<Receita>('receitas', targetReceitaId) || null;
+    }
+  }
+
+  // 3. Carregar todas as parcelas dessa receita (ou vinculadas)
   let parcelas: ParcelaReceber[] = [];
-  if (receita) {
-    await saveToIDB('receitas', receita);
+  const searchReceitaId = receita?.id || parcelaRef?.receita_id;
+
+  if (searchReceitaId) {
     if (isOnline) {
       try {
         const { data: pList, error: pErr } = await supabase
           .from('parcelas_receber')
           .select('*')
-          .eq('receita_id', receita.id)
+          .eq('receita_id', searchReceitaId)
           .order('numero_parcela', { ascending: true });
         if (!pErr && pList && pList.length > 0) {
           parcelas = pList;
@@ -1084,9 +1083,68 @@ export const getReceitaCompleta = async (
     if (parcelas.length === 0) {
       const allIDBParcelas = await getAllFromIDB<ParcelaReceber>('parcelas_receber');
       parcelas = allIDBParcelas
-        .filter(p => p.receita_id === receita!.id)
+        .filter(p => p.receita_id === searchReceitaId)
         .sort((a, b) => (a.numero_parcela || 0) - (b.numero_parcela || 0));
     }
+  }
+
+  if (parcelas.length === 0 && parcelaRef) {
+    parcelas = [parcelaRef];
+  }
+
+  // 4. Se a receita não foi encontrada na tabela de receitas, mas temos parcela(s), sintetiza a receita
+  if (!receita && parcelaRef) {
+    const totalParcs = Number(parcelaRef.total_parcelas) || parcelas.length || 1;
+    const somaValores = parcelas.length > 0
+      ? parcelas.reduce((acc, p) => acc + (Number(p.valor) || 0), 0)
+      : (Number(parcelaRef.valor) || 0) * totalParcs;
+
+    receita = {
+      id: parcelaRef.receita_id || parcelaRef.id,
+      tenant_id: parcelaRef.tenant_id,
+      tipo_devedor: (parcelaRef.tipo_devedor as any) || 'associado',
+      associado_id: (parcelaRef as any).associado_id,
+      associado_nome: parcelaRef.devedor_nome,
+      associado_cpf: parcelaRef.devedor_cpf_cnpj,
+      cliente_nome: parcelaRef.devedor_nome,
+      cliente_cpf_cnpj: parcelaRef.devedor_cpf_cnpj,
+      descricao: parcelaRef.descricao || 'Receita de Mensalidade / Plano',
+      categoria: 'Mensalidade',
+      data_emissao: parcelaRef.data_vencimento ? parcelaRef.data_vencimento.split('T')[0] : new Date().toISOString().split('T')[0],
+      data_inicio_cobranca: parcelaRef.data_vencimento ? parcelaRef.data_vencimento.split('T')[0] : new Date().toISOString().split('T')[0],
+      valor_total: somaValores,
+      qtd_parcelas: totalParcs,
+      forma_pagamento_padrao: parcelaRef.forma_pagamento || 'Boleto',
+      conta_bancaria_id: parcelaRef.conta_bancaria_id,
+      status: 'ativo'
+    };
+  }
+
+  // 5. Enriquecimento de dados se algum campo prioritário estiver ausente na receita
+  if (receita) {
+    if (!receita.associado_id && (parcelaRef as any)?.associado_id) {
+      receita.associado_id = (parcelaRef as any).associado_id;
+    }
+    if (!receita.associado_nome && parcelaRef?.devedor_nome) {
+      receita.associado_nome = parcelaRef.devedor_nome;
+    }
+    if (!receita.associado_cpf && parcelaRef?.devedor_cpf_cnpj) {
+      receita.associado_cpf = parcelaRef.devedor_cpf_cnpj;
+    }
+    if (!receita.forma_pagamento_padrao && (parcelaRef?.forma_pagamento || parcelas[0]?.forma_pagamento)) {
+      receita.forma_pagamento_padrao = parcelaRef?.forma_pagamento || parcelas[0]?.forma_pagamento;
+    }
+    if (!receita.data_inicio_cobranca && (parcelas[0]?.data_vencimento || parcelaRef?.data_vencimento)) {
+      receita.data_inicio_cobranca = parcelas[0]?.data_vencimento || parcelaRef?.data_vencimento;
+    }
+    if ((!receita.valor_total || Number(receita.valor_total) === 0) && parcelas.length > 0) {
+      receita.valor_total = parcelas.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+    }
+    if ((!receita.qtd_parcelas || Number(receita.qtd_parcelas) === 0) && parcelas.length > 0) {
+      receita.qtd_parcelas = parcelas.length;
+    }
+
+    await saveToIDB('receitas', receita);
   }
 
   return { receita, parcelas };

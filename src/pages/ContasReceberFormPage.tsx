@@ -63,6 +63,59 @@ const receitaSchema = z.object({
 
 type ReceitaFormData = z.infer<typeof receitaSchema>;
 
+const matchCategoria = (cat: string | undefined, available: string[]): string => {
+  if (!cat) return available[0] || 'Mensalidade';
+  const found = available.find(c => c.toLowerCase() === cat.toLowerCase());
+  if (found) return found;
+  const singularCat = cat.replace(/s$/i, '');
+  const singularFound = available.find(c => c.toLowerCase().replace(/s$/i, '') === singularCat.toLowerCase());
+  if (singularFound) return singularFound;
+  return cat;
+};
+
+const matchFormaPagamento = (fp: string | undefined, available: string[]): string => {
+  if (!fp) return available[0] || 'Boleto';
+  const fpClean = fp.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const found = available.find(a => a.toLowerCase().replace(/[^a-z0-9]/g, '') === fpClean);
+  if (found) return found;
+  if (fpClean.includes('boleto')) {
+    const b = available.find(a => a.toLowerCase().includes('boleto'));
+    if (b) return b;
+    return 'Boleto';
+  }
+  if (fpClean.includes('pix')) {
+    const p = available.find(a => a.toLowerCase().includes('pix'));
+    if (p) return p;
+    return 'PIX';
+  }
+  if (fpClean.includes('dinheiro') || fpClean.includes('cash')) {
+    const d = available.find(a => a.toLowerCase().includes('dinheiro'));
+    if (d) return d;
+    return 'Dinheiro';
+  }
+  if (fpClean.includes('credito') || fpClean.includes('credit')) {
+    const c = available.find(a => a.toLowerCase().includes('crédito') || a.toLowerCase().includes('credito'));
+    if (c) return c;
+    return 'Cartão de Crédito';
+  }
+  if (fpClean.includes('debito') || fpClean.includes('debit')) {
+    const deb = available.find(a => a.toLowerCase().includes('débito') || a.toLowerCase().includes('debito'));
+    if (deb) return deb;
+    return 'Cartão de Débito';
+  }
+  if (fpClean.includes('transf')) {
+    const t = available.find(a => a.toLowerCase().includes('transfer'));
+    if (t) return t;
+    return 'Transferência';
+  }
+  if (fpClean.includes('cheque')) {
+    const ch = available.find(a => a.toLowerCase().includes('cheque'));
+    if (ch) return ch;
+    return 'Cheque';
+  }
+  return fp;
+};
+
 export const ContasReceberFormPage: React.FC = () => {
   const { id } = useParams();
 
@@ -117,7 +170,7 @@ export const ContasReceberFormPage: React.FC = () => {
   useEffect(() => {
     const fetchAssociados = async () => {
       try {
-        const data = await getAssociados(state.isOnline, state.empresaSelecionada);
+        const data = await getAssociados(state.isOnline, 'all');
         setAssociados(data);
       } catch (e) {
         console.error(e);
@@ -132,31 +185,73 @@ export const ContasReceberFormPage: React.FC = () => {
       const loadReceita = async () => {
         setLoadingDados(true);
         try {
+          // Carrega lista completa de associados primeiro para garantir matching
+          const assocsList = await getAssociados(state.isOnline, 'all');
+          setAssociados(assocsList);
+
           const { receita: rec, parcelas: parcs } = await getReceitaCompleta(state.isOnline, id, targetParcelaId);
 
           if (rec) {
+            let resolvedAssociadoId = rec.associado_id || '';
+            if (!resolvedAssociadoId && (rec.tipo_devedor === 'associado' || !rec.tipo_devedor)) {
+              // Tenta localizar por CPF ou Nome da receita ou da parcela
+              const cpfBusca = (rec.associado_cpf || parcs[0]?.devedor_cpf_cnpj || '').replace(/\D/g, '');
+              const nomeBusca = (rec.associado_nome || parcs[0]?.devedor_nome || '').trim().toLowerCase();
+
+              const found = assocsList.find(a => {
+                if (cpfBusca && (a.cpf || '').replace(/\D/g, '') === cpfBusca) return true;
+                if (nomeBusca && a.nome.trim().toLowerCase() === nomeBusca) return true;
+                return false;
+              });
+              if (found) {
+                resolvedAssociadoId = found.id;
+              }
+            }
+
+            // Se temos um associado_id mas ele não está na lista atual de associados, adiciona
+            if (resolvedAssociadoId && !assocsList.some(a => a.id === resolvedAssociadoId)) {
+              const placeholder: Associado = {
+                id: resolvedAssociadoId,
+                tenant_id: rec.tenant_id || state.empresaSelecionada || 'default_tenant',
+                nome: rec.associado_nome || parcs[0]?.devedor_nome || 'Associado Selecionado',
+                cpf: rec.associado_cpf || parcs[0]?.devedor_cpf_cnpj || '',
+                status: 'ativo',
+                data_adesao: rec.data_emissao || '',
+                dependentes: []
+              };
+              setAssociados(prev => [placeholder, ...prev]);
+            }
+
+            const resolvedCategoria = matchCategoria(rec.categoria, categorias);
+            const resolvedFormaPagamento = matchFormaPagamento(rec.forma_pagamento_padrao || parcs[0]?.forma_pagamento || '', formasPagamento);
+
+            const totalVal = Number(rec.valor_total) || parcs.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+            const qtdParcs = Number(rec.qtd_parcelas) || (parcs.length > 0 ? parcs.length : 1);
+            const dataEmissao = rec.data_emissao ? rec.data_emissao.split('T')[0] : (parcs[0]?.data_vencimento ? parcs[0].data_vencimento.split('T')[0] : format(new Date(), "yyyy-MM-dd"));
+            const dataInicio = rec.data_inicio_cobranca ? rec.data_inicio_cobranca.split('T')[0] : (parcs[0]?.data_vencimento ? parcs[0].data_vencimento.split('T')[0] : format(new Date(), "yyyy-MM-dd"));
+
             form.reset({
-              tipo_devedor: rec.tipo_devedor,
-              associado_id: rec.associado_id || '',
+              tipo_devedor: rec.tipo_devedor || 'associado',
+              associado_id: resolvedAssociadoId,
               cliente_tipo: rec.cliente_tipo || 'pf',
-              cliente_nome: rec.cliente_nome || '',
-              cliente_cpf_cnpj: rec.cliente_cpf_cnpj || '',
-              descricao: rec.descricao || '',
-              categoria: rec.categoria || '',
-              data_emissao: rec.data_emissao || format(new Date(), "yyyy-MM-dd"),
-              data_inicio_cobranca: rec.data_inicio_cobranca || format(new Date(), "yyyy-MM-dd"),
-              valor_total: Number(rec.valor_total) || 0,
-              qtd_parcelas: Number(rec.qtd_parcelas) || (parcs.length > 0 ? parcs.length : 1),
-              forma_pagamento_padrao: rec.forma_pagamento_padrao || '',
+              cliente_nome: rec.cliente_nome || rec.associado_nome || parcs[0]?.devedor_nome || '',
+              cliente_cpf_cnpj: rec.cliente_cpf_cnpj || rec.associado_cpf || parcs[0]?.devedor_cpf_cnpj || '',
+              descricao: rec.descricao || parcs[0]?.descricao || '',
+              categoria: resolvedCategoria,
+              data_emissao: dataEmissao,
+              data_inicio_cobranca: dataInicio,
+              valor_total: totalVal,
+              qtd_parcelas: qtdParcs,
+              forma_pagamento_padrao: resolvedFormaPagamento,
               conta_bancaria_id: rec.conta_bancaria_id || '',
               observacoes: rec.observacoes || '',
               parcelas: parcs.map(p => ({
                 id: p.id,
-                numero_parcela: p.numero_parcela,
-                data_vencimento: p.data_vencimento,
+                numero_parcela: Number(p.numero_parcela) || 1,
+                data_vencimento: p.data_vencimento ? p.data_vencimento.split('T')[0] : dataInicio,
                 valor: Number(p.valor) || 0,
-                forma_pagamento: p.forma_pagamento || rec.forma_pagamento_padrao || 'pix',
-                observacao: p.observacoes || ''
+                forma_pagamento: matchFormaPagamento(p.forma_pagamento || rec.forma_pagamento_padrao || 'Boleto', formasPagamento),
+                observacao: p.observacoes || (p as any).observacao || ''
               }))
             });
           } else {
@@ -420,6 +515,9 @@ export const ContasReceberFormPage: React.FC = () => {
                 >
                   <option value="">Selecione...</option>
                   {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  {form.watch("categoria") && !categorias.includes(form.watch("categoria")) && (
+                    <option value={form.watch("categoria")}>{form.watch("categoria")}</option>
+                  )}
                 </select>
                 {errors.categoria && <p className="text-rose-500 text-xs mt-1">{errors.categoria.message}</p>}
               </div>
@@ -437,6 +535,9 @@ export const ContasReceberFormPage: React.FC = () => {
                 >
                   <option value="">Selecione...</option>
                   {formasPagamento.map(fp => <option key={fp} value={fp}>{fp}</option>)}
+                  {form.watch("forma_pagamento_padrao") && !formasPagamento.includes(form.watch("forma_pagamento_padrao")) && (
+                    <option value={form.watch("forma_pagamento_padrao")}>{form.watch("forma_pagamento_padrao")}</option>
+                  )}
                 </select>
               </div>
 
