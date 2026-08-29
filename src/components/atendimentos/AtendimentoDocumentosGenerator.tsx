@@ -61,18 +61,40 @@ export const AtendimentoDocumentosGenerator: React.FC<Props> = ({ atendimento, p
     const parcelasStr = parcelas.map(p => `Parcela ${p.numero_parcela} - Vencimento: ${formatLocalDate(p.data_vencimento)} - Valor: R$ ${p.valor.toFixed(2)} - Status: ${p.status}`).join('<br/>') || 'Nenhuma parcela financeira';
 
     const vars: Record<string, string> = {
-      // Atendimento Data
+      // Atendimento Data (suporta tanto prefixo atendimento_ quanto chaves diretas)
       '{{atendimento_id}}': atendimento.id,
       '{{atendimento_tipo}}': atendimento.tipo_cliente === 'associado' ? 'Associado' : 'Cliente Externo',
       '{{atendimento_falecido_nome}}': atendimento.falecido_nome || '',
+      '{{falecido_nome}}': atendimento.falecido_nome || '',
       '{{atendimento_falecido_cpf}}': atendimento.falecido_cpf || '',
+      '{{falecido_cpf}}': atendimento.falecido_cpf || '',
       '{{atendimento_falecido_data_nascimento}}': formatLocalDate(atendimento.falecido_data_nascimento, 'dd/MM/yyyy', ''),
+      '{{falecido_data_nascimento}}': formatLocalDate(atendimento.falecido_data_nascimento, 'dd/MM/yyyy', ''),
+      '{{datanasc_falecido}}': formatLocalDate(atendimento.falecido_data_nascimento, 'dd/MM/yyyy', ''),
+      '{{cor_falecido}}': (atendimento as any).cor_falecido || (atendimento as any).etnia || '',
+      '{{sexo_falecido}}': (atendimento as any).sexo_falecido || (atendimento as any).sexo || '',
       '{{atendimento_local_velorio}}': atendimento.local_velorio || '',
+      '{{local_velorio}}': atendimento.local_velorio || '',
       '{{atendimento_local_sepultamento}}': atendimento.local_sepultamento || '',
+      '{{local_sepultamento}}': atendimento.local_sepultamento || '',
       '{{atendimento_data_obito}}': formatLocalDate(atendimento.data_obito, 'dd/MM/yyyy', ''),
+      '{{data_obito}}': formatLocalDate(atendimento.data_obito, 'dd/MM/yyyy', ''),
+      '{{hora_obito}}': (atendimento as any).hora_obito || '',
+      '{{local_obito}}': (atendimento as any).local_obito || '',
+      '{{declaracaoobito}}': (atendimento as any).declaracao_obito || (atendimento as any).numero_do || '',
+      '{{declaracao_obito}}': (atendimento as any).declaracao_obito || (atendimento as any).numero_do || '',
+      '{{medico_resp}}': (atendimento as any).medico_responsavel || (atendimento as any).medico_resp || '',
+      '{{crm_medico}}': (atendimento as any).crm_medico || '',
+      '{{rqe_medico}}': (atendimento as any).rqe_medico || '',
+      '{{inicio_tanato}}': (atendimento as any).inicio_tanato || '',
+      '{{termino_tanato}}': (atendimento as any).termino_tanato || '',
       '{{atendimento_data_velorio}}': formatLocalDate(atendimento.data_velorio, 'dd/MM/yyyy', ''),
+      '{{data_velorio}}': formatLocalDate(atendimento.data_velorio, 'dd/MM/yyyy', ''),
       '{{atendimento_data_sepultamento}}': formatLocalDate(atendimento.data_sepultamento, 'dd/MM/yyyy', ''),
+      '{{data_sepultamento}}': formatLocalDate(atendimento.data_sepultamento, 'dd/MM/yyyy', ''),
+      '{{atendimento_valor}}': `R$ ${(atendimento.valor_total || 0).toFixed(2)}`,
       '{{atendimento_valor_total}}': `R$ ${(atendimento.valor_total || 0).toFixed(2)}`,
+      '{{atendimento_status}}': (atendimento.status || '').toUpperCase(),
       '{{atendimento_itens_lista}}': itensStr,
       '{{atendimento_parcelas_lista}}': parcelasStr,
       '{{data_atual}}': formatLocalDate(dataAtual),
@@ -118,14 +140,14 @@ export const AtendimentoDocumentosGenerator: React.FC<Props> = ({ atendimento, p
           <FileText className="w-4 h-4 text-blue-500" /> 
           Emissão de Documentos e Termos de Atendimento
         </h3>
-        <span className="text-xs text-text-subtle">
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20">
           {documentos.filter(d => d.ativo).length} modelos disponíveis
         </span>
       </div>
       
-      <div className="p-6 space-y-4">
+      <div className="p-5 space-y-4">
         <p className="text-xs text-text-subtle">
-          Selecione um documento padrão cadastrado para preencher os dados do atendimento (falecido, itens, parcelas, velório e sepultamento).
+          Selecione um dos modelos padrões cadastrados no sistema para gerar o documento preenchido automaticamente com todos os dados deste atendimento e do falecido.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3">
@@ -155,7 +177,6 @@ export const AtendimentoDocumentosGenerator: React.FC<Props> = ({ atendimento, p
         </div>
       </div>
 
-      {/* Visualizador Profissional Interativo de Documentos Padrões */}
       <VisualizadorDocumentoPadraoModal
         isOpen={Boolean(docToPrint)}
         onClose={() => setDocToPrint(null)}
@@ -163,6 +184,7 @@ export const AtendimentoDocumentosGenerator: React.FC<Props> = ({ atendimento, p
         empresaData={empresaData}
         empresas={empresas}
         associados={associadoData ? [associadoData] : []}
+        atendimentos={[atendimento]}
         initialPlaceholderValues={placeholderValues}
         customTitle={`${docToPrint?.nome || 'Documento'} • Atendimento #${atendimento.id.substring(0, 8).toUpperCase()}`}
       />

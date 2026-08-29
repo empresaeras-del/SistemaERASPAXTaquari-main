@@ -13,13 +13,29 @@ import {
   Search,
   CheckCircle2,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Flame,
+  CreditCard,
+  Hospital,
+  Truck,
+  ChevronDown,
+  ChevronRight,
+  Sparkles,
+  RotateCcw,
+  Layers
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { DocumentoPadrao, TipoDocumento } from '../../types/documentos';
-import { Empresa } from '../../services/empresasService';
-import { Associado } from '../../services/associadosService';
+import { Empresa, getEmpresas } from '../../services/empresasService';
+import { Associado, getAssociados } from '../../services/associadosService';
+import { Atendimento } from '../../types/atendimentos';
+import { getAtendimentos } from '../../services/atendimentosService';
+import { PlanoPax } from '../../types/planosPax';
+import { Credenciado } from '../../types/credenciados';
+import { Fornecedor } from '../../types/fornecedores';
 import { formatLocalDate } from '../../utils/dateUtils';
+import { getAllFromIDB } from '../../lib/idb';
+import { supabase } from '../../lib/supabase';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
 
@@ -38,9 +54,17 @@ export interface VisualizadorDocumentoPadraoModalProps {
   empresaData?: Empresa | null;
   empresas?: Empresa[];
   associados?: Associado[];
+  atendimentos?: Atendimento[];
+  planos?: PlanoPax[];
+  credenciados?: Credenciado[];
+  fornecedores?: Fornecedor[];
   initialPlaceholderValues?: Record<string, string>;
   onEmpresaSelect?: (empresaId: string) => void;
   onAssociadoSelect?: (associadoId: string) => void;
+  onAtendimentoSelect?: (atendimentoId: string) => void;
+  onPlanoSelect?: (planoId: string) => void;
+  onCredenciadoSelect?: (credenciadoId: string) => void;
+  onFornecedorSelect?: (fornecedorId: string) => void;
   customTitle?: string;
 }
 
@@ -49,11 +73,19 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   onClose,
   documento,
   empresaData: initialEmpresaData,
-  empresas = [],
-  associados = [],
+  empresas: propEmpresas = [],
+  associados: propAssociados = [],
+  atendimentos: propAtendimentos = [],
+  planos: propPlanos = [],
+  credenciados: propCredenciados = [],
+  fornecedores: propFornecedores = [],
   initialPlaceholderValues = {},
   onEmpresaSelect,
   onAssociadoSelect,
+  onAtendimentoSelect,
+  onPlanoSelect,
+  onCredenciadoSelect,
+  onFornecedorSelect,
   customTitle
 }) => {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
@@ -61,12 +93,117 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   const [showSidebar, setShowSidebar] = useState<boolean>(true);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [searchVar, setSearchVar] = useState('');
+  
+  // Entidades carregadas (props ou autônomas)
+  const [empresas, setEmpresas] = useState<Empresa[]>(propEmpresas);
+  const [associados, setAssociados] = useState<Associado[]>(propAssociados);
+  const [atendimentos, setAtendimentos] = useState<Atendimento[]>(propAtendimentos);
+  const [planos, setPlanos] = useState<PlanoPax[]>(propPlanos);
+  const [credenciados, setCredenciados] = useState<Credenciado[]>(propCredenciados);
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>(propFornecedores);
+
+  // Seleções ativas
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<string>('');
   const [selectedAssociadoId, setSelectedAssociadoId] = useState<string>('');
+  const [selectedAtendimentoId, setSelectedAtendimentoId] = useState<string>('');
+  const [selectedPlanoId, setSelectedPlanoId] = useState<string>('');
+  const [selectedCredenciadoId, setSelectedCredenciadoId] = useState<string>('');
+  const [selectedFornecedorId, setSelectedFornecedorId] = useState<string>('');
+
   const [currentEmpresa, setCurrentEmpresa] = useState<Empresa | null>(initialEmpresaData || null);
   const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>(initialPlaceholderValues);
 
+  // Controle de accordions/seções abertas na sidebar
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    empresa: true,
+    associado: false,
+    atendimento: false,
+    plano: false,
+    credenciado: false,
+    fornecedor: false,
+  });
+
   const printAreaRef = useRef<HTMLDivElement>(null);
+
+  // Sincroniza listas vindas de props
+  useEffect(() => { if (propEmpresas.length > 0) setEmpresas(propEmpresas); }, [propEmpresas]);
+  useEffect(() => { if (propAssociados.length > 0) setAssociados(propAssociados); }, [propAssociados]);
+  useEffect(() => { if (propAtendimentos.length > 0) setAtendimentos(propAtendimentos); }, [propAtendimentos]);
+  useEffect(() => { if (propPlanos.length > 0) setPlanos(propPlanos); }, [propPlanos]);
+  useEffect(() => { if (propCredenciados.length > 0) setCredenciados(propCredenciados); }, [propCredenciados]);
+  useEffect(() => { if (propFornecedores.length > 0) setFornecedores(propFornecedores); }, [propFornecedores]);
+
+  // Carregamento autônomo e unificado caso as listas não sejam passadas por props
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const carregarEntidades = async () => {
+      try {
+        if (empresas.length === 0) {
+          const emps = await getEmpresas(true);
+          setEmpresas(emps || []);
+          if (!currentEmpresa && emps && emps.length > 0) {
+            setCurrentEmpresa(emps[0]);
+            setSelectedEmpresaId(emps[0].id);
+          }
+        }
+        if (associados.length === 0) {
+          const assocs = await getAssociados(true, 'all');
+          setAssociados(assocs || []);
+        }
+        if (atendimentos.length === 0) {
+          const atds = await getAtendimentos(true, 'all');
+          setAtendimentos(atds || []);
+        }
+        if (planos.length === 0) {
+          try {
+            const { data } = await supabase.from('planos_pax').select('*').is('deleted_at', null);
+            if (data && data.length > 0) {
+              setPlanos(data as PlanoPax[]);
+            } else {
+              const idbPlanos = await getAllFromIDB<PlanoPax>('planos_pax');
+              setPlanos(idbPlanos || []);
+            }
+          } catch (e) {
+            const idbPlanos = await getAllFromIDB<PlanoPax>('planos_pax');
+            setPlanos(idbPlanos || []);
+          }
+        }
+        if (credenciados.length === 0) {
+          try {
+            const { data } = await supabase.from('credenciados').select('*');
+            if (data && data.length > 0) {
+              setCredenciados(data as Credenciado[]);
+            } else {
+              const idbCreds = await getAllFromIDB<Credenciado>('credenciados');
+              setCredenciados(idbCreds || []);
+            }
+          } catch (e) {
+            const idbCreds = await getAllFromIDB<Credenciado>('credenciados');
+            setCredenciados(idbCreds || []);
+          }
+        }
+        if (fornecedores.length === 0) {
+          try {
+            const { data } = await supabase.from('fornecedores').select('*');
+            if (data && data.length > 0) {
+              setFornecedores(data as Fornecedor[]);
+            } else {
+              const idbForns = await getAllFromIDB<Fornecedor>('fornecedores');
+              setFornecedores(idbForns || []);
+            }
+          } catch (e) {
+            const idbForns = await getAllFromIDB<Fornecedor>('fornecedores');
+            setFornecedores(idbForns || []);
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar entidades para o visualizador:', e);
+      }
+    };
+
+    carregarEntidades();
+  }, [isOpen]);
 
   // Sincroniza empresa atual caso mude por props
   useEffect(() => {
@@ -76,7 +213,22 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     }
   }, [initialEmpresaData]);
 
-  // Inicializa valores de placeholders ao abrir o documento
+  // Detecção inteligente de módulos a partir das tags do documento
+  const modulosDetectados = useMemo(() => {
+    if (!documento?.conteudo) return { hasAtendimento: false, hasAssociado: false, hasPlano: false, hasCredenciado: false, hasFornecedor: false, hasEmpresa: true };
+    const content = documento.conteudo.toLowerCase();
+    
+    return {
+      hasAtendimento: /\{\{(falecido_|data_obito|hora_obito|local_obito|local_velorio|local_sepultamento|data_velorio|data_sepultamento|atendimento_|declaracao|medico_|crm_medico|rqe_medico|tanato|datanasc_falecido|cor_falecido|sexo_falecido)/i.test(content),
+      hasAssociado: /\{\{(associado_|numero_contrato|data_adesao|quantidade_dependentes|valor_mensalidade)/i.test(content),
+      hasPlano: /\{\{(plano_|valor_mensalidade)/i.test(content),
+      hasCredenciado: /\{\{credenciado_/i.test(content),
+      hasFornecedor: /\{\{fornecedor_/i.test(content),
+      hasEmpresa: /\{\{empresa_/i.test(content),
+    };
+  }, [documento?.conteudo]);
+
+  // Inicializa valores de placeholders e abre accordions relevantes
   useEffect(() => {
     if (!documento || !isOpen) return;
 
@@ -103,14 +255,26 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
 
     if (currentEmpresa) {
       if (!initialVals['{{empresa_nome}}']) initialVals['{{empresa_nome}}'] = currentEmpresa.nome_fantasia || currentEmpresa.razao_social || '';
+      if (!initialVals['{{empresa_razao_social}}']) initialVals['{{empresa_razao_social}}'] = currentEmpresa.razao_social || currentEmpresa.nome_fantasia || '';
       if (!initialVals['{{empresa_cnpj}}']) initialVals['{{empresa_cnpj}}'] = currentEmpresa.cnpj || '';
       if (!initialVals['{{empresa_endereco}}']) initialVals['{{empresa_endereco}}'] = currentEmpresa.endereco || '';
       if (!initialVals['{{empresa_telefone}}']) initialVals['{{empresa_telefone}}'] = currentEmpresa.telefone || '';
       if (!initialVals['{{empresa_email}}']) initialVals['{{empresa_email}}'] = currentEmpresa.email || '';
+      if (!initialVals['{{empresa_chave_pix}}']) initialVals['{{empresa_chave_pix}}'] = currentEmpresa.chave_pix || '';
     }
 
     setPlaceholderValues(initialVals);
-  }, [documento, isOpen]);
+
+    // Ajusta seções abertas com base no tipo de documento detectado
+    setOpenSections({
+      empresa: true,
+      atendimento: modulosDetectados.hasAtendimento,
+      associado: modulosDetectados.hasAssociado,
+      plano: modulosDetectados.hasPlano,
+      credenciado: modulosDetectados.hasCredenciado,
+      fornecedor: modulosDetectados.hasFornecedor,
+    });
+  }, [documento, isOpen, modulosDetectados]);
 
   // Manipulador de troca de empresa
   const handleEmpresaChange = (empresaId: string) => {
@@ -122,10 +286,12 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
       setPlaceholderValues(prev => ({
         ...prev,
         '{{empresa_nome}}': emp.nome_fantasia || emp.razao_social || '',
+        '{{empresa_razao_social}}': emp.razao_social || emp.nome_fantasia || '',
         '{{empresa_cnpj}}': emp.cnpj || '',
         '{{empresa_endereco}}': emp.endereco || '',
         '{{empresa_telefone}}': emp.telefone || '',
         '{{empresa_email}}': emp.email || '',
+        '{{empresa_chave_pix}}': emp.chave_pix || '',
       }));
     }
 
@@ -141,39 +307,40 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     if (!assoc) return;
 
     const enderecoCompleto = [
-      assoc.endereco_logradouro,
-      assoc.endereco_numero ? `nº ${assoc.endereco_numero}` : '',
-      assoc.endereco_bairro,
-      assoc.endereco_cidade,
-      assoc.endereco_cep ? `CEP: ${assoc.endereco_cep}` : ''
+      assoc.endereco_logradouro || assoc.logradouro,
+      (assoc.endereco_numero || assoc.numero) ? `nº ${assoc.endereco_numero || assoc.numero}` : '',
+      assoc.endereco_bairro || assoc.bairro,
+      assoc.endereco_cidade || assoc.cidade,
+      (assoc.endereco_cep || assoc.cep) ? `CEP: ${assoc.endereco_cep || assoc.cep}` : ''
     ].filter(Boolean).join(', ');
 
     setPlaceholderValues(prev => {
       const nv = { ...prev };
-      const setIfPresent = (k: string, v: string) => { if (k in nv || true) nv[k] = v; };
-      setIfPresent('{{associado_nome}}', assoc.nome || '');
-      setIfPresent('{{associado_cpf}}', assoc.cpf || '');
-      setIfPresent('{{associado_rg}}', assoc.rg || '');
-      setIfPresent('{{associado_data_nasc}}', assoc.data_nascimento ? formatLocalDate(assoc.data_nascimento) : '');
-      setIfPresent('{{associado_sexo}}', assoc.sexo || '');
-      setIfPresent('{{associado_nome_pai}}', assoc.nome_pai || '');
-      setIfPresent('{{associado_nome_mae}}', assoc.nome_mae || '');
-      setIfPresent('{{associado_telefone}}', assoc.telefone || '');
-      setIfPresent('{{associado_email}}', assoc.email || '');
-      setIfPresent('{{associado_endereco}}', enderecoCompleto);
-      setIfPresent('{{associado_logradouro}}', assoc.endereco_logradouro || '');
-      setIfPresent('{{associado_numero}}', assoc.endereco_numero || '');
-      setIfPresent('{{associado_bairro}}', assoc.endereco_bairro || '');
-      setIfPresent('{{associado_cidade}}', assoc.endereco_cidade || '');
-      setIfPresent('{{associado_cep}}', assoc.endereco_cep || '');
-      setIfPresent('{{associado_status}}', assoc.status || '');
-      setIfPresent('{{plano_atual}}', assoc.plano_nome || '');
-      setIfPresent('{{plano_nome}}', assoc.plano_nome || '');
-      setIfPresent('{{numero_contrato}}', assoc.numero_contrato || (assoc as any).numero_contrato_fisico || assoc.id.substring(0, 8).toUpperCase());
-      setIfPresent('{{valor_mensalidade}}', assoc.valor_plano ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(assoc.valor_plano) : '');
-      setIfPresent('{{quantidade_dependentes}}', (assoc.dependentes?.length || 0).toString());
-      setIfPresent('{{data_adesao}}', assoc.data_adesao ? formatLocalDate(assoc.data_adesao) : '');
-      setIfPresent('{{associado_dependentes}}', (assoc.dependentes && assoc.dependentes.length > 0) 
+      const setVar = (k: string, v: string) => { nv[k] = v; };
+
+      setVar('{{associado_nome}}', assoc.nome || '');
+      setVar('{{associado_cpf}}', assoc.cpf || '');
+      setVar('{{associado_rg}}', assoc.rg || '');
+      setVar('{{associado_data_nasc}}', assoc.data_nascimento ? formatLocalDate(assoc.data_nascimento) : '');
+      setVar('{{associado_sexo}}', assoc.sexo || '');
+      setVar('{{associado_nome_pai}}', assoc.nome_pai || '');
+      setVar('{{associado_nome_mae}}', assoc.nome_mae || '');
+      setVar('{{associado_telefone}}', assoc.telefone || '');
+      setVar('{{associado_email}}', assoc.email || '');
+      setVar('{{associado_endereco}}', enderecoCompleto);
+      setVar('{{associado_logradouro}}', assoc.endereco_logradouro || assoc.logradouro || '');
+      setVar('{{associado_numero}}', assoc.endereco_numero || assoc.numero || '');
+      setVar('{{associado_bairro}}', assoc.endereco_bairro || assoc.bairro || '');
+      setVar('{{associado_cidade}}', assoc.endereco_cidade || assoc.cidade || '');
+      setVar('{{associado_cep}}', assoc.endereco_cep || assoc.cep || '');
+      setVar('{{associado_status}}', (assoc.status || '').toUpperCase());
+      setVar('{{plano_atual}}', assoc.plano_nome || '');
+      setVar('{{plano_nome}}', assoc.plano_nome || '');
+      setVar('{{numero_contrato}}', assoc.numero_contrato || (assoc as any).numero_contrato_fisico || assoc.id.substring(0, 8).toUpperCase());
+      setVar('{{valor_mensalidade}}', assoc.valor_plano ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(assoc.valor_plano) : '');
+      setVar('{{quantidade_dependentes}}', (assoc.dependentes?.length || 0).toString());
+      setVar('{{data_adesao}}', assoc.data_adesao ? formatLocalDate(assoc.data_adesao) : '');
+      setVar('{{associado_dependentes}}', (assoc.dependentes && assoc.dependentes.length > 0) 
         ? assoc.dependentes.map(d => `${d.nome} (${d.parentesco || 'Dependente'} - CPF: ${d.cpf || 'Não inf.'})`).join('<br/>') 
         : 'Nenhum dependente vinculado');
       return nv;
@@ -182,6 +349,178 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     if (onAssociadoSelect) {
       onAssociadoSelect(associadoId);
     }
+  };
+
+  // Manipulador de seleção de Atendimento Funerário / Óbito
+  const handleAtendimentoChange = (atendimentoId: string) => {
+    setSelectedAtendimentoId(atendimentoId);
+    const atd = atendimentos.find(a => a.id === atendimentoId);
+    if (!atd) return;
+
+    setPlaceholderValues(prev => {
+      const nv = { ...prev };
+      const setVar = (k: string, v: string) => { nv[k] = v; };
+
+      setVar('{{falecido_nome}}', atd.falecido_nome || '');
+      setVar('{{atendimento_falecido_nome}}', atd.falecido_nome || '');
+      setVar('{{falecido_cpf}}', atd.falecido_cpf || '');
+      setVar('{{falecido_data_nascimento}}', atd.falecido_data_nascimento ? formatLocalDate(atd.falecido_data_nascimento) : '');
+      setVar('{{datanasc_falecido}}', atd.falecido_data_nascimento ? formatLocalDate(atd.falecido_data_nascimento) : '');
+      setVar('{{data_obito}}', atd.data_obito ? formatLocalDate(atd.data_obito) : '');
+      setVar('{{hora_obito}}', (atd as any).hora_obito || '');
+      setVar('{{local_obito}}', (atd as any).local_obito || '');
+      setVar('{{local_velorio}}', atd.local_velorio || '');
+      setVar('{{local_sepultamento}}', atd.local_sepultamento || '');
+      setVar('{{data_velorio}}', atd.data_velorio ? formatLocalDate(atd.data_velorio) : '');
+      setVar('{{data_sepultamento}}', atd.data_sepultamento ? formatLocalDate(atd.data_sepultamento) : '');
+      setVar('{{atendimento_valor}}', atd.valor_total ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(atd.valor_total) : 'R$ 0,00');
+      setVar('{{atendimento_status}}', (atd.status || '').toUpperCase());
+      setVar('{{cor_falecido}}', (atd as any).cor_falecido || (atd as any).etnia || '');
+      setVar('{{sexo_falecido}}', (atd as any).sexo_falecido || (atd as any).sexo || '');
+      setVar('{{declaracaoobito}}', (atd as any).declaracao_obito || (atd as any).numero_do || '');
+      setVar('{{declaracao_obito}}', (atd as any).declaracao_obito || (atd as any).numero_do || '');
+      setVar('{{medico_resp}}', (atd as any).medico_responsavel || (atd as any).medico_resp || '');
+      setVar('{{medico_responsavel}}', (atd as any).medico_responsavel || (atd as any).medico_resp || '');
+      setVar('{{crm_medico}}', (atd as any).crm_medico || '');
+      setVar('{{rqe_medico}}', (atd as any).rqe_medico || '');
+      setVar('{{inicio_tanato}}', (atd as any).inicio_tanato || '');
+      setVar('{{termino_tanato}}', (atd as any).termino_tanato || '');
+
+      return nv;
+    });
+
+    // Se o atendimento possui associado_id vinculado, preenche automaticamente os dados do associado
+    if (atd.associado_id && (!selectedAssociadoId || selectedAssociadoId !== atd.associado_id)) {
+      handleAssociadoChange(atd.associado_id);
+    }
+
+    if (onAtendimentoSelect) {
+      onAtendimentoSelect(atendimentoId);
+    }
+  };
+
+  // Manipulador de seleção de Plano PAX
+  const handlePlanoChange = (planoId: string) => {
+    setSelectedPlanoId(planoId);
+    const plano = planos.find(p => p.id === planoId);
+    if (!plano) return;
+
+    setPlaceholderValues(prev => {
+      const nv = { ...prev };
+      const setVar = (k: string, v: string) => { nv[k] = v; };
+
+      setVar('{{plano_nome}}', plano.nome || '');
+      setVar('{{plano_atual}}', plano.nome || '');
+      setVar('{{plano_codigo}}', plano.codigo || '');
+      setVar('{{plano_tipo}}', plano.tipo_plano === 'individual' ? 'Individual' : 'Coletivo / Familiar');
+      setVar('{{valor_mensalidade}}', plano.valor_mensalidade ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plano.valor_mensalidade) : 'R$ 0,00');
+      setVar('{{plano_taxa_adesao}}', plano.taxa_adesao ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plano.taxa_adesao) : 'R$ 0,00');
+      setVar('{{plano_carencia}}', `${plano.carencia_geral_dias || 0} dias`);
+      setVar('{{plano_carencia_geral}}', `${plano.carencia_geral_dias || 0} dias`);
+      setVar('{{plano_carencia_acidente}}', `${plano.carencia_acidente_dias || 0} dias`);
+      setVar('{{plano_carencia_morte_natural}}', `${plano.carencia_morte_natural_dias || 0} dias`);
+      setVar('{{plano_limite_vidas}}', plano.limite_vidas ? String(plano.limite_vidas) : 'Ilimitado');
+      setVar('{{plano_vigencia_inicio}}', plano.vigencia_inicio ? formatLocalDate(plano.vigencia_inicio) : '');
+      setVar('{{plano_vigencia_fim}}', plano.vigencia_fim ? formatLocalDate(plano.vigencia_fim) : '');
+
+      return nv;
+    });
+
+    if (onPlanoSelect) {
+      onPlanoSelect(planoId);
+    }
+  };
+
+  // Manipulador de seleção de Rede Credenciada / Prestadores
+  const handleCredenciadoChange = (credenciadoId: string) => {
+    setSelectedCredenciadoId(credenciadoId);
+    const cred = credenciados.find(c => c.id === credenciadoId);
+    if (!cred) return;
+
+    const enderecoCompleto = [
+      cred.endereco,
+      cred.numero ? `nº ${cred.numero}` : '',
+      cred.complemento,
+      cred.bairro,
+      cred.cidade,
+      cred.estado,
+      cred.cep ? `CEP: ${cred.cep}` : ''
+    ].filter(Boolean).join(', ');
+
+    setPlaceholderValues(prev => {
+      const nv = { ...prev };
+      const setVar = (k: string, v: string) => { nv[k] = v; };
+
+      setVar('{{credenciado_nome}}', cred.razao_social || cred.nome_fantasia || '');
+      setVar('{{credenciado_fantasia}}', cred.nome_fantasia || cred.razao_social || '');
+      setVar('{{credenciado_cnpj}}', cred.cnpj_cpf || '');
+      setVar('{{credenciado_endereco}}', enderecoCompleto);
+      setVar('{{credenciado_cidade}}', cred.cidade ? `${cred.cidade}${cred.estado ? ' - ' + cred.estado : ''}` : '');
+      setVar('{{credenciado_telefone}}', cred.telefone || '');
+      setVar('{{credenciado_email}}', cred.email || '');
+      setVar('{{credenciado_responsavel}}', cred.responsavel_nome || '');
+      setVar('{{credenciado_ramo}}', cred.ramo_atividade || '');
+      setVar('{{credenciado_chave_pix}}', cred.chave_pix || '');
+
+      return nv;
+    });
+
+    if (onCredenciadoSelect) {
+      onCredenciadoSelect(credenciadoId);
+    }
+  };
+
+  // Manipulador de seleção de Fornecedores
+  const handleFornecedorChange = (fornecedorId: string) => {
+    setSelectedFornecedorId(fornecedorId);
+    const forn = fornecedores.find(f => f.id === fornecedorId);
+    if (!forn) return;
+
+    const enderecoCompleto = [
+      forn.logradouro,
+      forn.numero ? `nº ${forn.numero}` : '',
+      forn.complemento,
+      forn.bairro,
+      forn.cidade,
+      forn.uf,
+      forn.cep ? `CEP: ${forn.cep}` : ''
+    ].filter(Boolean).join(', ');
+
+    setPlaceholderValues(prev => {
+      const nv = { ...prev };
+      const setVar = (k: string, v: string) => { nv[k] = v; };
+
+      setVar('{{fornecedor_nome}}', forn.razao_social || forn.nome_fantasia || '');
+      setVar('{{fornecedor_fantasia}}', forn.nome_fantasia || forn.razao_social || '');
+      setVar('{{fornecedor_cnpj}}', forn.cnpj_cpf || '');
+      setVar('{{fornecedor_endereco}}', enderecoCompleto);
+      setVar('{{fornecedor_cidade}}', forn.cidade ? `${forn.cidade}${forn.uf ? ' - ' + forn.uf : ''}` : '');
+      setVar('{{fornecedor_telefone}}', forn.telefone || forn.celular_whatsapp || '');
+      setVar('{{fornecedor_email}}', forn.email || '');
+      setVar('{{fornecedor_contato}}', forn.contato_nome || '');
+      setVar('{{fornecedor_chave_pix}}', forn.dados_bancarios?.chave_pix || '');
+
+      return nv;
+    });
+
+    if (onFornecedorSelect) {
+      onFornecedorSelect(fornecedorId);
+    }
+  };
+
+  // Toggle de seção do accordion
+  const toggleSection = (sec: string) => {
+    setOpenSections(prev => ({ ...prev, [sec]: !prev[sec] }));
+  };
+
+  // Reset de seleções automáticas
+  const handleResetSelections = () => {
+    setSelectedAssociadoId('');
+    setSelectedAtendimentoId('');
+    setSelectedPlanoId('');
+    setSelectedCredenciadoId('');
+    setSelectedFornecedorId('');
+    toast.success('Seleções limpas.');
   };
 
   // Controles de zoom
@@ -230,7 +569,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     return html;
   }, [documento?.conteudo, placeholderValues]);
 
-  // Quantidade de variáveis pendentes
+  // Contadores
   const totalVars = Object.keys(placeholderValues).length;
   const preenchidasVars = Object.values(placeholderValues).filter(v => v && v.trim().length > 0).length;
 
@@ -419,7 +758,6 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
       });
     } catch (err) {
       console.error('Erro ao gerar PDF do documento:', err);
-      // Fallback para impressão caso doc.html falhe
       toast.error('Não foi possível gerar o PDF direto. Abrindo diálogo de impressão...', { id: 'export-doc-pdf' });
       setIsExportingPDF(false);
       handleImprimir();
@@ -448,55 +786,49 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 {TIPO_LABELS[documento.tipo as TipoDocumento] || documento.tipo}
               </span>
               <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border shrink-0 ${
-                documento.ativo 
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' 
-                  : 'bg-slate-500/20 text-slate-300 border-slate-500/30'
+                documento.ativo ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600'
               }`}>
                 {documento.ativo ? 'Ativo' : 'Inativo'}
               </span>
             </div>
-            <p className="text-xs text-slate-400 hidden sm:block truncate">
+            <p className="text-xs text-slate-400 truncate mt-0.5">
               Visualizador Interativo • {preenchidasVars} de {totalVars} variáveis preenchidas
             </p>
           </div>
         </div>
 
-        {/* Centro: Controles de Orientação, Zoom e Barra de Variáveis */}
-        <div className="flex items-center gap-2 bg-[#1c222e] p-1.5 rounded-xl border border-[#2d3544]">
-          
-          {/* Alternância de Sidebar */}
+        {/* Centro: Controles de Orientação, Zoom e Sidebar */}
+        <div className="hidden md:flex items-center gap-3 bg-[#181d27] px-3 py-1.5 rounded-xl border border-[#2d3544]">
           <button
             onClick={() => setShowSidebar(!showSidebar)}
-            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-              showSidebar 
-                ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30' 
-                : 'text-slate-400 hover:text-white hover:bg-[#2d3544]'
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
+              showSidebar ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:text-white'
             }`}
-            title={showSidebar ? "Ocultar painel de variáveis" : "Exibir painel de variáveis"}
+            title={showSidebar ? "Ocultar Painel Lateral" : "Exibir Painel Lateral"}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Variáveis</span>
+            <span>Painel de Dados</span>
           </button>
 
           <div className="h-4 w-px bg-[#2d3544]" />
 
-          {/* Botão de Orientação: Retrato vs Paisagem */}
-          <div className="flex items-center bg-[#13171f] rounded-lg p-0.5 border border-[#2d3544]">
+          {/* Seletor de Orientação */}
+          <div className="flex items-center gap-1 bg-[#13171f] p-0.5 rounded-lg border border-[#2d3544]">
             <button
               onClick={() => setOrientation('portrait')}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1 ${
+              className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md transition-all ${
                 orientation === 'portrait' 
                   ? 'bg-blue-600 text-white shadow-sm' 
                   : 'text-slate-400 hover:text-white'
               }`}
               title="Modo Retrato (Vertical - A4 210x297mm)"
             >
-              <FileText className="w-3.5 h-3.5" />
+              <RotateCw className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Retrato</span>
             </button>
             <button
               onClick={() => setOrientation('landscape')}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1 ${
+              className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md transition-all ${
                 orientation === 'landscape' 
                   ? 'bg-blue-600 text-white shadow-sm' 
                   : 'text-slate-400 hover:text-white'
@@ -571,94 +903,339 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
         </div>
       </header>
 
-      {/* ─── CORPO PRINCIPAL: SIDEBAR DE VARIÁVEIS + ÁREA DE TRABALHO ─── */}
+      {/* ─── CORPO PRINCIPAL: SIDEBAR MULTI-MÓDULO + ÁREA DE TRABALHO ─── */}
       <div className="flex-1 flex overflow-hidden relative">
         
-        {/* SIDEBAR DE VARIÁVEIS & SELETORES */}
+        {/* SIDEBAR DE INSERÇÃO AUTOMÁTICA E VARIÁVEIS */}
         {showSidebar && (
-          <aside className="w-80 lg:w-96 bg-[#13171f] border-r border-[#2d3544] flex flex-col shrink-0 z-20 shadow-2xl animate-in slide-in-from-left duration-200">
+          <aside className="w-80 lg:w-[410px] bg-[#13171f] border-r border-[#2d3544] flex flex-col shrink-0 z-20 shadow-2xl animate-in slide-in-from-left duration-200">
             
             {/* Header da Sidebar */}
             <div className="p-4 border-b border-[#2d3544] bg-[#181d27]">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <SlidersHorizontal className="w-4 h-4 text-blue-400" />
-                  Preenchimento de Variáveis
+                  Inserção Automática de Dados
                 </h3>
                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
                   {variaveisDoDocumento.length} variáveis
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Os dados preenchidos atualizam o documento em tempo real.
+                Selecione os registros dos módulos abaixo para preenchimento imediato.
               </p>
             </div>
 
             {/* Conteúdo Rolável da Sidebar */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               
-              {/* Seletor de Empresa Emissora */}
-              {empresas.length > 0 && (
-                <div className="bg-[#181d27] p-3.5 rounded-xl border border-[#2d3544] space-y-2">
-                  <label className="block text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5" />
-                    Empresa Emissora
-                  </label>
-                  <select
-                    value={selectedEmpresaId}
-                    onChange={(e) => handleEmpresaChange(e.target.value)}
-                    className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none transition-colors"
+              {/* ── SELETOR 1: EMPRESA EMISSORA ── */}
+              <div className="bg-[#181d27] rounded-xl border border-[#2d3544] overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleSection('empresa')}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-[#202735] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
+                    <Building2 className="w-4 h-4" />
+                    <span>Empresa Emissora</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedEmpresaId && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Empresa Selecionada" />}
+                    {openSections.empresa ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {openSections.empresa && (
+                  <div className="p-3 pt-0 border-t border-[#2d3544]/60 space-y-2">
+                    <select
+                      value={selectedEmpresaId}
+                      onChange={(e) => handleEmpresaChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-amber-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione a empresa...</option>
+                      {empresas.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.nome_fantasia || emp.razao_social}
+                        </option>
+                      ))}
+                    </select>
+                    {currentEmpresa && (
+                      <div className="text-[10px] text-slate-400 pt-1.5 flex flex-wrap items-center gap-2 border-t border-[#2d3544]">
+                        <span className="flex items-center gap-1">
+                          {currentEmpresa.logo_url ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-amber-400" />}
+                          Logo: {currentEmpresa.logo_url ? 'Vinculado' : 'Sem logo'}
+                        </span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1">
+                          {currentEmpresa.assinatura_url ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-amber-400" />}
+                          Assinatura: {currentEmpresa.assinatura_url ? 'Vinculada' : 'Sem assinatura'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ── SELETOR 2: ATENDIMENTO / ÓBITO ── */}
+              <div className={`bg-[#181d27] rounded-xl border transition-all ${
+                modulosDetectados.hasAtendimento ? 'border-indigo-500/50 shadow-md shadow-indigo-500/5' : 'border-[#2d3544]'
+              } overflow-hidden`}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('atendimento')}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-[#202735] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                    <Flame className="w-4 h-4" />
+                    <span>Atendimento / Óbito</span>
+                    {modulosDetectados.hasAtendimento && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Detectado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedAtendimentoId && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Atendimento Selecionado" />}
+                    {openSections.atendimento ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {openSections.atendimento && (
+                  <div className="p-3 pt-0 border-t border-[#2d3544]/60 space-y-2">
+                    <select
+                      value={selectedAtendimentoId}
+                      onChange={(e) => handleAtendimentoChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-indigo-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione o atendimento do falecido...</option>
+                      {atendimentos.map(atd => (
+                        <option key={atd.id} value={atd.id}>
+                          {atd.falecido_nome} {atd.data_obito ? `(Óbito: ${formatLocalDate(atd.data_obito)})` : ''} - Status: {(atd.status || '').toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400">
+                      Preenche falecido, datas de óbito, velório, sepultamento, médico, CRM, tanatopraxia e vincula associado se houver.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── SELETOR 3: ASSOCIADO & CONTRATO ── */}
+              <div className={`bg-[#181d27] rounded-xl border transition-all ${
+                modulosDetectados.hasAssociado ? 'border-blue-500/50 shadow-md shadow-blue-500/5' : 'border-[#2d3544]'
+              } overflow-hidden`}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('associado')}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-[#202735] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-blue-400 uppercase tracking-wider">
+                    <User className="w-4 h-4" />
+                    <span>Associado & Contrato</span>
+                    {modulosDetectados.hasAssociado && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Detectado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedAssociadoId && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Associado Selecionado" />}
+                    {openSections.associado ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {openSections.associado && (
+                  <div className="p-3 pt-0 border-t border-[#2d3544]/60 space-y-2">
+                    <select
+                      value={selectedAssociadoId}
+                      onChange={(e) => handleAssociadoChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione um associado...</option>
+                      {associados.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.nome} {a.cpf ? `(CPF: ${a.cpf})` : ''} {a.numero_contrato ? `[Contrato: ${a.numero_contrato}]` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400">
+                      Preenche nome, CPF, endereço, número do contrato, plano, dependentes e data de adesão.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── SELETOR 4: PLANO PAX ── */}
+              <div className={`bg-[#181d27] rounded-xl border transition-all ${
+                modulosDetectados.hasPlano ? 'border-emerald-500/50 shadow-md shadow-emerald-500/5' : 'border-[#2d3544]'
+              } overflow-hidden`}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('plano')}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-[#202735] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                    <CreditCard className="w-4 h-4" />
+                    <span>Plano PAX</span>
+                    {modulosDetectados.hasPlano && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Detectado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedPlanoId && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Plano Selecionado" />}
+                    {openSections.plano ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {openSections.plano && (
+                  <div className="p-3 pt-0 border-t border-[#2d3544]/60 space-y-2">
+                    <select
+                      value={selectedPlanoId}
+                      onChange={(e) => handlePlanoChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-emerald-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione o plano PAX...</option>
+                      {planos.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.nome} ({p.codigo}) - {p.tipo_plano === 'individual' ? 'Individual' : 'Coletivo'} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor_mensalidade || 0)}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400">
+                      Preenche nome do plano, código, tipo, valor de mensalidade, taxa de adesão e carências.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── SELETOR 5: REDE CREDENCIADA / PRESTADOR ── */}
+              <div className={`bg-[#181d27] rounded-xl border transition-all ${
+                modulosDetectados.hasCredenciado ? 'border-rose-500/50 shadow-md shadow-rose-500/5' : 'border-[#2d3544]'
+              } overflow-hidden`}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('credenciado')}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-[#202735] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-rose-400 uppercase tracking-wider">
+                    <Hospital className="w-4 h-4" />
+                    <span>Rede Credenciada / Prestador</span>
+                    {modulosDetectados.hasCredenciado && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Detectado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedCredenciadoId && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Credenciado Selecionado" />}
+                    {openSections.credenciado ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {openSections.credenciado && (
+                  <div className="p-3 pt-0 border-t border-[#2d3544]/60 space-y-2">
+                    <select
+                      value={selectedCredenciadoId}
+                      onChange={(e) => handleCredenciadoChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-rose-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione o credenciado / clínica...</option>
+                      {credenciados.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.razao_social} {c.nome_fantasia ? `(${c.nome_fantasia})` : ''} - {c.ramo_atividade || 'Saúde'}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400">
+                      Preenche razão social, nome fantasia, CNPJ/CPF, endereço, telefone, e-mail e responsável.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── SELETOR 6: FORNECEDOR ── */}
+              <div className={`bg-[#181d27] rounded-xl border transition-all ${
+                modulosDetectados.hasFornecedor ? 'border-orange-500/50 shadow-md shadow-orange-500/5' : 'border-[#2d3544]'
+              } overflow-hidden`}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('fornecedor')}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-[#202735] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-orange-400 uppercase tracking-wider">
+                    <Truck className="w-4 h-4" />
+                    <span>Fornecedor</span>
+                    {modulosDetectados.hasFornecedor && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Detectado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedFornecedorId && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Fornecedor Selecionado" />}
+                    {openSections.fornecedor ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {openSections.fornecedor && (
+                  <div className="p-3 pt-0 border-t border-[#2d3544]/60 space-y-2">
+                    <select
+                      value={selectedFornecedorId}
+                      onChange={(e) => handleFornecedorChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-orange-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione o fornecedor...</option>
+                      {fornecedores.map(f => (
+                        <option key={f.id} value={f.id}>
+                          {f.razao_social} {f.nome_fantasia ? `(${f.nome_fantasia})` : ''} - {f.cnpj_cpf}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400">
+                      Preenche razão social, CNPJ/CPF, endereço, telefone, contato e dados bancários/PIX.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Botão para limpar seleções */}
+              {(selectedAssociadoId || selectedAtendimentoId || selectedPlanoId || selectedCredenciadoId || selectedFornecedorId) && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleResetSelections}
+                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-400 transition-colors"
                   >
-                    <option value="">Selecione a empresa...</option>
-                    {empresas.map(emp => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.nome_fantasia || emp.razao_social}
-                      </option>
-                    ))}
-                  </select>
-                  {currentEmpresa && (
-                    <div className="text-[10px] text-slate-400 pt-1.5 flex flex-wrap items-center gap-2 border-t border-[#2d3544]">
-                      <span className="flex items-center gap-1">
-                        {currentEmpresa.logo_url ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-amber-400" />}
-                        Logo: {currentEmpresa.logo_url ? 'Vinculado' : 'Sem logo'}
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        {currentEmpresa.assinatura_url ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-amber-400" />}
-                        Assinatura: {currentEmpresa.assinatura_url ? 'Vinculada' : 'Sem assinatura'}
-                      </span>
-                    </div>
-                  )}
+                    <RotateCcw className="w-3 h-3" />
+                    Limpar Seleções de Módulos
+                  </button>
                 </div>
               )}
 
-              {/* Seletor Rápido de Associado */}
-              {associados.length > 0 && (
-                <div className="bg-[#181d27] p-3.5 rounded-xl border border-[#2d3544] space-y-2">
-                  <label className="block text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5" />
-                    Associado (Preenchimento Automático)
-                  </label>
-                  <select
-                    value={selectedAssociadoId}
-                    onChange={(e) => handleAssociadoChange(e.target.value)}
-                    className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none transition-colors"
-                  >
-                    <option value="">Selecione um associado para preencher...</option>
-                    {associados.map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.nome} (CPF: {a.cpf || 'Sem CPF'})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-slate-400">
-                    Preenche nome, CPF, endereço, plano, dependentes e mensalidade automaticamente.
-                  </p>
+              {/* Divisor */}
+              <div className="border-t border-[#2d3544] pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-blue-400" />
+                    Variáveis do Documento
+                  </h4>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    {preenchidasVars} de {totalVars} preenchidas
+                  </span>
                 </div>
-              )}
+              </div>
 
               {/* Busca de Variáveis */}
-              {variaveisDoDocumento.length > 5 && (
+              {variaveisDoDocumento.length > 4 && (
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
@@ -676,7 +1253,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 </div>
               )}
 
-              {/* Campos de Inserção de Variáveis */}
+              {/* Campos de Inserção Manual/Ajuste de Variáveis */}
               <div className="space-y-3 pt-1">
                 {variaveisDoDocumento.length > 0 ? (
                   variaveisDoDocumento.map(variable => {
@@ -755,7 +1332,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                     const emptyVals: Record<string, string> = {};
                     Object.keys(placeholderValues).forEach(k => { emptyVals[k] = ''; });
                     setPlaceholderValues(emptyVals);
-                    setSelectedAssociadoId('');
+                    handleResetSelections();
                     toast.success('Campos limpos!');
                   }
                 }}
