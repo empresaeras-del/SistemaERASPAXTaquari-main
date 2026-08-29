@@ -11,7 +11,7 @@ import { downloadDocumento, isPdfDocument, isImageDocument } from '../../utils/d
 interface Props {
   associado: Associado;
   onClose: () => void;
-  onEdit: (associado: Associado) => void;
+  onEdit?: (associado: Associado) => void;
 }
 
 export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onEdit }) => {

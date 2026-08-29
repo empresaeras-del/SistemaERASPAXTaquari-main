@@ -1,37 +1,44 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAppContext } from "../context/AppContext";
 import { getAssociados, Associado } from "../services/associadosService";
+import { getEmpresas, Empresa } from "../services/empresasService";
 import { supabase } from "../lib/supabase";
 import { 
   Search, Filter, FileText, Download, LayoutGrid, List,
   Users, CheckCircle2, AlertCircle, XCircle, CreditCard,
-  Calendar, Eye, ChevronRight
-, Printer } from "lucide-react";
+  Calendar, Eye, ChevronRight, GitFork, Network,
+  Printer, Plus 
+} from "lucide-react";
 import { usePlanosPax } from "../hooks/usePlanosPax";
 import { formatLocalDate } from "../utils/dateUtils";
 
 import { NovoContratoWizard } from "../components/contratos/NovoContratoWizard";
-import { Plus } from "lucide-react";
+import { OrganogramaContratosCanvas } from "../components/contratos/OrganogramaContratosCanvas";
+import { AssociadoDetailsModal } from "../components/associados/AssociadoDetailsModal";
+
 export const ContratosPage: React.FC = () => {
   const { state } = useAppContext();
   const { planosAtivos: planos, calcularValor, planos: planosCompletos } = usePlanosPax();
   
   const [associados, setAssociados] = useState<Associado[]>([]);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [planoFilter, setPlanoFilter] = useState("todos");
-  const [viewMode, setViewMode] = useState<"grid" | "table">("table");
+  const [viewMode, setViewMode] = useState<"organograma" | "table" | "grid">("organograma");
   const [showNovoContrato, setShowNovoContrato] = useState(false);
+  const [selectedAssociadoDetails, setSelectedAssociadoDetails] = useState<Associado | null>(null);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getAssociados(
-        state.isOnline,
-        state.empresaSelecionada,
-      );
+      const [data, empresasList] = await Promise.all([
+        getAssociados(state.isOnline, state.empresaSelecionada),
+        getEmpresas(state.isOnline)
+      ]);
+      setEmpresas(empresasList || []);
       // Associados vinculados a um plano
       const comContrato = data.filter(a => a.plano_pax_id);
       setAssociados(comContrato);
@@ -298,26 +305,38 @@ export const ContratosPage: React.FC = () => {
           </select>
 
           {/* VIEW SWITCHER */}
-          <div className="flex items-center bg-bg-subtle border border-border-default p-1 rounded-xl ml-auto md:ml-0">
+          <div className="flex items-center bg-bg-subtle border border-border-default p-1 rounded-xl ml-auto md:ml-0 gap-1">
             <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
-              title="Visualização em Cards"
+              onClick={() => setViewMode('organograma')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'organograma' 
+                  ? 'bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white shadow-md shadow-blue-500/25' 
+                  : 'text-text-subtle hover:text-text-base hover:bg-bg-hover'
+              }`}
+              title="Visualização em Organograma Interativo tipo Canvas"
             >
-              <LayoutGrid className="w-4 h-4" />
+              <Network className="w-3.5 h-3.5" />
+              <span>Organograma</span>
             </button>
             <button
               onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base hover:bg-bg-hover'}`}
               title="Visualização em Tabela"
             >
               <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base hover:bg-bg-hover'}`}
+              title="Visualização em Cards"
+            >
+              <LayoutGrid className="w-4 h-4" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* CONTENT: GRID OR TABLE */}
+      {/* CONTENT: ORGANOGRAMA CANVAS, GRID OU TABELA */}
       {loading ? (
         <div className="py-20 text-center text-text-subtle flex flex-col items-center">
           <div className="w-8 h-8 border-3 border-[#3B82F6] border-t-transparent rounded-full animate-spin mb-3" />
@@ -331,6 +350,22 @@ export const ContratosPage: React.FC = () => {
             Não encontramos nenhum contrato com os filtros aplicados.
           </p>
         </div>
+      ) : viewMode === 'organograma' ? (
+        /* ORGANOGRAMA CANVAS VIEW */
+        <OrganogramaContratosCanvas
+          associados={filtered}
+          planos={planosCompletos?.length ? planosCompletos : (planos as any)}
+          empresaNome={
+            state.empresaSelecionada === 'all'
+              ? 'Todas as Unidades (Visão Global)'
+              : empresas.find(e => e.id === state.empresaSelecionada)?.nome_fantasia ||
+                empresas.find(e => e.id === state.empresaSelecionada)?.razao_social ||
+                'PAX & Funerária Taquari'
+          }
+          statusFilter={statusFilter}
+          planoFilter={planoFilter}
+          onSelectAssociado={(assoc) => setSelectedAssociadoDetails(assoc)}
+        />
       ) : viewMode === 'grid' ? (
         /* GRID VIEW */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -394,14 +429,11 @@ export const ContratosPage: React.FC = () => {
               </div>
 
               {/* CARD FOOTER ACTIONS */}
-              {/* Note: since "Contratos" are managed in Associados, this button could just be a visual placeholder or redirect to associados page if implemented */}
               <div className="flex items-center justify-end pt-3 border-t border-border-default/60 mt-2">
                 <button
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6]/20 transition-colors text-xs font-semibold"
-                  onClick={() => {
-                     // Could link to Associado details or Contrato details
-                  }}
-                  title="Detalhes do Contrato"
+                  onClick={() => setSelectedAssociadoDetails(a)}
+                  title="Ver Ficha Completa do Associado"
                 >
                   <Eye className="w-3.5 h-3.5" />
                   Ver Detalhes
@@ -423,6 +455,7 @@ export const ContratosPage: React.FC = () => {
                   <th className="px-5 py-4">Adesão</th>
                   <th className="px-5 py-4 text-right">Valor</th>
                   <th className="px-5 py-4 text-center">Status</th>
+                  <th className="px-5 py-4 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-default/50">
@@ -466,6 +499,15 @@ export const ContratosPage: React.FC = () => {
                         {getStatusBadge(a.status)}
                       </div>
                     </td>
+                    <td className="px-5 py-3 text-center">
+                      <button
+                        onClick={() => setSelectedAssociadoDetails(a)}
+                        className="p-1.5 rounded-lg text-text-subtle hover:text-[#3B82F6] hover:bg-bg-hover transition-colors"
+                        title="Ver Detalhes do Associado"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -473,6 +515,15 @@ export const ContratosPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* MODAL DETALHES DO ASSOCIADO */}
+      {selectedAssociadoDetails && (
+        <AssociadoDetailsModal
+          associado={selectedAssociadoDetails}
+          onClose={() => setSelectedAssociadoDetails(null)}
+        />
+      )}
+
       {showNovoContrato && (
         <NovoContratoWizard 
           onClose={() => setShowNovoContrato(false)}
