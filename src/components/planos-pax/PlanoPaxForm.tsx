@@ -9,6 +9,7 @@ import { SeletorItensPax } from './SeletorItensPax';
 import { useAppContext } from '../../context/AppContext';
 import { getAssociados } from '../../services/associadosService';
 import { Info, DollarSign, Clock, List as ListIcon, Users, MapPin, Shield, CreditCard, ArrowRight, ArrowLeft } from 'lucide-react';
+import { RegrasCalculoInfo } from '../associados/RegrasCalculoInfo';
 
 
 const optNum = z.preprocess(val => (val === '' || val === null || val === undefined || Number.isNaN(val as any)) ? null : val, z.coerce.number().nullable().optional()) as unknown as z.ZodType<number | null | undefined>;
@@ -397,7 +398,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                       />
                     </div>
 
-                    <div className="p-4 bg-bg-surface rounded-xl border border-border-default space-y-4">
+                    <div className="p-5 bg-bg-surface rounded-2xl border border-border-default space-y-4 shadow-sm">
                       <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider">Tipo de Plano</label>
                       <div className="flex gap-6">
                         <label className="flex items-center gap-3 cursor-pointer group">
@@ -418,6 +419,16 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                           />
                           <span className="text-text-base font-medium group-hover:text-[#3B82F6] transition-colors">Coletivo (Familiar)</span>
                         </label>
+                      </div>
+
+                      {/* Card com as Regras de Cálculo de Mensalidades para Planos Individuais e Coletivos */}
+                      <div className="pt-2">
+                        <RegrasCalculoInfo 
+                          initialTab={watch('tipo_plano') === 'coletivo' ? 'coletivo' : 'individual'}
+                          onTabChange={(tab) => {
+                            setValue('tipo_plano', tab, { shouldValidate: true, shouldDirty: true });
+                          }}
+                        />
                       </div>
                     </div>
 
