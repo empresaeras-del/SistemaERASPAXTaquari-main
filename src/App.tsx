@@ -1,6 +1,6 @@
 import { SystemAlertProvider } from './utils/systemAlert';
 import React, { Suspense, lazy, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
 import { ToastProvider } from './context/ToastContext';
@@ -145,9 +145,11 @@ export default function App() {
                         <Route path="requisicoes" element={<RequisicoesPage />} />
                         <Route path="contratos" element={<ContratosPage />} />
                         <Route path="atendimentos" element={<AtendimentosPage />} />
+                        <Route path="financeiro" element={<Navigate to="/financeiro/contas-a-receber" replace />} />
                         <Route path="financeiro/contas-a-receber" element={<ContasReceberPage />} />
                         <Route path="financeiro/contas-a-pagar" element={<ContasPagarPage />} />
                         <Route path="financeiro/caixas" element={<CaixasPage />} />
+                        <Route path="caixas" element={<CaixasPage />} />
                         <Route path="financeiro/contas-a-receber/nova" element={<ContasReceberFormPage />} />
                         <Route path="financeiro/contas-a-receber/:id/editar" element={<ContasReceberFormPage />} />
                         <Route path="financeiro/contas-a-pagar/nova" element={<ContasPagarFormPage />} />
@@ -161,8 +163,10 @@ export default function App() {
                         <Route path="auditoria" element={<AuditoriaPage />} />
                         <Route path="documentos" element={<DocumentosPadroesPage />} />
                         <Route path="configuracoes" element={<ConfiguracoesPage />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
                       </Route>
                     </Route>
+                    <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Suspense>
               </ErrorBoundary>

@@ -7,6 +7,28 @@ import { LoteCaixa, MovimentacaoCaixa } from '../types/caixas';
 import toast from 'react-hot-toast';
 import { Plus, RefreshCw, X, RotateCcw, ArrowUpRight, ArrowDownRight, Printer, Eye, FileText } from 'lucide-react';
 
+const formatCurrency = (val: number | string | undefined | null) => {
+  const num = Number(val) || 0;
+  return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+};
+
+const parseValor = (val: string | number) => {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (!val) return 0;
+  const parsed = parseFloat(String(val).replace(/\./g, '').replace(',', '.'));
+  return isNaN(parsed) ? 0 : parsed;
+};
+
+const formatDateSafe = (dateStr: string | null | undefined) => {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? '-' : d.toLocaleString('pt-BR');
+  } catch {
+    return '-';
+  }
+};
+
 export const CaixasPage: React.FC = () => {
   const { state } = useAppContext();
   const { confirm } = useConfirm();
@@ -161,7 +183,7 @@ export const CaixasPage: React.FC = () => {
         terminal_caixa: 'Caixa Principal',
         operador_id: state.user?.id || '',
         operador_nome: state.user?.nome || '',
-        saldo_inicial: Number(saldoInicialNovoLote),
+        saldo_inicial: parseValor(saldoInicialNovoLote),
         observacao_abertura: observacaoNovoLote
       });
       toast.success("Caixa aberto com sucesso!");
@@ -189,7 +211,7 @@ export const CaixasPage: React.FC = () => {
         state.isOnline, 
         loteAberto.id, 
         {
-          saldo_fechamento_informado: Number(saldoInformado), 
+          saldo_fechamento_informado: parseValor(saldoInformado), 
           observacao_fechamento: observacaoFechamento
         }
       );
@@ -218,7 +240,7 @@ export const CaixasPage: React.FC = () => {
         tenant_id: loteAberto.tenant_id,
         lote_id: loteAberto.id,
         tipo,
-        valor: Number(valorMov),
+        valor: parseValor(valorMov),
         descricao: descricaoMov,
         forma_pagamento: 'dinheiro' as const,
         data_movimentacao: new Date().toISOString(),
@@ -282,10 +304,6 @@ export const CaixasPage: React.FC = () => {
 
   const handlePrintLote = async (lote: LoteCaixa) => {
     await handleViewLoteDetails(lote, true);
-  };
-
-  const formatCurrency = (val: number | string) => {
-    return Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
   return (
@@ -384,7 +402,7 @@ export const CaixasPage: React.FC = () => {
                  <tbody className="divide-y divide-border-default">
                    {movimentacoes.map(mov => (
                      <tr key={mov.id} className={`hover:bg-bg-base/50 ${mov.estornado ? 'opacity-50' : ''}`}>
-                       <td className="p-3 text-text-subtle">{new Date(mov.data_movimentacao).toLocaleString()}</td>
+                       <td className="p-3 text-text-subtle">{formatDateSafe(mov.data_movimentacao)}</td>
                        <td className="p-3 uppercase">{mov.origem}</td>
                        <td className="p-3">
                          {mov.estornado && <span className="mr-2 px-1.5 py-0.5 bg-rose-500/10 text-rose-500 rounded text-[10px] uppercase font-bold tracking-wider no-underline inline-block">Estornado</span>}
@@ -433,8 +451,8 @@ export const CaixasPage: React.FC = () => {
                       </span>
                     </div>
                     <div className="text-sm text-text-subtle">
-                      Abertura: {new Date(lote.data_abertura).toLocaleString()}
-                      {lote.data_fechamento && ` | Fechamento: ${new Date(lote.data_fechamento).toLocaleString()}`}
+                      Abertura: {formatDateSafe(lote.data_abertura)}
+                      {lote.data_fechamento && ` | Fechamento: ${formatDateSafe(lote.data_fechamento)}`}
                     </div>
                     {lote.observacao_fechamento && (
                       <div className="mt-2 text-xs text-rose-500 bg-rose-500/10 p-2 rounded break-words">
@@ -546,9 +564,9 @@ export const CaixasPage: React.FC = () => {
                   Detalhes do Lote: {modalLoteDetalhes.lote.codigo_lote}
                 </h3>
                 <div className="text-sm text-text-subtle mt-1 space-x-4">
-                  <span>Abertura: {new Date(modalLoteDetalhes.lote.data_abertura).toLocaleString()}</span>
+                  <span>Abertura: {formatDateSafe(modalLoteDetalhes.lote.data_abertura)}</span>
                   {modalLoteDetalhes.lote.data_fechamento && (
-                    <span>Fechamento: {new Date(modalLoteDetalhes.lote.data_fechamento).toLocaleString()}</span>
+                    <span>Fechamento: {formatDateSafe(modalLoteDetalhes.lote.data_fechamento)}</span>
                   )}
                   <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${modalLoteDetalhes.lote.status === 'aberto' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-text-subtle/10 text-text-subtle'}`}>
                     {modalLoteDetalhes.lote.status}
@@ -637,7 +655,7 @@ export const CaixasPage: React.FC = () => {
                       <tbody className="divide-y divide-border-default">
                         {modalLoteDetalhes.movimentacoes.map(mov => (
                           <tr key={mov.id} className={`hover:bg-bg-base/50 ${mov.estornado ? 'opacity-50 line-through' : ''}`}>
-                            <td className="p-3 text-text-subtle">{new Date(mov.data_movimentacao).toLocaleString()}</td>
+                            <td className="p-3 text-text-subtle">{formatDateSafe(mov.data_movimentacao)}</td>
                             <td className="p-3 uppercase text-xs">{mov.origem}</td>
                             <td className="p-3">
                               {mov.estornado && <span className="mr-2 px-1.5 py-0.5 bg-rose-500/10 text-rose-500 rounded text-[10px] uppercase font-bold tracking-wider no-underline inline-block">Estornado</span>}

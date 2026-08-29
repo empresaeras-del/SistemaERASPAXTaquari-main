@@ -130,7 +130,13 @@ export const fecharLoteCaixa = async (
     observacao_fechamento?: string;
   }
 ): Promise<LoteCaixa> => {
-  const lote = await getFromIDB<LoteCaixa>('lotes_caixa', loteId);
+  let lote = await getFromIDB<LoteCaixa>('lotes_caixa', loteId);
+  if (!lote && isOnline) {
+    try {
+      const { data } = await supabase.from('lotes_caixa').select('*').eq('id', loteId).single();
+      if (data) lote = data as LoteCaixa;
+    } catch (e) {}
+  }
   if (!lote) {
     throw new Error('Lote de caixa não encontrado.');
   }
@@ -303,10 +309,22 @@ export const estornarMovimentacaoCaixa = async (
   movimentacaoId: string,
   observacao: string
 ): Promise<void> => {
-  const mov = await getFromIDB<MovimentacaoCaixa>('movimentacoes_caixa', movimentacaoId);
+  let mov = await getFromIDB<MovimentacaoCaixa>('movimentacoes_caixa', movimentacaoId);
+  if (!mov && isOnline) {
+    try {
+      const { data } = await supabase.from('movimentacoes_caixa').select('*').eq('id', movimentacaoId).single();
+      if (data) mov = data as MovimentacaoCaixa;
+    } catch (e) {}
+  }
   if (!mov) throw new Error('Movimentação não encontrada');
 
-  const lote = await getFromIDB<LoteCaixa>('lotes_caixa', mov.lote_id);
+  let lote = await getFromIDB<LoteCaixa>('lotes_caixa', mov.lote_id);
+  if (!lote && isOnline) {
+    try {
+      const { data } = await supabase.from('lotes_caixa').select('*').eq('id', mov.lote_id).single();
+      if (data) lote = data as LoteCaixa;
+    } catch (e) {}
+  }
   if (!lote) throw new Error('Lote não encontrado');
   if (lote.status !== 'aberto') {
     throw new Error('Não é possível estornar movimentações de um lote fechado');
@@ -528,7 +546,13 @@ export const reabrirLoteCaixa = async (
   justificativa: string,
   usuarioNome: string
 ): Promise<LoteCaixa> => {
-  const lote = await getFromIDB<LoteCaixa>('lotes_caixa', loteId);
+  let lote = await getFromIDB<LoteCaixa>('lotes_caixa', loteId);
+  if (!lote && isOnline) {
+    try {
+      const { data } = await supabase.from('lotes_caixa').select('*').eq('id', loteId).single();
+      if (data) lote = data as LoteCaixa;
+    } catch (e) {}
+  }
   if (!lote) throw new Error('Lote não encontrado');
   if (lote.status === 'aberto') throw new Error('O lote já está aberto');
 

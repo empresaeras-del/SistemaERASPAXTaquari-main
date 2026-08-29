@@ -29,7 +29,7 @@ export const ContasAPagarAlert: React.FC = () => {
           </div>
         </div>
         <button 
-          onClick={() => navigate('/financeiro')}
+          onClick={() => navigate('/financeiro/contas-a-pagar')}
           className="flex items-center gap-2 text-sm font-bold bg-rose-500 hover:bg-rose-600 text-white py-2.5 px-6 rounded-xl transition-all hover:scale-[1.02] active:scale-95 whitespace-nowrap shadow-lg shadow-rose-500/25"
         >
           Acessar Financeiro
@@ -54,7 +54,7 @@ export const ContasAPagarAlert: React.FC = () => {
         ))}
         {alertas.length > 3 && (
           <div 
-             onClick={() => navigate('/financeiro')}
+             onClick={() => navigate('/financeiro/contas-a-pagar')}
              className="flex flex-col items-center justify-center bg-rose-500/5 hover:bg-rose-500/10 p-4 rounded-2xl border border-dashed border-rose-500/30 cursor-pointer transition-colors min-h-[100px]"
           >
              <span className="text-rose-500 font-black text-2xl">+{alertas.length - 3}</span>
