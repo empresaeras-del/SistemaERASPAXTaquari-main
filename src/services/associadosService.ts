@@ -166,6 +166,7 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
         (a as any).empresa_id === tenantId;
       if (!matchTenant) return false;
     }
+    return true;
   }).map(a => {
     const logr = a.endereco_logradouro || a.logradouro || '';
     const num = a.endereco_numero || a.numero || '';
