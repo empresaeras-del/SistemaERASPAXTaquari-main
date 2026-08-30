@@ -7,8 +7,12 @@ import { useAppContext } from '../context/AppContext';
 import { DocumentoPadrao, TipoDocumento } from '../types/documentos';
 import { canDelete } from '../utils/permissions';
 import { formatLocalDate } from '../utils/dateUtils';
-import { FileText, Plus, Search, Pencil, Power, PowerOff, X, Download, Eye, Maximize, Minimize, Trash2, Printer, ChevronDown, ChevronRight, Copy, Tag, Info } from 'lucide-react';
+import { FileText, Plus, Search, Pencil, Power, PowerOff, X, Download, Eye, Maximize, Minimize, Trash2, Printer, ChevronDown, ChevronRight, Copy, Tag, Info, Layout, Table as TableIcon, Image as ImageIcon, Scissors, Layers, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { VisualizadorDocumentoPadraoModal } from '../components/documentos/VisualizadorDocumentoPadraoModal';
+import { DocumentoMargensModal, MargensConfig } from '../components/documentos/DocumentoMargensModal';
+import { DocumentoTableModal } from '../components/documentos/DocumentoTableModal';
+import { DocumentoImageModal } from '../components/documentos/DocumentoImageModal';
+import { DocumentoMiniaturasPreview } from '../components/documentos/DocumentoMiniaturasPreview';
 
 /* ─── Tipos para o painel de variáveis ─── */
 interface VariavelInfo {
@@ -350,6 +354,13 @@ export const DocumentosPadroesPage = () => {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Novos estados para Margens, Tabelas, Imagens e Miniaturas
+  const [margens, setMargens] = useState<MargensConfig>({ top: 20, bottom: 20, left: 25, right: 25 });
+  const [isMargensModalOpen, setIsMargensModalOpen] = useState(false);
+  const [isTableModalOpen, setIsTableModalOpen] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'editor' | 'miniaturas' | 'preview_split'>('miniaturas');
+
   const [customVariables, setCustomVariables] = useState<string[]>([]);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set(['associado']));
   const [varSearch, setVarSearch] = useState('');
@@ -369,7 +380,7 @@ export const DocumentosPadroesPage = () => {
   const editorConfig = useMemo(() => ({
     readonly: false,
     language: 'pt_br',
-    height: isFullscreen ? 518 : 408,
+    height: isFullscreen ? 560 : 440,
     toolbarButtonSize: 'middle' as const,
     toolbarAdaptive: false,
     buttons: [
@@ -391,7 +402,7 @@ export const DocumentosPadroesPage = () => {
     style: {
       background: '#ffffff',
       color: '#1a1a1a',
-      padding: '20mm 25mm',
+      padding: `${margens.top}mm ${margens.right}mm ${margens.bottom}mm ${margens.left}mm`,
       width: '210mm',
       minHeight: '297mm',
       margin: '0 auto',
@@ -410,7 +421,7 @@ export const DocumentosPadroesPage = () => {
       body {
         width: 210mm !important;
         min-height: 297mm !important;
-        padding: 20mm 25mm !important;
+        padding: ${margens.top}mm ${margens.right}mm ${margens.bottom}mm ${margens.left}mm !important;
         margin: 0 auto !important;
         background: #ffffff !important;
         box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
@@ -425,26 +436,45 @@ export const DocumentosPadroesPage = () => {
         width: 100% !important;
       }
       table td, table th {
-        border: 1px solid #cbd5e1 !important;
-        padding: 6px 10px !important;
-        min-width: 30px !important;
-        vertical-align: top !important;
+        border: 1px solid #cbd5e1;
+        padding: 6px 10px;
+        min-width: 30px;
+        vertical-align: top;
+      }
+      table.tabela-sem-grade, 
+      table.tabela-sem-grade td, 
+      table.tabela-sem-grade th, 
+      table[style*="border: none"],
+      table[style*="border: 0"] {
+        border: none !important;
+      }
+      table.tabela-sem-grade td, 
+      table.tabela-sem-grade th {
+        border: none !important;
+      }
+      table.tabela-zebrada tr:nth-child(even) td {
+        background: #f8fafc !important;
       }
       table th {
-        background: #f1f5f9 !important;
-        font-weight: bold !important;
-        text-align: left !important;
-      }
-      table tr:nth-child(even) td {
-        background: #f8fafc !important;
+        background: #f1f5f9;
+        font-weight: bold;
+        text-align: left;
       }
       .jodit-selected-cell {
         outline: 2px solid #3B82F6 !important;
       }
+      .page-break {
+        page-break-after: always;
+        break-after: page;
+        height: 1px;
+        border-bottom: 2px dashed #94a3b8;
+        margin: 24px 0;
+        text-align: center;
+      }
       h1, h2, h3, h4 { color: #0f172a !important; margin-top: 0.8em; }
       p { margin-bottom: 0.6em; }
     `,
-  }), [isFullscreen]);
+  }), [isFullscreen, margens]);
 
 
   React.useEffect(() => {
@@ -807,6 +837,18 @@ export const DocumentosPadroesPage = () => {
     }
   };
 
+  const handleInsertPageBreak = () => {
+    const pageBreakHtml = `
+      <div class="page-break" style="page-break-after: always; height: 1px; border-bottom: 2px dashed #94a3b8; margin: 24px 0; text-align: center;">
+        <span style="background: #e2e8f0; color: #475569; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">
+          --- Quebra de Página (Nova Folha A4) ---
+        </span>
+      </div>
+      <p><br/></p>
+    `;
+    insertAtCursor(pageBreakHtml);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -1036,15 +1078,16 @@ export const DocumentosPadroesPage = () => {
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-4">
                 <button
-                  onClick={() => setShowPreviewModal(!showPreviewModal)}
+                  type="button"
+                  onClick={() => setViewMode(viewMode === 'preview_split' ? 'miniaturas' : 'preview_split')}
                   className={`hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-sm font-medium ${
-                    showPreviewModal
+                    viewMode === 'preview_split'
                       ? 'bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/30'
                       : 'bg-bg-base text-text-subtle border-border-default hover:text-[#3B82F6] hover:border-[#3B82F6]/30'
                   }`}
                 >
                   <Eye className="w-4 h-4" />
-                  {showPreviewModal ? 'Ocultar Preview' : 'Preview A4'}
+                  {viewMode === 'preview_split' ? 'Ocultar Preview A4' : 'Preview A4'}
                 </button>
                 <button
                   onClick={() => setIsFullscreen(!isFullscreen)}
@@ -1257,19 +1300,115 @@ export const DocumentosPadroesPage = () => {
                   <div className="p-5 sm:p-6 space-y-4">
 
                     {/* Cabeçalho da seção */}
-                    <div className="flex items-center gap-3 pb-3 border-b border-border-default">
-                      <div className="p-1.5 rounded-lg bg-[#3B82F6]/10 border border-[#3B82F6]/20">
-                        <FileText className="w-3.5 h-3.5 text-[#3B82F6]" />
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border-default">
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 rounded-lg bg-[#3B82F6]/10 border border-[#3B82F6]/20">
+                          <FileText className="w-3.5 h-3.5 text-[#3B82F6]" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-[#3B82F6] uppercase tracking-widest">Conteúdo do Documento</h4>
+                          <p className="text-[11px] text-text-subtle mt-0.5">
+                            Use as ferramentas profissionais de margens, tabelas, imagens e variáveis
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-[#3B82F6] uppercase tracking-widest">Conteúdo do Documento</h4>
-                        <p className="text-[11px] text-text-subtle mt-0.5">
-                          Use o painel de variáveis à esquerda para inserir campos dinâmicos
-                        </p>
-                      </div>
-                      <div className="ml-auto flex items-center gap-1.5 text-[10px] text-text-subtle bg-bg-base border border-border-default rounded-lg px-2 py-1">
-                        <Info className="w-3 h-3 text-[#3B82F6]" />
+                      <div className="flex items-center gap-1.5 text-[10px] text-text-subtle bg-bg-base border border-border-default rounded-lg px-2.5 py-1">
+                        <Info className="w-3.5 h-3.5 text-[#3B82F6]" />
                         <span>Formato A4 · 210mm × 297mm</span>
+                      </div>
+                    </div>
+
+                    {/* ── Barra de Ferramentas Avançadas do Editor ── */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-[#13171f] border border-[#2d3748] rounded-2xl">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Botão Margens */}
+                        <button
+                          type="button"
+                          onClick={() => setIsMargensModalOpen(true)}
+                          className="px-3 py-1.5 bg-[#1e2533] hover:bg-blue-500/20 text-slate-200 hover:text-blue-300 border border-[#2d3544] hover:border-blue-500/40 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                          title="Ajustar margens laterais, superior e inferior"
+                        >
+                          <Layout className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Margens:</span>
+                          <span className="text-[10px] text-blue-400 font-bold bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                            {margens.left}mm × {margens.top}mm
+                          </span>
+                        </button>
+
+                        {/* Botão Tabelas Profissionais */}
+                        <button
+                          type="button"
+                          onClick={() => setIsTableModalOpen(true)}
+                          className="px-3 py-1.5 bg-[#1e2533] hover:bg-indigo-500/20 text-slate-200 hover:text-indigo-300 border border-[#2d3544] hover:border-indigo-500/40 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                          title="Inserir tabelas com controle de grades visíveis/ocultas"
+                        >
+                          <TableIcon className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Tabelas & Grades</span>
+                        </button>
+
+                        {/* Botão Inserir Imagem */}
+                        <button
+                          type="button"
+                          onClick={() => setIsImageModalOpen(true)}
+                          className="px-3 py-1.5 bg-[#1e2533] hover:bg-emerald-500/20 text-slate-200 hover:text-emerald-300 border border-[#2d3544] hover:border-emerald-500/40 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                          title="Inserir imagens, logomarcas ou carimbos"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Inserir Imagem</span>
+                        </button>
+
+                        {/* Botão Quebra de Página */}
+                        <button
+                          type="button"
+                          onClick={handleInsertPageBreak}
+                          className="px-3 py-1.5 bg-[#1e2533] hover:bg-amber-500/20 text-slate-200 hover:text-amber-300 border border-[#2d3544] hover:border-amber-500/40 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                          title="Inserir quebra de página A4"
+                        >
+                          <Scissors className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Quebra de Página</span>
+                        </button>
+                      </div>
+
+                      {/* Seletor de Modo de Visualização */}
+                      <div className="flex items-center gap-1 bg-[#0f1219] p-1 rounded-xl border border-[#2d3544]">
+                        <button
+                          type="button"
+                          onClick={() => setViewMode('editor')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                            viewMode === 'editor'
+                              ? 'bg-blue-600 text-white shadow'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                          title="Apenas Editor"
+                        >
+                          Editor
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewMode('miniaturas')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                            viewMode === 'miniaturas'
+                              ? 'bg-blue-600 text-white shadow'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                          title="Miniaturas de Páginas Laterais"
+                        >
+                          <Layers className="w-3 h-3" />
+                          Miniaturas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewMode('preview_split')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                            viewMode === 'preview_split'
+                              ? 'bg-blue-600 text-white shadow'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                          title="Pré-visualização A4 Lado a Lado"
+                        >
+                          <Eye className="w-3 h-3" />
+                          Preview A4
+                        </button>
                       </div>
                     </div>
 
@@ -1282,7 +1421,7 @@ export const DocumentosPadroesPage = () => {
                       <RulerHorizontal />
 
                       {/* Corpo: régua vertical + área de edição */}
-                      <div className="flex overflow-hidden" style={{ height: isFullscreen ? 518 : 410 }}>
+                      <div className="flex overflow-hidden" style={{ height: isFullscreen ? 560 : 440 }}>
                         <RulerVertical />
                         <div className="flex-1 min-w-0 overflow-hidden">
                           <JoditEditor
@@ -1300,25 +1439,41 @@ export const DocumentosPadroesPage = () => {
                 </form>
               </div>
 
-              {/* Preview Side */}
-              {showPreviewModal && (
-                <div className="hidden lg:flex flex-col w-[50%] bg-[#404040] overflow-hidden">
+              {/* ── Painel Lateral: Miniaturas em Tempo Real ── */}
+              {viewMode === 'miniaturas' && (
+                <DocumentoMiniaturasPreview
+                  htmlContent={editingDoc?.conteudo || ''}
+                  margens={margens}
+                  onInsertPageBreak={handleInsertPageBreak}
+                />
+              )}
+
+              {/* ── Painel Lateral: Pré-visualização A4 Lado a Lado ── */}
+              {viewMode === 'preview_split' && (
+                <div className="hidden lg:flex flex-col w-[50%] bg-[#404040] overflow-hidden border-l border-border-default">
                   <div className="p-3 border-b border-border-default bg-bg-subtle flex items-center justify-between shrink-0 shadow-md z-10">
                     <span className="text-sm font-semibold text-text-subtle flex items-center gap-2">
-                      <Eye className="w-4 h-4" />
+                      <Eye className="w-4 h-4 text-blue-400" />
                       Pré-visualização (A4)
                     </span>
                     <span className="text-xs text-text-subtle">
-                      Margens e paginação simuladas
+                      Margens: {margens.left}mm / {margens.top}mm
                     </span>
                   </div>
                   <div className="flex-1 overflow-y-auto p-8 flex flex-col items-center gap-6 bg-[#323639] custom-scrollbar pb-24">
                     <div 
                       className="a4-simulated shrink-0 shadow-2xl relative"
+                      style={{
+                        padding: `${margens.top}mm ${margens.right}mm ${margens.bottom}mm ${margens.left}mm`,
+                        background: '#ffffff',
+                        width: '210mm',
+                        minHeight: '297mm',
+                        boxSizing: 'border-box'
+                      }}
                     >
                       <div 
                         className="document-preview-content prose max-w-none h-full"
-                        style={{ fontSize: '11pt', lineHeight: '1.5', fontFamily: 'Arial, sans-serif' }}
+                        style={{ fontSize: '11pt', lineHeight: '1.5', fontFamily: 'Arial, sans-serif', color: '#1a1a1a' }}
                         dangerouslySetInnerHTML={{ 
                           __html: editingDoc?.conteudo 
                             ? editingDoc.conteudo 
@@ -1350,6 +1505,28 @@ export const DocumentosPadroesPage = () => {
           </div>
         </div>
       )}
+
+      {/* Modais de Recursos Avançados do Editor */}
+      <DocumentoMargensModal
+        isOpen={isMargensModalOpen}
+        onClose={() => setIsMargensModalOpen(false)}
+        margens={margens}
+        onSave={setMargens}
+      />
+
+      <DocumentoTableModal
+        isOpen={isTableModalOpen}
+        onClose={() => setIsTableModalOpen(false)}
+        onInsertTable={insertAtCursor}
+      />
+
+      <DocumentoImageModal
+        isOpen={isImageModalOpen}
+        onClose={() => setIsImageModalOpen(false)}
+        onInsertImage={insertAtCursor}
+        empresaData={currentEmpresa}
+        empresas={empresas}
+      />
     </div>
   );
 };

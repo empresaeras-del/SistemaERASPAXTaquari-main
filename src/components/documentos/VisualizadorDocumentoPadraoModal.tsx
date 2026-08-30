@@ -701,6 +701,27 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
               background-color: #f1f5f9;
               font-weight: bold;
             }
+            table.tabela-sem-grade,
+            table.tabela-sem-grade td,
+            table.tabela-sem-grade th,
+            table[style*="border: none"],
+            table[style*="border: 0"] {
+              border: none !important;
+            }
+            table.tabela-zebrada tr:nth-child(even) td {
+              background-color: #f8fafc !important;
+            }
+            .page-break {
+              page-break-after: always;
+              break-after: page;
+              height: 0;
+              margin: 0;
+              padding: 0;
+              border: none !important;
+            }
+            .page-break span {
+              display: none !important;
+            }
           </style>
         </head>
         <body>
