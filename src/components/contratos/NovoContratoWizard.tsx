@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { getAssociados, saveAssociado, Associado } from '../../services/associadosService';
@@ -44,6 +44,11 @@ export const NovoContratoWizard: React.FC<{
       canvas.height = canvas.offsetHeight;
     }
 
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0f172a';
+
     const pos = getMousePos(canvas, e);
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
@@ -57,7 +62,9 @@ export const NovoContratoWizard: React.FC<{
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    e.preventDefault(); // Evitar scroll no touch
+    if (e.cancelable && typeof e.preventDefault === 'function') {
+      e.preventDefault(); // Evitar scroll no touch
+    }
     const pos = getMousePos(canvas, e);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
@@ -75,11 +82,11 @@ export const NovoContratoWizard: React.FC<{
 
   const getMousePos = (canvas: HTMLCanvasElement, e: any) => {
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top
+      x: (clientX ?? 0) - rect.left,
+      y: (clientY ?? 0) - rect.top
     };
   };
   
@@ -97,17 +104,20 @@ export const NovoContratoWizard: React.FC<{
   useEffect(() => {
     if (!associadoInicial) {
       getAssociados(state.isOnline, state.empresaSelecionada).then(data => {
-        setAssociados(data);
+        setAssociados(data || []);
+      }).catch(err => {
+        console.error('Erro ao carregar associados no wizard:', err);
       });
     } else {
-        if (associadoInicial.plano_pax_id) {
-            setPlanoId(associadoInicial.plano_pax_id);
-        }
+      setSelectedAssociado(associadoInicial);
+      if (associadoInicial.plano_pax_id) {
+        setPlanoId(associadoInicial.plano_pax_id);
+      }
     }
   }, [associadoInicial, state.isOnline, state.empresaSelecionada]);
 
   const planoSelecionado = useMemo(() => {
-    return planosCompletos.find(p => p.id === planoId);
+    return (planosCompletos || []).find(p => p.id === planoId);
   }, [planosCompletos, planoId]);
 
   const ultrapassouLimiteColetivo = useMemo(() => {
