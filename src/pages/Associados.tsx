@@ -509,9 +509,6 @@ export const AssociadosPage: React.FC = () => {
       } else if (field === 'endereco_numero' || field === 'numero') {
         updated.endereco_numero = finalValue;
         updated.numero = finalValue;
-      } else if (field === 'endereco_complemento' || field === 'complemento') {
-        updated.endereco_complemento = finalValue;
-        updated.complemento = finalValue;
       } else if (field === 'endereco_bairro' || field === 'bairro') {
         updated.endereco_bairro = finalValue;
         updated.bairro = finalValue;
@@ -535,7 +532,6 @@ export const AssociadosPage: React.FC = () => {
         delete next[field as string];
         if (field === 'endereco_logradouro') delete next.logradouro;
         if (field === 'endereco_numero') delete next.numero;
-        if (field === 'endereco_complemento') delete next.complemento;
         if (field === 'endereco_bairro') delete next.bairro;
         if (field === 'endereco_cidade' || (field as string) === 'municipio') {
           delete next.cidade;
@@ -1822,22 +1818,8 @@ export const AssociadosPage: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Complemento (Opcional) */}
-                          <div className="space-y-1 md:col-span-4">
-                            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
-                              Complemento <span className="text-text-subtle font-normal">(Opcional)</span>
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Apto, Bloco, Casa, Lote..."
-                              value={editingAssociado.endereco_complemento || editingAssociado.complemento || ""}
-                              onChange={(e) => handleFieldChange("endereco_complemento", e.target.value)}
-                              className="w-full px-3.5 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
-                            />
-                          </div>
-
                           {/* Bairro */}
-                          <div className="space-y-1 md:col-span-4">
+                          <div className="space-y-1 md:col-span-6">
                             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
                               Bairro *
                             </label>
@@ -1861,7 +1843,7 @@ export const AssociadosPage: React.FC = () => {
                           </div>
 
                           {/* Cidade / UF / Município */}
-                          <div className="space-y-1 md:col-span-4">
+                          <div className="space-y-1 md:col-span-6">
                             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
                               Município / UF *
                             </label>

@@ -116,7 +116,7 @@ export const processSyncQueue = async (isOnline: boolean) => {
 
           // Sanitização específica para associados
           if (targetTable === 'associados') {
-            const { dependentes, fornecedor_id, justificativa_modificacao_plano, ...assocClean } = payload;
+            const { dependentes, fornecedor_id, justificativa_modificacao_plano, complemento, endereco_complemento, ...assocClean } = payload;
             
             const tenantId = (assocClean.tenant_id && assocClean.tenant_id !== 'all') ? assocClean.tenant_id : 'default_tenant';
             const empresaId = (assocClean.empresa_id && assocClean.empresa_id !== 'all') ? assocClean.empresa_id : tenantId;

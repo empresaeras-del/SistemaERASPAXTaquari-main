@@ -16,14 +16,12 @@ export interface Associado {
   email?: string;
   endereco_logradouro?: string;
   endereco_numero?: string;
-  endereco_complemento?: string;
   endereco_bairro?: string;
   endereco_cidade?: string;
   endereco_cep?: string;
   endereco_estado?: string;
   logradouro?: string;
   numero?: string;
-  complemento?: string;
   bairro?: string;
   cidade?: string;
   municipio?: string;
@@ -173,7 +171,6 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
   }).map(a => {
     const logr = a.endereco_logradouro || a.logradouro || '';
     const num = a.endereco_numero || a.numero || '';
-    const comp = a.endereco_complemento || a.complemento || '';
     const bai = a.endereco_bairro || a.bairro || '';
     const cid = a.endereco_cidade || a.cidade || (a as any).municipio || '';
     const cepVal = a.endereco_cep || a.cep || '';
@@ -185,8 +182,6 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
       logradouro: logr,
       endereco_numero: num,
       numero: num,
-      endereco_complemento: comp,
-      complemento: comp,
       endereco_bairro: bai,
       bairro: bai,
       endereco_cidade: cid,
@@ -270,8 +265,6 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
     logradouro: rest.endereco_logradouro || rest.logradouro || null,
     endereco_numero: rest.endereco_numero || rest.numero || null,
     numero: rest.endereco_numero || rest.numero || null,
-    endereco_complemento: rest.endereco_complemento || rest.complemento || null,
-    complemento: rest.endereco_complemento || rest.complemento || null,
     endereco_bairro: rest.endereco_bairro || rest.bairro || null,
     bairro: rest.endereco_bairro || rest.bairro || null,
     endereco_cidade: rest.endereco_cidade || rest.cidade || rest.municipio || null,
