@@ -2047,7 +2047,7 @@ export const AssociadosPage: React.FC = () => {
                                         </div>
                                       </div>
 
-                                      {/* Informações detalhadas do dependente */}
+                                      {/* Informações detalhadas do dependente (Campos da tabela Supabase) */}
                                       <div className="grid grid-cols-1 gap-1.5 pt-2 border-t border-border-default/50 text-xs text-text-subtle">
                                         <div className="flex items-center justify-between">
                                           <span className="text-text-muted">CPF:</span>
@@ -2058,24 +2058,22 @@ export const AssociadosPage: React.FC = () => {
                                         {dep.data_nascimento && (
                                           <div className="flex items-center justify-between">
                                             <span className="text-text-muted">Nascimento:</span>
-                                            <span className="font-medium text-text-base">
+                                            <span className="font-medium text-text-base flex items-center gap-1.5">
                                               {formatDateSafe(dep.data_nascimento)}
-                                            </span>
-                                          </div>
-                                        )}
-                                        {(dep as any).telefone && (
-                                          <div className="flex items-center justify-between">
-                                            <span className="text-text-muted">Telefone:</span>
-                                            <span className="font-medium text-text-base">
-                                              {(dep as any).telefone}
-                                            </span>
-                                          </div>
-                                        )}
-                                        {(dep as any).rg && (
-                                          <div className="flex items-center justify-between">
-                                            <span className="text-text-muted">RG:</span>
-                                            <span className="font-medium text-text-base">
-                                              {(dep as any).rg}
+                                              {(() => {
+                                                try {
+                                                  const d = new Date(dep.data_nascimento);
+                                                  if (!isNaN(d.getTime())) {
+                                                    const age = new Date().getFullYear() - d.getFullYear();
+                                                    return age >= 0 ? (
+                                                      <span className="text-[10px] text-blue-400 font-bold bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                                                        {age}a
+                                                      </span>
+                                                    ) : null;
+                                                  }
+                                                } catch {}
+                                                return null;
+                                              })()}
                                             </span>
                                           </div>
                                         )}

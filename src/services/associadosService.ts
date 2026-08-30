@@ -283,10 +283,10 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
                 associado_id: associadoId,
                 tenant_id: associadoToSave.tenant_id,
                 empresa_id: associadoToSave.tenant_id,
-                nome: d.nome || '',
-                cpf: d.cpf || null,
-                data_nascimento: d.data_nascimento || null,
-                parentesco: d.parentesco || 'Outro'
+                nome: (d.nome || '').trim().toUpperCase(),
+                cpf: d.cpf ? d.cpf.trim() : null,
+                data_nascimento: d.data_nascimento ? d.data_nascimento.split('T')[0] : null,
+                parentesco: d.parentesco ? d.parentesco.trim().toUpperCase() : 'OUTRO'
               };
             });
             const { error: depError } = await supabase.from('dependentes').insert(depsToInsert);

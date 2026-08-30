@@ -5,8 +5,6 @@ import {
   Users, 
   Calendar, 
   CreditCard, 
-  Phone, 
-  FileText, 
   CheckCircle2, 
   AlertCircle, 
   HeartHandshake,
@@ -29,18 +27,18 @@ export interface DependenteFormModalProps {
 }
 
 const OPCOES_PARENTESCO = [
-  'Cônjuge / Esposo(a)',
-  'Filho(a)',
-  'Enteado(a)',
-  'Pai / Mãe',
-  'Sogro(a)',
-  'Irmão(ã)',
-  'Neto(a)',
-  'Avô / Avó',
-  'Tio(a)',
-  'Sobrinho(a)',
-  'Genro / Nora',
-  'Outro'
+  'CÔNJUGE / ESPOSO(A)',
+  'FILHO(A)',
+  'ENTEADO(A)',
+  'PAI / MÃE',
+  'SOGRO(A)',
+  'IRMÃO(Ã)',
+  'NETO(A)',
+  'AVÔ / AVÓ',
+  'TIO(A)',
+  'SOBRINHO(A)',
+  'GENRO / NORA',
+  'OUTRO'
 ];
 
 export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
@@ -52,14 +50,9 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
   existingCpfs = []
 }) => {
   const [nome, setNome] = useState('');
-  const [parentesco, setParentesco] = useState('');
-  const [parentescoPersonalizado, setParentescoPersonalizado] = useState('');
-  const [cpf, setCpf] = useState('');
-  const [rg, setRg] = useState('');
   const [dataNascimento, setDataNascimento] = useState('');
-  const [sexo, setSexo] = useState<string>('nao_informado');
-  const [telefone, setTelefone] = useState('');
-  const [observacoes, setObservacoes] = useState('');
+  const [parentesco, setParentesco] = useState('');
+  const [cpf, setCpf] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Preenche dados quando abre para edição ou reseta para novo
@@ -68,35 +61,14 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
 
     if (dependente) {
       setNome(dependente.nome || '');
-      
-      const parentescoExiste = OPCOES_PARENTESCO.includes(dependente.parentesco || '');
-      if (parentescoExiste) {
-        setParentesco(dependente.parentesco || '');
-        setParentescoPersonalizado('');
-      } else if (dependente.parentesco) {
-        setParentesco('Outro');
-        setParentescoPersonalizado(dependente.parentesco);
-      } else {
-        setParentesco('');
-        setParentescoPersonalizado('');
-      }
-
+      setDataNascimento(dependente.data_nascimento ? dependente.data_nascimento.split('T')[0] : '');
+      setParentesco(dependente.parentesco || '');
       setCpf(dependente.cpf ? maskCPFOrCNPJ(dependente.cpf, false) : '');
-      setRg((dependente as any).rg || '');
-      setDataNascimento(dependente.data_nascimento || '');
-      setSexo((dependente as any).sexo || 'nao_informado');
-      setTelefone((dependente as any).telefone || '');
-      setObservacoes((dependente as any).observacoes || '');
     } else {
       setNome('');
-      setParentesco('');
-      setParentescoPersonalizado('');
-      setCpf('');
-      setRg('');
       setDataNascimento('');
-      setSexo('nao_informado');
-      setTelefone('');
-      setObservacoes('');
+      setParentesco('');
+      setCpf('');
     }
     setErrors({});
   }, [isOpen, dependente]);
@@ -145,33 +117,28 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
     return 'valid';
   }, [cpf, existingCpfs, dependente]);
 
-  // Formatação de telefone
-  const handleTelefoneChange = (val: string) => {
-    const numbers = val.replace(/\D/g, '').slice(0, 11);
-    if (numbers.length <= 2) {
-      setTelefone(numbers.length > 0 ? `(${numbers}` : '');
-    } else if (numbers.length <= 6) {
-      setTelefone(`(${numbers.slice(0, 2)}) ${numbers.slice(2)}`);
-    } else if (numbers.length <= 10) {
-      setTelefone(`(${numbers.slice(0, 2)}) ${numbers.slice(2, 6)}-${numbers.slice(6)}`);
-    } else {
-      setTelefone(`(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7)}`);
-    }
-  };
-
   const handleSalvar = (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
-    if (!nome.trim() || nome.trim().length < 3) {
-      newErrors.nome = 'Informe o nome completo do dependente (mínimo 3 caracteres)';
+    // 1. Nome é OBRIGATÓRIO
+    if (!nome.trim() || nome.trim().length < 2) {
+      newErrors.nome = 'Informe o nome completo do dependente (campo obrigatório)';
     }
 
-    const parentescoFinal = parentesco === 'Outro' ? parentescoPersonalizado.trim() : parentesco;
-    if (!parentescoFinal) {
-      newErrors.parentesco = 'Selecione ou informe o grau de parentesco';
+    // 2. Data de Nascimento é OBRIGATÓRIA
+    if (!dataNascimento.trim()) {
+      newErrors.dataNascimento = 'Informe a data de nascimento do dependente (campo obrigatório)';
+    } else {
+      const date = parseISO(dataNascimento);
+      if (!isValid(date)) {
+        newErrors.dataNascimento = 'Data de nascimento inválida.';
+      } else if (date > new Date()) {
+        newErrors.dataNascimento = 'Data de nascimento não pode ser uma data futura.';
+      }
     }
 
+    // 3. CPF é OPCIONAL (se preenchido, deve ser válido)
     if (cpf.trim()) {
       if (cpfValidationState === 'invalid') {
         newErrors.cpf = 'CPF inválido. Verifique os números digitados.';
@@ -180,12 +147,7 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
       }
     }
 
-    if (dataNascimento) {
-      const date = parseISO(dataNascimento);
-      if (!isValid(date) || date > new Date()) {
-        newErrors.dataNascimento = 'Data de nascimento inválida ou futura.';
-      }
-    }
+    // 4. Parentesco é OPCIONAL (não gera erro)
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -194,20 +156,17 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
       return;
     }
 
+    // Apenas campos existentes na tabela 'dependentes' do Supabase
     const depData: Dependente = {
       id: dependente?.id || uuidv4(),
       nome: nome.trim().toUpperCase(),
-      parentesco: parentescoFinal.toUpperCase(),
-      cpf: cpf.trim() || undefined,
-      data_nascimento: dataNascimento || undefined,
-      rg: rg.trim() || undefined,
-      sexo: sexo !== 'nao_informado' ? sexo : undefined,
-      telefone: telefone.trim() || undefined,
-      observacoes: observacoes.trim() || undefined
-    } as Dependente;
+      data_nascimento: dataNascimento.trim(),
+      parentesco: parentesco.trim() ? parentesco.trim().toUpperCase() : 'OUTRO',
+      cpf: cpf.trim() || undefined
+    };
 
     onSave(depData);
-    toast.success(dependente ? 'Dependente atualizado com sucesso!' : 'Dependente cadastrado com sucesso!');
+    toast.success(dependente ? 'Dependente atualizado com sucesso!' : 'Dependente adicionado com sucesso!');
     onClose();
   };
 
@@ -215,7 +174,7 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#181d27] border border-[#2d3544] w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="bg-[#181d27] border border-[#2d3544] w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Cabeçalho do Modal */}
         <div className="p-5 sm:p-6 border-b border-[#2d3544] flex items-center justify-between bg-[#13171f]">
@@ -233,7 +192,7 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                {titularNome ? `Associado Titular: ${titularNome}` : 'Cadastre as informações completas do dependente'}
+                {titularNome ? `Associado Titular: ${titularNome}` : 'Campos obrigatórios: Nome e Data de Nascimento'}
               </p>
             </div>
           </div>
@@ -249,28 +208,24 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
         </div>
 
         {/* Formulário com Scroll */}
-        <form onSubmit={handleSalvar} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 custom-scrollbar text-white">
+        <form onSubmit={handleSalvar} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 custom-scrollbar text-white">
           
           {/* Card Informativo de Vínculo Contratual */}
-          <div className="p-4 bg-gradient-to-r from-blue-900/30 to-indigo-900/20 border border-blue-500/30 rounded-2xl flex items-start gap-3">
-            <Sparkles className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+          <div className="p-3.5 bg-gradient-to-r from-blue-900/30 to-indigo-900/20 border border-blue-500/30 rounded-2xl flex items-start gap-3">
+            <Sparkles className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
             <div className="text-xs text-blue-200 leading-relaxed">
               <span className="font-bold text-white">Regra de Contrato: </span>
-              A inclusão ou alteração de dependentes é refletida no cálculo de mensalidades do plano contratado e fica disponível para emissão automática de Termos Aditivos e Requisições.
+              A inclusão ou alteração de dependentes é refletida no cálculo de mensalidades do plano contratado e fica disponível para emissão de Termos Aditivos.
             </div>
           </div>
 
-          {/* SEÇÃO 1: DADOS PRINCIPAIS */}
+          {/* DADOS DO DEPENDENTE (Apenas campos da tabela Supabase) */}
           <div className="space-y-4">
-            <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5" />
-              Identificação do Dependente
-            </h4>
-
-            {/* Nome Completo */}
+            
+            {/* Nome Completo (OBRIGATÓRIO) */}
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-slate-300">
-                Nome Completo <span className="text-rose-400">*</span>
+                Nome Completo <span className="text-rose-400 font-bold">*</span>
               </label>
               <div className="relative">
                 <input
@@ -283,121 +238,21 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
                   placeholder="Nome completo do dependente..."
                   autoFocus
                   className={`w-full bg-[#13171f] border rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors ${
-                    errors.nome ? 'border-rose-500 focus:border-rose-500' : 'border-[#2d3544] focus:border-blue-500'
+                    errors.nome ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' : 'border-[#2d3544] focus:border-blue-500'
                   }`}
                 />
               </div>
               {errors.nome && <p className="text-[11px] text-rose-400 font-medium">{errors.nome}</p>}
             </div>
 
-            {/* Grau de Parentesco */}
+            {/* Data de Nascimento (OBRIGATÓRIA) e Grau de Parentesco (OPCIONAL) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Grau de Parentesco <span className="text-rose-400">*</span>
-                </label>
-                <div className="relative">
-                  <select
-                    value={parentesco}
-                    onChange={(e) => {
-                      setParentesco(e.target.value);
-                      if (errors.parentesco) setErrors(prev => ({ ...prev, parentesco: '' }));
-                    }}
-                    className={`w-full bg-[#13171f] border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none transition-colors ${
-                      errors.parentesco ? 'border-rose-500 focus:border-rose-500' : 'border-[#2d3544] focus:border-blue-500'
-                    }`}
-                  >
-                    <option value="">Selecione o parentesco...</option>
-                    {OPCOES_PARENTESCO.map(op => (
-                      <option key={op} value={op}>{op}</option>
-                    ))}
-                  </select>
-                </div>
-                {errors.parentesco && <p className="text-[11px] text-rose-400 font-medium">{errors.parentesco}</p>}
-              </div>
-
-              {/* Se for 'Outro', exibe campo para digitação */}
-              {parentesco === 'Outro' ? (
-                <div className="space-y-1.5 animate-in fade-in duration-150">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Especifique o Parentesco <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={parentescoPersonalizado}
-                    onChange={(e) => setParentescoPersonalizado(e.target.value.toUpperCase())}
-                    placeholder="Ex: Padrasto, Afilhado..."
-                    className="w-full bg-[#13171f] border border-[#2d3544] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Sexo / Gênero
-                  </label>
-                  <select
-                    value={sexo}
-                    onChange={(e) => setSexo(e.target.value)}
-                    className="w-full bg-[#13171f] border border-[#2d3544] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="nao_informado">Não informado</option>
-                    <option value="masculino">Masculino</option>
-                    <option value="feminino">Feminino</option>
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* CPF e Data de Nascimento */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* CPF com feedback */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    CPF (Opcional)
-                  </label>
-                  {cpfValidationState === 'valid' && (
-                    <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> CPF Válido
-                    </span>
-                  )}
-                  {cpfValidationState === 'invalid' && (
-                    <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" /> CPF Inválido
-                    </span>
-                  )}
-                  {cpfValidationState === 'duplicate' && (
-                    <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1">
-                      <ShieldAlert className="w-3 h-3" /> CPF Já Vinculado
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  maxLength={14}
-                  value={cpf}
-                  onChange={(e) => {
-                    const masked = maskCPFOrCNPJ(e.target.value, false);
-                    setCpf(masked);
-                    if (errors.cpf) setErrors(prev => ({ ...prev, cpf: '' }));
-                  }}
-                  placeholder="000.000.000-00"
-                  className={`w-full bg-[#13171f] border rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors ${
-                    errors.cpf 
-                      ? 'border-rose-500 focus:border-rose-500' 
-                      : cpfValidationState === 'valid' 
-                      ? 'border-emerald-500/50 focus:border-emerald-500' 
-                      : 'border-[#2d3544] focus:border-blue-500'
-                  }`}
-                />
-                {errors.cpf && <p className="text-[11px] text-rose-400 font-medium">{errors.cpf}</p>}
-              </div>
-
+              
               {/* Data de Nascimento com cálculo de idade */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-semibold text-slate-300">
-                    Data de Nascimento
+                    Data de Nascimento <span className="text-rose-400 font-bold">*</span>
                   </label>
                   {idadeCalculada !== null && (
                     <span className="text-[10px] text-blue-400 font-bold px-1.5 py-0.2 bg-blue-500/10 rounded border border-blue-500/20">
@@ -413,55 +268,83 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
                     if (errors.dataNascimento) setErrors(prev => ({ ...prev, dataNascimento: '' }));
                   }}
                   className={`w-full bg-[#13171f] border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none transition-colors ${
-                    errors.dataNascimento ? 'border-rose-500 focus:border-rose-500' : 'border-[#2d3544] focus:border-blue-500'
+                    errors.dataNascimento ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' : 'border-[#2d3544] focus:border-blue-500'
                   }`}
                 />
                 {errors.dataNascimento && <p className="text-[11px] text-rose-400 font-medium">{errors.dataNascimento}</p>}
               </div>
-            </div>
 
-            {/* RG e Telefone */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Grau de Parentesco (OPCIONAL) */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-300">
-                  RG (Registro Geral)
+                  Grau de Parentesco <span className="text-slate-500 font-normal">(Opcional)</span>
                 </label>
-                <input
-                  type="text"
-                  value={rg}
-                  onChange={(e) => setRg(e.target.value.toUpperCase())}
-                  placeholder="Número do RG..."
-                  className="w-full bg-[#13171f] border border-[#2d3544] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="parentesco-options-list"
+                    value={parentesco}
+                    onChange={(e) => {
+                      setParentesco(e.target.value.toUpperCase());
+                      if (errors.parentesco) setErrors(prev => ({ ...prev, parentesco: '' }));
+                    }}
+                    placeholder="Ex: Filho(a), Cônjuge, Pai/Mãe..."
+                    className="w-full bg-[#13171f] border border-[#2d3544] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition-colors uppercase"
+                  />
+                  <datalist id="parentesco-options-list">
+                    {OPCOES_PARENTESCO.map(op => (
+                      <option key={op} value={op} />
+                    ))}
+                  </datalist>
+                </div>
+                <p className="text-[10px] text-slate-500">Selecione uma opção da lista ou digite livremente</p>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Telefone / Celular (WhatsApp)
-                </label>
-                <input
-                  type="text"
-                  value={telefone}
-                  onChange={(e) => handleTelefoneChange(e.target.value)}
-                  placeholder="(00) 00000-0000"
-                  className="w-full bg-[#13171f] border border-[#2d3544] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
-                />
-              </div>
             </div>
 
-            {/* Observações / Restrições */}
+            {/* CPF (OPCIONAL) */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-300">
-                Observações / Informações Médicas (Opcional)
-              </label>
-              <textarea
-                rows={2}
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                placeholder="Anotações internas, restrições ou observações adicionais..."
-                className="w-full bg-[#13171f] border border-[#2d3544] rounded-xl p-3 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 resize-none"
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-300">
+                  CPF <span className="text-slate-500 font-normal">(Opcional)</span>
+                </label>
+                {cpfValidationState === 'valid' && (
+                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> CPF Válido
+                  </span>
+                )}
+                {cpfValidationState === 'invalid' && (
+                  <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> CPF Inválido
+                  </span>
+                )}
+                {cpfValidationState === 'duplicate' && (
+                  <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1">
+                    <ShieldAlert className="w-3 h-3" /> CPF Já Vinculado
+                  </span>
+                )}
+              </div>
+              <input
+                type="text"
+                maxLength={14}
+                value={cpf}
+                onChange={(e) => {
+                  const masked = maskCPFOrCNPJ(e.target.value, false);
+                  setCpf(masked);
+                  if (errors.cpf) setErrors(prev => ({ ...prev, cpf: '' }));
+                }}
+                placeholder="000.000.000-00"
+                className={`w-full bg-[#13171f] border rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors ${
+                  errors.cpf 
+                    ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' 
+                    : cpfValidationState === 'valid' 
+                    ? 'border-emerald-500/50 focus:border-emerald-500' 
+                    : 'border-[#2d3544] focus:border-blue-500'
+                }`}
               />
+              {errors.cpf && <p className="text-[11px] text-rose-400 font-medium">{errors.cpf}</p>}
             </div>
+
           </div>
 
           {/* Rodapé com botões */}
