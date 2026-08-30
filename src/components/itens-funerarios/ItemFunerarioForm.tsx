@@ -8,6 +8,7 @@ import { ItemFunerario, ItemFunerarioInsert, ItemFunerarioUpdate, CategoriaItemF
 import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { getCoberturasDoItem } from '../../hooks/useItensFunerarios';
 import { useAppContext } from '../../context/AppContext';
+import { BotaoSalvar } from '../common/BotaoSalvar';
 
 const schema = z.object({
   codigo: z.string().min(1, 'Código é obrigatório').max(50, 'Máximo 50 caracteres').transform(v => v.toUpperCase()),
@@ -547,14 +548,14 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
               >
                 Cancelar
               </button>
-              <button
+              <BotaoSalvar
                 type="submit"
-                disabled={isSubmitting}
-                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50 text-sm shadow-md"
-              >
-                <Save className="w-4 h-4" />
-                {isSubmitting ? 'Salvando...' : 'Salvar Item & Vínculos'}
-              </button>
+                salvando={isSubmitting}
+                texto={isEditing ? 'Salvar Alterações' : 'Salvar Item & Vínculos'}
+                textoSalvando="Salvando Item..."
+                textoSalvo="Item Salvo!"
+                variante="primary"
+              />
             </div>
           </div>
         </form>

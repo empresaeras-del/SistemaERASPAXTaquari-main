@@ -16,6 +16,7 @@ import { format, lastDayOfMonth } from 'date-fns';
 
 import { useOptions } from '../hooks/useOptions';
 import { OptionsModal } from '../components/OptionsModal';
+import { BotaoSalvar } from '../components/common/BotaoSalvar';
 
 const receitaSchema = z.object({
   tipo_devedor: z.enum(['associado', 'cliente_pf', 'cliente_pj']),
@@ -694,18 +695,14 @@ export const ContasReceberFormPage: React.FC = () => {
             >
               Cancelar
             </button>
-            <button
+            <BotaoSalvar
               type="submit"
-              disabled={loading}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium transition-colors disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Save className="w-5 h-5" />
-              )}
-              {isEditing ? 'Atualizar' : 'Salvar Receita'}
-            </button>
+              salvando={loading}
+              texto={isEditing ? 'Atualizar Receita' : 'Salvar Receita'}
+              textoSalvando={isEditing ? 'Atualizando...' : 'Salvando Receita...'}
+              textoSalvo={isEditing ? 'Atualizado!' : 'Receita Salva!'}
+              variante="emerald"
+            />
           </div>
         </form>
         )}

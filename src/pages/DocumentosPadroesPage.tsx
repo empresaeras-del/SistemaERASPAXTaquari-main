@@ -13,6 +13,7 @@ import { DocumentoMargensModal, MargensConfig } from '../components/documentos/D
 import { DocumentoTableModal } from '../components/documentos/DocumentoTableModal';
 import { DocumentoImageModal } from '../components/documentos/DocumentoImageModal';
 import { DocumentoMiniaturasPreview } from '../components/documentos/DocumentoMiniaturasPreview';
+import { BotaoSalvar } from '../components/common/BotaoSalvar';
 
 /* ─── Tipos para o painel de variáveis ─── */
 interface VariavelInfo {
@@ -348,6 +349,8 @@ export const DocumentosPadroesPage = () => {
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<Partial<DocumentoPadrao> | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   const [previewDoc, setPreviewDoc] = useState<DocumentoPadrao | null>(null);
 
@@ -753,6 +756,8 @@ export const DocumentosPadroesPage = () => {
       conteudo: '',
       empresa_id: empresaSelecionada || ''
     });
+    setIsSaving(false);
+    setIsSaved(false);
     setIsFormOpen(true);
     setVarSearch('');
     setExpandedModules(new Set(['associado']));
@@ -793,17 +798,23 @@ export const DocumentosPadroesPage = () => {
       return;
     }
     
+    setIsSaving(true);
     try {
       if (editingDoc?.id) {
         await editar(editingDoc.id, editingDoc);
       } else {
         await criar(editingDoc as any);
       }
-      setIsFormOpen(false);
-      setEditingDoc(null);
+      setIsSaved(true);
+      setTimeout(() => {
+        setIsFormOpen(false);
+        setEditingDoc(null);
+      }, 400);
     } catch (err: any) {
       console.error('Erro ao salvar documento:', err);
       alert(err?.message || 'Erro ao salvar documento');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1494,13 +1505,16 @@ export const DocumentosPadroesPage = () => {
               >
                 Cancelar
               </button>
-              <button
+              <BotaoSalvar
                 type="submit"
                 form="docForm"
-                className="px-4 py-2 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#3B82F6]/25"
-              >
-                Salvar Modelo
-              </button>
+                salvando={isSaving}
+                salvo={isSaved}
+                texto={editingDoc?.id ? 'Salvar Alterações' : 'Salvar Modelo'}
+                textoSalvando="Salvando Modelo..."
+                textoSalvo="Modelo Salvo!"
+                variante="primary"
+              />
             </div>
           </div>
         </div>

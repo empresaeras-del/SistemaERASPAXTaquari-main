@@ -16,6 +16,7 @@ import { isValidCPFOrCNPJ, maskCPFOrCNPJ } from '../../utils/validators';
 import { differenceInYears, parseISO, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
+import { BotaoSalvar } from '../common/BotaoSalvar';
 
 export interface DependenteFormModalProps {
   isOpen: boolean;
@@ -54,6 +55,8 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
   const [parentesco, setParentesco] = useState('');
   const [cpf, setCpf] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   // Preenche dados quando abre para edição ou reseta para novo
   useEffect(() => {
@@ -71,6 +74,8 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
       setCpf('');
     }
     setErrors({});
+    setIsSaving(false);
+    setIsSaved(false);
   }, [isOpen, dependente]);
 
   // Tecla ESC para fechar
@@ -147,8 +152,6 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
       }
     }
 
-    // 4. Parentesco é OPCIONAL (não gera erro)
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       const firstError = Object.values(newErrors)[0];
@@ -156,7 +159,7 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
       return;
     }
 
-    // Apenas campos existentes na tabela 'dependentes' do Supabase
+    setIsSaving(true);
     const depData: Dependente = {
       id: dependente?.id || uuidv4(),
       nome: nome.trim().toUpperCase(),
@@ -165,9 +168,15 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
       cpf: cpf.trim() || undefined
     };
 
-    onSave(depData);
-    toast.success(dependente ? 'Dependente atualizado com sucesso!' : 'Dependente adicionado com sucesso!');
-    onClose();
+    setTimeout(() => {
+      setIsSaving(false);
+      setIsSaved(true);
+      onSave(depData);
+      toast.success(dependente ? 'Dependente atualizado com sucesso!' : 'Dependente adicionado com sucesso!');
+      setTimeout(() => {
+        onClose();
+      }, 350);
+    }, 400);
   };
 
   if (!isOpen) return null;
@@ -176,67 +185,46 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-[#181d27] border border-[#2d3544] w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         
-        {/* Cabeçalho do Modal */}
         <div className="p-5 sm:p-6 border-b border-[#2d3544] flex items-center justify-between bg-[#13171f]">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
+            <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-lg font-bold text-white leading-tight">
-                  {dependente ? 'Editar Dependente' : 'Novo Dependente'}
-                </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  {dependente ? 'Modo Edição' : 'Novo Cadastro'}
-                </span>
-              </div>
+              <h3 className="text-base font-bold text-white leading-tight">
+                {dependente ? 'Editar Dados do Dependente' : 'Cadastrar Novo Dependente'}
+              </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                {titularNome ? `Associado Titular: ${titularNome}` : 'Campos obrigatórios: Nome e Data de Nascimento'}
+                {titularNome ? `Associado Titular: ${titularNome}` : 'Gerenciamento individual de dependente'}
               </p>
             </div>
           </div>
-
           <button
             type="button"
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-white hover:bg-[#232936] rounded-xl transition-colors"
-            title="Fechar (ESC)"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Formulário com Scroll */}
-        <form onSubmit={handleSalvar} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 custom-scrollbar text-white">
-          
-          {/* Card Informativo de Vínculo Contratual */}
-          <div className="p-3.5 bg-gradient-to-r from-blue-900/30 to-indigo-900/20 border border-blue-500/30 rounded-2xl flex items-start gap-3">
-            <Sparkles className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-            <div className="text-xs text-blue-200 leading-relaxed">
-              <span className="font-bold text-white">Regra de Contrato: </span>
-              A inclusão ou alteração de dependentes é refletida no cálculo de mensalidades do plano contratado e fica disponível para emissão de Termos Aditivos.
-            </div>
-          </div>
-
-          {/* DADOS DO DEPENDENTE (Apenas campos da tabela Supabase) */}
-          <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar text-white flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
-            {/* Nome Completo (OBRIGATÓRIO) */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-300">
-                Nome Completo <span className="text-rose-400 font-bold">*</span>
+            <div className="md:col-span-2 space-y-1.5">
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                Nome Completo do Dependente <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <input
                   type="text"
+                  required
                   value={nome}
                   onChange={(e) => {
-                    setNome(e.target.value.toUpperCase());
+                    setNome(e.target.value);
                     if (errors.nome) setErrors(prev => ({ ...prev, nome: '' }));
                   }}
-                  placeholder="Nome completo do dependente..."
-                  autoFocus
+                  placeholder="Ex: MARIA SILVA SANTOS"
                   className={`w-full bg-[#13171f] border rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors ${
                     errors.nome ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' : 'border-[#2d3544] focus:border-blue-500'
                   }`}
@@ -245,88 +233,76 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
               {errors.nome && <p className="text-[11px] text-rose-400 font-medium">{errors.nome}</p>}
             </div>
 
-            {/* Data de Nascimento (OBRIGATÓRIA) e Grau de Parentesco (OPCIONAL) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              
-              {/* Data de Nascimento com cálculo de idade */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Data de Nascimento <span className="text-rose-400 font-bold">*</span>
-                  </label>
-                  {idadeCalculada !== null && (
-                    <span className="text-[10px] text-blue-400 font-bold px-1.5 py-0.2 bg-blue-500/10 rounded border border-blue-500/20">
-                      {idadeCalculada} {idadeCalculada === 1 ? 'ano' : 'anos'}
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="date"
-                  value={dataNascimento}
-                  onChange={(e) => {
-                    setDataNascimento(e.target.value);
-                    if (errors.dataNascimento) setErrors(prev => ({ ...prev, dataNascimento: '' }));
-                  }}
-                  className={`w-full bg-[#13171f] border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none transition-colors ${
-                    errors.dataNascimento ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' : 'border-[#2d3544] focus:border-blue-500'
-                  }`}
-                />
-                {errors.dataNascimento && <p className="text-[11px] text-rose-400 font-medium">{errors.dataNascimento}</p>}
-              </div>
-
-              {/* Grau de Parentesco (OPCIONAL) */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Grau de Parentesco <span className="text-slate-500 font-normal">(Opcional)</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    list="parentesco-options-list"
-                    value={parentesco}
-                    onChange={(e) => {
-                      setParentesco(e.target.value.toUpperCase());
-                      if (errors.parentesco) setErrors(prev => ({ ...prev, parentesco: '' }));
-                    }}
-                    placeholder="Ex: Filho(a), Cônjuge, Pai/Mãe..."
-                    className="w-full bg-[#13171f] border border-[#2d3544] rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition-colors uppercase"
-                  />
-                  <datalist id="parentesco-options-list">
-                    {OPCOES_PARENTESCO.map(op => (
-                      <option key={op} value={op} />
-                    ))}
-                  </datalist>
-                </div>
-                <p className="text-[10px] text-slate-500">Selecione uma opção da lista ou digite livremente</p>
-              </div>
-
-            </div>
-
-            {/* CPF (OPCIONAL) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-slate-300">
-                  CPF <span className="text-slate-500 font-normal">(Opcional)</span>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Data de Nascimento <span className="text-rose-500">*</span>
+                </label>
+                {idadeCalculada !== null && (
+                  <span className="text-[11px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                    {idadeCalculada} {idadeCalculada === 1 ? 'ano' : 'anos'}
+                  </span>
+                )}
+              </div>
+              <input
+                type="date"
+                required
+                value={dataNascimento}
+                onChange={(e) => {
+                  setDataNascimento(e.target.value);
+                  if (errors.dataNascimento) setErrors(prev => ({ ...prev, dataNascimento: '' }));
+                }}
+                className={`w-full bg-[#13171f] border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none transition-colors ${
+                  errors.dataNascimento ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' : 'border-[#2d3544] focus:border-blue-500'
+                }`}
+              />
+              {errors.dataNascimento && <p className="text-[11px] text-rose-400 font-medium">{errors.dataNascimento}</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                Grau de Parentesco
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  list="parentesco-opcoes"
+                  value={parentesco}
+                  onChange={(e) => setParentesco(e.target.value)}
+                  placeholder="Selecione ou digite (Ex: FILHO(A))"
+                  className="w-full bg-[#13171f] border border-[#2d3544] focus:border-blue-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors"
+                />
+                <datalist id="parentesco-opcoes">
+                  {OPCOES_PARENTESCO.map(op => (
+                    <option key={op} value={op} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  CPF <span className="text-[10px] text-slate-400 lowercase font-normal">(opcional)</span>
                 </label>
                 {cpfValidationState === 'valid' && (
-                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> CPF Válido
+                  <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> CPF Válido
                   </span>
                 )}
                 {cpfValidationState === 'invalid' && (
-                  <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" /> CPF Inválido
+                  <span className="text-[11px] font-semibold text-rose-400 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" /> CPF Inválido
                   </span>
                 )}
                 {cpfValidationState === 'duplicate' && (
-                  <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1">
-                    <ShieldAlert className="w-3 h-3" /> CPF Já Vinculado
+                  <span className="text-[11px] font-semibold text-amber-400 flex items-center gap-1">
+                    <ShieldAlert className="w-3.5 h-3.5" /> CPF Duplicado
                   </span>
                 )}
               </div>
               <input
                 type="text"
-                maxLength={14}
                 value={cpf}
                 onChange={(e) => {
                   const masked = maskCPFOrCNPJ(e.target.value, false);
@@ -335,11 +311,7 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
                 }}
                 placeholder="000.000.000-00"
                 className={`w-full bg-[#13171f] border rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors ${
-                  errors.cpf 
-                    ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' 
-                    : cpfValidationState === 'valid' 
-                    ? 'border-emerald-500/50 focus:border-emerald-500' 
-                    : 'border-[#2d3544] focus:border-blue-500'
+                  errors.cpf ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' : 'border-[#2d3544] focus:border-blue-500'
                 }`}
               />
               {errors.cpf && <p className="text-[11px] text-rose-400 font-medium">{errors.cpf}</p>}
@@ -347,22 +319,24 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
 
           </div>
 
-          {/* Rodapé com botões */}
           <div className="pt-4 border-t border-[#2d3544] flex items-center justify-end gap-3">
             <button
               type="button"
+              disabled={isSaving}
               onClick={onClose}
-              className="px-4 py-2.5 bg-[#232936] hover:bg-[#2e3748] text-slate-300 rounded-xl text-sm font-semibold transition-colors"
+              className="px-4 py-2.5 bg-[#232936] hover:bg-[#2e3748] disabled:opacity-50 text-slate-300 rounded-xl text-sm font-semibold transition-colors"
             >
               Cancelar
             </button>
-            <button
+            <BotaoSalvar
               type="submit"
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-600/20 active:scale-95 flex items-center gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              {dependente ? 'Salvar Alterações' : 'Adicionar Dependente'}
-            </button>
+              salvando={isSaving}
+              salvo={isSaved}
+              texto={dependente ? 'Salvar Alterações' : 'Adicionar Dependente'}
+              textoSalvando="Salvando Dependente..."
+              textoSalvo="Dependente Salvo!"
+              variante="primary"
+            />
           </div>
         </form>
 

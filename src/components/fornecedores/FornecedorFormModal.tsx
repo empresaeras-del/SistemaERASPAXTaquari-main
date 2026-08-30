@@ -21,6 +21,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { BotaoSalvar } from '../common/BotaoSalvar';
 import { 
   Fornecedor, 
   FornecedorInsert, 
@@ -866,14 +867,14 @@ export const FornecedorFormModal: React.FC<Props> = ({
               >
                 Cancelar
               </button>
-              <button
+              <BotaoSalvar
                 type="submit"
-                disabled={isSubmitting}
-                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50 text-sm shadow-md"
-              >
-                <Save className="w-4 h-4" />
-                {isSubmitting ? 'Salvando...' : 'Salvar Fornecedor'}
-              </button>
+                salvando={isSubmitting}
+                texto={isEditing ? 'Salvar Alterações' : 'Salvar Fornecedor'}
+                textoSalvando="Salvando Fornecedor..."
+                textoSalvo="Fornecedor Salvo!"
+                variante="primary"
+              />
             </div>
           </div>
         </form>

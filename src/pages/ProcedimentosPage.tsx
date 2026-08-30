@@ -9,6 +9,7 @@ import { UploadProcedimentos } from '../components/procedimentos/UploadProcedime
 import { getFromIDB, saveToIDB } from '../lib/idb';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
+import { BotaoSalvar } from '../components/common/BotaoSalvar';
 
 export const ProcedimentosPage = () => {
   const { procedimentos, loading, criar, editar, excluir } = useProcedimentos();
@@ -61,6 +62,8 @@ export const ProcedimentosPage = () => {
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProc, setEditingProc] = useState<Partial<Procedimento> | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   const filtered = procedimentos.filter(proc => {
     const term = searchTerm.toLowerCase();
@@ -76,6 +79,8 @@ export const ProcedimentosPage = () => {
       tipo_procedimento: tiposProcedimento[0] || '',
       empresa_id: empresaSelecionada || ''
     });
+    setIsSaving(false);
+    setIsSaved(false);
     setIsFormOpen(true);
   };
 
@@ -129,6 +134,7 @@ export const ProcedimentosPage = () => {
       return;
     }
     
+    setIsSaving(true);
     try {
       if (editingProc?.id) {
         await editar(editingProc.id, editingProc);
@@ -137,11 +143,16 @@ export const ProcedimentosPage = () => {
         await criar(editingProc as any);
         toast.success('Procedimento criado com sucesso!');
       }
-      setIsFormOpen(false);
-      setEditingProc(null);
+      setIsSaved(true);
+      setTimeout(() => {
+        setIsFormOpen(false);
+        setEditingProc(null);
+      }, 400);
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -467,12 +478,15 @@ export const ProcedimentosPage = () => {
                 >
                   Cancelar
                 </button>
-                <button
+                <BotaoSalvar
                   type="submit"
-                  className="px-6 py-2.5 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50 shadow-lg shadow-[#3B82F6]/25"
-                >
-                  {editingProc?.id ? 'Atualizar Procedimento' : 'Salvar Procedimento'}
-                </button>
+                  salvando={isSaving}
+                  salvo={isSaved}
+                  texto={editingProc?.id ? 'Atualizar Procedimento' : 'Salvar Procedimento'}
+                  textoSalvando="Salvando Procedimento..."
+                  textoSalvo="Procedimento Salvo!"
+                  variante="primary"
+                />
               </div>
 
 

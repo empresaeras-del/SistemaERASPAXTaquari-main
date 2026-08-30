@@ -20,6 +20,7 @@ import {
   uploadDocumentoAssociado,
 } from "../services/associadosService";
 import { DependenteFormModal } from "../components/associados/DependenteFormModal";
+import { BotaoSalvar } from "../components/common/BotaoSalvar";
 import { usePlanosPax } from "../hooks/usePlanosPax";
 import { useColumnVisibility } from "../hooks/useColumnVisibility";
 import { ColumnVisibilityToggle } from "../components/ColumnVisibilityToggle";
@@ -138,6 +139,8 @@ export const AssociadosPage: React.FC = () => {
   const [documentoVisualizando, setDocumentoVisualizando] = useState<DocumentoAssociado | null>(null);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [isDraggingDoc, setIsDraggingDoc] = useState(false);
+  const [isSavingAssociado, setIsSavingAssociado] = useState(false);
+  const [isSavedAssociado, setIsSavedAssociado] = useState(false);
 
   const handleWhatsAppMenu = async (associado: Associado) => {
     const opcao = window.prompt(
@@ -584,6 +587,8 @@ export const AssociadosPage: React.FC = () => {
     setDependenteFormModalOpen(false);
     setSelectedContratoId(null);
     setFieldErrors({});
+    setIsSavingAssociado(false);
+    setIsSavedAssociado(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -598,10 +603,12 @@ export const AssociadosPage: React.FC = () => {
     }
     if (!editingAssociado || !editingAssociado.id) return;
     if (!executarValidacaoOuAlertar()) return;
+    setIsSavingAssociado(true);
     try {
       if (editingAssociado.cpf) {
         if (!isValidCPFOrCNPJ(editingAssociado.cpf, false)) {
           toast.error("CPF do titular inválido.");
+          setIsSavingAssociado(false);
           return;
         }
         const cpfLimpo = editingAssociado.cpf.replace(/\D/g, '');
@@ -614,6 +621,7 @@ export const AssociadosPage: React.FC = () => {
           );
           if (duplicateUser) {
             toast.error(`Não é possível registrar. Este CPF já está sendo usado pelo associado ativo: ${duplicateUser.nome}`);
+            setIsSavingAssociado(false);
             return;
           }
         }
@@ -623,6 +631,7 @@ export const AssociadosPage: React.FC = () => {
         for (const dep of editingAssociado.dependentes) {
           if (dep && dep.cpf && !isValidCPFOrCNPJ(dep.cpf, false)) {
              toast.error(`CPF do dependente ${dep.nome || ''} é inválido.`);
+             setIsSavingAssociado(false);
              return;
           }
         }
@@ -640,6 +649,7 @@ export const AssociadosPage: React.FC = () => {
         
         if (!contratoResult.success) {
           toast.error(contratoResult.error.issues[0].message);
+          setIsSavingAssociado(false);
           return;
         }
       }
@@ -709,12 +719,17 @@ export const AssociadosPage: React.FC = () => {
       }
       
       await saveAssociado(novoAssociado, state.isOnline);
+      setIsSavedAssociado(true);
       await loadData();
-      handleCloseModal();
       toast.success("Associado salvo com sucesso!");
+      setTimeout(() => {
+        handleCloseModal();
+      }, 400);
     } catch (error) {
       console.error("Erro ao salvar associado", error);
       toast.error("Erro ao salvar associado.");
+    } finally {
+      setIsSavingAssociado(false);
     }
   };
 
@@ -2662,13 +2677,16 @@ export const AssociadosPage: React.FC = () => {
                   </button>
                   <div className="flex gap-3">
                     {isEditingMode ? (
-                      <button
+                      <BotaoSalvar
                         type="submit"
+                        salvando={isSavingAssociado}
+                        salvo={isSavedAssociado}
                         disabled={!state.isOnline}
-                        className="px-4 py-2 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#3B82F6]/25 disabled:opacity-50"
-                      >
-                        Salvar Alterações
-                      </button>
+                        texto="Salvar Alterações"
+                        textoSalvando="Salvando Alterações..."
+                        textoSalvo="Alterações Salvas!"
+                        variante="primary"
+                      />
                     ) : (
                       <>
                         {activeTab !== "principal" && (
@@ -2718,14 +2736,17 @@ export const AssociadosPage: React.FC = () => {
                             Próximo
                           </button>
                         ) : (
-                          <button
+                          <BotaoSalvar
                             key="btn-submit"
                             type="submit"
+                            salvando={isSavingAssociado}
+                            salvo={isSavedAssociado}
                             disabled={!state.isOnline}
-                            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-emerald-500/25 disabled:opacity-50"
-                          >
-                            {isEditingMode ? 'Salvar Alterações' : 'Finalizar Cadastro'}
-                          </button>
+                            texto="Finalizar Cadastro"
+                            textoSalvando="Gravando Associado..."
+                            textoSalvo="Cadastro Concluído!"
+                            variante="emerald"
+                          />
                         )}
                       </>
                     )}

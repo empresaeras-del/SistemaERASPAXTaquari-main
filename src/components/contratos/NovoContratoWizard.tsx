@@ -6,9 +6,9 @@ import { salvarReceita } from '../../services/financeiroService';
 import { registrarAuditoria } from '../../lib/supabase';
 import { X, Search, FileText, Calendar, DollarSign, CheckCircle2, ChevronRight, User } from 'lucide-react';
 import { format } from 'date-fns';
-import { useRef } from 'react';
 import { useConfirm } from '../../context/ConfirmContext';
 import { v4 as uuidv4 } from 'uuid';
+import { BotaoSalvar } from '../common/BotaoSalvar';
 
 export const NovoContratoWizard: React.FC<{
   onClose: () => void;
@@ -577,31 +577,40 @@ export const NovoContratoWizard: React.FC<{
             {step === 1 ? 'Cancelar' : 'Voltar'}
           </button>
           
-          <button
-            disabled={
-              (step === 1 && !selectedAssociado) || 
-              (step === 2 && !planoId) || 
-              loading
-            }
-            onClick={() => {
-              if (step === 1 && selectedAssociado?.plano_pax_id) {
-                confirm({
-                  title: 'Associado já possui plano',
-                  message: 'O associado selecionado já possui um contrato com plano ativo. Por favor, selecione outro associado para dar seguimento.',
-                  confirmText: 'Entendi',
-                  onConfirm: () => {}
-                });
-                return;
+          {step < 4 ? (
+            <button
+              disabled={
+                (step === 1 && !selectedAssociado) || 
+                (step === 2 && !planoId)
               }
-              
-              if (step < 4) setStep(step + 1);
-              else handleSave();
-            }}
-            className="px-6 py-2.5 bg-[#3B82F6] hover:bg-[#3B82F6]/90 text-white rounded-xl font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-[#3B82F6]/20"
-          >
-            {loading ? 'Salvando...' : step < 4 ? 'Avançar' : 'Confirmar e Gerar Mensalidades'}
-            {!loading && step < 4 && <ChevronRight className="w-4 h-4" />}
-          </button>
+              onClick={() => {
+                if (step === 1 && selectedAssociado?.plano_pax_id) {
+                  confirm({
+                    title: 'Associado já possui plano',
+                    message: 'O associado selecionado já possui um contrato com plano ativo. Por favor, selecione outro associado para dar seguimento.',
+                    confirmText: 'Entendi',
+                    onConfirm: () => {}
+                  });
+                  return;
+                }
+                setStep(step + 1);
+              }}
+              className="px-6 py-2.5 bg-[#3B82F6] hover:bg-[#3B82F6]/90 text-white rounded-xl font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-[#3B82F6]/20"
+            >
+              Avançar
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <BotaoSalvar
+              type="button"
+              onClick={handleSave}
+              salvando={loading}
+              texto="Confirmar e Gerar Mensalidades"
+              textoSalvando="Gerando Contrato e Mensalidades..."
+              textoSalvo="Contrato Gerado com Sucesso!"
+              variante="primary"
+            />
+          )}
         </div>
       </div>
     </div>

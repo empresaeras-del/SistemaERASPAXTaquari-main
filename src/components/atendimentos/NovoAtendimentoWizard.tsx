@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { useToast } from '../../context/ToastContext';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
+import { BotaoSalvar } from '../common/BotaoSalvar';
 
 export const NovoAtendimentoWizard: React.FC<{
   onClose: () => void;
@@ -618,14 +619,15 @@ export const NovoAtendimentoWizard: React.FC<{
               <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
-            <button
+            <BotaoSalvar
+              type="button"
               onClick={handleSave}
-              disabled={loading}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-400 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/25 hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              {loading ? 'Salvando...' : 'Finalizar Atendimento'}
-              <CheckCircle2 className="w-4 h-4" />
-            </button>
+              salvando={loading}
+              texto="Finalizar Atendimento"
+              textoSalvando="Gravando Atendimento..."
+              textoSalvo="Atendimento Concluído!"
+              variante="emerald"
+            />
           )}
         </div>
       </div>

@@ -14,6 +14,7 @@ import { getContasBancariasAtivas } from '../services/contasBancariasService';
 import { ContaBancaria } from '../types/contasBancarias';
 import { useOptions } from '../hooks/useOptions';
 import { OptionsModal } from '../components/OptionsModal';
+import { BotaoSalvar } from '../components/common/BotaoSalvar';
 
 const defaultCategoriasDespesa = [
   'Repasse Credenciados / Prestadores',
@@ -589,18 +590,14 @@ export const ContasPagarFormPage: React.FC = () => {
             >
               Cancelar
             </button>
-            <button
+            <BotaoSalvar
               type="submit"
-              disabled={loading}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium transition-colors disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Save className="w-5 h-5" />
-              )}
-              {isEditing ? 'Atualizar' : 'Salvar Despesa'}
-            </button>
+              salvando={loading}
+              texto={isEditing ? 'Atualizar Despesa' : 'Salvar Despesa'}
+              textoSalvando={isEditing ? 'Atualizando...' : 'Salvando Despesa...'}
+              textoSalvo={isEditing ? 'Atualizado!' : 'Despesa Salva!'}
+              variante="emerald"
+            />
           </div>
         </form>
         )}

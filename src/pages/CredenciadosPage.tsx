@@ -18,6 +18,7 @@ import { getEmpresaById, Empresa } from "../services/empresasService";
 import { useAppContext } from "../context/AppContext";
 import { useConfirm } from '../context/ConfirmContext';
 import { RelatorioCredenciadosModal } from '../components/credenciados/RelatorioCredenciadosModal';
+import { BotaoSalvar } from '../components/common/BotaoSalvar';
 import toast from 'react-hot-toast';
 
 export const CredenciadosPage: React.FC = () => {
@@ -53,6 +54,8 @@ export const CredenciadosPage: React.FC = () => {
   const [selectedCredenciado, setSelectedCredenciado] = useState<any>(null);
   
   const [planosVinculados, setPlanosVinculados] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<Partial<CredenciadoInsert>>({
@@ -89,6 +92,8 @@ export const CredenciadosPage: React.FC = () => {
   const handleOpenCreate = () => {
     setEditingId(null);
     setFormData({ razao_social: '', cnpj_cpf: '', ramo_atividade: 'clinica_medica', status: 'ativo' });
+    setIsSaving(false);
+    setIsSaved(false);
     setIsFormOpen(true);
     setActiveTab('dados');
   };
@@ -96,6 +101,8 @@ export const CredenciadosPage: React.FC = () => {
   const handleEdit = (cred: any) => {
     setFormData(cred);
     setEditingId(cred.id);
+    setIsSaving(false);
+    setIsSaved(false);
     setIsFormOpen(true);
     setActiveTab('dados');
   };
@@ -110,6 +117,7 @@ export const CredenciadosPage: React.FC = () => {
       toast.error('CPF ou CNPJ inválido.');
       return;
     }
+    setIsSaving(true);
     try {
       const { id, created_at, updated_at, empresa_id, ...dataToSave } = formData as any;
       if (editingId) {
@@ -119,17 +127,22 @@ export const CredenciadosPage: React.FC = () => {
         await criar(dataToSave as CredenciadoInsert);
         toast.success('Credenciado criado com sucesso!');
       }
-      setIsFormOpen(false);
-      setFormData({
-        razao_social: '',
-        nome_fantasia: '',
-        cnpj_cpf: '',
-        ramo_atividade: 'clinica_medica',
-        status: 'ativo'
-      });
-      setEditingId(null);
+      setIsSaved(true);
+      setTimeout(() => {
+        setIsFormOpen(false);
+        setFormData({
+          razao_social: '',
+          nome_fantasia: '',
+          cnpj_cpf: '',
+          ramo_atividade: 'clinica_medica',
+          status: 'ativo'
+        });
+        setEditingId(null);
+      }, 400);
     } catch (err) {
       console.error(err); toast.error(err instanceof Error ? err.message : "Erro ao salvar credenciado");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -834,14 +847,16 @@ export const CredenciadosPage: React.FC = () => {
                 >
                   Cancelar
                 </button>
-                <button 
+                <BotaoSalvar
                   type="submit"
                   form="credenciadoForm"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium transition-colors shadow-lg shadow-[#3B82F6]/20 text-sm flex items-center gap-2"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Salvar Credenciado
-                </button>
+                  salvando={isSaving}
+                  salvo={isSaved}
+                  texto={editingId ? 'Salvar Alterações' : 'Salvar Credenciado'}
+                  textoSalvando="Salvando Credenciado..."
+                  textoSalvo="Credenciado Salvo!"
+                  variante="emerald"
+                />
               </div>
             )}
             

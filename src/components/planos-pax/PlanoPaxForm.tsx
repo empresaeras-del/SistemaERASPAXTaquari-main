@@ -10,6 +10,7 @@ import { useAppContext } from '../../context/AppContext';
 import { getAssociados } from '../../services/associadosService';
 import { Info, DollarSign, Clock, List as ListIcon, Users, MapPin, Shield, CreditCard, ArrowRight, ArrowLeft } from 'lucide-react';
 import { RegrasCalculoInfo } from '../associados/RegrasCalculoInfo';
+import { BotaoSalvar } from '../common/BotaoSalvar';
 
 
 const optNum = z.preprocess(val => (val === '' || val === null || val === undefined || Number.isNaN(val as any)) ? null : val, z.coerce.number().nullable().optional()) as unknown as z.ZodType<number | null | undefined>;
@@ -880,15 +881,15 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     Próximo <ChevronRight className="w-4 h-4" />
                   </button>
                 ) : (
-                  <button
+                  <BotaoSalvar
                     key="btn-submit"
                     type="submit"
-                    disabled={isSubmitting}
-                    className="flex items-center gap-2 px-8 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg shadow-emerald-500/25 disabled:opacity-50"
-                  >
-                    <Save className="w-5 h-5" />
-                    {isSubmitting ? 'Salvando...' : 'Salvar Plano'}
-                  </button>
+                    salvando={isSubmitting}
+                    texto={initialData ? 'Salvar Alterações' : 'Salvar Plano'}
+                    textoSalvando="Salvando Plano..."
+                    textoSalvo="Plano Salvo com Sucesso!"
+                    variante="emerald"
+                  />
                 )}
               </div>
             </div>
