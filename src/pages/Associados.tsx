@@ -283,24 +283,26 @@ export const AssociadosPage: React.FC = () => {
       } else {
         setEditingAssociado(prev => {
           if (!prev) return prev;
-          const logr = (data.logradouro || '').toUpperCase();
-          const bai = (data.bairro || '').toUpperCase();
-          const cid = (data.localidade ? `${data.localidade}${data.uf ? ' - ' + data.uf : ''}` : '').toUpperCase();
-          const est = (data.uf || '').toUpperCase();
+          const logr = (data.logradouro || '').toUpperCase().trim();
+          const bai = (data.bairro || '').toUpperCase().trim();
+          const cid = (data.localidade ? `${data.localidade}${data.uf ? ' - ' + data.uf : ''}` : '').toUpperCase().trim();
+          const est = (data.uf || '').toUpperCase().trim();
           const cepFormatado = cepLimpo.replace(/^(\d{5})(\d{3})/, '$1-$2');
 
           return {
             ...prev,
             endereco_cep: cepFormatado,
             cep: cepFormatado,
-            endereco_logradouro: logr,
-            logradouro: logr,
-            endereco_bairro: bai,
-            bairro: bai,
-            endereco_cidade: cid,
-            cidade: cid,
-            endereco_estado: est,
-            uf: est
+            // SÓ substitui logradouro e bairro se o ViaCEP retornou valor preenchido
+            endereco_logradouro: logr || prev.endereco_logradouro || prev.logradouro || '',
+            logradouro: logr || prev.endereco_logradouro || prev.logradouro || '',
+            endereco_bairro: bai || prev.endereco_bairro || prev.bairro || '',
+            bairro: bai || prev.endereco_bairro || prev.bairro || '',
+            endereco_cidade: cid || prev.endereco_cidade || prev.cidade || '',
+            cidade: cid || prev.endereco_cidade || prev.cidade || '',
+            municipio: data.localidade?.toUpperCase().trim() || prev.cidade || prev.endereco_cidade || '',
+            endereco_estado: est || prev.endereco_estado || prev.uf || '',
+            uf: est || prev.endereco_estado || prev.uf || ''
           };
         });
 
@@ -309,12 +311,18 @@ export const AssociadosPage: React.FC = () => {
           const next = { ...prev };
           delete next.endereco_cep;
           delete next.cep;
-          delete next.endereco_logradouro;
-          delete next.logradouro;
-          delete next.endereco_bairro;
-          delete next.bairro;
-          delete next.endereco_cidade;
-          delete next.cidade;
+          if (data.logradouro) {
+            delete next.endereco_logradouro;
+            delete next.logradouro;
+          }
+          if (data.bairro) {
+            delete next.endereco_bairro;
+            delete next.bairro;
+          }
+          if (data.localidade) {
+            delete next.endereco_cidade;
+            delete next.cidade;
+          }
           return next;
         });
 
@@ -430,13 +438,13 @@ export const AssociadosPage: React.FC = () => {
       });
     }
 
-    const cidade = ((assoc.endereco_cidade || assoc.cidade || '') + '').trim();
+    const cidade = ((assoc.endereco_cidade || assoc.cidade || assoc.municipio || '') + '').trim();
     if (!cidade) {
       erros.push({
         campo: 'endereco_cidade',
-        label: 'Cidade / UF',
+        label: 'Município / UF',
         subTab: 'endereco',
-        mensagem: 'Cidade / UF é obrigatório.'
+        mensagem: 'Município / UF é obrigatório.'
       });
     }
 
@@ -498,12 +506,16 @@ export const AssociadosPage: React.FC = () => {
       } else if (field === 'endereco_numero' || field === 'numero') {
         updated.endereco_numero = finalValue;
         updated.numero = finalValue;
+      } else if (field === 'endereco_complemento' || field === 'complemento') {
+        updated.endereco_complemento = finalValue;
+        updated.complemento = finalValue;
       } else if (field === 'endereco_bairro' || field === 'bairro') {
         updated.endereco_bairro = finalValue;
         updated.bairro = finalValue;
-      } else if (field === 'endereco_cidade' || field === 'cidade') {
+      } else if (field === 'endereco_cidade' || field === 'cidade' || (field as string) === 'municipio') {
         updated.endereco_cidade = finalValue;
         updated.cidade = finalValue;
+        updated.municipio = finalValue;
       } else if (field === 'endereco_cep' || field === 'cep') {
         updated.endereco_cep = finalValue;
         updated.cep = finalValue;
@@ -520,8 +532,12 @@ export const AssociadosPage: React.FC = () => {
         delete next[field as string];
         if (field === 'endereco_logradouro') delete next.logradouro;
         if (field === 'endereco_numero') delete next.numero;
+        if (field === 'endereco_complemento') delete next.complemento;
         if (field === 'endereco_bairro') delete next.bairro;
-        if (field === 'endereco_cidade') delete next.cidade;
+        if (field === 'endereco_cidade' || (field as string) === 'municipio') {
+          delete next.cidade;
+          delete next.endereco_cidade;
+        }
         if (field === 'endereco_cep') delete next.cep;
         return next;
       });
@@ -1702,9 +1718,10 @@ export const AssociadosPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                          <div className="space-y-1 md:col-span-4">
-                            <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                          {/* CEP */}
+                          <div className="space-y-1 md:col-span-3">
+                            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
                               CEP *
                             </label>
                             <div className="relative flex items-center">
@@ -1714,7 +1731,7 @@ export const AssociadosPage: React.FC = () => {
                                 placeholder="00000-000"
                                 value={editingAssociado.endereco_cep || editingAssociado.cep || ""}
                                 onChange={(e) => handleFieldChange("endereco_cep", e.target.value)}
-                                className={`w-full px-4 py-2.5 pr-11 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                                className={`w-full px-3.5 py-2.5 pr-10 bg-bg-surface border rounded-xl text-text-base text-sm focus:outline-none transition-all ${
                                   fieldErrors.endereco_cep || fieldErrors.cep
                                     ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
                                     : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
@@ -1735,58 +1752,78 @@ export const AssociadosPage: React.FC = () => {
                               </button>
                             </div>
                             {(fieldErrors.endereco_cep || fieldErrors.cep) && (
-                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                              <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                                 {fieldErrors.endereco_cep || fieldErrors.cep}
                               </p>
                             )}
                           </div>
+
+                          {/* Logradouro */}
                           <div className="space-y-1 md:col-span-6">
-                            <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
                               Logradouro *
                             </label>
                             <input
                               type="text"
-                              placeholder="Rua, Avenida, Alameda..."
+                              placeholder="Rua, Avenida, Alameda, Travessa..."
                               value={editingAssociado.endereco_logradouro || editingAssociado.logradouro || ""}
                               onChange={(e) => handleFieldChange("endereco_logradouro", e.target.value)}
-                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                              className={`w-full px-3.5 py-2.5 bg-bg-surface border rounded-xl text-text-base text-sm focus:outline-none transition-all ${
                                 fieldErrors.endereco_logradouro || fieldErrors.logradouro
                                   ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
                                   : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
                               }`}
                             />
                             {(fieldErrors.endereco_logradouro || fieldErrors.logradouro) && (
-                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                              <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                                 {fieldErrors.endereco_logradouro || fieldErrors.logradouro}
                               </p>
                             )}
                           </div>
-                          <div className="space-y-1 md:col-span-2">
-                            <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+
+                          {/* Número */}
+                          <div className="space-y-1 md:col-span-3">
+                            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
                               Número *
                             </label>
                             <input
                               type="text"
-                              placeholder="Nº"
+                              placeholder="Nº ou S/N"
                               value={editingAssociado.endereco_numero || editingAssociado.numero || ""}
                               onChange={(e) => handleFieldChange("endereco_numero", e.target.value)}
-                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                              className={`w-full px-3.5 py-2.5 bg-bg-surface border rounded-xl text-text-base text-sm focus:outline-none transition-all ${
                                 fieldErrors.endereco_numero || fieldErrors.numero
                                   ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
                                   : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
                               }`}
                             />
                             {(fieldErrors.endereco_numero || fieldErrors.numero) && (
-                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                              <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                                 {fieldErrors.endereco_numero || fieldErrors.numero}
                               </p>
                             )}
                           </div>
-                          <div className="space-y-1 md:col-span-6">
-                            <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+
+                          {/* Complemento (Opcional) */}
+                          <div className="space-y-1 md:col-span-4">
+                            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+                              Complemento <span className="text-text-subtle font-normal">(Opcional)</span>
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Apto, Bloco, Casa, Lote..."
+                              value={editingAssociado.endereco_complemento || editingAssociado.complemento || ""}
+                              onChange={(e) => handleFieldChange("endereco_complemento", e.target.value)}
+                              className="w-full px-3.5 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-base text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                            />
+                          </div>
+
+                          {/* Bairro */}
+                          <div className="space-y-1 md:col-span-4">
+                            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
                               Bairro *
                             </label>
                             <input
@@ -1794,36 +1831,38 @@ export const AssociadosPage: React.FC = () => {
                               placeholder="Nome do bairro"
                               value={editingAssociado.endereco_bairro || editingAssociado.bairro || ""}
                               onChange={(e) => handleFieldChange("endereco_bairro", e.target.value)}
-                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                              className={`w-full px-3.5 py-2.5 bg-bg-surface border rounded-xl text-text-base text-sm focus:outline-none transition-all ${
                                 fieldErrors.endereco_bairro || fieldErrors.bairro
                                   ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
                                   : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
                               }`}
                             />
                             {(fieldErrors.endereco_bairro || fieldErrors.bairro) && (
-                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                              <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                                 {fieldErrors.endereco_bairro || fieldErrors.bairro}
                               </p>
                             )}
                           </div>
-                          <div className="space-y-1 md:col-span-6">
-                            <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
-                              Cidade / UF *
+
+                          {/* Cidade / UF / Município */}
+                          <div className="space-y-1 md:col-span-4">
+                            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+                              Município / UF *
                             </label>
                             <input
                               type="text"
-                              placeholder="Cidade / UF"
-                              value={editingAssociado.endereco_cidade || editingAssociado.cidade || ""}
+                              placeholder="Ex: Coxim - MS ou Taquari"
+                              value={editingAssociado.endereco_cidade || editingAssociado.cidade || editingAssociado.municipio || ""}
                               onChange={(e) => handleFieldChange("endereco_cidade", e.target.value)}
-                              className={`w-full px-4 py-2.5 bg-bg-surface border rounded-xl text-text-base focus:outline-none transition-all ${
+                              className={`w-full px-3.5 py-2.5 bg-bg-surface border rounded-xl text-text-base text-sm focus:outline-none transition-all ${
                                 fieldErrors.endereco_cidade || fieldErrors.cidade
                                   ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-500/5"
                                   : "border-border-default focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
                               }`}
                             />
                             {(fieldErrors.endereco_cidade || fieldErrors.cidade) && (
-                              <p className="text-xs text-rose-500 flex items-center gap-1 mt-1 font-medium">
+                              <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                                 {fieldErrors.endereco_cidade || fieldErrors.cidade}
                               </p>
