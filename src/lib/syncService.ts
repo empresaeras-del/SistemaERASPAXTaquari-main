@@ -81,6 +81,34 @@ export const clearFailedSyncTasks = async () => {
   } catch (e) {}
 };
 
+async function resilientSyncUpsert(tableName: string, data: Record<string, any>, onConflict = 'id', maxRetries = 6): Promise<any> {
+  let current = { ...data };
+  for (let i = 0; i < maxRetries; i++) {
+    const { data: resData, error } = await supabase.from(tableName).upsert(current, { onConflict });
+    if (!error) return resData;
+    const errMsg = `${error.message || ''} ${error.details || ''}`;
+    const missingColMatch =
+      errMsg.match(/Could not find the '([^']+)' column/i) ||
+      errMsg.match(/column "([^"]+)" of relation/i) ||
+      errMsg.match(/column "([^"]+)" does not exist/i) ||
+      errMsg.match(/column ([a-zA-Z0-9_]+) does not exist/i);
+    if (missingColMatch && missingColMatch[1]) {
+      delete current[missingColMatch[1]];
+      continue;
+    }
+    if ((errMsg.includes('plano_pax_id') || errMsg.includes('planos_pax') || error.code === '23503') && current.plano_pax_id !== undefined) {
+      current.plano_pax_id = null;
+      continue;
+    }
+    if (errMsg.includes('empresa_id') && current.empresa_id) {
+      delete current.empresa_id;
+      continue;
+    }
+    throw error;
+  }
+  throw new Error(`Excedido limite de sanitização de colunas para tabela ${tableName}`);
+}
+
 let isProcessing = false;
 
 export const processSyncQueue = async (isOnline: boolean) => {
@@ -116,7 +144,7 @@ export const processSyncQueue = async (isOnline: boolean) => {
 
           // Sanitização específica para associados
           if (targetTable === 'associados') {
-            const { dependentes, fornecedor_id, justificativa_modificacao_plano, complemento, endereco_complemento, ...assocClean } = payload;
+            const { dependentes, fornecedor_id, justificativa_modificacao_plano, complemento, endereco_complemento, municipio, ...assocClean } = payload;
             
             const tenantId = (assocClean.tenant_id && assocClean.tenant_id !== 'all') ? assocClean.tenant_id : 'default_tenant';
             const empresaId = (assocClean.empresa_id && assocClean.empresa_id !== 'all') ? assocClean.empresa_id : tenantId;
@@ -134,6 +162,8 @@ export const processSyncQueue = async (isOnline: boolean) => {
               cpf: assocClean.cpf ? String(assocClean.cpf).trim() : null,
               rg: assocClean.rg ? String(assocClean.rg).trim() : null,
               email: assocClean.email ? String(assocClean.email).trim() : null,
+              endereco_cidade: assocClean.endereco_cidade || assocClean.cidade || municipio || null,
+              cidade: assocClean.endereco_cidade || assocClean.cidade || municipio || null,
               plano_id: planoId,
               plano_pax_id: planoPaxId,
               data_nascimento: dataNascimento,
@@ -144,15 +174,14 @@ export const processSyncQueue = async (isOnline: boolean) => {
               historico_contratos: Array.isArray(assocClean.historico_contratos) ? assocClean.historico_contratos : []
             };
 
-            const { error: assocErr } = await supabase.from(targetTable).upsert(payload, { onConflict: 'id' });
-            if (assocErr) throw assocErr;
+            await resilientSyncUpsert(targetTable, payload, 'id');
 
             // Se houver dependentes, sincroniza separadamente
             if (Array.isArray(dependentes) && dependentes.length > 0) {
-              const depsPayload = dependentes.map((d: any) => {
+              for (const d of dependentes) {
                 const depId = UUID_REGEX.test(d.id || '') ? d.id : generateUUID();
                 const depNasc = (d.data_nascimento && String(d.data_nascimento).trim() !== '') ? String(d.data_nascimento).split('T')[0] : null;
-                return {
+                const depPayload = {
                   id: depId,
                   associado_id: payload.id,
                   tenant_id: tenantId,
@@ -162,20 +191,21 @@ export const processSyncQueue = async (isOnline: boolean) => {
                   data_nascimento: depNasc,
                   parentesco: d.parentesco && String(d.parentesco).trim() !== '' ? String(d.parentesco).trim().toUpperCase() : 'OUTRO'
                 };
-              });
-              await supabase.from('dependentes').upsert(depsPayload);
+                await resilientSyncUpsert('dependentes', depPayload, 'id');
+              }
             }
 
             // Se houver plano, sincroniza também na tabela contratos
-            if (planoPaxId) {
+            if (planoPaxId || payload.plano_nome) {
               try {
-                const contratoPayload = {
+                const contratoPayload: Record<string, any> = {
                   tenant_id: tenantId,
                   empresa_id: empresaId,
                   associado_id: payload.id,
                   plano_pax_id: planoPaxId,
                   numero_contrato: payload.numero_contrato || `CTR-${payload.id.substring(0, 8).toUpperCase()}`,
                   data_inicio: dataAdesao,
+                  data_adesao: dataAdesao,
                   valor_mensalidade: Number(valorPlano) || 0,
                   status: payload.status || 'ativo',
                   observacoes: payload.observacoes || null
@@ -187,11 +217,13 @@ export const processSyncQueue = async (isOnline: boolean) => {
                   .eq('associado_id', payload.id)
                   .maybeSingle();
 
-                if (existingContrato) {
-                  await supabase.from('contratos').update(contratoPayload).eq('id', existingContrato.id);
+                if (existingContrato?.id) {
+                  contratoPayload.id = existingContrato.id;
                 } else {
-                  await supabase.from('contratos').insert({ id: generateUUID(), ...contratoPayload });
+                  contratoPayload.id = generateUUID();
                 }
+
+                await resilientSyncUpsert('contratos', contratoPayload, 'id');
               } catch (contratoErr) {
                 console.warn('Erro ao sincronizar contrato na fila de sync:', contratoErr);
               }

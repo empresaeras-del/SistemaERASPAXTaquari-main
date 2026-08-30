@@ -196,6 +196,71 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
   });
 };
 
+/**
+ * Executa um upsert no Supabase de forma resiliente:
+ * 1. Se falhar por coluna inexistente no schema cache do PostgREST (PGRST204 ou erro 42703),
+ *    detecta dinamicamente a coluna, remove do payload e tenta novamente.
+ * 2. Se falhar por foreign key em plano_pax_id (23503), anula o campo e tenta novamente.
+ * 3. Se falhar por empresa_id/tenant_id em constraints locais, remove ou ajusta e tenta novamente.
+ */
+export async function resilientSupabaseUpsert(
+  tableName: string,
+  data: Record<string, any>,
+  onConflict: string = 'id',
+  maxRetries: number = 8
+): Promise<{ data: any; error: any }> {
+  let currentPayload = { ...data };
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const { data: resData, error } = await supabase
+      .from(tableName)
+      .upsert(currentPayload, { onConflict });
+
+    if (!error) {
+      return { data: resData, error: null };
+    }
+
+    const errMsg = error.message || '';
+    const errDetails = error.details || '';
+    const fullErr = `${errMsg} ${errDetails}`;
+
+    // 1. Detecta coluna inexistente no schema cache do PostgREST
+    const missingColMatch =
+      fullErr.match(/Could not find the '([^']+)' column/i) ||
+      fullErr.match(/column "([^"]+)" of relation/i) ||
+      fullErr.match(/column "([^"]+)" does not exist/i) ||
+      fullErr.match(/column ([a-zA-Z0-9_]+) does not exist/i);
+
+    if (missingColMatch && missingColMatch[1]) {
+      const colToRemove = missingColMatch[1];
+      console.warn(`[resilientSupabaseUpsert] Tabela ${tableName}: Coluna '${colToRemove}' ausente no Supabase. Removendo do payload e reprocessando...`);
+      delete currentPayload[colToRemove];
+      continue;
+    }
+
+    // 2. Detecta violação de Foreign Key em plano_pax_id
+    if (fullErr.includes('plano_pax_id') || fullErr.includes('planos_pax') || error.code === '23503') {
+      if (currentPayload.plano_pax_id !== undefined && currentPayload.plano_pax_id !== null) {
+        console.warn(`[resilientSupabaseUpsert] Tabela ${tableName}: FK de plano_pax_id violada. Anulando plano_pax_id e reprocessando...`);
+        currentPayload.plano_pax_id = null;
+        continue;
+      }
+    }
+
+    // 3. Se falhar por empresa_id
+    if (fullErr.includes('empresa_id') && currentPayload.empresa_id) {
+      console.warn(`[resilientSupabaseUpsert] Tabela ${tableName}: Erro com empresa_id. Removendo e reprocessando...`);
+      delete currentPayload.empresa_id;
+      continue;
+    }
+
+    // Se for outro erro irrecuperável, retorna
+    return { data: null, error };
+  }
+
+  return { data: null, error: new Error(`Excedido limite de tentativas de sanitização para ${tableName}`) };
+}
+
 export const saveAssociado = async (associado: Associado, isOnline: boolean): Promise<void> => {
   const existing = await getFromIDB<Associado>(STORE_NAME, associado.id);
   
@@ -246,160 +311,164 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
   // 1. Sempre grava imediatamente no IndexedDB para persistência offline/local
   await saveToIDB(STORE_NAME, associadoToSave);
 
-  // 2. Prepara os dados sanitizados para o Supabase
-  const associadoDataSupabase = {
-    id: associadoId,
-    tenant_id: tenantId,
-    empresa_id: empresaId,
-    nome: rest.nome || '',
-    cpf: rest.cpf ? String(rest.cpf).trim() : null,
-    rg: rest.rg ? String(rest.rg).trim() : null,
-    data_nascimento: dataNascimento,
-    sexo: rest.sexo || null,
-    nome_pai: rest.nome_pai || null,
-    nome_mae: rest.nome_mae || null,
-    telefone: rest.telefone || null,
-    celular_whatsapp: rest.celular_whatsapp || rest.telefone || null,
-    email: rest.email ? String(rest.email).trim() : null,
-    endereco_logradouro: rest.endereco_logradouro || rest.logradouro || null,
-    logradouro: rest.endereco_logradouro || rest.logradouro || null,
-    endereco_numero: rest.endereco_numero || rest.numero || null,
-    numero: rest.endereco_numero || rest.numero || null,
-    endereco_bairro: rest.endereco_bairro || rest.bairro || null,
-    bairro: rest.endereco_bairro || rest.bairro || null,
-    endereco_cidade: rest.endereco_cidade || rest.cidade || rest.municipio || null,
-    cidade: rest.endereco_cidade || rest.cidade || rest.municipio || null,
-    municipio: rest.endereco_cidade || rest.cidade || rest.municipio || null,
-    endereco_cep: rest.endereco_cep || rest.cep || null,
-    cep: rest.endereco_cep || rest.cep || null,
-    endereco_estado: rest.endereco_estado || rest.uf || null,
-    uf: rest.endereco_estado || rest.uf || null,
-    tipo_pessoa: rest.tipo_pessoa || 'PF',
-    tipo_associado: rest.tipo_associado || 'titular',
-    plano_id: planoId,
-    plano_pax_id: planoPaxId,
-    plano_nome: rest.plano_nome || null,
-    numero_contrato: rest.numero_contrato || null,
-    n_vidas: nVidas,
-    valor_plano: valorPlano,
-    data_adesao: dataAdesao,
-    assinatura_base64: rest.assinatura_base64 || null,
-    documentos: Array.isArray(rest.documentos) ? rest.documentos : [],
-    historico_contratos: Array.isArray(rest.historico_contratos) ? rest.historico_contratos : [],
-    status: rest.status || 'ativo',
-    estado_civil: rest.estado_civil || null,
-    profissao: rest.profissao || null,
-    observacoes: rest.observacoes || null
-  };
-
   if (isOnline) {
     try {
-      const { error } = await supabase
-        .from('associados')
-        .upsert(associadoDataSupabase, { onConflict: 'id' });
-            
-      if (error) {
-        console.error('Erro ao salvar associado no Supabase:', error);
+      // 2. Pré-sincroniza o plano_pax caso exista e não esteja presente no Supabase (evita erro de FK)
+      if (planoPaxId) {
+        try {
+          const { data: planoInSupabase } = await supabase
+            .from('planos_pax')
+            .select('id')
+            .eq('id', planoPaxId)
+            .maybeSingle();
+
+          if (!planoInSupabase) {
+            const localPlano = await getFromIDB<any>('planos_pax', planoPaxId);
+            if (localPlano) {
+              const { coberturas, faixas, itens, ...cleanPlano } = localPlano;
+              await resilientSupabaseUpsert('planos_pax', {
+                id: planoPaxId,
+                tenant_id: tenantId,
+                empresa_id: empresaId,
+                nome: cleanPlano.nome || associadoToSave.plano_nome || 'Plano PAX',
+                codigo: cleanPlano.codigo || `PLN-${planoPaxId.substring(0, 6).toUpperCase()}`,
+                tipo_plano: cleanPlano.tipo_plano || 'individual',
+                valor_mensalidade: Number(cleanPlano.valor_mensalidade) || Number(valorPlano) || 0,
+                ativo: true,
+                ...cleanPlano
+              }, 'id');
+            }
+          }
+        } catch (planCheckErr) {
+          console.warn('Verificação de plano_pax falhou:', planCheckErr);
+        }
+      }
+
+      // 3. Prepara os dados sanitizados para o Supabase (sem campos inexistentes como 'municipio')
+      const associadoDataSupabase: Record<string, any> = {
+        id: associadoId,
+        tenant_id: tenantId,
+        empresa_id: empresaId,
+        nome: rest.nome || '',
+        cpf: rest.cpf ? String(rest.cpf).trim() : null,
+        rg: rest.rg ? String(rest.rg).trim() : null,
+        data_nascimento: dataNascimento,
+        sexo: rest.sexo || null,
+        nome_pai: rest.nome_pai || null,
+        nome_mae: rest.nome_mae || null,
+        telefone: rest.telefone || null,
+        celular_whatsapp: rest.celular_whatsapp || rest.telefone || null,
+        email: rest.email ? String(rest.email).trim() : null,
+        endereco_logradouro: rest.endereco_logradouro || rest.logradouro || null,
+        logradouro: rest.endereco_logradouro || rest.logradouro || null,
+        endereco_numero: rest.endereco_numero || rest.numero || null,
+        numero: rest.endereco_numero || rest.numero || null,
+        endereco_bairro: rest.endereco_bairro || rest.bairro || null,
+        bairro: rest.endereco_bairro || rest.bairro || null,
+        endereco_cidade: rest.endereco_cidade || rest.cidade || rest.municipio || null,
+        cidade: rest.endereco_cidade || rest.cidade || rest.municipio || null,
+        endereco_cep: rest.endereco_cep || rest.cep || null,
+        cep: rest.endereco_cep || rest.cep || null,
+        endereco_estado: rest.endereco_estado || rest.uf || null,
+        uf: rest.endereco_estado || rest.uf || null,
+        tipo_pessoa: rest.tipo_pessoa || 'PF',
+        tipo_associado: rest.tipo_associado || 'titular',
+        plano_id: planoId,
+        plano_pax_id: planoPaxId,
+        plano_nome: rest.plano_nome || null,
+        numero_contrato: rest.numero_contrato || null,
+        n_vidas: nVidas,
+        valor_plano: valorPlano,
+        data_adesao: dataAdesao,
+        assinatura_base64: rest.assinatura_base64 || null,
+        documentos: Array.isArray(rest.documentos) ? rest.documentos : [],
+        historico_contratos: Array.isArray(rest.historico_contratos) ? rest.historico_contratos : [],
+        status: rest.status || 'ativo',
+        estado_civil: rest.estado_civil || null,
+        profissao: rest.profissao || null,
+        observacoes: rest.observacoes || null
+      };
+
+      // 4. Salva o Associado no Supabase com resiliência a esquemas divergentes
+      const { error: assocError } = await resilientSupabaseUpsert('associados', associadoDataSupabase, 'id');
+
+      if (assocError) {
+        console.error('Erro ao salvar associado no Supabase:', assocError);
         await addToSyncQueue({
           storeName: STORE_NAME,
           action: 'update',
           data: associadoToSave
         });
-      } else {
-        // Exclui dependentes antigos e insere os novos com sanitização completa
-        try {
-          await supabase.from('dependentes').delete().eq('associado_id', associadoId);
-          if (Array.isArray(dependentes) && dependentes.length > 0) {
-            const depsToInsert = dependentes.map((d: any) => {
-              const depId = UUID_REGEX.test(d.id || '') ? d.id : crypto.randomUUID();
-              const depNasc = (d.data_nascimento && String(d.data_nascimento).trim() !== '') 
-                ? String(d.data_nascimento).split('T')[0] 
-                : null;
-              return {
-                id: depId,
-                associado_id: associadoId,
-                tenant_id: tenantId,
-                empresa_id: empresaId,
-                nome: (d.nome || '').trim().toUpperCase(),
-                cpf: d.cpf && String(d.cpf).trim() !== '' ? String(d.cpf).trim() : null,
-                data_nascimento: depNasc,
-                parentesco: d.parentesco && String(d.parentesco).trim() !== '' ? String(d.parentesco).trim().toUpperCase() : 'OUTRO'
-              };
-            });
-            const { error: depError } = await supabase.from('dependentes').insert(depsToInsert);
-            if (depError) {
-              console.error('Erro ao inserir dependentes no Supabase:', depError);
-            }
-          }
-        } catch (depErr) {
-          console.warn('Erro ao sincronizar dependentes:', depErr);
-        }
+        throw new Error(`Erro ao salvar associado no Supabase: ${assocError.message || assocError}`);
+      }
 
-        // 3. Sincroniza registro na tabela 'contratos' do Supabase se o associado tiver plano
-        if (planoPaxId) {
-          try {
-            // Garante que o plano existe no Supabase antes de criar o contrato
-            const { data: planoInSupabase } = await supabase
-              .from('planos_pax')
-              .select('id')
-              .eq('id', planoPaxId)
-              .maybeSingle();
-
-            if (!planoInSupabase) {
-              const localPlano = await getFromIDB<any>('planos_pax', planoPaxId);
-              if (localPlano) {
-                const { coberturas, faixas, itens, ...cleanPlano } = localPlano;
-                await supabase.from('planos_pax').upsert({
-                  id: planoPaxId,
-                  tenant_id: tenantId,
-                  empresa_id: empresaId,
-                  nome: cleanPlano.nome || associadoToSave.plano_nome || 'Plano PAX',
-                  codigo: cleanPlano.codigo || `PLN-${planoPaxId.substring(0, 6).toUpperCase()}`,
-                  tipo_plano: cleanPlano.tipo_plano || 'individual',
-                  valor_mensalidade: Number(cleanPlano.valor_mensalidade) || Number(valorPlano) || 0,
-                  ativo: true,
-                  ...cleanPlano
-                });
-              }
-            }
-
-            const contratoData = {
+      // 5. Salva dependentes vinculados
+      try {
+        await supabase.from('dependentes').delete().eq('associado_id', associadoId);
+        if (Array.isArray(dependentes) && dependentes.length > 0) {
+          for (const d of dependentes) {
+            const depId = UUID_REGEX.test(d.id || '') ? d.id : crypto.randomUUID();
+            const depNasc = (d.data_nascimento && String(d.data_nascimento).trim() !== '') 
+              ? String(d.data_nascimento).split('T')[0] 
+              : null;
+            const depPayload = {
+              id: depId,
+              associado_id: associadoId,
               tenant_id: tenantId,
               empresa_id: empresaId,
-              associado_id: associadoId,
-              plano_pax_id: planoPaxId,
-              numero_contrato: associadoToSave.numero_contrato || `CTR-${associadoId.substring(0, 8).toUpperCase()}`,
-              data_inicio: dataAdesao,
-              valor_mensalidade: Number(valorPlano) || 0,
-              status: associadoToSave.status || 'ativo',
-              observacoes: (associadoToSave as any).observacoes || null
+              nome: (d.nome || '').trim().toUpperCase(),
+              cpf: d.cpf && String(d.cpf).trim() !== '' ? String(d.cpf).trim() : null,
+              data_nascimento: depNasc,
+              parentesco: d.parentesco && String(d.parentesco).trim() !== '' ? String(d.parentesco).trim().toUpperCase() : 'OUTRO'
             };
-
-            const { data: existingContrato } = await supabase
-              .from('contratos')
-              .select('id')
-              .eq('associado_id', associadoId)
-              .maybeSingle();
-
-            if (existingContrato) {
-              const { error: updateErr } = await supabase.from('contratos').update(contratoData).eq('id', existingContrato.id);
-              if (updateErr) console.warn('Erro ao atualizar contrato no Supabase:', updateErr);
-            } else {
-              const { error: insertErr } = await supabase.from('contratos').insert({ id: crypto.randomUUID(), ...contratoData });
-              if (insertErr) console.warn('Erro ao inserir contrato no Supabase:', insertErr);
-            }
-          } catch (contratoErr) {
-            console.warn('Erro ao sincronizar contrato no Supabase:', contratoErr);
+            await resilientSupabaseUpsert('dependentes', depPayload, 'id');
           }
         }
+      } catch (depErr) {
+        console.warn('Erro ao sincronizar dependentes:', depErr);
       }
-    } catch (err) {
-      console.error('Supabase save threw error, fallback to IDB and sync queue:', err);
+
+      // 6. Salva registro na tabela 'contratos' do Supabase se o associado tiver plano
+      if (planoPaxId || associadoToSave.plano_pax_id || associadoToSave.plano_nome) {
+        try {
+          const contratoData: Record<string, any> = {
+            tenant_id: tenantId,
+            empresa_id: empresaId,
+            associado_id: associadoId,
+            plano_pax_id: planoPaxId,
+            numero_contrato: associadoToSave.numero_contrato || `CTR-${associadoId.substring(0, 8).toUpperCase()}`,
+            data_inicio: dataAdesao,
+            data_adesao: dataAdesao,
+            valor_mensalidade: Number(valorPlano) || 0,
+            status: associadoToSave.status || 'ativo',
+            observacoes: (associadoToSave as any).observacoes || null
+          };
+
+          const { data: existingContrato } = await supabase
+            .from('contratos')
+            .select('id')
+            .eq('associado_id', associadoId)
+            .maybeSingle();
+
+          if (existingContrato?.id) {
+            contratoData.id = existingContrato.id;
+          } else {
+            contratoData.id = crypto.randomUUID();
+          }
+
+          await resilientSupabaseUpsert('contratos', contratoData, 'id');
+        } catch (contratoErr) {
+          console.warn('Erro ao sincronizar contrato no Supabase:', contratoErr);
+        }
+      }
+    } catch (err: any) {
+      console.error('Supabase save falhou, fallback para fila de sync:', err);
       await addToSyncQueue({
         storeName: STORE_NAME,
         action: 'update',
         data: associadoToSave
       });
+      throw err;
     }
   } else {
     await addToSyncQueue({
