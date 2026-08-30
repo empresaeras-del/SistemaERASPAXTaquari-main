@@ -15,9 +15,11 @@ import {
   saveAssociado,
   softDeleteAssociado,
   Associado,
+  Dependente,
   DocumentoAssociado,
   uploadDocumentoAssociado,
 } from "../services/associadosService";
+import { DependenteFormModal } from "../components/associados/DependenteFormModal";
 import { usePlanosPax } from "../hooks/usePlanosPax";
 import { useColumnVisibility } from "../hooks/useColumnVisibility";
 import { ColumnVisibilityToggle } from "../components/ColumnVisibilityToggle";
@@ -129,7 +131,8 @@ export const AssociadosPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAssociado, setEditingAssociado] =
     useState<Associado | null>(null);
-  const [selectedDependenteId, setSelectedDependenteId] = useState<string | null>(null);
+  const [dependenteFormModalOpen, setDependenteFormModalOpen] = useState(false);
+  const [dependenteEmEdicao, setDependenteEmEdicao] = useState<Dependente | null>(null);
   const [selectedContratoId, setSelectedContratoId] = useState<string | null>(null);
   const [isEditingMode, setIsEditingMode] = useState(false);
   const [documentoVisualizando, setDocumentoVisualizando] = useState<DocumentoAssociado | null>(null);
@@ -531,7 +534,8 @@ export const AssociadosPage: React.FC = () => {
   };
 
   const handleOpenModal = (associado?: Associado) => {
-    setSelectedDependenteId(null);
+    setDependenteEmEdicao(null);
+    setDependenteFormModalOpen(false);
     setBuscaDependenteInterno("");
     setFieldErrors({});
     if (associado) {
@@ -560,7 +564,8 @@ export const AssociadosPage: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingAssociado(null);
-    setSelectedDependenteId(null);
+    setDependenteEmEdicao(null);
+    setDependenteFormModalOpen(false);
     setSelectedContratoId(null);
     setFieldErrors({});
   };
@@ -1879,288 +1884,224 @@ export const AssociadosPage: React.FC = () => {
                       </div>
                     </div>
                   ) : activeTab === "dependentes" ? (
-                    <div className="space-y-6 flex flex-col h-full">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <h4 className="text-xl font-bold text-text-base flex items-center gap-2">
-                            <Users className="w-6 h-6 text-[#3B82F6]" />
-                            Dependentes
-                          </h4>
-                          {!selectedDependenteId && (
-                            <span className="px-3 py-1 bg-[#3B82F6]/10 text-[#3B82F6] rounded-full text-sm font-bold border border-[#3B82F6]/20">
-                              {editingAssociado.dependentes?.length || 0} cadastrados
-                            </span>
-                          )}
+                    <div className="space-y-6 flex flex-col h-full animate-in fade-in duration-200">
+                      {/* Top Bar with Title, Total Vidas and Actions */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-bg-surface p-4 sm:p-5 rounded-2xl border border-border-default shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-2xl bg-[#3B82F6]/10 border border-[#3B82F6]/20 text-[#3B82F6] flex items-center justify-center shrink-0">
+                            <Users className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-base sm:text-lg font-bold text-text-base leading-tight">
+                                Dependentes do Associado
+                              </h4>
+                              <span className="px-2.5 py-0.5 bg-[#3B82F6]/10 text-[#3B82F6] rounded-full text-xs font-bold border border-[#3B82F6]/20">
+                                {editingAssociado.dependentes?.length || 0} cadastrado(s)
+                              </span>
+                            </div>
+                            <p className="text-xs text-text-subtle mt-0.5">
+                              Contrato PAX: <strong className="text-text-base">{1 + (editingAssociado.dependentes?.length || 0)} vidas</strong> (1 Titular + {editingAssociado.dependentes?.length || 0} Dependentes)
+                            </p>
+                          </div>
                         </div>
 
-                        {!selectedDependenteId && (
                         <div className="flex items-center gap-3">
-                          <div className="relative">
+                          <div className="relative flex-1 sm:w-64">
                             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                             <input
                               type="text"
-                              placeholder="Buscar dependente..."
+                              placeholder="Buscar por nome, CPF..."
                               value={buscaDependenteInterno}
                               onChange={(e) => setBuscaDependenteInterno(e.target.value)}
-                              className="w-full sm:w-64 bg-bg-subtle border border-border-default rounded-xl pl-9 pr-4 py-2 text-text-base focus:outline-none focus:border-[#3B82F6] text-sm"
+                              className="w-full bg-bg-subtle border border-border-default rounded-xl pl-9 pr-8 py-2 text-text-base focus:outline-none focus:border-[#3B82F6] text-xs transition-colors"
                             />
+                            {buscaDependenteInterno && (
+                              <button
+                                type="button"
+                                onClick={() => setBuscaDependenteInterno("")}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-base"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                           <button
                             type="button"
                             onClick={() => {
-                              const newId = uuidv4();
-                              setEditingAssociado({
-                                ...editingAssociado,
-                                dependentes: [
-                                  ...(editingAssociado.dependentes || []),
-                                  {
-                                    id: newId,
-                                    nome: "",
-                                    cpf: "",
-                                    data_nascimento: "",
-                                    parentesco: "",
-                                  },
-                                ],
-                              });
-                              setSelectedDependenteId(newId);
+                              setDependenteEmEdicao(null);
+                              setDependenteFormModalOpen(true);
                             }}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-[#3B82F6] text-white rounded-xl text-sm font-semibold hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/20"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-500/20 shrink-0 active:scale-95"
                           >
                             <Plus className="w-4 h-4" />
                             Novo Dependente
                           </button>
                         </div>
-                        )}
                       </div>
 
-                      {!selectedDependenteId ? (
-                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                          {!editingAssociado.dependentes ||
-                          editingAssociado.dependentes.length === 0 ? (
-                            <div className="text-center py-20 bg-bg-subtle border border-dashed border-border-default rounded-2xl">
-                              <Users className="w-12 h-12 mx-auto text-text-subtle mb-3 opacity-50" />
-                              <p className="text-text-base font-semibold mb-1">Nenhum dependente</p>
-                              <p className="text-text-subtle text-sm">
-                                Este associado ainda não possui dependentes cadastrados.
-                              </p>
+                      {/* Lista de Cards de Dependentes ou Empty State */}
+                      <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                        {!editingAssociado.dependentes || editingAssociado.dependentes.length === 0 ? (
+                          <div className="text-center py-16 px-4 bg-bg-subtle border border-dashed border-border-default rounded-3xl flex flex-col items-center justify-center">
+                            <div className="w-16 h-16 rounded-3xl bg-[#3B82F6]/10 text-[#3B82F6] flex items-center justify-center mb-4 border border-[#3B82F6]/20">
+                              <Users className="w-8 h-8 opacity-80" />
                             </div>
-                          ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              {editingAssociado.dependentes
-                                .filter(dep => !buscaDependenteInterno || dep.nome.toLowerCase().includes(buscaDependenteInterno.toLowerCase()))
-                                .map((dep, index) => (
-                                <div
-                                  key={dep.id}
-                                  onClick={() => setSelectedDependenteId(dep.id)}
-                                  className="p-4 bg-bg-surface border border-border-default rounded-xl relative group cursor-pointer hover:border-[#3B82F6]/50 transition-colors"
-                                >
-                                  <div className="flex justify-between items-start">
-                                    <div>
-                                      <p className="text-text-base font-medium truncate">{dep.nome || 'Novo Dependente'}</p>
-                                      <p className="text-sm text-text-subtle">{dep.parentesco || 'Não informado'}</p>
+                            <h5 className="text-base font-bold text-text-base mb-1">Nenhum dependente cadastrado</h5>
+                            <p className="text-text-subtle text-xs max-w-sm mb-6">
+                              Este associado ainda não possui dependentes vinculados ao seu plano PAX. Cadastre um novo dependente através do formulário individual e independente.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDependenteEmEdicao(null);
+                                setDependenteFormModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-2xl text-sm font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+                            >
+                              <Plus className="w-4 h-4" />
+                              Cadastrar Primeiro Dependente
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {editingAssociado.dependentes
+                              .filter((dep) => {
+                                if (!buscaDependenteInterno) return true;
+                                const s = buscaDependenteInterno.toLowerCase();
+                                const sDigits = s.replace(/\D/g, "");
+                                return (
+                                  dep.nome.toLowerCase().includes(s) ||
+                                  (dep.parentesco && dep.parentesco.toLowerCase().includes(s)) ||
+                                  (dep.cpf && dep.cpf.replace(/\D/g, "").includes(sDigits))
+                                );
+                              })
+                              .map((dep, index) => {
+                                const initials = (dep.nome || "D")
+                                  .split(" ")
+                                  .filter(Boolean)
+                                  .slice(0, 2)
+                                  .map((p) => p[0])
+                                  .join("")
+                                  .toUpperCase();
+
+                                return (
+                                  <div
+                                    key={dep.id || index}
+                                    className="p-5 bg-bg-surface border border-border-default rounded-2xl relative group hover:border-[#3B82F6]/60 transition-all hover:shadow-lg flex flex-col justify-between"
+                                  >
+                                    <div className="space-y-3">
+                                      {/* Header do Card */}
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md shrink-0">
+                                            {initials}
+                                          </div>
+                                          <div className="min-w-0">
+                                            <p className="text-sm font-bold text-text-base truncate" title={dep.nome}>
+                                              {dep.nome || "Sem Nome"}
+                                            </p>
+                                            <span className="inline-block mt-0.5 px-2 py-0.5 bg-blue-500/10 text-[#3B82F6] border border-blue-500/20 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                                              {dep.parentesco || "Dependente"}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setDependenteEmEdicao(dep);
+                                              setDependenteFormModalOpen(true);
+                                            }}
+                                            className="p-1.5 text-text-muted hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-lg transition-colors"
+                                            title="Editar Dependente"
+                                          >
+                                            <Edit2 className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              confirm({
+                                                title: "Excluir Dependente",
+                                                message: `Deseja realmente remover o dependente "${dep.nome}" deste associado? Isso atualizará a contagem de vidas do plano.`,
+                                                confirmText: "Sim, Excluir",
+                                                cancelText: "Cancelar",
+                                                onConfirm: () => {
+                                                  const novosDeps = (editingAssociado.dependentes || []).filter(
+                                                    (d) => d.id !== dep.id
+                                                  );
+                                                  setEditingAssociado({
+                                                    ...editingAssociado,
+                                                    dependentes: novosDeps,
+                                                  });
+                                                  toast.success("Dependente removido com sucesso.");
+                                                },
+                                              });
+                                            }}
+                                            className="p-1.5 text-text-muted hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                            title="Excluir Dependente"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* Informações detalhadas do dependente */}
+                                      <div className="grid grid-cols-1 gap-1.5 pt-2 border-t border-border-default/50 text-xs text-text-subtle">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-text-muted">CPF:</span>
+                                          <span className="font-medium text-text-base">
+                                            {dep.cpf ? maskCPFOrCNPJ(dep.cpf, false) : "Não informado"}
+                                          </span>
+                                        </div>
+                                        {dep.data_nascimento && (
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-text-muted">Nascimento:</span>
+                                            <span className="font-medium text-text-base">
+                                              {formatDateSafe(dep.data_nascimento)}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {(dep as any).telefone && (
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-text-muted">Telefone:</span>
+                                            <span className="font-medium text-text-base">
+                                              {(dep as any).telefone}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {(dep as any).rg && (
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-text-muted">RG:</span>
+                                            <span className="font-medium text-text-base">
+                                              {(dep as any).rg}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
-                                    <div className="flex gap-2">
+
+                                    {/* Botão de Edição Rápida */}
+                                    <div className="mt-3 pt-2">
                                       <button
                                         type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const novosDeps = [
-                                            ...editingAssociado.dependentes!,
-                                          ];
-                                          novosDeps.splice(index, 1);
-                                          setEditingAssociado({
-                                            ...editingAssociado,
-                                            dependentes: novosDeps,
-                                          });
+                                        onClick={() => {
+                                          setDependenteEmEdicao(dep);
+                                          setDependenteFormModalOpen(true);
                                         }}
-                                        className="p-1.5 text-text-subtle hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity bg-bg-subtle rounded-md border border-border-default"
+                                        className="w-full py-1.5 px-3 bg-bg-subtle hover:bg-bg-hover border border-border-default rounded-xl text-xs font-semibold text-text-muted hover:text-text-base transition-colors flex items-center justify-center gap-1.5"
                                       >
-                                        <Trash2 className="w-4 h-4" />
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                        Editar / Gerenciar Dependente
                                       </button>
                                     </div>
                                   </div>
-                                  <div className="mt-4 flex gap-4 text-xs text-text-subtle">
-                                    {dep.cpf && <span>CPF: {dep.cpf}</span>}
-                                    {dep.data_nascimento && <span>Nasc: {formatDateSafe(dep.data_nascimento)}</span>}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-center mb-4">
-                             <button
-                                type="button"
-                                onClick={() => {
-                                  // Find current index
-                                  const idx = editingAssociado.dependentes?.findIndex(d => d.id === selectedDependenteId);
-                                  if (idx !== undefined && idx !== -1) {
-                                      const dep = editingAssociado.dependentes![idx];
-                                      // If user clicks Voltar and the record is virtually empty, auto-remove it to clean up
-                                      if (!dep.nome && !dep.cpf && !dep.data_nascimento && !dep.parentesco) {
-                                          const novosDeps = [...editingAssociado.dependentes!];
-                                          novosDeps.splice(idx, 1);
-                                          setEditingAssociado({ ...editingAssociado, dependentes: novosDeps });
-                                      }
-                                  }
-                                  setSelectedDependenteId(null)
-                                }}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-bg-subtle border border-border-default text-text-muted rounded-lg text-sm font-medium hover:bg-bg-hover transition-colors"
-                             >
-                                Voltar e Cancelar
-                             </button>
-                             
-                             <button
-                                type="button"
-                                onClick={() => {
-                                  const idx = editingAssociado.dependentes?.findIndex(d => d.id === selectedDependenteId);
-                                  if (idx !== undefined && idx !== -1) {
-                                      const dep = editingAssociado.dependentes![idx];
-                                      if (!dep.nome) {
-                                          toast.error("Preencha pelo menos o Nome do dependente antes de confirmar.");
-                                          return;
-                                      }
-                                      // Valida CPF apenas se foi preenchido
-                                      if (dep.cpf && dep.cpf.replace(/\D/g, '').length > 0) {
-                                          if (!isValidCPFOrCNPJ(dep.cpf, false)) {
-                                              toast.error(`CPF do dependente ${dep.nome} é inválido.`);
-                                              return;
-                                          }
-                                      }
-                                      
-                                      // Se tudo OK, abre modal/confirmação
-                                      confirm({
-                                          title: "Atenção - Inclusão de Dependente",
-                                          message: "A inclusão de novos dependentes deve ser validada entre o gestor e o respectivo associado através de Termo Aditivo, pois podem incorrer em reajuste Contratual.\n\nAo confirmar, você poderá gerar o aditivo posteriormente na aba Documentos.",
-                                          confirmText: "Estou ciente, confirmar",
-                                          cancelText: "Cancelar",
-                                          onConfirm: () => {
-                                              toast.success("Dependente confirmado. Você pode gerar o Termo Aditivo na aba Documentos.");
-                                              setSelectedDependenteId(null);
-                                          }
-                                      });
-                                  } else {
-                                      setSelectedDependenteId(null);
-                                  }
-                                }}
-                                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-lg text-sm font-bold hover:bg-emerald-500/20 transition-colors"
-                             >
-                                <CheckCircle className="w-4 h-4" />
-                                Confirmar Dependente
-                             </button>
+                                );
+                              })}
                           </div>
-                          {(() => {
-                            const index = editingAssociado.dependentes?.findIndex(d => d.id === selectedDependenteId) ?? -1;
-                            if (index === -1) return null;
-                            const dep = editingAssociado.dependentes![index];
-                            return (
-                              <div
-                                key={dep.id}
-                                className="p-5 bg-bg-surface border border-border-default rounded-xl relative group"
-                              >
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div className="space-y-1 md:col-span-2">
-                                    <label className="block text-xs font-semibold text-text-subtle">
-                                      Nome Completo
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={dep.nome}
-                                      onChange={(e) => {
-                                        const novosDeps = [
-                                          ...editingAssociado.dependentes!,
-                                        ];
-                                        novosDeps[index] = {
-                                          ...dep,
-                                          nome: e.target.value.toUpperCase(),
-                                        };
-                                        setEditingAssociado({
-                                          ...editingAssociado,
-                                          dependentes: novosDeps,
-                                        });
-                                      }}
-                                      className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-text-base text-sm focus:outline-none focus:border-[#3B82F6]"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="block text-xs font-semibold text-text-subtle">
-                                      CPF
-                                    </label>
-                                    <input
-                                      type="text"
-                                      maxLength={14}
-                                      value={dep.cpf || ""}
-                                      onChange={(e) => {
-                                        const formatted = maskCPFOrCNPJ(e.target.value, false);
-                                        const novosDeps = [
-                                          ...editingAssociado.dependentes!,
-                                        ];
-                                        novosDeps[index] = {
-                                          ...dep,
-                                          cpf: formatted,
-                                        };
-                                        setEditingAssociado({
-                                          ...editingAssociado,
-                                          dependentes: novosDeps,
-                                        });
-                                      }}
-                                      className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-text-base text-sm focus:outline-none focus:border-[#3B82F6]"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <label className="block text-xs font-semibold text-text-subtle">
-                                      Data Nasc.
-                                    </label>
-                                    <input
-                                      type="date"
-                                      value={dep.data_nascimento || ""}
-                                      onChange={(e) => {
-                                        const novosDeps = [
-                                          ...editingAssociado.dependentes!,
-                                        ];
-                                        novosDeps[index] = {
-                                          ...dep,
-                                          data_nascimento: e.target.value,
-                                        };
-                                        setEditingAssociado({
-                                          ...editingAssociado,
-                                          dependentes: novosDeps,
-                                        });
-                                      }}
-                                      className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-text-base text-sm focus:outline-none focus:border-[#3B82F6]"
-                                    />
-                                  </div>
-                                  <div className="space-y-1 md:col-span-2">
-                                    <label className="block text-xs font-semibold text-text-subtle">
-                                      Parentesco
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={dep.parentesco}
-                                      onChange={(e) => {
-                                        const novosDeps = [
-                                          ...editingAssociado.dependentes!,
-                                        ];
-                                        novosDeps[index] = {
-                                          ...dep,
-                                          parentesco: e.target.value.toUpperCase(),
-                                        };
-                                        setEditingAssociado({
-                                          ...editingAssociado,
-                                          dependentes: novosDeps,
-                                        });
-                                      }}
-                                      className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-text-base text-sm focus:outline-none focus:border-[#3B82F6]"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   ) : activeTab === "contratos" ? (
                     <div className="space-y-6">
@@ -2997,6 +2938,35 @@ export const AssociadosPage: React.FC = () => {
         <VisualizadorDocumentoModal
           documento={documentoVisualizando}
           onClose={() => setDocumentoVisualizando(null)}
+        />
+      )}
+
+      {/* Modal Independente de Formulário de Dependente */}
+      {dependenteFormModalOpen && editingAssociado && (
+        <DependenteFormModal
+          isOpen={dependenteFormModalOpen}
+          onClose={() => {
+            setDependenteFormModalOpen(false);
+            setDependenteEmEdicao(null);
+          }}
+          dependente={dependenteEmEdicao}
+          titularNome={editingAssociado.nome}
+          existingCpfs={(editingAssociado.dependentes || []).map((d) => d.cpf || "").filter(Boolean)}
+          onSave={(salvoDep) => {
+            const deps = editingAssociado.dependentes ? [...editingAssociado.dependentes] : [];
+            const index = deps.findIndex((d) => d.id === salvoDep.id);
+            if (index !== -1) {
+              deps[index] = salvoDep;
+            } else {
+              deps.push(salvoDep);
+            }
+            setEditingAssociado({
+              ...editingAssociado,
+              dependentes: deps,
+            });
+            setDependenteFormModalOpen(false);
+            setDependenteEmEdicao(null);
+          }}
         />
       )}
 
