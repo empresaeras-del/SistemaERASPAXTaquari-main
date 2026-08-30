@@ -2808,13 +2808,37 @@ export const AssociadosPage: React.FC = () => {
                           </td>
                         </tr>
                       ) : (
-                        dependentesFiltrados.map((d, index) => (
-                          <tr key={index} className="hover:bg-bg-surface/50 transition-colors">
-                            <td className="px-6 py-4 text-text-base font-medium">{d.nome}</td>
-                            <td className="px-6 py-4 capitalize">{d.parentesco || 'Não informado'}</td>
-                            <td className="px-6 py-4 text-text-base">{d.titular_nome}</td>
-                          </tr>
-                        ))
+                        dependentesFiltrados.map((d, index) => {
+                          const assoc = associados.find(a => 
+                            (a.nome && d.titular_nome && a.nome.trim().toLowerCase() === d.titular_nome.trim().toLowerCase()) ||
+                            (a.dependentes && a.dependentes.some(dep => dep.id === d.id))
+                          );
+                          return (
+                            <tr 
+                              key={index} 
+                              onClick={() => {
+                                if (assoc) {
+                                  setShowDependentesModal(false);
+                                  handleOpenModal(assoc);
+                                  setActiveTab('dependentes');
+                                  setDependenteEmEdicao(d);
+                                  setDependenteFormModalOpen(true);
+                                }
+                              }}
+                              className="hover:bg-bg-surface/70 transition-colors cursor-pointer group"
+                              title="Clique para abrir e gerenciar este dependente"
+                            >
+                              <td className="px-6 py-4 text-text-base font-medium">
+                                <div className="flex items-center justify-between">
+                                  <span>{d.nome}</span>
+                                  <Edit2 className="w-3.5 h-3.5 text-[#3B82F6] opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 capitalize">{d.parentesco || 'Não informado'}</td>
+                              <td className="px-6 py-4 text-text-base">{d.titular_nome}</td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>

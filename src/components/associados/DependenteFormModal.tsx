@@ -208,7 +208,7 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar text-white flex-1">
+        <form onSubmit={handleSalvar} className="p-5 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar text-white flex-1">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             <div className="md:col-span-2 space-y-1.5">
