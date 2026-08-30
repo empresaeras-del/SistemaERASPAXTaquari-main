@@ -10,6 +10,7 @@ import { cancelarReceitasPorAtendimento, getParcelasReceberPorAtendimento, Parce
 import { useItensFunerarios } from '../../hooks/useItensFunerarios';
 import { AtendimentoDocumentosGenerator } from './AtendimentoDocumentosGenerator';
 import { formatLocalDate } from '../../utils/dateUtils';
+import { maskCPFOrCNPJ } from '../../utils/validators';
 
 interface Props {
   atendimento: Atendimento;
@@ -75,7 +76,13 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    let finalValue = value;
+    if (name === 'falecido_cpf') {
+      finalValue = maskCPFOrCNPJ(value, false);
+    } else if (name === 'falecido_nome' || name === 'local_velorio' || name === 'local_sepultamento') {
+      finalValue = value.toUpperCase();
+    }
+    setFormData((prev) => ({ ...prev, [name]: finalValue }));
   };
 
   const executeSave = async () => {
@@ -86,6 +93,10 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
       
       const newAtendimento = { 
         ...formData, 
+        falecido_nome: (formData.falecido_nome || '').trim().toUpperCase(),
+        falecido_cpf: formData.falecido_cpf ? formData.falecido_cpf.trim() : undefined,
+        local_velorio: (formData.local_velorio || '').trim().toUpperCase(),
+        local_sepultamento: (formData.local_sepultamento || '').trim().toUpperCase(),
         valor_total: newValorTotal,
         itens: itemsList 
       };
@@ -189,7 +200,13 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
                 <div>
                   <label className="block text-xs font-semibold text-text-subtle mb-1">Nome Completo</label>
                   {isEditing ? (
-                    <input name="falecido_nome" value={formData.falecido_nome} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm" />
+                    <input 
+                      name="falecido_nome" 
+                      value={formData.falecido_nome || ''} 
+                      onChange={handleChange} 
+                      placeholder="Nome completo"
+                      className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm uppercase focus:ring-2 focus:ring-primary/50" 
+                    />
                   ) : (
                     <p className="text-sm text-text-base font-medium">{formData.falecido_nome || '-'}</p>
                   )}
@@ -199,7 +216,14 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
                   <div>
                     <label className="block text-xs font-semibold text-text-subtle mb-1">CPF</label>
                     {isEditing ? (
-                      <input name="falecido_cpf" value={formData.falecido_cpf || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm" />
+                      <input 
+                        name="falecido_cpf" 
+                        value={formData.falecido_cpf || ''} 
+                        onChange={handleChange} 
+                        placeholder="000.000.000-00"
+                        maxLength={14}
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50" 
+                      />
                     ) : (
                       <p className="text-sm text-text-base font-medium">{formData.falecido_cpf || '-'}</p>
                     )}
@@ -243,7 +267,13 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
                   <div>
                     <label className="block text-xs font-semibold text-text-subtle mb-1">Local Velório</label>
                     {isEditing ? (
-                      <input name="local_velorio" value={formData.local_velorio || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm" />
+                      <input 
+                        name="local_velorio" 
+                        value={formData.local_velorio || ''} 
+                        onChange={handleChange} 
+                        placeholder="Local do velório"
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm uppercase focus:ring-2 focus:ring-primary/50" 
+                      />
                     ) : (
                       <p className="text-sm text-text-base font-medium">{formData.local_velorio || '-'}</p>
                     )}
@@ -251,7 +281,13 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
                   <div>
                     <label className="block text-xs font-semibold text-text-subtle mb-1">Local Sepultamento</label>
                     {isEditing ? (
-                      <input name="local_sepultamento" value={formData.local_sepultamento || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm" />
+                      <input 
+                        name="local_sepultamento" 
+                        value={formData.local_sepultamento || ''} 
+                        onChange={handleChange} 
+                        placeholder="Local do sepultamento"
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm uppercase focus:ring-2 focus:ring-primary/50" 
+                      />
                     ) : (
                       <p className="text-sm text-text-base font-medium">{formData.local_sepultamento || '-'}</p>
                     )}

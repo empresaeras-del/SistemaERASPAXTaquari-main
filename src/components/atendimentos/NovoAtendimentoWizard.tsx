@@ -11,6 +11,7 @@ import { X, Search, FileText, CheckCircle2, ChevronRight, User, AlertTriangle, P
 import { format } from 'date-fns';
 import { useToast } from '../../context/ToastContext';
 import { formatLocalDate } from '../../utils/dateUtils';
+import { maskCPFOrCNPJ } from '../../utils/validators';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
 import { BotaoSalvar } from '../common/BotaoSalvar';
 
@@ -170,11 +171,11 @@ export const NovoAtendimentoWizard: React.FC<{
         tipo_cliente: tipoCliente,
         associado_id: tipoCliente === 'associado' ? selectedAssociado?.id : undefined,
         dependente_id: falecidoId !== 'associado' ? falecidoId : undefined,
-        falecido_nome: fNome,
-        falecido_cpf: fCpf,
+        falecido_nome: (fNome || '').trim().toUpperCase(),
+        falecido_cpf: fCpf ? fCpf.trim() : undefined,
         falecido_data_nascimento: fDataNasc,
-        local_velorio: localVelorio,
-        local_sepultamento: localSepultamento,
+        local_velorio: (localVelorio || '').trim().toUpperCase(),
+        local_sepultamento: (localSepultamento || '').trim().toUpperCase(),
         data_obito: dataObito,
         data_velorio: dataVelorio,
         data_sepultamento: dataSepultamento,
@@ -457,12 +458,26 @@ export const NovoAtendimentoWizard: React.FC<{
               {tipoCliente === 'externo' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="block text-sm font-semibold text-text-subtle mb-1">Nome Completo do Falecido</label>
-                    <input type="text" value={falecidoNome} onChange={(e) => setFalecidoNome(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+                    <label className="block text-sm font-semibold text-text-subtle mb-1">Nome Completo do Falecido *</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={falecidoNome} 
+                      onChange={(e) => setFalecidoNome(e.target.value.toUpperCase())} 
+                      placeholder="Digite o nome completo"
+                      className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base uppercase focus:ring-2 focus:ring-primary/50" 
+                    />
                   </div>
                   <div className="space-y-1">
                     <label className="block text-sm font-semibold text-text-subtle mb-1">CPF</label>
-                    <input type="text" value={falecidoCpf} onChange={(e) => setFalecidoCpf(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+                    <input 
+                      type="text" 
+                      value={falecidoCpf} 
+                      onChange={(e) => setFalecidoCpf(maskCPFOrCNPJ(e.target.value, false))} 
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                      className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" 
+                    />
                   </div>
                   <div className="space-y-1">
                     <label className="block text-sm font-semibold text-text-subtle mb-1">Data de Nascimento</label>
@@ -489,11 +504,23 @@ export const NovoAtendimentoWizard: React.FC<{
                </div>
                <div className="space-y-1">
                  <label className="block text-sm font-semibold text-text-subtle mb-1">Local do Velório</label>
-                 <input type="text" value={localVelorio} onChange={(e) => setLocalVelorio(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+                 <input 
+                   type="text" 
+                   value={localVelorio} 
+                   onChange={(e) => setLocalVelorio(e.target.value.toUpperCase())} 
+                   placeholder="Ex: Capela Municipal / Residência"
+                   className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base uppercase focus:ring-2 focus:ring-primary/50" 
+                 />
                </div>
                <div className="space-y-1">
                  <label className="block text-sm font-semibold text-text-subtle mb-1">Local do Sepultamento</label>
-                 <input type="text" value={localSepultamento} onChange={(e) => setLocalSepultamento(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+                 <input 
+                   type="text" 
+                   value={localSepultamento} 
+                   onChange={(e) => setLocalSepultamento(e.target.value.toUpperCase())} 
+                   placeholder="Ex: Cemitério Municipal"
+                   className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base uppercase focus:ring-2 focus:ring-primary/50" 
+                 />
                </div>
             </div>
           )}

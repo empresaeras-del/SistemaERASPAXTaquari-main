@@ -398,6 +398,8 @@ export const ConfiguracoesPage: React.FC = () => {
       const permitidos = editingUsuario.modulos_permitidos || [];
       const novoUsuario: UsuarioCadastro = {
         ...(editingUsuario as UsuarioCadastro),
+        nome: (editingUsuario.nome || '').trim().toUpperCase(),
+        email: (editingUsuario.email || '').trim().toLowerCase(),
         modulos_permitidos: (permitidos.length === MODULOS_SISTEMA.length || editingUsuario.nivel === 'super_admin')
           ? ['*']
           : permitidos
@@ -1352,10 +1354,10 @@ export const ConfiguracoesPage: React.FC = () => {
                       onChange={(e) =>
                         setEditingUsuario({
                           ...editingUsuario,
-                          nome: e.target.value,
+                          nome: e.target.value.toUpperCase(),
                         })
                       }
-                      className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
+                      className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white uppercase focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
                     />
                   </div>
                   <div>
