@@ -11,6 +11,7 @@ import { useItensFunerarios } from '../../hooks/useItensFunerarios';
 import { AtendimentoDocumentosGenerator } from './AtendimentoDocumentosGenerator';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { maskCPFOrCNPJ } from '../../utils/validators';
+import { BotaoSalvar } from '../common/BotaoSalvar';
 
 interface Props {
   atendimento: Atendimento;
@@ -136,7 +137,7 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-base/80 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-bg-subtle rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-border-default overflow-hidden">
         
         {/* HEADER */}
@@ -149,17 +150,42 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
           </div>
           <div className="flex items-center gap-3">
             {!isEditing ? (
-              <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-lg font-medium hover:bg-primary/20 transition-colors">
-                <Edit2 className="w-4 h-4" />
+              <button 
+                type="button"
+                onClick={() => setIsEditing(true)} 
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold text-xs transition-all shadow-md shadow-blue-500/20"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
                 Editar
               </button>
             ) : (
-              <button onClick={handleSave} disabled={loading} className="flex items-center gap-2 px-4 py-1.5 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-opacity">
-                <Save className="w-4 h-4" />
-                {loading ? 'Salvando...' : 'Salvar'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({ ...atendimento });
+                    setIsEditing(false);
+                  }}
+                  className="px-3 py-1.5 text-xs text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl font-medium transition-colors"
+                >
+                  Descartar
+                </button>
+                <BotaoSalvar 
+                  salvando={loading} 
+                  onClick={handleSave} 
+                  texto="Salvar" 
+                  textoSalvando="Salvando..." 
+                  tamanho="sm" 
+                  variante="primary" 
+                />
+              </div>
             )}
-            <button onClick={onClose} className="p-2 text-text-subtle hover:text-text-base transition-colors rounded-lg hover:bg-bg-hover">
+            <button 
+              type="button"
+              onClick={onClose} 
+              className="p-2 text-text-subtle hover:text-text-base transition-colors rounded-xl hover:bg-bg-hover"
+              title="Fechar"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -506,6 +532,61 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
             <AtendimentoDocumentosGenerator atendimento={atendimento} parcelas={parcelas} />
           )}
         </div>
+
+        {/* FOOTER */}
+        {activeTab === 'detalhes' && (
+          <div className="px-6 py-4 bg-bg-surface border-t border-border-default flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2 text-xs text-text-subtle">
+              {isEditing ? (
+                <span className="flex items-center gap-1.5 text-amber-500 font-medium bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                  <Edit2 className="w-3.5 h-3.5" /> Modo de edição ativo: faça as alterações e clique em Salvar.
+                </span>
+              ) : (
+                <span className="text-text-muted">
+                  Visualizando dados cadastrais e itens do atendimento.
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isEditing) {
+                    setFormData({ ...atendimento });
+                    setIsEditing(false);
+                  } else {
+                    onClose();
+                  }
+                }}
+                className="px-4 py-2 rounded-xl text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors text-sm font-medium"
+              >
+                {isEditing ? 'Cancelar Edição' : 'Fechar'}
+              </button>
+
+              {!isEditing ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Editar Atendimento
+                </button>
+              ) : (
+                <BotaoSalvar
+                  salvando={loading}
+                  onClick={handleSave}
+                  texto="Salvar Alterações"
+                  textoSalvando="Salvando Alterações..."
+                  textoSalvo="Alterações Salvas!"
+                  variante="primary"
+                  tamanho="md"
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

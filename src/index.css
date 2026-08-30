@@ -3,6 +3,7 @@
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   
+  --color-primary: #2563eb;
   --color-bg-base: var(--theme-bg-base);
   --color-bg-surface: var(--theme-bg-surface);
   --color-bg-subtle: var(--theme-bg-subtle);
