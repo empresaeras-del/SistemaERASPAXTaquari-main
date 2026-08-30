@@ -110,44 +110,73 @@ export const processSyncQueue = async (isOnline: boolean) => {
       }
 
       try {
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (task.action === 'insert' || task.action === 'update') {
           let payload = { ...task.data };
 
           // Sanitização específica para associados
           if (targetTable === 'associados') {
             const { dependentes, fornecedor_id, justificativa_modificacao_plano, ...assocClean } = payload;
-            payload = assocClean;
+            
+            const tenantId = (assocClean.tenant_id && assocClean.tenant_id !== 'all') ? assocClean.tenant_id : 'default_tenant';
+            const empresaId = (assocClean.empresa_id && assocClean.empresa_id !== 'all') ? assocClean.empresa_id : tenantId;
+            const planoPaxId = assocClean.plano_pax_id && UUID_REGEX.test(assocClean.plano_pax_id) ? assocClean.plano_pax_id : null;
+            const planoId = assocClean.plano_id && UUID_REGEX.test(assocClean.plano_id) ? assocClean.plano_id : null;
+            const dataNascimento = (assocClean.data_nascimento && String(assocClean.data_nascimento).trim() !== '') ? String(assocClean.data_nascimento).split('T')[0] : null;
+            const dataAdesao = (assocClean.data_adesao && String(assocClean.data_adesao).trim() !== '') ? String(assocClean.data_adesao).split('T')[0] : new Date().toISOString().split('T')[0];
+            const valorPlano = (assocClean.valor_plano !== undefined && assocClean.valor_plano !== null && !isNaN(Number(assocClean.valor_plano))) ? Number(assocClean.valor_plano) : null;
+            const nVidas = Number(assocClean.n_vidas) || (1 + (Array.isArray(dependentes) ? dependentes.length : 0));
 
-            const { error: assocErr } = await supabase.from(targetTable).upsert(payload);
+            payload = {
+              ...assocClean,
+              tenant_id: tenantId,
+              empresa_id: empresaId,
+              cpf: assocClean.cpf ? String(assocClean.cpf).trim() : null,
+              rg: assocClean.rg ? String(assocClean.rg).trim() : null,
+              email: assocClean.email ? String(assocClean.email).trim() : null,
+              plano_id: planoId,
+              plano_pax_id: planoPaxId,
+              data_nascimento: dataNascimento,
+              data_adesao: dataAdesao,
+              valor_plano: valorPlano,
+              n_vidas: nVidas,
+              documentos: Array.isArray(assocClean.documentos) ? assocClean.documentos : [],
+              historico_contratos: Array.isArray(assocClean.historico_contratos) ? assocClean.historico_contratos : []
+            };
+
+            const { error: assocErr } = await supabase.from(targetTable).upsert(payload, { onConflict: 'id' });
             if (assocErr) throw assocErr;
 
             // Se houver dependentes, sincroniza separadamente
             if (Array.isArray(dependentes) && dependentes.length > 0) {
-              const depsPayload = dependentes.map((d: any) => ({
-                id: d.id,
-                associado_id: payload.id,
-                tenant_id: payload.tenant_id,
-                empresa_id: payload.tenant_id,
-                nome: d.nome || '',
-                cpf: d.cpf || null,
-                data_nascimento: d.data_nascimento || null,
-                parentesco: d.parentesco || 'Outro'
-              }));
+              const depsPayload = dependentes.map((d: any) => {
+                const depId = UUID_REGEX.test(d.id || '') ? d.id : generateUUID();
+                const depNasc = (d.data_nascimento && String(d.data_nascimento).trim() !== '') ? String(d.data_nascimento).split('T')[0] : null;
+                return {
+                  id: depId,
+                  associado_id: payload.id,
+                  tenant_id: tenantId,
+                  empresa_id: empresaId,
+                  nome: (d.nome || '').trim().toUpperCase(),
+                  cpf: d.cpf && String(d.cpf).trim() !== '' ? String(d.cpf).trim() : null,
+                  data_nascimento: depNasc,
+                  parentesco: d.parentesco && String(d.parentesco).trim() !== '' ? String(d.parentesco).trim().toUpperCase() : 'OUTRO'
+                };
+              });
               await supabase.from('dependentes').upsert(depsPayload);
             }
 
             // Se houver plano, sincroniza também na tabela contratos
-            if (payload.plano_pax_id) {
+            if (planoPaxId) {
               try {
                 const contratoPayload = {
-                  id: generateUUID(),
-                  tenant_id: payload.tenant_id || 'default_tenant',
-                  empresa_id: payload.empresa_id || payload.tenant_id || 'default_tenant',
+                  tenant_id: tenantId,
+                  empresa_id: empresaId,
                   associado_id: payload.id,
-                  plano_pax_id: payload.plano_pax_id,
+                  plano_pax_id: planoPaxId,
                   numero_contrato: payload.numero_contrato || `CTR-${payload.id.substring(0, 8).toUpperCase()}`,
-                  data_inicio: payload.data_adesao || new Date().toISOString().split('T')[0],
-                  valor_mensalidade: payload.valor_plano || null,
+                  data_inicio: dataAdesao,
+                  valor_mensalidade: Number(valorPlano) || 0,
                   status: payload.status || 'ativo',
                   observacoes: payload.observacoes || null
                 };
@@ -161,12 +190,47 @@ export const processSyncQueue = async (isOnline: boolean) => {
                 if (existingContrato) {
                   await supabase.from('contratos').update(contratoPayload).eq('id', existingContrato.id);
                 } else {
-                  await supabase.from('contratos').insert(contratoPayload);
+                  await supabase.from('contratos').insert({ id: generateUUID(), ...contratoPayload });
                 }
               } catch (contratoErr) {
                 console.warn('Erro ao sincronizar contrato na fila de sync:', contratoErr);
               }
             }
+          } else if (targetTable === 'receitas') {
+            const tenantId = (payload.tenant_id && payload.tenant_id !== 'all') ? payload.tenant_id : 'default_tenant';
+            const cleanReceita = {
+              ...payload,
+              tenant_id: tenantId,
+              empresa_id: (payload.empresa_id && payload.empresa_id !== 'all') ? payload.empresa_id : tenantId,
+              associado_id: payload.associado_id && UUID_REGEX.test(payload.associado_id) ? payload.associado_id : null,
+              conta_bancaria_id: payload.conta_bancaria_id && UUID_REGEX.test(payload.conta_bancaria_id) ? payload.conta_bancaria_id : null,
+              atendimento_id: payload.atendimento_id && UUID_REGEX.test(payload.atendimento_id) ? payload.atendimento_id : null,
+              criado_por: payload.criado_por && UUID_REGEX.test(payload.criado_por) ? payload.criado_por : null,
+              valor_total: Number(payload.valor_total) || 0,
+              qtd_parcelas: Number(payload.qtd_parcelas) || 1,
+              data_emissao: payload.data_emissao ? String(payload.data_emissao).split('T')[0] : new Date().toISOString().split('T')[0],
+              data_inicio_cobranca: payload.data_inicio_cobranca ? String(payload.data_inicio_cobranca).split('T')[0] : new Date().toISOString().split('T')[0],
+            };
+            const { error } = await supabase.from(targetTable).upsert(cleanReceita);
+            if (error) throw error;
+          } else if (targetTable === 'parcelas_receber') {
+            const tenantId = (payload.tenant_id && payload.tenant_id !== 'all') ? payload.tenant_id : 'default_tenant';
+            const isPaid = payload.status === 'recebido' || payload.status === 'pago';
+            const cleanParcela = {
+              ...payload,
+              tenant_id: tenantId,
+              empresa_id: (payload.empresa_id && payload.empresa_id !== 'all') ? payload.empresa_id : tenantId,
+              receita_id: payload.receita_id && UUID_REGEX.test(payload.receita_id) ? payload.receita_id : null,
+              conta_bancaria_id: payload.conta_bancaria_id && UUID_REGEX.test(payload.conta_bancaria_id) ? payload.conta_bancaria_id : null,
+              numero_parcela: Number(payload.numero_parcela) || 1,
+              valor: Number(payload.valor) || 0,
+              data_vencimento: payload.data_vencimento ? String(payload.data_vencimento).split('T')[0] : new Date().toISOString().split('T')[0],
+              data_pagamento: payload.data_pagamento ? String(payload.data_pagamento).split('T')[0] : (isPaid ? new Date().toISOString().split('T')[0] : null),
+              valor_pago: payload.valor_pago !== undefined && payload.valor_pago !== null ? Number(payload.valor_pago) : (isPaid ? Number(payload.valor) || 0 : null),
+              valor_recebido: payload.valor_recebido !== undefined && payload.valor_recebido !== null ? Number(payload.valor_recebido) : (isPaid ? Number(payload.valor) || 0 : null),
+            };
+            const { error } = await supabase.from(targetTable).upsert(cleanParcela);
+            if (error) throw error;
           } else {
             const { error } = await supabase.from(targetTable).upsert(payload);
             if (error) throw error;

@@ -129,27 +129,32 @@ export interface ParcelaPagar {
 export const sanitizeReceitaForSupabase = (r: Receita, fallbackTenantId?: string) => {
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const rId = UUID_REGEX.test(r.id || '') ? r.id : generateUUID();
-  const tId = r.tenant_id || fallbackTenantId || 'default_tenant';
+  const tId = (r.tenant_id && r.tenant_id !== 'all' && r.tenant_id.trim() !== '') 
+    ? r.tenant_id 
+    : ((fallbackTenantId && fallbackTenantId !== 'all' && fallbackTenantId.trim() !== '') ? fallbackTenantId : 'default_tenant');
+  const empresaId = ((r as any).empresa_id && (r as any).empresa_id !== 'all' && String((r as any).empresa_id).trim() !== '')
+    ? (r as any).empresa_id
+    : tId;
 
   return {
     id: rId,
     tenant_id: tId,
-    empresa_id: tId,
+    empresa_id: empresaId,
     tipo_devedor: r.tipo_devedor || 'associado',
     associado_id: r.associado_id && UUID_REGEX.test(r.associado_id) ? r.associado_id : null,
     associado_nome: r.associado_nome || null,
-    associado_cpf: r.associado_cpf || null,
+    associado_cpf: r.associado_cpf ? String(r.associado_cpf).trim() : null,
     associado_plano: r.associado_plano || null,
-    associado_valor_contrato: r.associado_valor_contrato !== undefined && r.associado_valor_contrato !== null ? Number(r.associado_valor_contrato) : null,
+    associado_valor_contrato: r.associado_valor_contrato !== undefined && r.associado_valor_contrato !== null && !isNaN(Number(r.associado_valor_contrato)) ? Number(r.associado_valor_contrato) : null,
     cliente_tipo: r.cliente_tipo || null,
     cliente_nome: r.cliente_nome || null,
-    cliente_cpf_cnpj: r.cliente_cpf_cnpj || null,
+    cliente_cpf_cnpj: r.cliente_cpf_cnpj ? String(r.cliente_cpf_cnpj).trim() : null,
     cliente_telefone: r.cliente_telefone || null,
-    cliente_email: r.cliente_email || null,
+    cliente_email: r.cliente_email ? String(r.cliente_email).trim() : null,
     descricao: r.descricao || 'Receita',
     categoria: r.categoria || 'Geral',
-    data_emissao: r.data_emissao ? r.data_emissao.split('T')[0] : new Date().toISOString().split('T')[0],
-    data_inicio_cobranca: r.data_inicio_cobranca ? r.data_inicio_cobranca.split('T')[0] : new Date().toISOString().split('T')[0],
+    data_emissao: (r.data_emissao && String(r.data_emissao).trim() !== '') ? String(r.data_emissao).split('T')[0] : new Date().toISOString().split('T')[0],
+    data_inicio_cobranca: (r.data_inicio_cobranca && String(r.data_inicio_cobranca).trim() !== '') ? String(r.data_inicio_cobranca).split('T')[0] : new Date().toISOString().split('T')[0],
     valor_total: Number(r.valor_total) || 0,
     qtd_parcelas: Number(r.qtd_parcelas) || 1,
     forma_pagamento_padrao: r.forma_pagamento_padrao || 'pix',
@@ -166,19 +171,29 @@ export const sanitizeReceitaForSupabase = (r: Receita, fallbackTenantId?: string
 export const sanitizeParcelaReceberForSupabase = (p: ParcelaReceber, fallbackReceitaId?: string, fallbackTenantId?: string) => {
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const pId = UUID_REGEX.test(p.id || '') ? p.id : generateUUID();
-  const rId = UUID_REGEX.test(p.receita_id || fallbackReceitaId || '') ? (p.receita_id || fallbackReceitaId) : fallbackReceitaId;
-  const tId = p.tenant_id || fallbackTenantId || 'default_tenant';
+  const rId = (p.receita_id && UUID_REGEX.test(p.receita_id)) 
+    ? p.receita_id 
+    : ((fallbackReceitaId && UUID_REGEX.test(fallbackReceitaId)) ? fallbackReceitaId : null);
+  
+  const tId = (p.tenant_id && p.tenant_id !== 'all' && p.tenant_id.trim() !== '') 
+    ? p.tenant_id 
+    : ((fallbackTenantId && fallbackTenantId !== 'all' && fallbackTenantId.trim() !== '') ? fallbackTenantId : 'default_tenant');
+  const empresaId = ((p as any).empresa_id && (p as any).empresa_id !== 'all' && String((p as any).empresa_id).trim() !== '')
+    ? (p as any).empresa_id
+    : tId;
 
-  const dataVenc = p.data_vencimento ? p.data_vencimento.split('T')[0] : new Date().toISOString().split('T')[0];
+  const dataVenc = (p.data_vencimento && String(p.data_vencimento).trim() !== '') 
+    ? String(p.data_vencimento).split('T')[0] 
+    : new Date().toISOString().split('T')[0];
   const isPaid = p.status === 'recebido' || p.status === 'pago';
 
   const dataPag = p.data_pagamento 
-    ? p.data_pagamento.split('T')[0] 
-    : (p.data_recebimento ? p.data_recebimento.split('T')[0] : (p.recebido_em ? p.recebido_em.split('T')[0] : (isPaid ? new Date().toISOString().split('T')[0] : null)));
+    ? String(p.data_pagamento).split('T')[0] 
+    : (p.data_recebimento ? String(p.data_recebimento).split('T')[0] : (p.recebido_em ? String(p.recebido_em).split('T')[0] : (isPaid ? new Date().toISOString().split('T')[0] : null)));
 
-  const valRecebido = p.valor_recebido !== undefined && p.valor_recebido !== null 
+  const valRecebido = p.valor_recebido !== undefined && p.valor_recebido !== null && !isNaN(Number(p.valor_recebido))
     ? Number(p.valor_recebido) 
-    : (p.valor_pago !== undefined && p.valor_pago !== null ? Number(p.valor_pago) : (isPaid ? Number(p.valor) : null));
+    : (p.valor_pago !== undefined && p.valor_pago !== null && !isNaN(Number(p.valor_pago)) ? Number(p.valor_pago) : (isPaid ? Number(p.valor) || 0 : null));
 
   const recebidoEm = p.recebido_em 
     ? p.recebido_em 
@@ -187,7 +202,7 @@ export const sanitizeParcelaReceberForSupabase = (p: ParcelaReceber, fallbackRec
   return {
     id: pId,
     tenant_id: tId,
-    empresa_id: tId,
+    empresa_id: empresaId,
     receita_id: rId,
     numero_parcela: Number(p.numero_parcela) || 1,
     valor: Number(p.valor) || 0,
@@ -206,7 +221,7 @@ export const sanitizeParcelaReceberForSupabase = (p: ParcelaReceber, fallbackRec
     observacao_recebimento: p.observacao_recebimento || (p as any).observacao || null,
     tipo_devedor: p.tipo_devedor || null,
     devedor_nome: p.devedor_nome || null,
-    devedor_cpf_cnpj: p.devedor_cpf_cnpj || null,
+    devedor_cpf_cnpj: p.devedor_cpf_cnpj ? String(p.devedor_cpf_cnpj).trim() : null,
     descricao: p.descricao || null,
     recebido_em: recebidoEm,
     recebido_por: p.recebido_por || null,

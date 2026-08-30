@@ -53,14 +53,21 @@ export const ContratosPage: React.FC = () => {
               .eq('associado_id', assoc.id)
               .maybeSingle();
 
+            const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const cTenantId = (assoc.tenant_id && assoc.tenant_id !== 'all') ? assoc.tenant_id : 'default_tenant';
+            const cPlanoId = assoc.plano_pax_id && UUID_REGEX.test(assoc.plano_pax_id) ? assoc.plano_pax_id : null;
+            const cDataInicio = (assoc.data_adesao && String(assoc.data_adesao).trim() !== '') 
+              ? String(assoc.data_adesao).split('T')[0] 
+              : new Date().toISOString().split('T')[0];
+
             const contratoData = {
-              tenant_id: assoc.tenant_id || 'default_tenant',
-              empresa_id: (assoc as any).empresa_id || assoc.tenant_id || 'default_tenant',
+              tenant_id: cTenantId,
+              empresa_id: (assoc as any).empresa_id || cTenantId,
               associado_id: assoc.id,
-              plano_pax_id: assoc.plano_pax_id,
+              plano_pax_id: cPlanoId,
               numero_contrato: assoc.numero_contrato || `CTR-${assoc.id.substring(0, 8).toUpperCase()}`,
-              data_inicio: assoc.data_adesao || new Date().toISOString().split('T')[0],
-              valor_mensalidade: assoc.valor_plano || null,
+              data_inicio: cDataInicio,
+              valor_mensalidade: Number(assoc.valor_plano) || 0,
               status: assoc.status || 'ativo',
               observacoes: (assoc as any).observacoes || null
             };

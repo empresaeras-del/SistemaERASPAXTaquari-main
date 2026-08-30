@@ -211,11 +211,42 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const associadoId = UUID_REGEX.test(associado.id) ? associado.id : crypto.randomUUID();
 
+  const tenantId = (rest.tenant_id && rest.tenant_id !== 'all') 
+    ? rest.tenant_id 
+    : 'default_tenant';
+  const empresaId = (rest.empresa_id && rest.empresa_id !== 'all') 
+    ? rest.empresa_id 
+    : tenantId;
+
+  const planoPaxId = rest.plano_pax_id && UUID_REGEX.test(rest.plano_pax_id) ? rest.plano_pax_id : null;
+  const planoId = rest.plano_id && UUID_REGEX.test(rest.plano_id) ? rest.plano_id : null;
+
+  const dataNascimento = (rest.data_nascimento && String(rest.data_nascimento).trim() !== '') 
+    ? String(rest.data_nascimento).split('T')[0] 
+    : null;
+
+  const dataAdesao = (rest.data_adesao && String(rest.data_adesao).trim() !== '') 
+    ? String(rest.data_adesao).split('T')[0] 
+    : new Date().toISOString().split('T')[0];
+
+  const valorPlano = (rest.valor_plano !== undefined && rest.valor_plano !== null && !isNaN(Number(rest.valor_plano)))
+    ? Number(rest.valor_plano)
+    : null;
+
+  const nVidas = Number(rest.n_vidas) || (1 + (Array.isArray(dependentes) ? dependentes.length : 0));
+
   const associadoToSave: Associado = {
     ...associado,
     id: associadoId,
+    tenant_id: tenantId,
+    empresa_id: empresaId,
+    plano_pax_id: planoPaxId || undefined,
+    data_nascimento: dataNascimento || undefined,
+    data_adesao: dataAdesao,
+    valor_plano: valorPlano ?? undefined,
+    n_vidas: nVidas,
     dependentes: Array.isArray(dependentes) ? dependentes : []
-  };
+  } as any;
 
   // 1. Sempre grava imediatamente no IndexedDB para persistência offline/local
   await saveToIDB(STORE_NAME, associadoToSave);
@@ -223,18 +254,18 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
   // 2. Prepara os dados sanitizados para o Supabase
   const associadoDataSupabase = {
     id: associadoId,
-    tenant_id: rest.tenant_id || 'default_tenant',
-    empresa_id: rest.empresa_id || rest.tenant_id || 'default_tenant',
+    tenant_id: tenantId,
+    empresa_id: empresaId,
     nome: rest.nome || '',
-    cpf: rest.cpf || '',
-    rg: rest.rg || null,
-    data_nascimento: rest.data_nascimento || null,
+    cpf: rest.cpf ? String(rest.cpf).trim() : null,
+    rg: rest.rg ? String(rest.rg).trim() : null,
+    data_nascimento: dataNascimento,
     sexo: rest.sexo || null,
     nome_pai: rest.nome_pai || null,
     nome_mae: rest.nome_mae || null,
     telefone: rest.telefone || null,
     celular_whatsapp: rest.celular_whatsapp || rest.telefone || null,
-    email: rest.email || null,
+    email: rest.email ? String(rest.email).trim() : null,
     endereco_logradouro: rest.endereco_logradouro || rest.logradouro || null,
     logradouro: rest.endereco_logradouro || rest.logradouro || null,
     endereco_numero: rest.endereco_numero || rest.numero || null,
@@ -252,16 +283,16 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
     uf: rest.endereco_estado || rest.uf || null,
     tipo_pessoa: rest.tipo_pessoa || 'PF',
     tipo_associado: rest.tipo_associado || 'titular',
-    plano_id: rest.plano_id || null,
-    plano_pax_id: rest.plano_pax_id || null,
+    plano_id: planoId,
+    plano_pax_id: planoPaxId,
     plano_nome: rest.plano_nome || null,
     numero_contrato: rest.numero_contrato || null,
-    n_vidas: rest.n_vidas || (1 + (dependentes?.length || 0)),
-    valor_plano: rest.valor_plano || null,
-    data_adesao: rest.data_adesao || new Date().toISOString().split('T')[0],
+    n_vidas: nVidas,
+    valor_plano: valorPlano,
+    data_adesao: dataAdesao,
     assinatura_base64: rest.assinatura_base64 || null,
-    documentos: rest.documentos || [],
-    historico_contratos: rest.historico_contratos || [],
+    documentos: Array.isArray(rest.documentos) ? rest.documentos : [],
+    historico_contratos: Array.isArray(rest.historico_contratos) ? rest.historico_contratos : [],
     status: rest.status || 'ativo',
     estado_civil: rest.estado_civil || null,
     profissao: rest.profissao || null,
@@ -275,99 +306,102 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
         .upsert(associadoDataSupabase, { onConflict: 'id' });
             
       if (error) {
-        console.warn('Supabase save failed, enqueuing for sync:', error.message);
+        console.error('Erro ao salvar associado no Supabase:', error);
         await addToSyncQueue({
           storeName: STORE_NAME,
           action: 'update',
           data: associadoToSave
         });
-      } else if (dependentes) {
-        // Exclui dependentes antigos e insere os novos
+      } else {
+        // Exclui dependentes antigos e insere os novos com sanitização completa
         try {
           await supabase.from('dependentes').delete().eq('associado_id', associadoId);
-          if (dependentes.length > 0) {
+          if (Array.isArray(dependentes) && dependentes.length > 0) {
             const depsToInsert = dependentes.map((d: any) => {
               const depId = UUID_REGEX.test(d.id || '') ? d.id : crypto.randomUUID();
+              const depNasc = (d.data_nascimento && String(d.data_nascimento).trim() !== '') 
+                ? String(d.data_nascimento).split('T')[0] 
+                : null;
               return {
                 id: depId,
                 associado_id: associadoId,
-                tenant_id: associadoToSave.tenant_id,
-                empresa_id: associadoToSave.tenant_id,
+                tenant_id: tenantId,
+                empresa_id: empresaId,
                 nome: (d.nome || '').trim().toUpperCase(),
-                cpf: d.cpf ? d.cpf.trim() : null,
-                data_nascimento: d.data_nascimento ? d.data_nascimento.split('T')[0] : null,
-                parentesco: d.parentesco ? d.parentesco.trim().toUpperCase() : 'OUTRO'
+                cpf: d.cpf && String(d.cpf).trim() !== '' ? String(d.cpf).trim() : null,
+                data_nascimento: depNasc,
+                parentesco: d.parentesco && String(d.parentesco).trim() !== '' ? String(d.parentesco).trim().toUpperCase() : 'OUTRO'
               };
             });
             const { error: depError } = await supabase.from('dependentes').insert(depsToInsert);
             if (depError) {
-              console.warn('Erro ao inserir dependentes no Supabase:', depError);
+              console.error('Erro ao inserir dependentes no Supabase:', depError);
             }
           }
         } catch (depErr) {
           console.warn('Erro ao sincronizar dependentes:', depErr);
         }
-      }
 
-      // 3. Sincroniza registro na tabela 'contratos' do Supabase se o associado tiver plano
-      if (associadoToSave.plano_pax_id) {
-        try {
-          // Garante que o plano existe no Supabase antes de criar o contrato
-          const { data: planoInSupabase } = await supabase
-            .from('planos_pax')
-            .select('id')
-            .eq('id', associadoToSave.plano_pax_id)
-            .maybeSingle();
+        // 3. Sincroniza registro na tabela 'contratos' do Supabase se o associado tiver plano
+        if (planoPaxId) {
+          try {
+            // Garante que o plano existe no Supabase antes de criar o contrato
+            const { data: planoInSupabase } = await supabase
+              .from('planos_pax')
+              .select('id')
+              .eq('id', planoPaxId)
+              .maybeSingle();
 
-          if (!planoInSupabase) {
-            const localPlano = await getFromIDB<any>('planos_pax', associadoToSave.plano_pax_id);
-            if (localPlano) {
-              const { coberturas, faixas, itens, ...cleanPlano } = localPlano;
-              await supabase.from('planos_pax').upsert({
-                id: associadoToSave.plano_pax_id,
-                tenant_id: associadoToSave.tenant_id || 'default_tenant',
-                empresa_id: associadoToSave.tenant_id || 'default_tenant',
-                nome: cleanPlano.nome || associadoToSave.plano_nome || 'Plano PAX',
-                codigo: cleanPlano.codigo || `PLN-${associadoToSave.plano_pax_id.substring(0, 6).toUpperCase()}`,
-                tipo_plano: cleanPlano.tipo_plano || 'individual',
-                valor_mensalidade: cleanPlano.valor_mensalidade || associadoToSave.valor_plano || 0,
-                ativo: true,
-                ...cleanPlano
-              });
+            if (!planoInSupabase) {
+              const localPlano = await getFromIDB<any>('planos_pax', planoPaxId);
+              if (localPlano) {
+                const { coberturas, faixas, itens, ...cleanPlano } = localPlano;
+                await supabase.from('planos_pax').upsert({
+                  id: planoPaxId,
+                  tenant_id: tenantId,
+                  empresa_id: empresaId,
+                  nome: cleanPlano.nome || associadoToSave.plano_nome || 'Plano PAX',
+                  codigo: cleanPlano.codigo || `PLN-${planoPaxId.substring(0, 6).toUpperCase()}`,
+                  tipo_plano: cleanPlano.tipo_plano || 'individual',
+                  valor_mensalidade: Number(cleanPlano.valor_mensalidade) || Number(valorPlano) || 0,
+                  ativo: true,
+                  ...cleanPlano
+                });
+              }
             }
+
+            const contratoData = {
+              tenant_id: tenantId,
+              empresa_id: empresaId,
+              associado_id: associadoId,
+              plano_pax_id: planoPaxId,
+              numero_contrato: associadoToSave.numero_contrato || `CTR-${associadoId.substring(0, 8).toUpperCase()}`,
+              data_inicio: dataAdesao,
+              valor_mensalidade: Number(valorPlano) || 0,
+              status: associadoToSave.status || 'ativo',
+              observacoes: (associadoToSave as any).observacoes || null
+            };
+
+            const { data: existingContrato } = await supabase
+              .from('contratos')
+              .select('id')
+              .eq('associado_id', associadoId)
+              .maybeSingle();
+
+            if (existingContrato) {
+              const { error: updateErr } = await supabase.from('contratos').update(contratoData).eq('id', existingContrato.id);
+              if (updateErr) console.warn('Erro ao atualizar contrato no Supabase:', updateErr);
+            } else {
+              const { error: insertErr } = await supabase.from('contratos').insert({ id: crypto.randomUUID(), ...contratoData });
+              if (insertErr) console.warn('Erro ao inserir contrato no Supabase:', insertErr);
+            }
+          } catch (contratoErr) {
+            console.warn('Erro ao sincronizar contrato no Supabase:', contratoErr);
           }
-
-          const contratoData = {
-            tenant_id: associadoToSave.tenant_id || 'default_tenant',
-            empresa_id: (associadoToSave as any).empresa_id || associadoToSave.tenant_id || 'default_tenant',
-            associado_id: associadoId,
-            plano_pax_id: associadoToSave.plano_pax_id,
-            numero_contrato: associadoToSave.numero_contrato || `CTR-${associadoId.substring(0, 8).toUpperCase()}`,
-            data_inicio: associadoToSave.data_adesao || new Date().toISOString().split('T')[0],
-            valor_mensalidade: associadoToSave.valor_plano || null,
-            status: associadoToSave.status || 'ativo',
-            observacoes: (associadoToSave as any).observacoes || null
-          };
-
-          const { data: existingContrato } = await supabase
-            .from('contratos')
-            .select('id')
-            .eq('associado_id', associadoId)
-            .maybeSingle();
-
-          if (existingContrato) {
-            const { error: updateErr } = await supabase.from('contratos').update(contratoData).eq('id', existingContrato.id);
-            if (updateErr) console.warn('Erro ao atualizar contrato no Supabase:', updateErr);
-          } else {
-            const { error: insertErr } = await supabase.from('contratos').insert({ id: crypto.randomUUID(), ...contratoData });
-            if (insertErr) console.warn('Erro ao inserir contrato no Supabase:', insertErr);
-          }
-        } catch (contratoErr) {
-          console.warn('Erro ao sincronizar contrato no Supabase:', contratoErr);
         }
       }
     } catch (err) {
-      console.warn('Supabase save threw error, fallback to IDB and sync queue:', err);
+      console.error('Supabase save threw error, fallback to IDB and sync queue:', err);
       await addToSyncQueue({
         storeName: STORE_NAME,
         action: 'update',

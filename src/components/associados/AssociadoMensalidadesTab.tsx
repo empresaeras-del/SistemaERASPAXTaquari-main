@@ -130,10 +130,14 @@ const MensalidadesGeracaoSubView = ({
     try {
       const mestreId = uuidv4();
       const totalReceita = parcelas.reduce((acc, p) => acc + p.valor, 0);
+      const targetTenant = (associado.tenant_id && associado.tenant_id !== 'all')
+        ? associado.tenant_id
+        : (state.empresaSelecionada && state.empresaSelecionada !== 'all' ? state.empresaSelecionada : 'default_tenant');
 
       const receitaMestre = {
         id: mestreId,
-        tenant_id: state.empresaSelecionada || 'default',
+        tenant_id: targetTenant,
+        empresa_id: targetTenant,
         tipo_devedor: 'associado',
         associado_id: associado.id,
         associado_nome: associado.nome,
@@ -147,12 +151,13 @@ const MensalidadesGeracaoSubView = ({
         qtd_parcelas: qtdParcelas,
         forma_pagamento_padrao: 'boleto',
         status: 'ativo',
-        criado_por: state.user?.nome || 'Sistema'
+        criado_por: state.user?.id || null
       };
 
       const parcelasGeradas = parcelas.map(p => ({
         id: uuidv4(),
-        tenant_id: state.empresaSelecionada || 'default',
+        tenant_id: targetTenant,
+        empresa_id: targetTenant,
         receita_id: mestreId,
         numero_parcela: p.numero_parcela,
         total_parcelas: qtdParcelas,
