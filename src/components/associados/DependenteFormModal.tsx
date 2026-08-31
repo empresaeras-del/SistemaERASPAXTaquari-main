@@ -9,7 +9,8 @@ import {
   AlertCircle, 
   HeartHandshake,
   Sparkles,
-  ShieldAlert
+  ShieldAlert,
+  Trash2
 } from 'lucide-react';
 import { Dependente } from '../../services/associadosService';
 import { isValidCPFOrCNPJ, maskCPFOrCNPJ } from '../../utils/validators';
@@ -23,6 +24,7 @@ export interface DependenteFormModalProps {
   onClose: () => void;
   dependente?: Dependente | null;
   onSave: (dep: Dependente) => void;
+  onDelete?: (dep: Dependente) => void;
   titularNome?: string;
   existingCpfs?: string[];
 }
@@ -47,6 +49,7 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
   onClose,
   dependente,
   onSave,
+  onDelete,
   titularNome,
   existingCpfs = []
 }) => {
@@ -319,24 +322,40 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
 
           </div>
 
-          <div className="pt-4 border-t border-[#2d3544] flex items-center justify-end gap-3">
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={onClose}
-              className="px-4 py-2.5 bg-[#232936] hover:bg-[#2e3748] disabled:opacity-50 text-slate-300 rounded-xl text-sm font-semibold transition-colors"
-            >
-              Cancelar
-            </button>
-            <BotaoSalvar
-              type="submit"
-              salvando={isSaving}
-              salvo={isSaved}
-              texto={dependente ? 'Salvar Alterações' : 'Adicionar Dependente'}
-              textoSalvando="Salvando Dependente..."
-              textoSalvo="Dependente Salvo!"
-              variante="primary"
-            />
+          <div className="pt-4 border-t border-[#2d3544] flex items-center justify-between gap-3">
+            <div>
+              {dependente && onDelete && (
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => onDelete(dependente)}
+                  className="px-3.5 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  title="Excluir este dependente"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Excluir Dependente</span>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={onClose}
+                className="px-4 py-2.5 bg-[#232936] hover:bg-[#2e3748] disabled:opacity-50 text-slate-300 rounded-xl text-sm font-semibold transition-colors"
+              >
+                Cancelar
+              </button>
+              <BotaoSalvar
+                type="submit"
+                salvando={isSaving}
+                salvo={isSaved}
+                texto={dependente ? 'Salvar Alterações' : 'Adicionar Dependente'}
+                textoSalvando="Salvando Dependente..."
+                textoSalvo="Dependente Salvo!"
+                variante="primary"
+              />
+            </div>
           </div>
         </form>
 

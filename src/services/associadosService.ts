@@ -311,6 +311,29 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
   // 1. Sempre grava imediatamente no IndexedDB para persistência offline/local
   await saveToIDB(STORE_NAME, associadoToSave);
 
+  // Sincroniza store 'dependentes' do IndexedDB
+  try {
+    const localDeps = await getAllFromIDB<any>('dependentes');
+    const currentDepIds = new Set((associadoToSave.dependentes || []).map((d: any) => d.id).filter(Boolean));
+    for (const d of localDeps) {
+      if (d.associado_id === associadoId && !currentDepIds.has(d.id)) {
+        await deleteFromIDB('dependentes', d.id);
+      }
+    }
+    if (Array.isArray(associadoToSave.dependentes)) {
+      for (const d of associadoToSave.dependentes) {
+        await saveToIDB('dependentes', {
+          ...d,
+          associado_id: associadoId,
+          tenant_id: tenantId,
+          empresa_id: empresaId
+        });
+      }
+    }
+  } catch (idbErr) {
+    console.warn('Erro ao atualizar dependentes no IDB:', idbErr);
+  }
+
   if (isOnline) {
     try {
       // 2. Pré-sincroniza o plano_pax caso exista e não esteja presente no Supabase (evita erro de FK)
@@ -402,9 +425,40 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
         throw new Error(`Erro ao salvar associado no Supabase: ${assocError.message || assocError}`);
       }
 
-      // 5. Salva dependentes vinculados
+      // 5. Salva e sincroniza dependentes vinculados de forma seletiva
       try {
-        await supabase.from('dependentes').delete().eq('associado_id', associadoId);
+        // Busca dependentes atualmente cadastrados no Supabase para este associado
+        const { data: existingDeps } = await supabase
+          .from('dependentes')
+          .select('id')
+          .eq('associado_id', associadoId);
+
+        const currentDepIds = new Set(
+          (Array.isArray(dependentes) ? dependentes : [])
+            .map((d: any) => d.id)
+            .filter(Boolean)
+        );
+
+        // Exclui apenas os dependentes que foram expressamente removidos do associado
+        if (existingDeps && existingDeps.length > 0) {
+          const idsToDelete = existingDeps
+            .map((d: any) => d.id)
+            .filter((id: string) => !currentDepIds.has(id));
+
+          if (idsToDelete.length > 0) {
+            const { error: delErr } = await supabase
+              .from('dependentes')
+              .delete()
+              .eq('associado_id', associadoId)
+              .in('id', idsToDelete);
+
+            if (delErr) {
+              console.warn('Aviso ao excluir dependentes removidos no Supabase:', delErr);
+            }
+          }
+        }
+
+        // Salva/atualiza cada um dos dependentes ativos
         if (Array.isArray(dependentes) && dependentes.length > 0) {
           for (const d of dependentes) {
             const depId = UUID_REGEX.test(d.id || '') ? d.id : crypto.randomUUID();
@@ -643,6 +697,34 @@ export const softDeleteAssociado = async (id: string, isOnline: boolean): Promis
 };
 
 export const deleteAssociado = softDeleteAssociado;
+
+export const deleteDependente = async (
+  depId: string,
+  associadoId: string,
+  isOnline: boolean
+): Promise<void> => {
+  try {
+    await deleteFromIDB('dependentes', depId);
+    const assoc = await getFromIDB<Associado>(STORE_NAME, associadoId);
+    if (assoc && assoc.dependentes) {
+      assoc.dependentes = assoc.dependentes.filter(d => d.id !== depId);
+      assoc.n_vidas = 1 + assoc.dependentes.length;
+      await saveToIDB(STORE_NAME, assoc);
+    }
+    if (isOnline) {
+      await supabase.from('dependentes').delete().eq('id', depId);
+    } else {
+      await addToSyncQueue({
+        storeName: 'dependentes',
+        action: 'delete',
+        data: { id: depId, associado_id: associadoId }
+      });
+    }
+  } catch (err) {
+    console.error('Erro ao excluir dependente:', err);
+    throw err;
+  }
+};
 
 export interface DocumentoAssociado {
   id: string;

@@ -468,6 +468,17 @@ export const canDelete = (user: Usuario | null | undefined, isOnline?: boolean):
 };
 
 /**
+ * Regra: Usuários de nível FUNCIONÁRIO NÃO possuem permissão para excluir dependentes.
+ * Apenas Super Admin, Admin e Gerente podem excluir dependentes vinculados ao plano.
+ * Bloqueado automaticamente quando offline.
+ */
+export const canDeleteDependente = (user: Usuario | null | undefined, isOnline?: boolean): boolean => {
+  if (isOnline === false) return false;
+  if (!user) return false;
+  return user.nivel === 'super_admin' || user.nivel === 'admin' || user.nivel === 'gerente';
+};
+
+/**
  * Regra: Somente Super Admin pode incluir novas empresas no sistema (online).
  */
 export const canCreateEmpresa = (user: Usuario | null | undefined, isOnline?: boolean): boolean => {

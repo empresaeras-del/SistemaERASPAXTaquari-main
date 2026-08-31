@@ -26,7 +26,7 @@ import { useColumnVisibility } from "../hooks/useColumnVisibility";
 import { ColumnVisibilityToggle } from "../components/ColumnVisibilityToggle";
 import { useFornecedores } from "../hooks/useFornecedores";
 import { registrarAuditoria } from "../lib/supabase";
-import { canDelete } from "../utils/permissions";
+import { canDelete, canDeleteDependente, alertPermissionRestriction } from "../utils/permissions";
 import { MessageCircle, Phone, ClipboardList, Activity, MapPin, User, FileText, CreditCard, FolderOpen, Folder, File, Plus, Search, Filter, Edit2, Trash2, X, Users, Heart, AlertCircle, ShieldCheck, CheckCircle, Clock, XCircle, DollarSign, Calendar, LayoutGrid, List , Printer, Eye, Download, UploadCloud, AlertTriangle, Image as ImageIcon, Lock, Wallet, ArrowRight, CheckCircle2 } from "lucide-react";
 import { PlanoPaxSelect } from "../components/planos-pax/PlanoPaxSelect";
 import { AssociadoRequisicoesTab } from "../components/associados/AssociadoRequisicoesTab";
@@ -756,6 +756,40 @@ export const AssociadosPage: React.FC = () => {
             "Erro ao excluir associado.",
           );
         }
+      },
+    });
+  };
+
+  const handleExcluirDependente = (dep: Dependente, index?: number) => {
+    if (!canDeleteDependente(state.user, state.isOnline)) {
+      if (state.user?.nivel === 'funcionario') {
+        alertPermissionRestriction('Associados', 'excluir dependentes vinculados ao plano');
+      } else {
+        toast.error("Exclusão bloqueada no Modo de Visualização (Offline).");
+      }
+      return;
+    }
+
+    confirm({
+      title: "Excluir Dependente",
+      message: `Deseja realmente remover o dependente "${dep.nome || 'selecionado'}" deste associado? Isso atualizará a contagem de vidas do plano.`,
+      confirmText: "Sim, Excluir",
+      cancelText: "Cancelar",
+      danger: true,
+      onConfirm: () => {
+        setEditingAssociado((prev) => {
+          if (!prev) return null;
+          const novosDeps = (prev.dependentes || []).filter(
+            (d, idx) => (dep.id && d.id ? d.id !== dep.id : (d.nome !== dep.nome || (index !== undefined && idx !== index)))
+          );
+          return {
+            ...prev,
+            dependentes: novosDeps,
+          };
+        });
+        setDependenteFormModalOpen(false);
+        setDependenteEmEdicao(null);
+        toast.success("Dependente removido com sucesso.");
       },
     });
   };
@@ -2057,26 +2091,13 @@ export const AssociadosPage: React.FC = () => {
                                           </button>
                                           <button
                                             type="button"
-                                            onClick={() => {
-                                              confirm({
-                                                title: "Excluir Dependente",
-                                                message: `Deseja realmente remover o dependente "${dep.nome}" deste associado? Isso atualizará a contagem de vidas do plano.`,
-                                                confirmText: "Sim, Excluir",
-                                                cancelText: "Cancelar",
-                                                onConfirm: () => {
-                                                  const novosDeps = (editingAssociado.dependentes || []).filter(
-                                                    (d) => d.id !== dep.id
-                                                  );
-                                                  setEditingAssociado({
-                                                    ...editingAssociado,
-                                                    dependentes: novosDeps,
-                                                  });
-                                                  toast.success("Dependente removido com sucesso.");
-                                                },
-                                              });
-                                            }}
-                                            className="p-1.5 text-text-muted hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
-                                            title="Excluir Dependente"
+                                            onClick={() => handleExcluirDependente(dep, index)}
+                                            className={`p-1.5 rounded-lg transition-colors ${
+                                              state.user?.nivel === 'funcionario'
+                                                ? 'text-text-muted hover:text-amber-400 hover:bg-amber-400/10'
+                                                : 'text-text-muted hover:text-rose-500 hover:bg-rose-500/10'
+                                            }`}
+                                            title={state.user?.nivel === 'funcionario' ? "Exclusão restrita (Nível Funcionário)" : "Excluir Dependente"}
                                           >
                                             <Trash2 className="w-4 h-4" />
                                           </button>
@@ -3016,17 +3037,21 @@ export const AssociadosPage: React.FC = () => {
           dependente={dependenteEmEdicao}
           titularNome={editingAssociado.nome}
           existingCpfs={(editingAssociado.dependentes || []).map((d) => d.cpf || "").filter(Boolean)}
+          onDelete={handleExcluirDependente}
           onSave={(salvoDep) => {
-            const deps = editingAssociado.dependentes ? [...editingAssociado.dependentes] : [];
-            const index = deps.findIndex((d) => d.id === salvoDep.id);
-            if (index !== -1) {
-              deps[index] = salvoDep;
-            } else {
-              deps.push(salvoDep);
-            }
-            setEditingAssociado({
-              ...editingAssociado,
-              dependentes: deps,
+            setEditingAssociado(prev => {
+              if (!prev) return null;
+              const deps = prev.dependentes ? [...prev.dependentes] : [];
+              const index = deps.findIndex((d) => d.id === salvoDep.id);
+              if (index !== -1) {
+                deps[index] = salvoDep;
+              } else {
+                deps.push(salvoDep);
+              }
+              return {
+                ...prev,
+                dependentes: deps,
+              };
             });
             setDependenteFormModalOpen(false);
             setDependenteEmEdicao(null);
