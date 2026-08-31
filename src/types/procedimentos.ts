@@ -6,7 +6,9 @@ export interface Procedimento {
   coparticipacao?: number;
   valor_total_associado?: number;
   ativo: boolean;
-  empresa_id: string;
+  empresa_id?: string;
+  tenant_id?: string;
+  deleted_at?: string;
   tipo_procedimento?: string;
   created_at?: string;
   updated_at?: string;

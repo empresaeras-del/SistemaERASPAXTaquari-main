@@ -3,6 +3,7 @@ import { generateUUID } from '../utils/uuid';
 import { supabase } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { registrarAuditoria } from '../lib/supabase';
 import { 
   PlanoPaxCompleto, 
@@ -15,7 +16,20 @@ export function usePlanosPax() {
   const [planos, setPlanos] = useState<PlanoPaxCompleto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { state: { user, isOnline, empresaSelecionada } } = useAppContext();
+  const { state: { user: stateUser, isOnline, empresaSelecionada } } = useAppContext();
+  const { user } = useAuth();
+
+  // Retorna o tenant_id efetivo para salvar registros
+  // Não-super_admin: sempre usa o tenant do próprio usuário
+  // Super_admin: usa a empresa selecionada no momento
+  const getTenantId = useCallback((): string => {
+    if (user?.nivel !== 'super_admin' && user?.tenant_id) {
+      return user.tenant_id;
+    }
+    return (empresaSelecionada && empresaSelecionada !== 'all')
+      ? empresaSelecionada
+      : (user?.tenant_id || '');
+  }, [user, empresaSelecionada]);
 
   const carregarPlanos = useCallback(async () => {
     try {
@@ -82,7 +96,7 @@ export function usePlanosPax() {
         ...planoBase 
       } = data;
       
-      const tenantId = (planoBase as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
+      const tenantId = getTenantId();
       const planoId = generateUUID();
 
       // Sanitizar dados base para garantir que apenas colunas do banco sejam enviadas
@@ -195,7 +209,7 @@ export function usePlanosPax() {
         ...planoBase 
       } = data;
       
-      const tenantId = (planoBase as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
+      const tenantId = getTenantId();
 
       // Sanitizar dados para UPDATE
       const dbPlanoUpdate = {

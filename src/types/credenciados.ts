@@ -8,13 +8,16 @@ export interface Credenciado {
   inscricao_estadual?: string;
   inscricao_municipal?: string;
   cep?: string;
+  logradouro?: string;
   endereco?: string;
   numero?: string;
   complemento?: string;
   bairro?: string;
   cidade?: string;
+  uf?: string;
   estado?: string;
   telefone?: string;
+  celular_whatsapp?: string;
   email?: string;
   responsavel_nome?: string;
   responsavel_telefone?: string;
@@ -26,6 +29,10 @@ export interface Credenciado {
   tipo_chave_pix?: string;
   chave_pix?: string;
   status: CredenciadoStatus;
+  // Campos de multi-tenancy
+  tenant_id?: string;
+  empresa_id?: string;
+  deleted_at?: string;
   created_at?: string;
   updated_at?: string;
 }

@@ -3,6 +3,7 @@ import { generateUUID } from '../utils/uuid';
 import { supabase } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Procedimento, ProcedimentoInsert, ProcedimentoUpdate } from '../types/procedimentos';
 import { registrarAuditoria } from '../lib/supabase';
 
@@ -11,21 +12,31 @@ export function useProcedimentos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { state: { isOnline, empresaSelecionada } } = useAppContext();
+  const { user } = useAuth();
+
+  // Retorna o tenant_id efetivo: para não-super_admin usa sempre o tenant do usuário
+  const getTenantId = useCallback((): string | null => {
+    if (user?.nivel === 'super_admin') return empresaSelecionada;
+    return user?.tenant_id || empresaSelecionada;
+  }, [user, empresaSelecionada]);
 
   const carregarProcedimentos = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      const tenantId = getTenantId();
+      const isSuperAdmin = user?.nivel === 'super_admin';
 
       if (isOnline) {
         let query = supabase.from('procedimentos').select('*');
-        if (empresaSelecionada && empresaSelecionada !== 'all') {
-          query = query.eq('empresa_id', empresaSelecionada);
+        // Filtra por tenant: super_admin verá todos se nenhuma empresa estiver selecionada
+        if (!isSuperAdmin && tenantId) {
+          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
+        } else if (isSuperAdmin && tenantId && tenantId !== 'all') {
+          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
         }
         const { data, error: err } = await query.order('descricao', { ascending: true });
-        
         if (err) throw err;
-        
         if (data) {
           for (const item of data) {
             await saveToIDB('procedimentos', item);
@@ -34,8 +45,11 @@ export function useProcedimentos() {
         setProcedimentos(data as Procedimento[] || []);
       } else {
         let idbData = await getAllFromIDB<Procedimento>('procedimentos');
-        if (empresaSelecionada && empresaSelecionada !== 'all') {
-          idbData = idbData.filter(d => d.empresa_id === empresaSelecionada);
+        if (tenantId && tenantId !== 'all') {
+          idbData = idbData.filter(d =>
+            (d as any).empresa_id === tenantId ||
+            (d as any).tenant_id === tenantId
+          );
         }
         idbData.sort((a, b) => a.descricao.localeCompare(b.descricao));
         setProcedimentos(idbData);
@@ -43,9 +57,13 @@ export function useProcedimentos() {
     } catch (err: any) {
       console.warn("Erro ao carregar procedimentos:", err);
       try {
+        const tenantId = getTenantId();
         let idbData = await getAllFromIDB<Procedimento>('procedimentos');
-        if (empresaSelecionada && empresaSelecionada !== 'all') {
-          idbData = idbData.filter(d => d.empresa_id === empresaSelecionada);
+        if (tenantId && tenantId !== 'all') {
+          idbData = idbData.filter(d =>
+            (d as any).empresa_id === tenantId ||
+            (d as any).tenant_id === tenantId
+          );
         }
         setProcedimentos(idbData);
       } catch (idbErr) {
@@ -54,7 +72,7 @@ export function useProcedimentos() {
     } finally {
       setLoading(false);
     }
-  }, [isOnline, empresaSelecionada]);
+  }, [isOnline, empresaSelecionada, getTenantId, user]);
 
   useEffect(() => {
     carregarProcedimentos();
@@ -62,13 +80,18 @@ export function useProcedimentos() {
 
   const criar = async (data: ProcedimentoInsert) => {
     try {
-      const newItem = { 
-        ...data, 
+      const tenantId = getTenantId();
+      const newItem = {
+        ...data,
         id: data.id || generateUUID(),
-        empresa_id: data.empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001')
+        tenant_id: tenantId || data.tenant_id,
+        empresa_id: tenantId || data.empresa_id,
       };
-      const { data: inserted, error: err } = await supabase.from('procedimentos').insert([newItem]).select().single();
-      
+      const { data: inserted, error: err } = await supabase
+        .from('procedimentos')
+        .insert([newItem])
+        .select()
+        .single();
       if (err) {
         console.warn('Supabase insert failed, saving to IDB only.', err);
         await saveToIDB('procedimentos', newItem);
@@ -85,13 +108,26 @@ export function useProcedimentos() {
 
   const editar = async (id: string, data: ProcedimentoUpdate) => {
     try {
-      const { data: updated, error: err } = await supabase.from('procedimentos').update(data).eq('id', id).select().single();
-      
+      const existing = await getFromIDB<Procedimento>('procedimentos', id);
+      const tenantId =
+        (data as any).tenant_id ||
+        (existing as any)?.tenant_id ||
+        getTenantId();
+      const payload = {
+        ...data,
+        tenant_id: tenantId,
+        empresa_id: tenantId,
+      };
+      const { data: updated, error: err } = await supabase
+        .from('procedimentos')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
       if (err) {
         console.warn('Supabase update failed, attempting IDB update.', err);
-        const existing = await getFromIDB<Procedimento>('procedimentos', id);
         if (existing) {
-          await saveToIDB('procedimentos', { ...existing, ...data });
+          await saveToIDB('procedimentos', { ...existing, ...payload });
         }
       } else {
         await saveToIDB('procedimentos', updated);

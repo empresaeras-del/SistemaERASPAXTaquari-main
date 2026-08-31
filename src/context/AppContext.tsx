@@ -53,9 +53,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sincroniza o usuário autenticado com o AppState
   useEffect(() => {
     dispatch({ type: 'SET_USER', payload: user });
-    
-    // Garante que assim que o usuário logar, o tenant seja definido corretamente,
-    // evitando que o Dashboard carregue com estado null ou tenant em cache.
+
+    // Ao logar, define IMEDIATAMENTE o tenant do usuário
+    // Para não-super_admin: usa sempre o tenant_id do próprio usuário
+    // Para super_admin: permite selecionar qualquer empresa (não força nada)
     if (user && user.nivel !== 'super_admin' && user.tenant_id) {
       dispatch({ type: 'SET_EMPRESA', payload: user.tenant_id });
     }
@@ -65,7 +66,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     get('tenant_id').then((tenantId) => {
       if (tenantId) {
-        dispatch({ type: 'SET_EMPRESA', payload: tenantId as string });
+        // Só aplica o tenant do cache se:
+        // 1. O usuário for super_admin (pode trocar de empresa), OU
+        // 2. Não houver usuário logado ainda (estado inicial)
+        // NUNCA sobrescreve o tenant do usuário não-super_admin
+        dispatch({
+          type: 'SET_EMPRESA',
+          payload: tenantId as string,
+        });
       }
     });
     get('theme').then((t) => {

@@ -10,6 +10,7 @@ import {
 } from '../types/fornecedores';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 // Sample mock data for initial seed when empty
 const SEED_FORNECEDORES: Fornecedor[] = [
@@ -148,7 +149,14 @@ export function useFornecedores() {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtros, setFiltros] = useState<FornecedorFiltros>({});
-  const { state: { user, isOnline, empresaSelecionada } } = useAppContext();
+  const { state: { user: stateUser, isOnline, empresaSelecionada } } = useAppContext();
+  const { user } = useAuth();
+
+  // Retorna o tenant_id efetivo: para não-super_admin usa sempre o tenant do usuário
+  const getTenantId = (): string | null => {
+    if (user?.nivel === 'super_admin') return empresaSelecionada;
+    return user?.tenant_id || empresaSelecionada;
+  };
 
   const carregarFornecedores = async () => {
     setLoading(true);
@@ -222,15 +230,15 @@ export function useFornecedores() {
   const criar = async (data: FornecedorInsert) => {
     try {
       const now = new Date().toISOString();
-      const tenantId = (data as any).empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
+      const tenantId = getTenantId();
       const newFornecedor: Fornecedor = {
         ...data,
         id: generateUUID(),
         created_at: now,
         updated_at: now,
         created_by: user?.id,
-        empresa_id: tenantId,
-        tenant_id: tenantId
+        empresa_id: tenantId || (data as any).empresa_id,
+        tenant_id: tenantId || (data as any).tenant_id,
       };
 
       if (isOnline) {
@@ -264,7 +272,10 @@ export function useFornecedores() {
     try {
       const now = new Date().toISOString();
       const existing = await getFromIDB<Fornecedor>('fornecedores', id);
-      const tenantId = (data as any).empresa_id || (existing as any)?.empresa_id || (empresaSelecionada && empresaSelecionada !== 'all' ? empresaSelecionada : 'emp-001');
+      const tenantId =
+        (data as any).empresa_id ||
+        (existing as any)?.empresa_id ||
+        getTenantId();
 
       const updatedFornecedor: Fornecedor = {
         ...(existing || {} as Fornecedor),

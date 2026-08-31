@@ -4,6 +4,7 @@ import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { addToSyncQueue } from '../lib/syncService';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Credenciado, CredenciadoInsert, CredenciadoUpdate, CredenciadoPlano, CredenciadoPlanoInsert, CredenciadoProcedimento, CredenciadoProcedimentoInsert, CredenciadoProcedimentoUpdate } from '../types/credenciados';
 
 export function useCredenciados() {
@@ -11,17 +12,37 @@ export function useCredenciados() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { state: { isOnline, empresaSelecionada } } = useAppContext();
+  const { user } = useAuth();
+
+  // Retorna o tenant_id efetivo: para não-super_admin usa sempre o tenant do usuário
+  const getTenantId = useCallback((): string | null => {
+    if (user?.nivel === 'super_admin') return empresaSelecionada;
+    return user?.tenant_id || empresaSelecionada;
+  }, [user, empresaSelecionada]);
 
   const carregarCredenciados = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      const tenantId = getTenantId();
+      const isSuperAdmin = user?.nivel === 'super_admin';
+
       if (isOnline) {
-        let query = supabase.from('credenciados').select('*');
+        let query = supabase
+          .from('credenciados')
+          .select('*')
+          .is('deleted_at', null);
+
+        // Filtra por tenant: super_admin pode ver todos ou só o selecionado
+        if (!isSuperAdmin && tenantId) {
+          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
+        } else if (isSuperAdmin && tenantId && tenantId !== 'all') {
+          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
+        }
+
         const { data, error: err } = await query.order('razao_social', { ascending: true });
-        
         if (err) throw err;
-        
+
         if (data) {
           for (const item of data) {
             await saveToIDB('credenciados', item);
@@ -30,13 +51,28 @@ export function useCredenciados() {
         setCredenciados(data as Credenciado[] || []);
       } else {
         let idbData = await getAllFromIDB<Credenciado>('credenciados');
+        // Filtragem local pelo tenant
+        if (tenantId && tenantId !== 'all') {
+          idbData = idbData.filter(c =>
+            (c as any).tenant_id === tenantId ||
+            (c as any).empresa_id === tenantId
+          );
+        }
+        idbData = idbData.filter(c => !(c as any).deleted_at);
         idbData.sort((a, b) => a.razao_social.localeCompare(b.razao_social));
         setCredenciados(idbData);
       }
     } catch (err: any) {
       console.warn("Erro ao carregar credenciados:", err);
       try {
+        const tenantId = getTenantId();
         let idbData = await getAllFromIDB<Credenciado>('credenciados');
+        if (tenantId && tenantId !== 'all') {
+          idbData = idbData.filter(c =>
+            (c as any).tenant_id === tenantId ||
+            (c as any).empresa_id === tenantId
+          );
+        }
         setCredenciados(idbData);
       } catch (idbErr) {
         setError('Erro ao carregar credenciados.');
@@ -44,7 +80,7 @@ export function useCredenciados() {
     } finally {
       setLoading(false);
     }
-  }, [isOnline, empresaSelecionada]);
+  }, [isOnline, empresaSelecionada, getTenantId, user]);
 
   useEffect(() => {
     carregarCredenciados();
@@ -52,42 +88,69 @@ export function useCredenciados() {
 
   const criar = async (data: CredenciadoInsert) => {
     try {
-      const newItem = { 
-        ...data, 
-        id: generateUUID()
+      // Garante que tenant_id seja sempre o do usuário logado (nunca vazio)
+      const tenantId = getTenantId();
+      const newItem = {
+        ...data,
+        id: generateUUID(),
+        tenant_id: tenantId || data.tenant_id,
+        empresa_id: tenantId || data.empresa_id,
       };
       let inserted = newItem;
       if (isOnline) {
-        const { data, error: err } = await supabase.from('credenciados').insert([newItem]).select().single();
+        const { data: dbData, error: err } = await supabase
+          .from('credenciados')
+          .insert([newItem])
+          .select()
+          .single();
         if (err) throw err;
-        inserted = data;
+        inserted = dbData;
       } else {
         await addToSyncQueue({ storeName: 'credenciados', action: 'insert', data: newItem });
       }
       await saveToIDB('credenciados', inserted);
       await carregarCredenciados();
     } catch (err: any) {
-      console.error("Criar error:", JSON.stringify(err)); if (err.code === "23505") throw new Error("Já existe um credenciado com este CNPJ/CPF."); throw new Error(err.message ? err.message : JSON.stringify(err));
+      console.error("Criar error:", JSON.stringify(err));
+      if (err.code === "23505") throw new Error("Já existe um credenciado com este CNPJ/CPF.");
+      throw new Error(err.message ? err.message : JSON.stringify(err));
     }
   };
 
   const editar = async (id: string, data: CredenciadoUpdate) => {
     try {
-      let updatedData = { ...data, updated_at: new Date().toISOString() };
+      // Preserva o tenant_id existente; preenche com o do usuário se ausente
+      const existing = await getFromIDB<Credenciado>('credenciados', id);
+      const tenantId =
+        (data as any).tenant_id ||
+        (existing as any)?.tenant_id ||
+        getTenantId();
+      let updatedData = {
+        ...data,
+        tenant_id: tenantId,
+        empresa_id: tenantId,
+        updated_at: new Date().toISOString(),
+      };
       if (isOnline) {
-        const { data: updated, error: err } = await supabase.from('credenciados').update(updatedData).eq('id', id).select().single();
+        const { data: updated, error: err } = await supabase
+          .from('credenciados')
+          .update(updatedData)
+          .eq('id', id)
+          .select()
+          .single();
         if (err) throw err;
         updatedData = updated;
       } else {
         await addToSyncQueue({ storeName: 'credenciados', action: 'update', data: { ...updatedData, id } });
       }
-      const existing = await getFromIDB<Credenciado>('credenciados', id);
       if (existing) {
         await saveToIDB('credenciados', { ...existing, ...updatedData });
       }
       await carregarCredenciados();
     } catch (err: any) {
-      console.error("Editar error:", JSON.stringify(err)); if (err.code === "23505") throw new Error("Já existe um credenciado com este CNPJ/CPF."); throw new Error(err.message ? err.message : JSON.stringify(err));
+      console.error("Editar error:", JSON.stringify(err));
+      if (err.code === "23505") throw new Error("Já existe um credenciado com este CNPJ/CPF.");
+      throw new Error(err.message ? err.message : JSON.stringify(err));
     }
   };
 
