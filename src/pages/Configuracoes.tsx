@@ -22,8 +22,10 @@ import {
   getAvailableNiveisForUser,
   canChangeUserPassword,
   canManageUserModules,
-  MODULOS_SISTEMA
+  MODULOS_SISTEMA,
+  getAllModuleAndSubmoduleIds
 } from "../utils/permissions";
+import { ModuloPermissionSelector } from "../components/usuarios/ModuloPermissionSelector";
 import {
   getUsuarios,
   saveUsuario,
@@ -286,41 +288,9 @@ export const ConfiguracoesPage: React.FC = () => {
 
   const normalizeModulos = (mods?: string[]): string[] => {
     if (!mods || mods.length === 0 || mods.includes('*')) {
-      return MODULOS_SISTEMA.map(m => m.id);
+      return getAllModuleAndSubmoduleIds();
     }
     return mods;
-  };
-
-  const handleToggleModulo = (moduloId: string) => {
-    if (!editingUsuario) return;
-    const current = editingUsuario.modulos_permitidos || [];
-    const exists = current.includes(moduloId);
-    let updated: string[];
-    if (exists) {
-      updated = current.filter(id => id !== moduloId);
-    } else {
-      updated = [...current, moduloId];
-    }
-    setEditingUsuario({
-      ...editingUsuario,
-      modulos_permitidos: updated
-    });
-  };
-
-  const handleSelectAllModulos = () => {
-    if (!editingUsuario) return;
-    setEditingUsuario({
-      ...editingUsuario,
-      modulos_permitidos: MODULOS_SISTEMA.map(m => m.id)
-    });
-  };
-
-  const handleDeselectAllModulos = () => {
-    if (!editingUsuario) return;
-    setEditingUsuario({
-      ...editingUsuario,
-      modulos_permitidos: []
-    });
   };
 
   const handleOpenUsuarioModal = (usuario?: UsuarioCadastro) => {
@@ -348,7 +318,7 @@ export const ConfiguracoesPage: React.FC = () => {
         nome: "",
         email: "",
         nivel: availableNiveis[0]?.value || "funcionario",
-        modulos_permitidos: MODULOS_SISTEMA.map(m => m.id),
+        modulos_permitidos: getAllModuleAndSubmoduleIds(),
       });
     }
     setIsUsuarioModalOpen(true);
@@ -396,11 +366,14 @@ export const ConfiguracoesPage: React.FC = () => {
 
     try {
       const permitidos = editingUsuario.modulos_permitidos || [];
+      const allSubmoduleIds = getAllModuleAndSubmoduleIds();
+      const isAllSelected = permitidos.includes('*') || (permitidos.length >= allSubmoduleIds.length);
+
       const novoUsuario: UsuarioCadastro = {
         ...(editingUsuario as UsuarioCadastro),
         nome: (editingUsuario.nome || '').trim().toUpperCase(),
         email: (editingUsuario.email || '').trim().toLowerCase(),
-        modulos_permitidos: (permitidos.length === MODULOS_SISTEMA.length || editingUsuario.nivel === 'super_admin')
+        modulos_permitidos: (isAllSelected || editingUsuario.nivel === 'super_admin')
           ? ['*']
           : permitidos
       };
@@ -1313,7 +1286,7 @@ export const ConfiguracoesPage: React.FC = () => {
 
       {isUsuarioModalOpen && editingUsuario && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0C16]/80 backdrop-blur-sm p-4">
-          <div className="bg-[#181B34] rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-[#262A45] overflow-hidden">
+          <div className="bg-[#181B34] rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-[#262A45] overflow-hidden">
             <div className="px-6 py-4 border-b border-[#262A45] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-[#7E4CF3]/20 border border-[#7E4CF3]/30 text-[#7E4CF3]">
@@ -1525,82 +1498,20 @@ export const ConfiguracoesPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* SELEÇÃO DE MÓDULOS DE ACESSO */}
+                {/* SELEÇÃO DE MÓDULOS, SUB-MÓDULOS E FORMULÁRIOS */}
                 {canManageUserModules(state.user) && (
-                  <div className="pt-4 border-t border-[#262A45] space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <label className="block text-sm font-bold text-white flex items-center gap-2">
-                          <Layers className="w-4 h-4 text-[#7E4CF3]" />
-                          Módulos com Acesso Permitido
-                        </label>
-                        <span className="text-xs text-slate-400">
-                          Selecione as áreas e rotas que este usuário poderá visualizar e operar.
-                        </span>
-                      </div>
-
-                      {editingUsuario.nivel !== 'super_admin' && (
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={handleSelectAllModulos}
-                            className="text-xs font-semibold text-[#7E4CF3] hover:text-[#9B72F7] bg-[#7E4CF3]/10 hover:bg-[#7E4CF3]/20 px-3 py-1 rounded-lg transition-colors border border-[#7E4CF3]/30"
-                          >
-                            Marcar Todos
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleDeselectAllModulos}
-                            className="text-xs font-semibold text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-lg transition-colors border border-slate-700"
-                          >
-                            Desmarcar Todos
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {editingUsuario.nivel === 'super_admin' ? (
-                      <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3.5 flex items-center gap-3">
-                        <Shield className="w-5 h-5 text-indigo-400 shrink-0" />
-                        <p className="text-xs text-indigo-300">
-                          Usuários com nível <strong>Super Admin</strong> possuem acesso total e irrestrito a todos os módulos do sistema.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
-                        {MODULOS_SISTEMA.map((modulo) => {
-                          const isChecked = (editingUsuario.modulos_permitidos || []).includes(modulo.id);
-                          return (
-                            <div
-                              key={modulo.id}
-                              onClick={() => handleToggleModulo(modulo.id)}
-                              className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between select-none ${
-                                isChecked
-                                  ? 'bg-gradient-to-br from-[#7E4CF3]/20 to-[#4A88E9]/15 border-[#7E4CF3] shadow-md shadow-[#7E4CF3]/10'
-                                  : 'bg-[#101223] border-[#262A45] hover:border-slate-600 opacity-70 hover:opacity-100'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-2 mb-1">
-                                <span className="font-bold text-xs text-white leading-tight">
-                                  {modulo.label}
-                                </span>
-                                <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors ${
-                                  isChecked
-                                    ? 'bg-[#7E4CF3] text-white'
-                                    : 'border border-slate-600 bg-[#181B34]'
-                                }`}>
-                                  {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                                </div>
-                              </div>
-                              <p className="text-[11px] text-slate-400 leading-tight">
-                                {modulo.descricao}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                  <ModuloPermissionSelector
+                    selectedModulos={editingUsuario.modulos_permitidos || []}
+                    onChange={(mods) =>
+                      setEditingUsuario({
+                        ...editingUsuario,
+                        modulos_permitidos: mods,
+                      })
+                    }
+                    userNivel={editingUsuario.nivel || "funcionario"}
+                    currentUser={state.user}
+                    disabled={!state.isOnline}
+                  />
                 )}
               </form>
             </div>

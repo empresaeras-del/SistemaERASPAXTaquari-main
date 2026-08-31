@@ -153,8 +153,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
     setDraggedIndex(index);
   };
 
-  // Filter items according to user permissions
-  const visibleNavItems = navItems.filter(item => hasModuleAccess(state.user, item.id || item.label.toLowerCase()));
+  // Filter items and subItems according to user permissions
+  const visibleNavItems = navItems
+    .map(item => {
+      if (item.subItems) {
+        const allowedSubItems = item.subItems.filter(sub => hasModuleAccess(state.user, sub.path));
+        if (allowedSubItems.length === 0) return null;
+        return { ...item, subItems: allowedSubItems };
+      }
+      return hasModuleAccess(state.user, item.path || item.id) ? item : null;
+    })
+    .filter(Boolean) as NavItem[];
 
   return (
     <aside className={`bg-bg-surface text-text-subtle flex flex-col h-full border-r border-border-default transition-all duration-300 ${isCollapsed ? "w-20" : "w-64"}`}>

@@ -70,7 +70,17 @@ export const TopNav: React.FC = () => {
   const location = useLocation();
   const { alertasReceber, alertasPagar } = useFinanceiroAlerts();
 
-  const visibleNavItems = navItems.filter(item => hasModuleAccess(state.user, item.id || item.label.toLowerCase()));
+  // Filter items and subItems according to user permissions
+  const visibleNavItems = navItems
+    .map(item => {
+      if (item.subItems) {
+        const allowedSubItems = item.subItems.filter(sub => hasModuleAccess(state.user, sub.path));
+        if (allowedSubItems.length === 0) return null;
+        return { ...item, subItems: allowedSubItems };
+      }
+      return hasModuleAccess(state.user, item.path || item.id) ? item : null;
+    })
+    .filter(Boolean) as (typeof navItems[0])[];
 
   return (
     <nav className="h-auto min-h-[48px] py-2 bg-bg-surface border-b border-border-default flex flex-wrap items-center px-4 relative z-40">

@@ -1,71 +1,312 @@
 import { NivelAcesso, Usuario } from '../types';
 
+export interface SubModuloInfo {
+  id: string;
+  label: string;
+  descricao: string;
+  tipo?: 'formulario' | 'lista' | 'operacional' | 'gestao' | 'relatorio';
+  paths: string[];
+}
+
 export interface ModuloInfo {
   id: string;
   label: string;
   descricao: string;
+  categoria: string;
+  iconName: string;
   paths: string[];
+  subModulos: SubModuloInfo[];
 }
 
 export const MODULOS_SISTEMA: ModuloInfo[] = [
   {
     id: 'dashboard',
-    label: 'Dashboard',
-    descricao: 'Indicadores, gráficos e visão geral do sistema',
-    paths: ['/']
+    label: 'Dashboard & Indicadores',
+    descricao: 'Indicadores, gráficos, atalhos rápidos e visão geral do sistema',
+    categoria: 'Visão Geral',
+    iconName: 'LayoutDashboard',
+    paths: ['/'],
+    subModulos: [
+      {
+        id: 'dashboard_metricas',
+        label: 'Visão Geral & Indicadores',
+        descricao: 'Acesso ao painel executivo com métricas, gráficos e atalhos rápidos',
+        tipo: 'gestao',
+        paths: ['/']
+      }
+    ]
   },
   {
     id: 'associados',
     label: 'Associados & Contratos',
-    descricao: 'Lista de associados, atendimentos, contratos e guias',
-    paths: ['/associados', '/contratos', '/atendimentos', '/requisicoes']
+    descricao: 'Lista de associados, cadastros, dependentes, atendimentos, contratos e guias',
+    categoria: 'Atendimento & Vendas',
+    iconName: 'Users',
+    paths: ['/associados', '/contratos', '/atendimentos', '/requisicoes'],
+    subModulos: [
+      {
+        id: 'associados_lista',
+        label: 'Lista & Cadastro de Associados',
+        descricao: 'Formulário de novo associado, edição, titulares, dependentes e carteirinhas',
+        tipo: 'formulario',
+        paths: ['/associados']
+      },
+      {
+        id: 'associados_atendimentos',
+        label: 'Atendimentos & Ocorrências',
+        descricao: 'Formulário de registro de atendimentos, histórico de contatos e solicitações',
+        tipo: 'formulario',
+        paths: ['/atendimentos']
+      },
+      {
+        id: 'associados_contratos',
+        label: 'Gestão de Contratos PAX',
+        descricao: 'Visualização, emissão, assinatura e controle de vigência dos contratos',
+        tipo: 'gestao',
+        paths: ['/contratos']
+      },
+      {
+        id: 'associados_requisicoes',
+        label: 'Requisições & Emissão de Guias',
+        descricao: 'Formulário de emissão de guias médicas/odontológicas e requisições',
+        tipo: 'formulario',
+        paths: ['/requisicoes']
+      }
+    ]
   },
   {
     id: 'financeiro',
     label: 'Financeiro & Caixas',
-    descricao: 'Contas a receber, contas a pagar, caixas e fluxo financeiro',
-    paths: ['/financeiro/contas-a-receber', '/financeiro/contas-a-pagar', '/caixas', '/financeiro/caixas']
+    descricao: 'Contas a receber, contas a pagar, conciliação bancária e fluxo de caixa',
+    categoria: 'Controladoria & Finanças',
+    iconName: 'DollarSign',
+    paths: ['/financeiro/contas-a-receber', '/financeiro/contas-a-pagar', '/caixas', '/financeiro/caixas', '/financeiro'],
+    subModulos: [
+      {
+        id: 'financeiro_receber',
+        label: 'Contas a Receber',
+        descricao: 'Mensalidades, parcelas a receber, quitações, geração de carnês e recibos',
+        tipo: 'formulario',
+        paths: ['/financeiro/contas-a-receber', '/financeiro/contas-a-receber/nova', '/financeiro/contas-a-receber/:id/editar']
+      },
+      {
+        id: 'financeiro_pagar',
+        label: 'Contas a Pagar',
+        descricao: 'Formulário de novas despesas, pagamentos a fornecedores e baixas de títulos',
+        tipo: 'formulario',
+        paths: ['/financeiro/contas-a-pagar', '/financeiro/contas-a-pagar/nova', '/financeiro/contas-a-pagar/:id/editar']
+      },
+      {
+        id: 'financeiro_caixas',
+        label: 'Caixas & Fluxo de Caixa',
+        descricao: 'Abertura, fechamento de caixa, sangrias, suprimentos e histórico de movimentações',
+        tipo: 'operacional',
+        paths: ['/caixas', '/financeiro/caixas']
+      }
+    ]
   },
   {
     id: 'planos',
     label: 'Planos Pax',
-    descricao: 'Planos, coberturas e regras de contratação',
-    paths: ['/planos']
+    descricao: 'Planos funerários, coberturas, regras de contratação e faixas de preço',
+    categoria: 'Produtos & Serviços',
+    iconName: 'Package',
+    paths: ['/planos'],
+    subModulos: [
+      {
+        id: 'planos_gestao',
+        label: 'Planos & Coberturas PAX',
+        descricao: 'Cadastro e edição de planos, faixas etárias, carências e coberturas adicionais',
+        tipo: 'formulario',
+        paths: ['/planos']
+      }
+    ]
   },
   {
     id: 'itens_funerarios',
-    label: 'Itens Funerários',
-    descricao: 'Estoque, catálogo de urnas e artigos funerários',
-    paths: ['/itens-funerarios']
+    label: 'Itens Funerários / Estoque',
+    descricao: 'Estoque, catálogo de urnas, artigos funerários e movimentações',
+    categoria: 'Operações Funerárias',
+    iconName: 'Package',
+    paths: ['/itens-funerarios'],
+    subModulos: [
+      {
+        id: 'itens_estoque',
+        label: 'Catálogo de Urnas & Estoque',
+        descricao: 'Cadastro de urnas, ornamentações, coroas, controle de entradas/saídas e saldo',
+        tipo: 'operacional',
+        paths: ['/itens-funerarios']
+      }
+    ]
   },
   {
     id: 'credenciados',
     label: 'Rede Credenciada',
-    descricao: 'Prestadores, procedimentos/exames e faturamentos',
-    paths: ['/credenciados', '/procedimentos', '/faturamentos']
+    descricao: 'Prestadores de saúde, tabela de procedimentos e faturamento de remessas',
+    categoria: 'Rede de Convênios',
+    iconName: 'Building2',
+    paths: ['/credenciados', '/procedimentos', '/faturamentos'],
+    subModulos: [
+      {
+        id: 'credenciados_prestadores',
+        label: 'Prestadores & Clínicas Credenciadas',
+        descricao: 'Formulário de cadastro de médicos, clínicas, laboratórios e especialidades',
+        tipo: 'formulario',
+        paths: ['/credenciados']
+      },
+      {
+        id: 'credenciados_procedimentos',
+        label: 'Procedimentos & Tabela de Exames',
+        descricao: 'Tabela de preços, exames, consultas e descontos aos associados',
+        tipo: 'formulario',
+        paths: ['/procedimentos']
+      },
+      {
+        id: 'credenciados_faturamentos',
+        label: 'Faturamento de Remessas',
+        descricao: 'Conciliação de guias, lotes de faturamento e fechamento com prestadores',
+        tipo: 'gestao',
+        paths: ['/faturamentos']
+      }
+    ]
   },
   {
     id: 'administracao',
-    label: 'Administração',
-    descricao: 'Fornecedores e parceiros administrativos',
-    paths: ['/fornecedores']
+    label: 'Administração & Parceiros',
+    descricao: 'Fornecedores, parceiros comerciais e prestadores administrativos',
+    categoria: 'Administrativo',
+    iconName: 'Briefcase',
+    paths: ['/fornecedores'],
+    subModulos: [
+      {
+        id: 'administracao_fornecedores',
+        label: 'Fornecedores & Parceiros',
+        descricao: 'Cadastro e gestão de empresas parceiras, fornecedores de insumos e frotas',
+        tipo: 'formulario',
+        paths: ['/fornecedores']
+      }
+    ]
   },
   {
     id: 'auditoria',
-    label: 'Ata de Ocorrências',
-    descricao: 'Logs de auditoria e segurança do sistema',
-    paths: ['/auditoria']
+    label: 'Ata de Ocorrências / Auditoria',
+    descricao: 'Logs de auditoria, registros de segurança e rastreabilidade de ações',
+    categoria: 'Governança & Segurança',
+    iconName: 'ShieldAlert',
+    paths: ['/auditoria'],
+    subModulos: [
+      {
+        id: 'auditoria_logs',
+        label: 'Ata de Ocorrências & Auditoria',
+        descricao: 'Visualização cronológica de eventos, cadastros, alterações e exclusões',
+        tipo: 'relatorio',
+        paths: ['/auditoria']
+      }
+    ]
   },
   {
     id: 'configuracoes',
-    label: 'Configurações',
-    descricao: 'Configurações gerais, documentos padrões, usuários e backup',
-    paths: ['/configuracoes', '/documentos']
+    label: 'Configurações & Documentos',
+    descricao: 'Configurações gerais, cadastro de empresas/usuários e documentos padrões',
+    categoria: 'Sistema & Parâmetros',
+    iconName: 'Settings',
+    paths: ['/configuracoes', '/documentos'],
+    subModulos: [
+      {
+        id: 'configuracoes_geral',
+        label: 'Configurações Gerais, Empresas & Usuários',
+        descricao: 'Gerenciamento de empresas, usuários, segurança de sessão e backup',
+        tipo: 'gestao',
+        paths: ['/configuracoes']
+      },
+      {
+        id: 'configuracoes_documentos',
+        label: 'Documentos Padrões & Minutas',
+        descricao: 'Editor de modelos, minutas de contrato, declarações e layouts de impressão',
+        tipo: 'formulario',
+        paths: ['/documentos']
+      }
+    ]
+  }
+];
+
+export interface PerfilPermissaoPreset {
+  id: string;
+  nome: string;
+  descricao: string;
+  modulos: string[];
+}
+
+export const PERFIS_PERMISSAO_PRESETS: PerfilPermissaoPreset[] = [
+  {
+    id: 'completo',
+    nome: 'Acesso Completo',
+    descricao: 'Todos os módulos e submódulos do sistema',
+    modulos: ['*']
+  },
+  {
+    id: 'atendimento_vendas',
+    nome: 'Atendimento & Adesões PAX',
+    descricao: 'Associados, atendimentos, contratos, planos e emissão de guias',
+    modulos: ['dashboard', 'dashboard_metricas', 'associados', 'associados_lista', 'associados_atendimentos', 'associados_contratos', 'associados_requisicoes', 'planos', 'planos_gestao']
+  },
+  {
+    id: 'financeiro_caixas',
+    nome: 'Operador Financeiro & Caixa',
+    descricao: 'Contas a receber, contas a pagar, movimentação de caixas e faturamento',
+    modulos: ['dashboard', 'dashboard_metricas', 'financeiro', 'financeiro_receber', 'financeiro_pagar', 'financeiro_caixas', 'credenciados', 'credenciados_faturamentos']
+  },
+  {
+    id: 'funeraria_estoque',
+    nome: 'Operações Funerárias & Estoque',
+    descricao: 'Atendimentos, itens funerários, urnas e fornecedores',
+    modulos: ['dashboard', 'dashboard_metricas', 'associados', 'associados_atendimentos', 'itens_funerarios', 'itens_estoque', 'administracao', 'administracao_fornecedores']
+  },
+  {
+    id: 'convenios_saude',
+    nome: 'Gestão de Convênios & Rede Credenciada',
+    descricao: 'Prestadores, procedimentos, exames, guias e faturamento',
+    modulos: ['dashboard', 'dashboard_metricas', 'associados', 'associados_requisicoes', 'credenciados', 'credenciados_prestadores', 'credenciados_procedimentos', 'credenciados_faturamentos']
   }
 ];
 
 /**
- * Verifica se um usuário possui acesso a um módulo específico ou rota.
+ * Retorna todos os IDs válidos de módulos e submódulos do sistema.
+ */
+export const getAllModuleAndSubmoduleIds = (): string[] => {
+  const ids: string[] = [];
+  MODULOS_SISTEMA.forEach(m => {
+    ids.push(m.id);
+    m.subModulos.forEach(s => {
+      ids.push(s.id);
+    });
+  });
+  return ids;
+};
+
+/**
+ * Retorna os IDs de sub-módulos pertencentes a um módulo principal.
+ */
+export const getSubmoduleIdsForModule = (moduleId: string): string[] => {
+  const mod = MODULOS_SISTEMA.find(m => m.id === moduleId);
+  return mod ? mod.subModulos.map(s => s.id) : [];
+};
+
+/**
+ * Retorna o ID do módulo principal que contém um determinado sub-módulo.
+ */
+export const getParentModuleId = (subModuleId: string): string | null => {
+  for (const mod of MODULOS_SISTEMA) {
+    if (mod.id === subModuleId) return mod.id;
+    if (mod.subModulos.some(s => s.id === subModuleId)) {
+      return mod.id;
+    }
+  }
+  return null;
+};
+
+/**
+ * Verifica se um usuário possui acesso a um módulo, sub-módulo específico ou rota.
  */
 export const hasModuleAccess = (
   user: Usuario | null | undefined,
@@ -78,16 +319,62 @@ export const hasModuleAccess = (
   const permitidos = user.modulos_permitidos || [];
   if (permitidos.includes('*')) return true;
 
-  // Verificação direta por ID do módulo
+  // 1. Verificação direta se o ID do módulo ou sub-módulo está explicitamente na lista
   if (permitidos.includes(moduleIdOrPath)) return true;
 
-  // Verificação por rota / path
-  const mod = MODULOS_SISTEMA.find(m => 
-    m.id === moduleIdOrPath || 
-    m.paths.some(p => p === moduleIdOrPath || (p !== '/' && moduleIdOrPath.startsWith(p)))
-  );
+  // 2. Se moduleIdOrPath for um módulo principal (ex: 'associados'):
+  // Se o módulo principal estiver na lista OU qualquer um de seus sub-módulos estiver permitido
+  const parentMod = MODULOS_SISTEMA.find(m => m.id === moduleIdOrPath);
+  if (parentMod) {
+    if (permitidos.includes(parentMod.id)) return true;
+    if (parentMod.subModulos.some(s => permitidos.includes(s.id))) return true;
+  }
 
-  if (mod && permitidos.includes(mod.id)) return true;
+  // 3. Se moduleIdOrPath for um sub-módulo (ex: 'associados_lista'):
+  // Se o sub-módulo estiver na lista OU o módulo pai completo estiver na lista
+  for (const m of MODULOS_SISTEMA) {
+    const sub = m.subModulos.find(s => s.id === moduleIdOrPath);
+    if (sub) {
+      if (permitidos.includes(sub.id) || permitidos.includes(m.id)) {
+        return true;
+      }
+    }
+  }
+
+  // 4. Verificação por rota / path (ex: '/associados', '/financeiro/contas-a-receber', '/caixas')
+  const cleanPath = moduleIdOrPath.split('?')[0].split('#')[0];
+
+  // Busca se há algum sub-módulo associado a este path
+  for (const m of MODULOS_SISTEMA) {
+    for (const sub of m.subModulos) {
+      const match = sub.paths.some(p => {
+        if (p === '/') return cleanPath === '/';
+        // Suporta rotas com parâmetros como :id
+        if (p.includes(':')) {
+          const regex = new RegExp('^' + p.replace(/:[a-zA-Z0-9_]+/g, '[^/]+') + '$');
+          return regex.test(cleanPath);
+        }
+        return cleanPath === p || cleanPath.startsWith(p + '/');
+      });
+
+      if (match) {
+        // Tem acesso se o sub-módulo está permitido OU se o módulo pai completo está permitido
+        if (permitidos.includes(sub.id) || permitidos.includes(m.id)) {
+          return true;
+        }
+      }
+    }
+
+    // Se nenhum sub-módulo específico bateu, verifica o path do módulo principal
+    const parentMatch = m.paths.some(p => {
+      if (p === '/') return cleanPath === '/';
+      return cleanPath === p || cleanPath.startsWith(p + '/');
+    });
+
+    if (parentMatch && permitidos.includes(m.id)) {
+      return true;
+    }
+  }
 
   return false;
 };
