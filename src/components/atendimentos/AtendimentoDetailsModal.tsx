@@ -12,6 +12,7 @@ import { AtendimentoDocumentosGenerator } from './AtendimentoDocumentosGenerator
 import { formatLocalDate } from '../../utils/dateUtils';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { BotaoSalvar } from '../common/BotaoSalvar';
+import { canEditAtendimentos, alertPermissionRestriction } from '../../utils/permissions';
 
 interface Props {
   atendimento: Atendimento;
@@ -152,7 +153,13 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
             {!isEditing ? (
               <button 
                 type="button"
-                onClick={() => setIsEditing(true)} 
+                onClick={() => {
+                  if (!canEditAtendimentos(state.user, state.isOnline)) {
+                    alertPermissionRestriction('Atendimentos', 'editar ou alterar dados de atendimentos cadastrados');
+                    return;
+                  }
+                  setIsEditing(true);
+                }} 
                 className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold text-xs transition-all shadow-md shadow-blue-500/20"
               >
                 <Edit2 className="w-3.5 h-3.5" />

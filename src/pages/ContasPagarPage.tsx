@@ -45,7 +45,7 @@ import { getEmpresaById, Empresa } from '../services/empresasService';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { parseLocalDate, formatLocalDate, formatLocalDateTime, isDateBeforeToday, isDateToday } from '../utils/dateUtils';
-import { canDelete } from '../utils/permissions';
+import { canDelete, canEditFinanceiro, alertPermissionRestriction } from '../utils/permissions';
 import { useConfirm } from '../context/ConfirmContext';
 import { useColumnVisibility } from '../hooks/useColumnVisibility';
 import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
@@ -619,7 +619,13 @@ export const ContasPagarPage: React.FC = () => {
 
                         {/* Editar */}
                         <button
-                          onClick={() => navigate(`/financeiro/contas-a-pagar/${parcela.despesa_id || parcela.id}/editar?parcela=${parcela.id}`)}
+                          onClick={() => {
+                            if (!canEditFinanceiro(state.user, state.isOnline)) {
+                              alertPermissionRestriction('Financeiro (Contas a Pagar)', 'editar despesas ou parcelas existentes');
+                              return;
+                            }
+                            navigate(`/financeiro/contas-a-pagar/${parcela.despesa_id || parcela.id}/editar?parcela=${parcela.id}`);
+                          }}
                           title="Editar Despesa"
                           disabled={parcela.status === 'pago'}
                           className={`p-1.5 rounded-lg transition-colors ${parcela.status === 'pago' ? 'bg-bg-hover text-text-subtle cursor-not-allowed opacity-50' : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400'}`}
@@ -1120,6 +1126,10 @@ export const ContasPagarPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
+                    if (!canEditFinanceiro(state.user, state.isOnline)) {
+                      alertPermissionRestriction('Financeiro (Contas a Pagar)', 'editar despesas ou parcelas existentes');
+                      return;
+                    }
                     setShowDetalhesModal(false);
                     navigate(`/financeiro/contas-a-pagar/${parcelaDetalhes.despesa_id || parcelaDetalhes.id}/editar?parcela=${parcelaDetalhes.id}`);
                   }}

@@ -3,7 +3,7 @@ import { usePlanosPax } from '../hooks/usePlanosPax';
 import { usePlanosAnalytics } from '../hooks/usePlanosAnalytics';
 import { PlanoPaxForm } from '../components/planos-pax/PlanoPaxForm';
 import { PlanoPaxCompleto } from '../types/planosPax';
-import { canDelete } from '../utils/permissions';
+import { canDelete, canEditPlanos, alertPermissionRestriction } from '../utils/permissions';
 import { useAppContext } from '../context/AppContext';
 import {
   Plus, Search, Power, PowerOff, ShieldCheck, ShieldAlert,
@@ -693,11 +693,23 @@ export const PlanosPaxPage: React.FC = () => {
   const [filtros, setFiltros] = useState({ busca: '', tipo_plano: '', ativo: '' });
 
   const handleOpenForm = (plano?: PlanoPaxCompleto) => {
+    if (plano && !canEditPlanos(state.user, state.isOnline)) {
+      alertPermissionRestriction('Planos PAX', 'editar ou modificar dados de planos cadastrados');
+      return;
+    }
+    if (!plano && !canEditPlanos(state.user, state.isOnline)) {
+      alertPermissionRestriction('Planos PAX', 'cadastrar novos planos PAX');
+      return;
+    }
     setEditingPlano(plano || null);
     setIsFormOpen(true);
   };
 
   const handleSave = async (data: any) => {
+    if (!canEditPlanos(state.user, state.isOnline)) {
+      alertPermissionRestriction('Planos PAX', 'salvar alterações em planos PAX');
+      return;
+    }
     if (editingPlano) {
       await editar(editingPlano.id, data);
     } else {
@@ -754,6 +766,10 @@ export const PlanosPaxPage: React.FC = () => {
   const handleToggleStatus = async (plano: PlanoPaxCompleto) => {
     if (!state.isOnline) {
       toast.error('Alteração de status bloqueada no Modo de Visualização (Offline).');
+      return;
+    }
+    if (!canEditPlanos(state.user, state.isOnline)) {
+      alertPermissionRestriction('Planos PAX', 'ativar, desativar ou alterar o status de planos');
       return;
     }
     try {

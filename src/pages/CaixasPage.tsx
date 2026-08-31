@@ -6,6 +6,7 @@ import { getEmpresaById, Empresa } from '../services/empresasService';
 import { LoteCaixa, MovimentacaoCaixa } from '../types/caixas';
 import toast from 'react-hot-toast';
 import { Plus, RefreshCw, X, RotateCcw, ArrowUpRight, ArrowDownRight, Printer, Eye, FileText } from 'lucide-react';
+import { canEditFinanceiro, alertPermissionRestriction } from '../utils/permissions';
 
 const formatCurrency = (val: number | string | undefined | null) => {
   const num = Number(val) || 0;
@@ -103,6 +104,10 @@ export const CaixasPage: React.FC = () => {
       toast.error("Operação de caixa bloqueada no Modo de Visualização (Offline).");
       return;
     }
+    if (!canEditFinanceiro(state.user, state.isOnline)) {
+      alertPermissionRestriction('Financeiro (Caixas)', 'reabrir lotes de caixa fechados');
+      return;
+    }
     if (!justificativaReabertura.trim()) {
       toast.error("A justificativa é obrigatória para reabrir o lote.");
       return;
@@ -137,6 +142,10 @@ export const CaixasPage: React.FC = () => {
     e.preventDefault();
     if (!state.isOnline) {
       toast.error("Operação de caixa bloqueada no Modo de Visualização (Offline).");
+      return;
+    }
+    if (!canEditFinanceiro(state.user, state.isOnline)) {
+      alertPermissionRestriction('Financeiro (Caixas)', 'estornar movimentações de caixa');
       return;
     }
     if (!motivoEstorno.trim()) {

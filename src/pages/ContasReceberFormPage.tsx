@@ -17,6 +17,7 @@ import { format, lastDayOfMonth } from 'date-fns';
 import { useOptions } from '../hooks/useOptions';
 import { OptionsModal } from '../components/OptionsModal';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
+import { canEditFinanceiro, alertPermissionRestriction } from '../utils/permissions';
 
 const receitaSchema = z.object({
   tipo_devedor: z.enum(['associado', 'cliente_pf', 'cliente_pj']),
@@ -183,6 +184,11 @@ export const ContasReceberFormPage: React.FC = () => {
   // Carrega receita existente para edição, se id informado
   useEffect(() => {
     if (isEditing && id) {
+      if (!canEditFinanceiro(state.user, state.isOnline)) {
+        alertPermissionRestriction('Financeiro (Contas a Receber)', 'editar receitas ou parcelas');
+        navigate('/financeiro/contas-a-receber');
+        return;
+      }
       const loadReceita = async () => {
         setLoadingDados(true);
         try {

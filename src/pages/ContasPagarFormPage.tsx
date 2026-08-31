@@ -15,6 +15,7 @@ import { ContaBancaria } from '../types/contasBancarias';
 import { useOptions } from '../hooks/useOptions';
 import { OptionsModal } from '../components/OptionsModal';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
+import { canEditFinanceiro, alertPermissionRestriction } from '../utils/permissions';
 
 const defaultCategoriasDespesa = [
   'Repasse Credenciados / Prestadores',
@@ -136,6 +137,11 @@ export const ContasPagarFormPage: React.FC = () => {
 
   useEffect(() => {
     if (isEditing && id) {
+      if (!canEditFinanceiro(state.user, state.isOnline)) {
+        alertPermissionRestriction('Financeiro (Contas a Pagar)', 'editar despesas ou parcelas');
+        navigate('/financeiro/contas-a-pagar');
+        return;
+      }
       const loadDespesa = async () => {
         setLoadingDados(true);
         try {

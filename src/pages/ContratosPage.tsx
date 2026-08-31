@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { usePlanosPax } from "../hooks/usePlanosPax";
 import { formatLocalDate } from "../utils/dateUtils";
+import { canEditContratos, alertPermissionRestriction } from "../utils/permissions";
 
 import { NovoContratoWizard } from "../components/contratos/NovoContratoWizard";
 import { OrganogramaContratosCanvas } from "../components/contratos/OrganogramaContratosCanvas";
@@ -216,7 +217,13 @@ export const ContratosPage: React.FC = () => {
             <span>Exportar CSV</span>
           </button>
           <button
-            onClick={() => setShowNovoContrato(true)}
+            onClick={() => {
+              if (!canEditContratos(state.user, state.isOnline)) {
+                alertPermissionRestriction('Contratos', 'criar ou emitir novos contratos PAX');
+                return;
+              }
+              setShowNovoContrato(true);
+            }}
             className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity shadow-lg shadow-blue-500/20"
           >
             <Plus className="w-4 h-4" />

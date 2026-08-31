@@ -22,7 +22,7 @@ import { RelatorioContasReceberModal } from '../components/financeiro/RelatorioC
 import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
 import { IndicadoresContasReceber } from '../components/financeiro/IndicadoresContasReceber';
 import { LoteCaixa } from '../types/caixas';
-import { canDelete } from '../utils/permissions';
+import { canDelete, canEditFinanceiro, alertPermissionRestriction } from '../utils/permissions';
 import {
    Search,
   Plus,
@@ -648,7 +648,13 @@ export const ContasReceberPage: React.FC = () => {
 
                         {/* Editar */}
                         <button
-                          onClick={() => navigate(`/financeiro/contas-a-receber/${parcela.receita_id || parcela.id}/editar?parcela=${parcela.id}`)}
+                          onClick={() => {
+                            if (!canEditFinanceiro(state.user, state.isOnline)) {
+                              alertPermissionRestriction('Financeiro (Contas a Receber)', 'editar parcelas ou receitas existentes');
+                              return;
+                            }
+                            navigate(`/financeiro/contas-a-receber/${parcela.receita_id || parcela.id}/editar?parcela=${parcela.id}`);
+                          }}
                           title="Editar Receita"
                           disabled={parcela.status === 'recebido'}
                           className={`p-1.5 rounded-lg transition-colors ${parcela.status === 'recebido' ? 'bg-bg-hover text-text-subtle cursor-not-allowed opacity-50' : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400'}`}
@@ -1152,6 +1158,10 @@ export const ContasReceberPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
+                    if (!canEditFinanceiro(state.user, state.isOnline)) {
+                      alertPermissionRestriction('Financeiro (Contas a Receber)', 'editar receitas ou parcelas existentes');
+                      return;
+                    }
                     setShowDetalhesModal(false);
                     navigate(`/financeiro/contas-a-receber/${parcelaDetalhes.receita_id || parcelaDetalhes.id}/editar?parcela=${parcelaDetalhes.id}`);
                   }}

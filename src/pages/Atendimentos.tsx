@@ -19,6 +19,7 @@ import { cancelarReceitasPorAtendimento } from '../services/financeiroService';
 import { AtendimentoDetailsModal } from '../components/atendimentos/AtendimentoDetailsModal';
 import { NovoAtendimentoWizard } from '../components/atendimentos/NovoAtendimentoWizard';
 import { AtendimentosKanban } from '../components/AtendimentosKanban';
+import { canEditAtendimentos, alertPermissionRestriction } from '../utils/permissions';
 
 export const AtendimentosPage: React.FC = () => {
   const { state } = useAppContext();
@@ -38,6 +39,10 @@ export const AtendimentosPage: React.FC = () => {
   const [statusChangeModal, setStatusChangeModal] = useState<{ isOpen: boolean, atendimento: Atendimento | null, newStatus: Atendimento['status'] | null, justificativa: string }>({ isOpen: false, atendimento: null, newStatus: null, justificativa: '' });
 
   const handleStatusChangeRequest = (atendimento: Atendimento, newStatus: Atendimento['status']) => {
+    if (!canEditAtendimentos(state.user, state.isOnline)) {
+      alertPermissionRestriction('Atendimentos', 'alterar o status deste atendimento no CRM/Kanban');
+      return;
+    }
     setStatusChangeModal({ isOpen: true, atendimento, newStatus, justificativa: '' });
   };
 

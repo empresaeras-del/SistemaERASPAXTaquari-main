@@ -1,4 +1,5 @@
 import { NivelAcesso, Usuario } from '../types';
+import { systemAlert } from './systemAlert';
 
 export interface SubModuloInfo {
   id: string;
@@ -388,6 +389,64 @@ export const canManageUserModules = (
 ): boolean => {
   if (!currentUser) return false;
   return currentUser.nivel === 'super_admin' || currentUser.nivel === 'admin';
+};
+
+/**
+ * Regra: Usuários de nível FUNCIONÁRIO NÃO possuem permissão para realizar EDIÇÕES
+ * nos módulos: Financeiro, Planos PAX, Contratos e Atendimentos.
+ * Apenas Super Admin, Admin e Gerente podem editar esses registros.
+ * Bloqueado automaticamente quando offline.
+ */
+export const canEditFinanceiro = (user: Usuario | null | undefined, isOnline?: boolean): boolean => {
+  if (isOnline === false) return false;
+  if (!user) return false;
+  return user.nivel === 'super_admin' || user.nivel === 'admin' || user.nivel === 'gerente';
+};
+
+export const canEditPlanos = (user: Usuario | null | undefined, isOnline?: boolean): boolean => {
+  if (isOnline === false) return false;
+  if (!user) return false;
+  return user.nivel === 'super_admin' || user.nivel === 'admin' || user.nivel === 'gerente';
+};
+
+export const canEditContratos = (user: Usuario | null | undefined, isOnline?: boolean): boolean => {
+  if (isOnline === false) return false;
+  if (!user) return false;
+  return user.nivel === 'super_admin' || user.nivel === 'admin' || user.nivel === 'gerente';
+};
+
+export const canEditAtendimentos = (user: Usuario | null | undefined, isOnline?: boolean): boolean => {
+  if (isOnline === false) return false;
+  if (!user) return false;
+  return user.nivel === 'super_admin' || user.nivel === 'admin' || user.nivel === 'gerente';
+};
+
+export const canEditModule = (
+  moduleName: 'financeiro' | 'planos' | 'contratos' | 'atendimentos',
+  user: Usuario | null | undefined,
+  isOnline?: boolean
+): boolean => {
+  switch (moduleName) {
+    case 'financeiro': return canEditFinanceiro(user, isOnline);
+    case 'planos': return canEditPlanos(user, isOnline);
+    case 'contratos': return canEditContratos(user, isOnline);
+    case 'atendimentos': return canEditAtendimentos(user, isOnline);
+    default: return true;
+  }
+};
+
+/**
+ * Exibe mensagem de alerta padronizada bloqueando edição por falta de permissão.
+ */
+export const alertPermissionRestriction = (
+  moduleName: string,
+  action: string = 'realizar edições ou alterações'
+) => {
+  systemAlert(
+    'Acesso Restrito - Permissão Insuficiente',
+    `Usuários com nível de acesso Funcionário não possuem permissão para ${action} no módulo de ${moduleName}.\n\nCaso necessite realizar esta operação, solicite a alteração para seu Gerente ou Administrador do sistema.`,
+    'warning'
+  );
 };
 
 /**
