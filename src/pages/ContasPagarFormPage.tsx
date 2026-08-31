@@ -15,6 +15,7 @@ import { ContaBancaria } from '../types/contasBancarias';
 import { useOptions } from '../hooks/useOptions';
 import { OptionsModal } from '../components/OptionsModal';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
 import { canEditFinanceiro, alertPermissionRestriction } from '../utils/permissions';
 
 const defaultCategoriasDespesa = [
@@ -301,21 +302,43 @@ export const ContasPagarFormPage: React.FC = () => {
     toast.error("Preencha todos os campos obrigatórios marcados em vermelho.");
   };
 
-  const errors = form.formState.errors;
+  const { errors, isDirty } = form.formState;
 
   return (
     <div className="p-6 max-w-5xl mx-auto flex flex-col h-full overflow-hidden">
-      <div className="flex items-center gap-4 mb-8">
-        <button 
-          onClick={() => navigate(-1)}
-          className="p-2 rounded-xl bg-bg-subtle border border-border-default text-text-subtle hover:text-text-base transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-text-base">{isEditing ? 'Editar Despesa' : 'Nova Despesa'}</h1>
-          <p className="text-text-subtle mt-1">Preencha os dados para gerar contas a pagar</p>
+      <div className="flex items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-xl bg-bg-subtle border border-border-default text-text-subtle hover:text-text-base transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-text-base">{isEditing ? 'Editar Despesa' : 'Nova Despesa'}</h1>
+              {isDirty && (
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                  Alterações não salvas
+                </span>
+              )}
+            </div>
+            <p className="text-text-subtle mt-1">Preencha os dados para gerar contas a pagar</p>
+          </div>
         </div>
+
+        {isDirty && (
+          <button
+            type="submit"
+            form="despesa-form"
+            disabled={loading}
+            className="hidden sm:inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl transition-all shadow-lg shadow-amber-500/25 active:scale-95 disabled:opacity-50"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>{loading ? 'Salvando...' : 'Salvar Alterações'}</span>
+          </button>
+        )}
       </div>
 
       <div className="bg-bg-subtle border border-border-default rounded-2xl flex-1 overflow-y-auto">
@@ -325,7 +348,15 @@ export const ContasPagarFormPage: React.FC = () => {
             <p className="text-sm font-medium">Carregando informações da despesa...</p>
           </div>
         ) : (
-        <form onSubmit={form.handleSubmit(onSubmit as any, onInvalid)} className="p-6 space-y-8">
+        <form id="despesa-form" onSubmit={form.handleSubmit(onSubmit as any, onInvalid)} className="p-6 space-y-8">
+          {isDirty && (
+            <AlertaAlteracoesPendentes
+              visivel={isDirty}
+              formId="despesa-form"
+              salvando={loading}
+              mensagem="Existem alterações não salvas nesta despesa/parcelas. Salve para registrar no banco de dados."
+            />
+          )}
           
           <section className="space-y-4">
             <h2 className="text-lg font-bold text-text-base border-b border-border-default pb-2">1. Identificação do Credor</h2>

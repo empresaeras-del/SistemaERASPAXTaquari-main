@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { useConfirm } from '../../context/ConfirmContext';
 import { v4 as uuidv4 } from 'uuid';
 import { BotaoSalvar } from '../common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 
 export const NovoContratoWizard: React.FC<{
   onClose: () => void;
@@ -318,7 +319,14 @@ export const NovoContratoWizard: React.FC<{
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {step > 1 && (
+            <AlertaAlteracoesPendentes
+              visivel={step > 1}
+              posicao="compact"
+              mensagem="Contrato em elaboração. Finalize as etapas e clique em 'Salvar e Gerar Contrato' para registrar no banco de dados."
+            />
+          )}
           {step === 1 && (
             <div className="space-y-4">
               <h3 className="text-lg font-bold text-text-base">Selecione o Associado</h3>

@@ -32,6 +32,7 @@ import {
   deleteUsuario,
   UsuarioCadastro,
 } from "../services/usuariosService";
+import { AlertaAlteracoesPendentes } from "../components/common/AlertaAlteracoesPendentes";
 import {
   Plus,
   Edit2,
@@ -91,6 +92,19 @@ export const ConfiguracoesPage: React.FC = () => {
     "todos" | "ativo" | "inativo"
   >("todos");
   const [usuarioTenantFilter, setUsuarioTenantFilter] = useState<string>("all");
+
+  const [initialEmpresaJson, setInitialEmpresaJson] = useState<string>('');
+  const [initialUsuarioJson, setInitialUsuarioJson] = useState<string>('');
+
+  const isEmpresaDirty = React.useMemo(() => {
+    if (!isModalOpen || !editingEmpresa || !initialEmpresaJson) return false;
+    return JSON.stringify(editingEmpresa) !== initialEmpresaJson;
+  }, [isModalOpen, editingEmpresa, initialEmpresaJson]);
+
+  const isUsuarioDirty = React.useMemo(() => {
+    if (!isUsuarioModalOpen || !editingUsuario || !initialUsuarioJson) return false;
+    return JSON.stringify(editingUsuario) !== initialUsuarioJson;
+  }, [isUsuarioModalOpen, editingUsuario, initialUsuarioJson]);
 
   const loadData = async () => {
     setLoading(true);
@@ -170,7 +184,9 @@ export const ConfiguracoesPage: React.FC = () => {
         return;
       }
       setModalActiveTab('dados');
-      setEditingEmpresa({ ...empresa });
+      const cloned = { ...empresa };
+      setEditingEmpresa(cloned);
+      setInitialEmpresaJson(JSON.stringify(cloned));
       const contas = await getContasBancarias(empresa.id, state.isOnline);
       setEmpresaContas(contas);
     } else {
@@ -179,10 +195,12 @@ export const ConfiguracoesPage: React.FC = () => {
         return;
       }
       setModalActiveTab('dados');
-      setEditingEmpresa({
+      const novaEmp: Partial<Empresa> = {
         id: generateUUID(),
         status: "ativo",
-      });
+      };
+      setEditingEmpresa(novaEmp);
+      setInitialEmpresaJson(JSON.stringify(novaEmp));
       setEmpresaContas([]);
     }
     setIsModalOpen(true);
@@ -191,6 +209,7 @@ export const ConfiguracoesPage: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingEmpresa(null);
+    setInitialEmpresaJson('');
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -301,17 +320,19 @@ export const ConfiguracoesPage: React.FC = () => {
         toast.error("Você não tem permissão para editar usuários deste nível.");
         return;
       }
-      setEditingUsuario({ 
+      const cloned = {
         ...usuario,
         modulos_permitidos: normalizeModulos(usuario.modulos_permitidos)
-      });
+      };
+      setEditingUsuario(cloned);
+      setInitialUsuarioJson(JSON.stringify(cloned));
     } else {
       if (state.user?.nivel !== 'super_admin' && state.user?.nivel !== 'admin') {
         toast.error("Você não tem permissão para cadastrar usuários.");
         return;
       }
       const availableNiveis = getAvailableNiveisForUser(state.user);
-      setEditingUsuario({
+      const novoUser: Partial<UsuarioCadastro> = {
         id: generateUUID(),
         tenant_id: state.user?.nivel === 'super_admin' ? (state.empresaSelecionada || "") : (state.user?.tenant_id || state.empresaSelecionada || ""),
         status: "ativo",
@@ -319,7 +340,9 @@ export const ConfiguracoesPage: React.FC = () => {
         email: "",
         nivel: availableNiveis[0]?.value || "funcionario",
         modulos_permitidos: getAllModuleAndSubmoduleIds(),
-      });
+      };
+      setEditingUsuario(novoUser);
+      setInitialUsuarioJson(JSON.stringify(novoUser));
     }
     setIsUsuarioModalOpen(true);
   };
@@ -327,6 +350,7 @@ export const ConfiguracoesPage: React.FC = () => {
   const handleCloseUsuarioModal = () => {
     setIsUsuarioModalOpen(false);
     setEditingUsuario(null);
+    setInitialUsuarioJson('');
     setSenhaUsuario('');
   };
 
@@ -718,6 +742,14 @@ export const ConfiguracoesPage: React.FC = () => {
                 onSubmit={handleSave}
                 className="space-y-6"
               >
+                {isEmpresaDirty && (
+                  <AlertaAlteracoesPendentes
+                    visivel={isEmpresaDirty}
+                    formId="empresaForm"
+                    posicao="compact"
+                    mensagem="Existem alterações pendentes nos dados desta empresa. Salve para registrar no banco de dados."
+                  />
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div>
@@ -1315,6 +1347,14 @@ export const ConfiguracoesPage: React.FC = () => {
                 onSubmit={handleSaveUsuario}
                 className="space-y-4"
               >
+                {isUsuarioDirty && (
+                  <AlertaAlteracoesPendentes
+                    visivel={isUsuarioDirty}
+                    formId="usuarioForm"
+                    posicao="compact"
+                    mensagem="Existem alterações pendentes no cadastro deste usuário. Salve para registrar no banco de dados."
+                  />
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-slate-400 mb-1">

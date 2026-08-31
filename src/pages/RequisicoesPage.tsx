@@ -23,6 +23,7 @@ import { useCredenciados } from '../hooks/useCredenciados';
 import { useProcedimentos } from '../hooks/useProcedimentos';
 import { canDelete } from '../utils/permissions';
 import { useConfirm } from '../context/ConfirmContext';
+import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
 import { 
   FileCheck2, 
   Plus, 
@@ -136,6 +137,7 @@ export const RequisicoesPage: React.FC = () => {
   // Cart of procedures in creation
   const [itensGuia, setItensGuia] = useState<RequisicaoItem[]>([]);
   const [editingRequisicao, setEditingRequisicao] = useState<any>(null);
+  const [isSalvandoGuia, setIsSalvandoGuia] = useState(false);
   const [modalReabrir, setModalReabrir] = useState<{ req: any, targetStatus: 'autorizada' | 'emitida' } | null>(null);
   const [motivoReabertura, setMotivoReabertura] = useState('');
 
@@ -360,7 +362,7 @@ export const RequisicoesPage: React.FC = () => {
         observacoes
       };
 
-      let novaReq;
+      let novaReq: any;
       if (editingRequisicao) {
         reqData.id = editingRequisicao.id;
         novaReq = await atualizarRequisicao(state.isOnline, { ...editingRequisicao, ...reqData });
@@ -427,6 +429,8 @@ export const RequisicoesPage: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       toast.error('Erro ao emitir guia de requisição.');
+    } finally {
+      setIsSalvandoGuia(false);
     }
   };
 
@@ -879,6 +883,14 @@ export const RequisicoesPage: React.FC = () => {
 
             {/* Modal Form Body */}
             <form onSubmit={handleCriarGuia} className="space-y-6 pt-4 overflow-y-auto pr-1 flex-1">
+              {(Boolean(selAssociadoId) || itensGuia.length > 0 || Boolean(selCredenciadoId)) && (
+                <AlertaAlteracoesPendentes
+                  visivel={true}
+                  salvando={isSalvandoGuia}
+                  posicao="compact"
+                  mensagem="Existem dados preenchidos nesta guia. Salve para registrar a requisição no banco de dados."
+                />
+              )}
               
               {/* SECTION 1: ASSOCIADO & PACIENTE */}
               <div className="bg-bg-subtle p-4 rounded-xl border border-border-default space-y-4">

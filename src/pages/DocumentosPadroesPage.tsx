@@ -14,6 +14,7 @@ import { DocumentoTableModal } from '../components/documentos/DocumentoTableModa
 import { DocumentoImageModal } from '../components/documentos/DocumentoImageModal';
 import { DocumentoMiniaturasPreview } from '../components/documentos/DocumentoMiniaturasPreview';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
 
 /* ─── Tipos para o painel de variáveis ─── */
 interface VariavelInfo {
@@ -349,8 +350,14 @@ export const DocumentosPadroesPage = () => {
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<Partial<DocumentoPadrao> | null>(null);
+  const [initialDocJson, setInitialDocJson] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+
+  const isDirty = React.useMemo(() => {
+    if (!isFormOpen || !initialDocJson) return false;
+    return JSON.stringify(editingDoc) !== initialDocJson;
+  }, [isFormOpen, editingDoc, initialDocJson]);
 
   const [previewDoc, setPreviewDoc] = useState<DocumentoPadrao | null>(null);
 
@@ -750,12 +757,14 @@ export const DocumentosPadroesPage = () => {
   };
 
   const handleOpenForm = (doc?: DocumentoPadrao) => {
-    setEditingDoc(doc || { 
+    const initialObj: Partial<DocumentoPadrao> = doc ? { ...doc } : { 
       ativo: true, 
-      tipo: 'contrato_adesao',
+      tipo: 'contrato_adesao' as TipoDocumento,
       conteudo: '',
       empresa_id: empresaSelecionada || ''
-    });
+    };
+    setEditingDoc(initialObj);
+    setInitialDocJson(JSON.stringify(initialObj));
     setIsSaving(false);
     setIsSaved(false);
     setIsFormOpen(true);
@@ -1224,6 +1233,17 @@ export const DocumentosPadroesPage = () => {
               </div>
               <div className="flex-1 overflow-y-auto custom-scrollbar">
                 <form id="docForm" onSubmit={handleSubmit}>
+                  {isDirty && (
+                    <div className="p-4 border-b border-border-default bg-bg-surface/30">
+                      <AlertaAlteracoesPendentes
+                        visivel={isDirty}
+                        formId="docForm"
+                        salvando={isSaving}
+                        posicao="compact"
+                        mensagem="Existem alterações pendentes neste modelo de documento. Salve para registrar no banco de dados."
+                      />
+                    </div>
+                  )}
 
                   {/* ── Seção: Dados básicos ── */}
                   <div className="p-5 sm:p-6 space-y-4 border-b border-border-default">

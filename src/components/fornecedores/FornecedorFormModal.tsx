@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BotaoSalvar } from '../common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 import { 
   Fornecedor, 
   FornecedorInsert, 
@@ -206,7 +207,7 @@ export const FornecedorFormModal: React.FC<Props> = ({
 
   const isEditing = !!initialData;
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isDirty } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       codigo: proximoCodigo,
@@ -419,7 +420,18 @@ export const FornecedorFormModal: React.FC<Props> = ({
         </div>
 
         {/* FORM CONTENT */}
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+        <form id="fornecedor-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+          {isDirty && (
+            <div className="px-6 pt-4 shrink-0">
+              <AlertaAlteracoesPendentes
+                visivel={isDirty}
+                formId="fornecedor-form"
+                salvando={isSubmitting}
+                posicao="compact"
+                mensagem="Existem alterações pendentes neste fornecedor/prestador. Salve para registrar no banco de dados."
+              />
+            </div>
+          )}
           
           {/* TAB 1: DADOS PRINCIPAIS */}
           {activeTab === 'dados' && (

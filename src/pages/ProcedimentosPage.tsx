@@ -10,6 +10,7 @@ import { getFromIDB, saveToIDB } from '../lib/idb';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
 
 export const ProcedimentosPage = () => {
   const { procedimentos, loading, criar, editar, excluir } = useProcedimentos();
@@ -62,8 +63,14 @@ export const ProcedimentosPage = () => {
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProc, setEditingProc] = useState<Partial<Procedimento> | null>(null);
+  const [initialProcJson, setInitialProcJson] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+
+  const isDirty = React.useMemo(() => {
+    if (!isFormOpen || !initialProcJson) return false;
+    return JSON.stringify(editingProc) !== initialProcJson;
+  }, [isFormOpen, editingProc, initialProcJson]);
 
   const filtered = procedimentos.filter(proc => {
     const term = searchTerm.toLowerCase();
@@ -71,14 +78,16 @@ export const ProcedimentosPage = () => {
   });
 
   const handleOpenForm = (proc?: Procedimento) => {
-    setEditingProc(proc || { 
+    const initialObj = proc ? { ...proc } : { 
       ativo: true, 
       codigo_tuss: '',
       descricao: '',
       valor_padrao: 0,
       tipo_procedimento: tiposProcedimento[0] || '',
       empresa_id: empresaSelecionada || ''
-    });
+    };
+    setEditingProc(initialObj);
+    setInitialProcJson(JSON.stringify(initialObj));
     setIsSaving(false);
     setIsSaved(false);
     setIsFormOpen(true);
@@ -342,6 +351,14 @@ export const ProcedimentosPage = () => {
             
             <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden flex-1">
               <div className="p-6 space-y-8 overflow-y-auto custom-scrollbar">
+                {isDirty && (
+                  <AlertaAlteracoesPendentes
+                    visivel={isDirty}
+                    salvando={isSaving}
+                    posicao="compact"
+                    mensagem="Existem alterações pendentes neste procedimento/tabela de preços. Salve para registrar no banco de dados."
+                  />
+                )}
                 
                 {/* Seção 1: Informações Básicas */}
                 <section>

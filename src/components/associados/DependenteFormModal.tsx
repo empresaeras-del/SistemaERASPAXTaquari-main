@@ -18,6 +18,7 @@ import { differenceInYears, parseISO, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
 import { v4 as uuidv4 } from 'uuid';
 import { BotaoSalvar } from '../common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 
 export interface DependenteFormModalProps {
   isOpen: boolean;
@@ -125,6 +126,24 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
     return 'valid';
   }, [cpf, existingCpfs, dependente]);
 
+  const isDirty = React.useMemo(() => {
+    if (!isOpen) return false;
+    if (dependente) {
+      const origNome = dependente.nome || '';
+      const origNasc = dependente.data_nascimento ? dependente.data_nascimento.split('T')[0] : '';
+      const origParentesco = dependente.parentesco || '';
+      const origCpf = dependente.cpf ? maskCPFOrCNPJ(dependente.cpf, false) : '';
+      return (
+        nome !== origNome ||
+        dataNascimento !== origNasc ||
+        parentesco !== origParentesco ||
+        cpf !== origCpf
+      );
+    } else {
+      return Boolean(nome.trim() || dataNascimento.trim() || parentesco.trim() || cpf.trim());
+    }
+  }, [isOpen, dependente, nome, dataNascimento, parentesco, cpf]);
+
   const handleSalvar = (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
@@ -212,6 +231,15 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
         </div>
 
         <form onSubmit={handleSalvar} className="p-5 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar text-white flex-1">
+          {isDirty && (
+            <AlertaAlteracoesPendentes
+              visivel={isDirty}
+              salvando={isSaving}
+              posicao="compact"
+              mensagem="Existem dados pendentes de salvamento para este dependente."
+            />
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             <div className="md:col-span-2 space-y-1.5">

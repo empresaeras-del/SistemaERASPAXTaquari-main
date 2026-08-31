@@ -19,6 +19,7 @@ import { useAppContext } from "../context/AppContext";
 import { useConfirm } from '../context/ConfirmContext';
 import { RelatorioCredenciadosModal } from '../components/credenciados/RelatorioCredenciadosModal';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
 import toast from 'react-hot-toast';
 
 export const CredenciadosPage: React.FC = () => {
@@ -65,6 +66,12 @@ export const CredenciadosPage: React.FC = () => {
     ramo_atividade: 'clinica_medica',
     status: 'ativo'
   });
+  const [initialFormDataJson, setInitialFormDataJson] = useState<string>('');
+
+  const isDirty = React.useMemo(() => {
+    if (!isFormOpen || !initialFormDataJson) return false;
+    return JSON.stringify(formData) !== initialFormDataJson;
+  }, [isFormOpen, formData, initialFormDataJson]);
 
   const [linkData, setLinkData] = useState({
     plano_pax_id: '',
@@ -91,7 +98,9 @@ export const CredenciadosPage: React.FC = () => {
 
   const handleOpenCreate = () => {
     setEditingId(null);
-    setFormData({ razao_social: '', cnpj_cpf: '', ramo_atividade: 'clinica_medica', status: 'ativo' });
+    const initialObj: Partial<CredenciadoInsert> = { razao_social: '', cnpj_cpf: '', ramo_atividade: 'clinica_medica', status: 'ativo' as CredenciadoStatus };
+    setFormData(initialObj);
+    setInitialFormDataJson(JSON.stringify(initialObj));
     setIsSaving(false);
     setIsSaved(false);
     setIsFormOpen(true);
@@ -99,7 +108,8 @@ export const CredenciadosPage: React.FC = () => {
   };
 
   const handleEdit = (cred: any) => {
-    setFormData(cred);
+    setFormData({ ...cred });
+    setInitialFormDataJson(JSON.stringify({ ...cred }));
     setEditingId(cred.id);
     setIsSaving(false);
     setIsSaved(false);
@@ -618,6 +628,15 @@ export const CredenciadosPage: React.FC = () => {
               {activeTab === 'dados' ? (
                 <div className="p-6 md:p-8">
                   <form id="credenciadoForm" onSubmit={handleSubmit} className="max-w-3xl mx-auto space-y-10">
+                    {isDirty && (
+                      <AlertaAlteracoesPendentes
+                        visivel={isDirty}
+                        formId="credenciadoForm"
+                        salvando={isSaving}
+                        posicao="compact"
+                        mensagem="Existem alterações pendentes no cadastro deste credenciado. Salve para registrar no banco de dados."
+                      />
+                    )}
                     
                     {/* Identificação Principal */}
                     <section>

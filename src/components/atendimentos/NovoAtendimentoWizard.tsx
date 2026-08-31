@@ -14,6 +14,7 @@ import { formatLocalDate } from '../../utils/dateUtils';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
 import { BotaoSalvar } from '../common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 
 export const NovoAtendimentoWizard: React.FC<{
   onClose: () => void;
@@ -368,7 +369,14 @@ export const NovoAtendimentoWizard: React.FC<{
         </div>
 
         {/* BODY */}
-        <div className="flex-1 overflow-y-auto p-6 bg-bg-base">
+        <div className="flex-1 overflow-y-auto p-6 bg-bg-base space-y-6">
+          {step > 1 && (
+            <AlertaAlteracoesPendentes
+              visivel={step > 1}
+              posicao="compact"
+              mensagem="Atendimento em preenchimento. Avance as etapas e conclua o salvamento para registrar os dados no banco de dados."
+            />
+          )}
           {step === 1 && (
             <div className="space-y-6">
               <div className="flex gap-4">

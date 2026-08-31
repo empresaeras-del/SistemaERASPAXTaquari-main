@@ -11,6 +11,7 @@ import { getAssociados } from '../../services/associadosService';
 import { Info, DollarSign, Clock, List as ListIcon, Users, MapPin, Shield, CreditCard, ArrowRight, ArrowLeft } from 'lucide-react';
 import { RegrasCalculoInfo } from '../associados/RegrasCalculoInfo';
 import { BotaoSalvar } from '../common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 
 
 const optNum = z.preprocess(val => (val === '' || val === null || val === undefined || Number.isNaN(val as any)) ? null : val, z.coerce.number().nullable().optional()) as unknown as z.ZodType<number | null | undefined>;
@@ -96,7 +97,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const [incluiTranslado, setIncluiTranslado] = useState(true);
   const [tipoTranslado, setTipoTranslado] = useState<'local' | 'raio'>('local');
 
-  const { register, control, handleSubmit, watch, reset, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, control, handleSubmit, watch, reset, setValue, formState: { errors, isDirty } } = useForm<FormData>({
     resolver: zodResolver(schema as any),
     defaultValues: {
       codigo: '',
@@ -353,7 +354,18 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
           )}
 
           {/* Form Content */}
-          <form onSubmit={handleSubmit(onSubmit, onError)} className="flex-1 flex flex-col overflow-hidden">
+          <form id="plano-pax-form" onSubmit={handleSubmit(onSubmit, onError)} className="flex-1 flex flex-col overflow-hidden">
+            {isDirty && (
+              <div className="px-8 pt-4 shrink-0">
+                <AlertaAlteracoesPendentes
+                  visivel={isDirty}
+                  formId="plano-pax-form"
+                  salvando={isSubmitting}
+                  posicao="compact"
+                  mensagem="Existem alterações pendentes nas regras ou valores deste plano PAX. Salve para registrar no banco de dados."
+                />
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto p-8">
               
               {(!initialData ? step === 1 : activeTab === 'identificacao') && (

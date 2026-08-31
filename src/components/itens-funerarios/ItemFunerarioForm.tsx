@@ -9,6 +9,7 @@ import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { getCoberturasDoItem } from '../../hooks/useItensFunerarios';
 import { useAppContext } from '../../context/AppContext';
 import { BotaoSalvar } from '../common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 
 const schema = z.object({
   codigo: z.string().min(1, 'Código é obrigatório').max(50, 'Máximo 50 caracteres').transform(v => v.toUpperCase()),
@@ -60,7 +61,7 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
   const { state: { isOnline } } = useAppContext();
   const isEditing = !!initialData;
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       codigo: '',
@@ -273,7 +274,18 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+        <form id="item-funerario-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+          {isDirty && (
+            <div className="px-6 pt-4 shrink-0">
+              <AlertaAlteracoesPendentes
+                visivel={isDirty}
+                formId="item-funerario-form"
+                salvando={isSubmitting}
+                posicao="compact"
+                mensagem="Existem alterações pendentes neste item funerário. Salve para registrar no banco de dados."
+              />
+            </div>
+          )}
           
           {/* TAB 1: DADOS GERAIS */}
           {activeTab === 'dados' && (

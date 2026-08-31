@@ -21,6 +21,7 @@ import {
 } from "../services/associadosService";
 import { DependenteFormModal } from "../components/associados/DependenteFormModal";
 import { BotaoSalvar } from "../components/common/BotaoSalvar";
+import { AlertaAlteracoesPendentes } from "../components/common/AlertaAlteracoesPendentes";
 import { usePlanosPax } from "../hooks/usePlanosPax";
 import { useColumnVisibility } from "../hooks/useColumnVisibility";
 import { ColumnVisibilityToggle } from "../components/ColumnVisibilityToggle";
@@ -141,6 +142,12 @@ export const AssociadosPage: React.FC = () => {
   const [isDraggingDoc, setIsDraggingDoc] = useState(false);
   const [isSavingAssociado, setIsSavingAssociado] = useState(false);
   const [isSavedAssociado, setIsSavedAssociado] = useState(false);
+  const [initialAssociadoSnapshot, setInitialAssociadoSnapshot] = useState<string>('');
+
+  const hasUnsavedChanges = React.useMemo(() => {
+    if (!isModalOpen || !editingAssociado || !initialAssociadoSnapshot) return false;
+    return JSON.stringify(editingAssociado) !== initialAssociadoSnapshot;
+  }, [isModalOpen, editingAssociado, initialAssociadoSnapshot]);
 
   const handleWhatsAppMenu = async (associado: Associado) => {
     const opcao = window.prompt(
@@ -554,13 +561,15 @@ export const AssociadosPage: React.FC = () => {
     setBuscaDependenteInterno("");
     setFieldErrors({});
     if (associado) {
-      setEditingAssociado({ ...associado });
+      const cloned = { ...associado };
+      setEditingAssociado(cloned);
+      setInitialAssociadoSnapshot(JSON.stringify(cloned));
       setIsEditingMode(true);
     } else {
       const defaultTenant = (state.empresaSelecionada && state.empresaSelecionada !== 'all') 
         ? state.empresaSelecionada 
         : 'default_tenant';
-      setEditingAssociado({
+      const novoAssoc: Associado = {
         id: uuidv4(),
         tenant_id: defaultTenant,
         nome: "",
@@ -568,7 +577,9 @@ export const AssociadosPage: React.FC = () => {
         status: "ativo",
         data_adesao: format(new Date(), "yyyy-MM-dd"),
         dependentes: [],
-      });
+      };
+      setEditingAssociado(novoAssoc);
+      setInitialAssociadoSnapshot(JSON.stringify(novoAssoc));
       setIsEditingMode(false);
     }
     setActiveTab("principal");
@@ -579,6 +590,7 @@ export const AssociadosPage: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingAssociado(null);
+    setInitialAssociadoSnapshot('');
     setDependenteEmEdicao(null);
     setDependenteFormModalOpen(false);
     setSelectedContratoId(null);
@@ -1221,9 +1233,17 @@ export const AssociadosPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-base/80 backdrop-blur-sm p-4">
           <div className="bg-bg-subtle rounded-3xl shadow-2xl w-full max-w-6xl 2xl:max-w-[1400px] max-h-[90vh] flex flex-col border border-border-default overflow-hidden">
             <div className="px-6 py-4 border-b border-border-default flex items-center justify-between shrink-0 bg-bg-surface/50">
-              <h3 className="text-xl font-bold text-text-base tracking-tight">
-                {editingAssociado.nome ? "Editar Associado" : "Novo Associado"}
-              </h3>
+              <div className="flex items-center gap-3">
+                <h3 className="text-xl font-bold text-text-base tracking-tight">
+                  {editingAssociado.nome ? "Editar Associado" : "Novo Associado"}
+                </h3>
+                {hasUnsavedChanges && (
+                  <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    Alterações pendentes
+                  </span>
+                )}
+              </div>
               <button
                 onClick={handleCloseModal}
                 className="text-text-subtle hover:text-text-base transition-colors"
@@ -1231,6 +1251,18 @@ export const AssociadosPage: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {hasUnsavedChanges && (
+              <div className="px-6 pt-3 shrink-0">
+                <AlertaAlteracoesPendentes
+                  visivel={hasUnsavedChanges}
+                  formId="associado-form"
+                  salvando={isSavingAssociado}
+                  posicao="compact"
+                  mensagem="Existem alterações realizadas no cadastro deste associado que necessitam de salvamento para devido registro no banco de dados."
+                />
+              </div>
+            )}
             <div
               className={`flex flex-1 overflow-hidden ${isEditingMode ? "flex-row" : "flex-col"}`}
             >

@@ -12,6 +12,7 @@ import { AtendimentoDocumentosGenerator } from './AtendimentoDocumentosGenerator
 import { formatLocalDate } from '../../utils/dateUtils';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { BotaoSalvar } from '../common/BotaoSalvar';
+import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 import { canEditAtendimentos, alertPermissionRestriction } from '../../utils/permissions';
 
 interface Props {
@@ -32,6 +33,14 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
 
   // Load items with details
   const [itemsList, setItemsList] = useState<AtendimentoItem[]>(atendimento.itens || []);
+
+  const isDirty = React.useMemo(() => {
+    if (!isEditing) return false;
+    return (
+      JSON.stringify(formData) !== JSON.stringify(atendimento) ||
+      JSON.stringify(itemsList) !== JSON.stringify(atendimento.itens || [])
+    );
+  }, [isEditing, formData, atendimento, itemsList]);
   const [parcelas, setParcelas] = useState<ParcelaReceber[]>([]);
   const [loadingParcelas, setLoadingParcelas] = useState(true);
   const [activeTab, setActiveTab] = useState<'detalhes' | 'documentos'>('detalhes');
@@ -214,6 +223,18 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
             <FileText className="w-4 h-4" /> Documentos
           </button>
         </div>
+
+        {isDirty && (
+          <div className="px-6 pt-4 shrink-0">
+            <AlertaAlteracoesPendentes
+              visivel={isDirty}
+              onSalvar={handleSave}
+              salvando={loading}
+              posicao="compact"
+              mensagem="Existem alterações pendentes neste atendimento. Salve para registrar no banco de dados."
+            />
+          </div>
+        )}
         
         {/* BODY */}
 
