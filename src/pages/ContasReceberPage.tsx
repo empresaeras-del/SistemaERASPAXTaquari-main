@@ -1,5 +1,5 @@
 import { useColumnVisibility } from '../hooks/useColumnVisibility';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
 import { useAppContext } from '../context/AppContext';
 import { getContasBancariasAtivas } from '../services/contasBancariasService';
@@ -57,26 +57,112 @@ export const ContasReceberPage: React.FC = () => {
   const { state } = useAppContext();
   const { confirm } = useConfirm();
 
-  const handleWhatsAppCobrança = async (parcela: ParcelaReceber) => {
-    const msg = await generateCobrançaTemplate(
-      parcela.devedor_nome || 'Cliente', 
-      parcela.valor, 
-      formatLocalDate(parcela.data_vencimento)
-    );
-    const phonePrompt = window.prompt("Confirme ou digite o WhatsApp do cliente (com DDD):", "");
-    if (phonePrompt) {
-        const success = sendWhatsAppMessage(phonePrompt, msg);
-        if (!success) toast.error("Número de telefone inválido.");
-    }
-  };
-
-
   const [parcelas, setParcelas] = useState<ParcelaReceber[]>([]);
   const [receitas, setReceitas] = useState<Receita[]>([]);
+  const [associados, setAssociados] = useState<Associado[]>([]);
+  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
   const [loading, setLoading] = useState(true);
   const [showReciboModal, setShowReciboModal] = useState(false);
   const [reciboModalData, setReciboModalData] = useState<ReciboDados | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Identifica o devedor/associado e recupera seu telefone de contato cadastrado
+  const getDevedorContato = useCallback((parcela: ParcelaReceber) => {
+    const recPai = receitas.find(r => r.id === parcela.receita_id);
+
+    let assoc: Associado | undefined;
+
+    // 1. Pelo associado_id na receita pai
+    if (recPai?.associado_id) {
+      assoc = associados.find(a => a.id === recPai.associado_id);
+    }
+
+    // 2. Pelo associado_id direto na parcela se existir
+    if (!assoc && (parcela as any)?.associado_id) {
+      assoc = associados.find(a => a.id === (parcela as any).associado_id);
+    }
+
+    // 3. Pelo CPF do devedor / associado
+    if (!assoc) {
+      const rawCpf = (parcela.devedor_cpf_cnpj || recPai?.associado_cpf || recPai?.cliente_cpf_cnpj || '').replace(/\D/g, '');
+      if (rawCpf && rawCpf.length === 11) {
+        assoc = associados.find(a => (a.cpf || '').replace(/\D/g, '') === rawCpf);
+      }
+    }
+
+    // 4. Pelo Nome exato ou aproximado do devedor / associado
+    if (!assoc) {
+      const rawNome = (parcela.devedor_nome || recPai?.associado_nome || recPai?.cliente_nome || '').trim().toLowerCase();
+      if (rawNome) {
+        assoc = associados.find(a => (a.nome || '').trim().toLowerCase() === rawNome);
+      }
+    }
+
+    const telefone = assoc?.telefone || 
+                     (assoc as any)?.celular_whatsapp || 
+                     (assoc as any)?.celular || 
+                     (assoc as any)?.whatsapp || 
+                     recPai?.cliente_telefone || 
+                     '';
+
+    const nome = assoc?.nome || 
+                 recPai?.associado_nome || 
+                 recPai?.cliente_nome || 
+                 parcela.devedor_nome || 
+                 'Cliente';
+
+    return {
+      associado: assoc,
+      telefone: telefone ? String(telefone).trim() : '',
+      nome,
+      receitaPai: recPai
+    };
+  }, [receitas, associados]);
+
+  // Envia mensagem de cobrança personalizada utilizando o telefone do cadastro
+  const handleWhatsAppCobrança = async (parcela: ParcelaReceber) => {
+    const { telefone: telefoneCadastrado, nome: nomeCliente } = getDevedorContato(parcela);
+    
+    const msg = await generateCobrançaTemplate(
+      nomeCliente, 
+      parcela.valor, 
+      formatLocalDate(parcela.data_vencimento),
+      {
+        empresa: empresaData?.nome_fantasia || 'ERAS PAX',
+        descricao: parcela.descricao
+      }
+    );
+
+    let phone = telefoneCadastrado;
+
+    // Se não tiver telefone no cadastro, solicita confirmação/digitação como fallback
+    if (!phone) {
+      const promptPhone = window.prompt(
+        `O associado/devedor "${nomeCliente}" não possui telefone cadastrado.\n\nDigite o número de WhatsApp com DDD para enviar a cobrança:`, 
+        ""
+      );
+      if (!promptPhone) return;
+      phone = promptPhone;
+    }
+
+    const success = sendWhatsAppMessage(phone, msg);
+    if (!success) {
+      const phoneCorrection = window.prompt(
+        `O número "${phone}" parece inválido.\nPor favor, confirme ou digite o número correto de WhatsApp com DDD:`,
+        phone
+      );
+      if (phoneCorrection) {
+        const retrySuccess = sendWhatsAppMessage(phoneCorrection, msg);
+        if (!retrySuccess) {
+          toast.error("Número de telefone inválido.");
+        } else {
+          toast.success(`WhatsApp aberto com mensagem de cobrança para ${nomeCliente}!`);
+        }
+      }
+    } else {
+      toast.success(`WhatsApp aberto com mensagem de cobrança para ${nomeCliente}!`);
+    }
+  };
 
   useEffect(() => {
     if (parcelas.length > 0 && location.state?.openDetails) {
@@ -126,8 +212,6 @@ export const ContasReceberPage: React.FC = () => {
   const [showDetalhesModal, setShowDetalhesModal] = useState(false);
   const [parcelaDetalhes, setParcelaDetalhes] = useState<ParcelaReceber | null>(null);
   const [receitaPai, setReceitaPai] = useState<Receita | null>(null);
-  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
-  const [associados, setAssociados] = useState<Associado[]>([]);
   const [showRelatorioModal, setShowRelatorioModal] = useState(false);
 
   const loadData = async () => {
@@ -630,8 +714,16 @@ export const ContasReceberPage: React.FC = () => {
                         
                         {/* WhatsApp Cobrança */}
                         <button
+                          type="button"
                           onClick={() => handleWhatsAppCobrança(parcela)}
-                          title="Enviar Cobrança via WhatsApp"
+                          title={
+                            (() => {
+                              const contato = getDevedorContato(parcela);
+                              return contato.telefone 
+                                ? `Enviar Cobrança via WhatsApp (${contato.telefone})` 
+                                : 'Enviar Cobrança via WhatsApp (Sem telefone cadastrado)';
+                            })()
+                          }
                           className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 transition-colors"
                         >
                           <MessageCircle className="w-4 h-4" />
@@ -1042,8 +1134,21 @@ export const ContasReceberPage: React.FC = () => {
                     <span className="text-text-subtle block">Tipo de Devedor</span>
                     <span className="font-semibold text-text-base capitalize">{(parcelaDetalhes.tipo_devedor || 'associado').replace('_', ' ')}</span>
                   </div>
+                  <div>
+                    <span className="text-text-subtle block">Telefone / WhatsApp</span>
+                    <span className="font-semibold text-text-base">
+                      {(() => {
+                        const contato = getDevedorContato(parcelaDetalhes);
+                        return contato.telefone ? (
+                          <span className="font-mono text-emerald-500 font-medium">{contato.telefone}</span>
+                        ) : (
+                          <span className="text-text-subtle italic text-xs">Não cadastrado</span>
+                        );
+                      })()}
+                    </span>
+                  </div>
                   {receitaPai?.associado_plano && (
-                    <div>
+                    <div className="md:col-span-2">
                       <span className="text-text-subtle block">Plano do Associado</span>
                       <span className="font-semibold text-emerald-400">{receitaPai.associado_plano}</span>
                     </div>
@@ -1189,6 +1294,17 @@ export const ContasReceberPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                {parcelaDetalhes.status !== 'recebido' && parcelaDetalhes.status !== 'cancelado' && (
+                  <button
+                    type="button"
+                    onClick={() => handleWhatsAppCobrança(parcelaDetalhes)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 font-medium text-sm transition-colors"
+                    title="Enviar Cobrança via WhatsApp"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>WhatsApp</span>
+                  </button>
+                )}
                 {(parcelaDetalhes.status === 'pendente' || parcelaDetalhes.status === 'atrasado') && (
                   <button
                     onClick={() => {
