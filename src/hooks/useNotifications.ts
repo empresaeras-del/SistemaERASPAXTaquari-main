@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { getNotificacoes, markAsRead, markAllAsRead, deleteNotificacao, Notificacao, createNotificacao } from '../services/notificacoesService';
 import { getRequisicoes, atualizarStatusRequisicao } from '../services/requisicoesService';
@@ -13,11 +13,12 @@ export const useNotifications = () => {
   const [pendingRequisicoes, setPendingRequisicoes] = useState<Requisicao[]>([]);
   const [pendingRemessas, setPendingRemessas] = useState<RemessaFaturamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const hasAttemptedSeedRef = useRef(false);
 
   const fetchNotificacoes = useCallback(async () => {
     if (!state.user?.id) return;
     setLoading(true);
-    const tenantId = state.empresaSelecionada || 'all';
+    const tenantId = (state.user?.nivel !== 'super_admin' ? state.user?.tenant_id : (state.empresaSelecionada || state.user?.tenant_id)) || 'all';
 
     try {
       const [notifsData, reqsData, remsData] = await Promise.all([
@@ -34,12 +35,14 @@ export const useNotifications = () => {
       const pendRems = remsData.filter(r => r.status === 'em_aberto');
       setPendingRemessas(pendRems);
 
-      // Seed initial mock notifications if empty
-      if (notifsData.length === 0) {
+      // Seed initial mock notifications if empty and not yet attempted
+      if (notifsData.length === 0 && !hasAttemptedSeedRef.current) {
+        hasAttemptedSeedRef.current = true;
+        const mockTenantId = state.user?.tenant_id || (tenantId !== 'all' ? tenantId : undefined);
         const mockNotifs: Omit<Notificacao, 'id' | 'created_at'>[] = [
           {
             usuario_id: state.user.id,
-            tenant_id: tenantId,
+            tenant_id: mockTenantId,
             titulo: 'Bem-vindo ao Sistema',
             mensagem: 'Seu acesso foi configurado com sucesso.',
             tipo: 'info',
@@ -47,7 +50,7 @@ export const useNotifications = () => {
           },
           {
             usuario_id: state.user.id,
-            tenant_id: tenantId,
+            tenant_id: mockTenantId,
             titulo: 'Aviso de Auditoria',
             mensagem: 'Verifique as novas requisições e remessas pendentes de aprovação.',
             tipo: 'alerta',
@@ -68,7 +71,7 @@ export const useNotifications = () => {
     } finally {
       setLoading(false);
     }
-  }, [state.isOnline, state.user?.id, state.empresaSelecionada]);
+  }, [state.isOnline, state.user?.id, state.user?.tenant_id, state.user?.nivel, state.empresaSelecionada]);
 
   useEffect(() => {
     fetchNotificacoes();

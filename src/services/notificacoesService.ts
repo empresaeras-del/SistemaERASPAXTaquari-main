@@ -24,7 +24,7 @@ export const getNotificacoes = async (isOnline: boolean, usuarioId: string, tena
     try {
       let query = supabase.from('notificacoes').select('*').is('deleted_at', null);
       if (tenantId && tenantId !== 'all') {
-         query = query.eq('tenant_id', tenantId);
+         query = query.or(`tenant_id.eq.${tenantId},tenant_id.is.null,tenant_id.eq.all,usuario_id.eq.${usuarioId}`);
       }
       const { data, error } = await query;
       if (error) throw error;
@@ -36,7 +36,7 @@ export const getNotificacoes = async (isOnline: boolean, usuarioId: string, tena
       }
       notificacoes = data || [];
     } catch (error) {
-      console.warn('Supabase fetch failed for notificacoes, falling back to IDB.');
+      console.warn('Supabase fetch failed for notificacoes, falling back to IDB.', error);
       notificacoes = await getAllFromIDB<Notificacao>(STORE_NAME);
     }
   } else {
@@ -45,7 +45,7 @@ export const getNotificacoes = async (isOnline: boolean, usuarioId: string, tena
 
   // Filter for user
   return notificacoes
-    .filter(n => !n.deleted_at && (n.usuario_id === usuarioId || n.usuario_id === 'all'))
+    .filter(n => !n.deleted_at && (n.usuario_id === usuarioId || n.usuario_id === 'all' || !n.usuario_id))
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 };
 
@@ -112,7 +112,18 @@ export const createNotificacao = async (notificacao: Omit<Notificacao, 'id' | 'c
   try {
     if (isOnline) {
       try {
-        await supabase.from('notificacoes').insert([newNotif]);
+        const payload: any = {
+          id: newNotif.id,
+          titulo: newNotif.titulo,
+          mensagem: newNotif.mensagem,
+          tipo: newNotif.tipo || 'info',
+          lida: newNotif.lida || false,
+          link: newNotif.link || null,
+          usuario_id: newNotif.usuario_id || 'all',
+          tenant_id: (newNotif.tenant_id && newNotif.tenant_id !== 'all') ? newNotif.tenant_id : null,
+          created_at: newNotif.created_at
+        };
+        await supabase.from('notificacoes').insert([payload]);
       } catch(e) {
         console.warn('Supabase createNotificacao failed', e);
       }
