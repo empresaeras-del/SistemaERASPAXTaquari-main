@@ -12,6 +12,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, metadata: { nome: string; tenant_id?: string }) => Promise<{ error: string | null; user?: User | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
+  refreshProfile: () => Promise<Usuario | null>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,6 +24,7 @@ const AuthContext = createContext<AuthContextType>({
   signUp: async () => ({ error: null }),
   signOut: async () => {},
   resetPassword: async () => ({ error: null }),
+  refreshProfile: async () => null,
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -88,6 +90,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refreshProfile = async (): Promise<Usuario | null> => {
+    let authUser = supabaseUser;
+    if (!authUser) {
+      const { data } = await supabase.auth.getUser();
+      authUser = data.user;
+    }
+    if (authUser) {
+      const p = await loadUserProfile(authUser);
+      if (p) setUser(p);
+      return p;
+    }
+    return null;
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -116,14 +132,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(profile || initialCached);
         }
       } else {
-        // Removido o fallback inseguro (fake session offline)
         setSession(null);
         setUser(null);
       }
       setLoading(false);
     }).catch(() => {
       if (!isMounted) return;
-      // Removido o fallback inseguro (fake session offline)
       setSession(null);
       setUser(null);
       setLoading(false);
@@ -157,6 +171,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscription.unsubscribe();
     };
   }, []);
+
+  // 4. Sincronização em tempo real e revalidação ao focar na janela
+  useEffect(() => {
+    if (!supabaseUser?.id) return;
+    let isMounted = true;
+
+    const channel = supabase
+      .channel(`realtime-users-sync-${supabaseUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${supabaseUser.id}`,
+        },
+        async () => {
+          if (!isMounted) return;
+          const fresh = await loadUserProfile(supabaseUser);
+          if (fresh && isMounted) setUser(fresh);
+        }
+      )
+      .subscribe();
+
+    const handleFocus = async () => {
+      if (supabaseUser && isMounted) {
+        const fresh = await loadUserProfile(supabaseUser);
+        if (fresh && isMounted) setUser(fresh);
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      isMounted = false;
+      channel.unsubscribe();
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [supabaseUser?.id]);
 
   const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
     setLoading(true);

@@ -71,24 +71,25 @@ export const Topbar: React.FC = () => {
   }, [state.isOnline, state.user?.tenant_id]);
 
   useEffect(() => {
-    if (empresas.length > 0 && !state.empresaSelecionada) {
-      if (state.user?.tenant_id) {
+    if (empresas.length > 0) {
+      if (state.user && state.user.nivel !== 'super_admin' && state.user.tenant_id) {
         const empUser = empresas.find(
           (e) =>
             e.id === state.user?.tenant_id ||
             e.nome_fantasia?.toLowerCase() === state.user?.tenant_id?.toLowerCase() ||
             e.razao_social?.toLowerCase() === state.user?.tenant_id?.toLowerCase()
         );
-        if (empUser) {
+        if (empUser && state.empresaSelecionada !== empUser.id) {
           dispatch({ type: 'SET_EMPRESA', payload: empUser.id });
           return;
         }
+      } else if (!state.empresaSelecionada) {
+        if (state.user?.nivel === 'super_admin') {
+          dispatch({ type: 'SET_EMPRESA', payload: 'all' });
+          return;
+        }
+        dispatch({ type: 'SET_EMPRESA', payload: empresas[0].id });
       }
-      if (state.user?.nivel === 'super_admin') {
-        dispatch({ type: 'SET_EMPRESA', payload: 'all' });
-        return;
-      }
-      dispatch({ type: 'SET_EMPRESA', payload: empresas[0].id });
     }
   }, [empresas, state.empresaSelecionada, state.user, dispatch]);
 

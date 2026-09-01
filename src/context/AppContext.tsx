@@ -15,20 +15,25 @@ const initialState: AppState = {
 
 const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
-    case 'SET_USER':
-      return { ...state, user: action.payload };
+    case 'SET_USER': {
+      const nextUser = action.payload;
+      const isSuperAdmin = nextUser?.nivel === 'super_admin';
+      const nextTenant = (!isSuperAdmin && nextUser?.tenant_id)
+        ? nextUser.tenant_id
+        : state.empresaSelecionada;
+      return { ...state, user: nextUser, empresaSelecionada: nextTenant };
+    }
     case 'SET_ONLINE_STATUS':
       return { ...state, isOnline: action.payload };
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
-    case 'SET_EMPRESA':
-      // Se for usuário comum, força sempre o tenant_id do próprio usuário
+    case 'SET_EMPRESA': {
+      // Se for usuário comum/admin com tenant_id, garante o tenant_id do usuário atual
       if (state.user && state.user.nivel !== 'super_admin' && state.user.tenant_id) {
-        if (action.payload !== state.user.tenant_id) {
-          return { ...state, empresaSelecionada: state.user.tenant_id };
-        }
+        return { ...state, empresaSelecionada: state.user.tenant_id };
       }
       return { ...state, empresaSelecionada: action.payload };
+    }
     case 'SET_THEME':
       return { ...state, theme: action.payload };
     case 'SET_LAYOUT':
@@ -54,11 +59,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     dispatch({ type: 'SET_USER', payload: user });
 
-    // Ao logar, define IMEDIATAMENTE o tenant do usuário
-    // Para não-super_admin: usa sempre o tenant_id do próprio usuário
-    // Para super_admin: permite selecionar qualquer empresa (não força nada)
+    // Ao logar ou atualizar o usuário, sincroniza o tenant e o IDB
     if (user && user.nivel !== 'super_admin' && user.tenant_id) {
       dispatch({ type: 'SET_EMPRESA', payload: user.tenant_id });
+      set('tenant_id', user.tenant_id).catch(console.error);
     }
   }, [user]);
 
@@ -68,12 +72,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (tenantId) {
         // Só aplica o tenant do cache se:
         // 1. O usuário for super_admin (pode trocar de empresa), OU
-        // 2. Não houver usuário logado ainda (estado inicial)
-        // NUNCA sobrescreve o tenant do usuário não-super_admin
-        dispatch({
-          type: 'SET_EMPRESA',
-          payload: tenantId as string,
-        });
+        // 2. Não houver usuário logado ainda
+        if (!user || user.nivel === 'super_admin') {
+          dispatch({
+            type: 'SET_EMPRESA',
+            payload: tenantId as string,
+          });
+        }
       }
     });
     get('theme').then((t) => {

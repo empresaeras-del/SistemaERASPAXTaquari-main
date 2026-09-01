@@ -60,8 +60,11 @@ import { SistemaBackupPanel } from '../components/configuracoes/SistemaBackupPan
 import { MensagensConfigTab } from '../components/configuracoes/MensagensConfigTab';
 import { SessaoSegurancaCard } from '../components/configuracoes/SessaoSegurancaCard';
 import { OrganogramaCanvas } from '../components/configuracoes/OrganogramaCanvas';
+import { useAuth } from '../context/AuthContext';
+
 export const ConfiguracoesPage: React.FC = () => {
   const { state } = useAppContext();
+  const { refreshProfile } = useAuth();
   const toast = useToast();
   const { confirm } = useConfirm();
   const [activeTab, setActiveTab] = useState<"empresas" | "usuarios" | "sistema" | "mensagens">(
@@ -405,6 +408,9 @@ export const ConfiguracoesPage: React.FC = () => {
       };
       const senhaLimpa = senhaUsuario ? senhaUsuario.trim() : undefined;
       await saveUsuario(novoUsuario, state.isOnline, senhaLimpa, state.user || undefined);
+      if (editingUsuario.id === state.user?.id) {
+        await refreshProfile();
+      }
       await loadData();
       handleCloseUsuarioModal();
       toast.success(
