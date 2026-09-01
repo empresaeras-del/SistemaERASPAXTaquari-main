@@ -39,10 +39,24 @@ export const getUsuarios = async (
 
       if (data) {
         for (const item of data) {
-          await saveToIDB(STORE_NAME, item);
+          const sanitizedItem: UsuarioCadastro = {
+            id: item.id,
+            tenant_id: item.tenant_id || (item as any).empresa_id || '',
+            nome: item.nome || '',
+            email: item.email || '',
+            nivel: item.nivel || 'funcionario',
+            modulos_permitidos: item.modulos_permitidos || ['*'],
+            status: item.status || 'ativo',
+            created_at: item.created_at,
+            deleted_at: item.deleted_at
+          };
+          await saveToIDB(STORE_NAME, sanitizedItem);
         }
       }
-      usuarios = data || [];
+      usuarios = (data || []).map(item => ({
+        ...item,
+        tenant_id: item.tenant_id || (item as any).empresa_id || ''
+      }));
     } catch (error) {
       console.warn(
         "Supabase fetch failed, falling back to IDB.",
@@ -156,6 +170,7 @@ export const saveUsuario = async (
   const { error: dbError } = await supabase.from("users").upsert({
     id: finalUserId,
     tenant_id: usuarioToSave.tenant_id,
+    empresa_id: usuarioToSave.tenant_id,
     nome: usuarioToSave.nome.trim(),
     email: usuarioToSave.email.trim().toLowerCase(),
     nivel: usuarioToSave.nivel,

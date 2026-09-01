@@ -34,33 +34,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Carrega perfil do usuário da tabela `users`
   const loadUserProfile = async (authUser: User): Promise<Usuario | null> => {
     try {
-      const { data, error } = await supabase
+      // 1. Tenta buscar pelo ID do Auth
+      let { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', authUser.id)
-        .single();
+        .maybeSingle();
 
-      if (error || !data) {
-        // Fallback: cria perfil mínimo a partir dos metadados do Auth
-        const appMeta = authUser.app_metadata || {};
-        const userMeta = authUser.user_metadata || {};
-        return {
-          id: authUser.id,
-          nome: userMeta.nome || userMeta.full_name || authUser.email?.split('@')[0] || 'Usuário',
-          email: authUser.email || '',
-          nivel: (appMeta.nivel as NivelAcesso) || (userMeta.nivel as NivelAcesso) || 'funcionario',
-          modulos_permitidos: appMeta.modulos_permitidos || ['*'],
-          tenant_id: appMeta.tenant_id || userMeta.tenant_id,
-        };
+      // 2. Se não encontrar pelo ID, tenta pelo email (caso tenha sido criado com outro UUID)
+      if (!data && authUser.email) {
+        const { data: userByEmail } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', authUser.email.trim().toLowerCase())
+          .maybeSingle();
+
+        if (userByEmail) {
+          data = userByEmail;
+          // Sincroniza auth_user_id se necessário
+          if (data.id !== authUser.id) {
+            try {
+              await supabase.from('users').update({ auth_user_id: authUser.id }).eq('id', data.id);
+            } catch (e) {}
+          }
+        }
       }
 
-      const finalProfile = {
+      const appMeta = authUser.app_metadata || {};
+      const userMeta = authUser.user_metadata || {};
+
+      const tenantId = data?.tenant_id || (data as any)?.empresa_id || appMeta.tenant_id || userMeta.tenant_id || '';
+
+      const finalProfile: Usuario = {
         id: data?.id || authUser.id,
-        nome: data?.nome || (authUser.user_metadata?.nome || authUser.email?.split('@')[0] || 'Usuário'),
+        nome: data?.nome || userMeta.nome || userMeta.full_name || authUser.email?.split('@')[0] || 'Usuário',
         email: data?.email || authUser.email || '',
-        nivel: (data?.nivel || authUser.app_metadata?.nivel || authUser.user_metadata?.nivel || 'funcionario') as NivelAcesso,
-        modulos_permitidos: data?.modulos_permitidos || authUser.app_metadata?.modulos_permitidos || ['*'],
-        tenant_id: data?.tenant_id || authUser.app_metadata?.tenant_id || authUser.user_metadata?.tenant_id,
+        nivel: (data?.nivel || appMeta.nivel || userMeta.nivel || 'funcionario') as NivelAcesso,
+        modulos_permitidos: data?.modulos_permitidos || appMeta.modulos_permitidos || ['*'],
+        tenant_id: tenantId,
       };
 
       try {

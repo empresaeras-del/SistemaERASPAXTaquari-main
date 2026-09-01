@@ -1251,8 +1251,8 @@ export const ConfiguracoesPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4">{usuario.email}</td>
                       <td className="px-6 py-4 text-slate-400 truncate max-w-[150px]">
-                        {empresas.find((e) => e?.id === usuario?.tenant_id)
-                          ?.nome_fantasia || "Desconhecida"}
+                        {empresas.find((e) => e?.id === usuario?.tenant_id || e?.nome_fantasia?.toLowerCase() === usuario?.tenant_id?.toLowerCase() || e?.razao_social?.toLowerCase() === usuario?.tenant_id?.toLowerCase())
+                          ?.nome_fantasia || usuario?.tenant_id || "Desconhecida"}
                       </td>
                       <td className="px-6 py-4 capitalize">{usuario.nivel}</td>
                       <td className="px-6 py-4">
@@ -1523,20 +1523,19 @@ export const ConfiguracoesPage: React.FC = () => {
                             tenant_id: e.target.value,
                           })
                         }
-                        disabled={state.user?.nivel === 'admin'}
-                        className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all disabled:opacity-50"
+                        className="w-full px-4 py-2.5 bg-[#101223] border border-[#262A45] rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-[#7E4CF3]/50 focus:border-[#7E4CF3] transition-all"
                       >
+                        <option className="bg-[#101223]" value="" disabled>
+                          Selecione a Empresa...
+                        </option>
                         {state.user?.nivel === 'super_admin' && (
                           <option className="bg-[#101223]" value="all">Todas as Empresas (Acesso Global)</option>
                         )}
-                        {empresas
-                          .filter(e => state.user?.nivel === 'super_admin' || e.id === state.user?.tenant_id)
-                          .map(e => (
-                            <option className="bg-[#101223]" key={e.id} value={e.id}>
-                              {e.nome_fantasia}
-                            </option>
-                          ))
-                        }
+                        {empresas.map((e) => (
+                          <option className="bg-[#101223]" key={e.id} value={e.id}>
+                            {e.nome_fantasia || e.razao_social}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   )}

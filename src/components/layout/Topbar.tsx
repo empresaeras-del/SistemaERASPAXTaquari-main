@@ -72,10 +72,25 @@ export const Topbar: React.FC = () => {
 
   useEffect(() => {
     if (empresas.length > 0 && !state.empresaSelecionada) {
-      if (state.user?.nivel === 'super_admin') { dispatch({ type: 'SET_EMPRESA', payload: 'all' }); return; }
+      if (state.user?.tenant_id) {
+        const empUser = empresas.find(
+          (e) =>
+            e.id === state.user?.tenant_id ||
+            e.nome_fantasia?.toLowerCase() === state.user?.tenant_id?.toLowerCase() ||
+            e.razao_social?.toLowerCase() === state.user?.tenant_id?.toLowerCase()
+        );
+        if (empUser) {
+          dispatch({ type: 'SET_EMPRESA', payload: empUser.id });
+          return;
+        }
+      }
+      if (state.user?.nivel === 'super_admin') {
+        dispatch({ type: 'SET_EMPRESA', payload: 'all' });
+        return;
+      }
       dispatch({ type: 'SET_EMPRESA', payload: empresas[0].id });
     }
-  }, [empresas, state.empresaSelecionada, dispatch]);
+  }, [empresas, state.empresaSelecionada, state.user, dispatch]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -101,8 +116,8 @@ export const Topbar: React.FC = () => {
 
   const isAnySyncing = isQueueSyncing || isPriming;
 
-  const currentEmpresa = empresas.find(e => e.id === state.empresaSelecionada)
-    || empresas.find(e => e.id === state.user?.tenant_id)
+  const currentEmpresa = empresas.find(e => e.id === state.empresaSelecionada || e.nome_fantasia?.toLowerCase() === state.empresaSelecionada?.toLowerCase() || e.razao_social?.toLowerCase() === state.empresaSelecionada?.toLowerCase())
+    || empresas.find(e => e.id === state.user?.tenant_id || e.nome_fantasia?.toLowerCase() === state.user?.tenant_id?.toLowerCase() || e.razao_social?.toLowerCase() === state.user?.tenant_id?.toLowerCase())
     || (empresas.length === 1 ? empresas[0] : null);
 
   return (
