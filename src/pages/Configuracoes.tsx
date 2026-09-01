@@ -511,10 +511,9 @@ export const ConfiguracoesPage: React.FC = () => {
           <Users className="w-4 h-4" />
           Usuários e Acessos
         </button>
-        {(state.user?.nivel === 'admin' || state.user?.nivel === 'super_admin') && (
-          <>
-            <button
-              onClick={() => setActiveTab("sistema")}
+        {state.user?.nivel === 'super_admin' && (
+          <button
+            onClick={() => setActiveTab("sistema")}
             className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
               activeTab === "sistema"
                 ? "border-[#7E4CF3] text-[#7E4CF3]"
@@ -524,7 +523,8 @@ export const ConfiguracoesPage: React.FC = () => {
             <Database className="w-4 h-4" />
             Sistema / Backup
           </button>
-          
+        )}
+        {(state.user?.nivel === 'admin' || state.user?.nivel === 'super_admin') && (
           <button
             onClick={() => setActiveTab("mensagens")}
             className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
@@ -536,13 +536,16 @@ export const ConfiguracoesPage: React.FC = () => {
             <MessageCircle className="w-4 h-4" />
             Mensagens e Templates
           </button>
-          </>
         )}
       </div>
 
       <div className="flex gap-6 flex-1 min-h-0">
       {activeTab === "empresas" && (
-        <div className={`bg-[#181B34] border border-[#262A45] rounded-2xl overflow-hidden shadow-sm flex-1 flex flex-col ${previewEmpresa ? 'hidden lg:flex' : 'flex'}`}>
+        <div className="flex-1 flex flex-col gap-6 min-h-0">
+          {/* Card de Segurança de Sessão — visível na aba Empresas */}
+          <SessaoSegurancaCard />
+
+          <div className={`bg-[#181B34] border border-[#262A45] rounded-2xl overflow-hidden shadow-sm flex flex-col ${previewEmpresa ? 'hidden lg:flex' : 'flex'}`}>
           <div className="p-4 border-b border-[#262A45] bg-[#101223]/50 flex items-center gap-2">
             <Building className="w-5 h-5 text-slate-400" />
             <h3 className="font-semibold text-white">
@@ -642,9 +645,9 @@ export const ConfiguracoesPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          </div>
         </div>
       )}
-
 
       {previewEmpresa && activeTab === "empresas" && (
         <div className="w-full lg:w-[400px] xl:w-[450px] shrink-0 bg-[#181B34] border border-[#262A45] rounded-2xl flex flex-col shadow-sm overflow-hidden">
@@ -1354,10 +1357,15 @@ export const ConfiguracoesPage: React.FC = () => {
         </div>
       )}
 
-      {activeTab === "sistema" && (
+      {activeTab === "sistema" && state.user?.nivel === 'super_admin' && (
         <div className="flex-1 flex flex-col gap-6 overflow-y-auto">
-          <SessaoSegurancaCard />
-          <SistemaBackupPanel />
+          <SistemaBackupPanel
+            empresas={empresas}
+            isSuperAdmin={state.user?.nivel === 'super_admin'}
+            usuarioEmpresaId={state.user?.tenant_id || state.empresaSelecionada || ''}
+            usuarioNome={state.user?.nome}
+            usuarioId={state.user?.id}
+          />
         </div>
       )}
 

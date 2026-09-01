@@ -8,16 +8,17 @@ import {
   Folder, 
   Clock, 
   CheckCircle, 
-  FileText, 
   RefreshCw, 
   ShieldCheck, 
   ListOrdered, 
   ChevronDown, 
   ChevronUp, 
   CheckCircle2, 
-  XCircle,
   FileCheck,
-  AlertCircle
+  AlertCircle,
+  Building2,
+  Filter,
+  Info
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../../context/ConfirmContext';
@@ -30,23 +31,45 @@ import {
   restaurarBackup, 
   AnaliseBackup 
 } from '../../services/backupService';
+import { Empresa } from '../../services/empresasService';
 
-export const SistemaBackupPanel = () => {
+interface SistemaBackupPanelProps {
+  empresas: Empresa[];
+  isSuperAdmin: boolean;
+  usuarioEmpresaId: string;
+  usuarioNome?: string;
+  usuarioId?: string;
+}
+
+export const SistemaBackupPanel: React.FC<SistemaBackupPanelProps> = ({
+  empresas,
+  isSuperAdmin,
+  usuarioEmpresaId,
+  usuarioNome,
+  usuarioId
+}) => {
   const { state } = useAppContext();
   const toast = useToast();
   const { confirm } = useConfirm();
 
-  // Estados do Backup Manual
+  // ─── Empresa selecionada para backup ───────────────────────────────────────
+  // super_admin pode escolher; demais usuários ficam fixos na própria empresa
+  const [empresaBackupId, setEmpresaBackupId] = useState<string>(
+    isSuperAdmin ? '' : usuarioEmpresaId
+  );
+  const empresaBackupSelecionada = empresas.find(e => e.id === empresaBackupId);
+
+  // ─── Estados do Backup Manual ──────────────────────────────────────────────
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ tabela: string; atual: number; total: number } | null>(null);
 
-  // Estados do Backup Programado
+  // ─── Estados do Backup Programado (chave por empresa) ─────────────────────
   const [hasFolder, setHasFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [backupTime, setBackupTime] = useState('');
   const [isScheduled, setIsScheduled] = useState(false);
 
-  // Estados da Importação / Restauração
+  // ─── Estados da Importação / Restauração ──────────────────────────────────
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [backupFile, setBackupFile] = useState<File | null>(null);
   const [analise, setAnalise] = useState<AnaliseBackup | null>(null);
@@ -55,97 +78,102 @@ export const SistemaBackupPanel = () => {
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreProgress, setRestoreProgress] = useState<{ tabela: string; atual: number; total: number; status: string } | null>(null);
   const [resultadoRestauracao, setResultadoRestauracao] = useState<{ sucesso: boolean; tabelas: number; registros: number; erros: string[] } | null>(null);
+  // empresa alvo da restauração (super_admin pode redirecionar)
+  const [empresaRestauracaoId, setEmpresaRestauracaoId] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Chave do localStorage/IDB por empresa para o backup automático
+  const backupTimeKey = `backup_time_${empresaBackupId || 'global'}`;
+  const folderHandleKey = `backup_folder_handle_${empresaBackupId || 'global'}`;
+
+  // Carrega config de backup programado quando a empresa selecionada mudar
   useEffect(() => {
     const loadConfig = async () => {
-      const handle = await get('backup_folder_handle');
+      setHasFolder(false);
+      setFolderName('');
+      setIsScheduled(false);
+      setBackupTime('');
+
+      const handle = await get(folderHandleKey);
       if (handle) {
         setHasFolder(true);
         setFolderName(handle.name);
       }
-      const time = localStorage.getItem('backup_time');
+      const time = localStorage.getItem(backupTimeKey);
       if (time) {
         setBackupTime(time);
         setIsScheduled(true);
       }
     };
     loadConfig();
-  }, []);
+  }, [empresaBackupId]);
 
-  // Seleção de pasta para backup automático
+  // Inicializa empresa alvo da restauração quando analise carrega
+  useEffect(() => {
+    if (analise?.valido) {
+      // Pré-preenche com a empresa do arquivo, ou a empresa do usuário
+      setEmpresaRestauracaoId(analise.empresa_id || usuarioEmpresaId || '');
+    }
+  }, [analise]);
+
+  // ─── Backup Automático ─────────────────────────────────────────────────────
   const handleSelectFolder = async () => {
     try {
       if (window.self !== window.top) {
-        toast.error('Para selecionar uma pasta, você precisa abrir o sistema em uma nova aba (fora do modo de visualização).', 5000);
+        toast.error('Para selecionar uma pasta, abra o sistema em uma nova aba (fora do modo de visualização).', 5000);
         return;
       }
-      
       if (!('showDirectoryPicker' in window)) {
         toast.error('Seu navegador não suporta a seleção de pastas (File System Access API).');
         return;
       }
-      
-      const directoryHandle = await (window as any).showDirectoryPicker({
-        mode: 'readwrite'
-      });
-      
-      await set('backup_folder_handle', directoryHandle);
+      const directoryHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+      await set(folderHandleKey, directoryHandle);
       setHasFolder(true);
       setFolderName(directoryHandle.name);
       toast.success('Pasta selecionada com sucesso!');
     } catch (error: any) {
       if (error.name !== 'AbortError') {
-        console.error('Erro ao selecionar pasta:', error);
         toast.error('Erro ao selecionar pasta de backup.');
       }
     }
   };
 
   const handleSaveSchedule = () => {
-    if (!hasFolder) {
-      toast.error('Selecione uma pasta primeiro.');
-      return;
-    }
-    if (!backupTime) {
-      toast.error('Defina um horário para o backup.');
-      return;
-    }
-    
-    localStorage.setItem('backup_time', backupTime);
+    if (!hasFolder) { toast.error('Selecione uma pasta primeiro.'); return; }
+    if (!backupTime) { toast.error('Defina um horário para o backup.'); return; }
+    localStorage.setItem(backupTimeKey, backupTime);
     setIsScheduled(true);
-    toast.success('Backup programado salvo com sucesso!');
+    toast.success(`Backup programado para ${empresaBackupSelecionada?.nome_fantasia || 'empresa'} às ${backupTime}.`);
   };
 
   const handleDisableSchedule = () => {
-    localStorage.removeItem('backup_time');
+    localStorage.removeItem(backupTimeKey);
     setIsScheduled(false);
     setBackupTime('');
     toast.success('Backup programado desativado.');
   };
 
-  // Geração de Backup Manual
+  // ─── Backup Manual ─────────────────────────────────────────────────────────
   const handleBackup = async () => {
-    if (!state.user || (state.user.nivel !== 'admin' && state.user.nivel !== 'super_admin')) {
-      toast.error('Permissão negada. Somente usuários administradores podem gerar backups.');
-      return;
-    }
-
     try {
       setIsExporting(true);
       setExportProgress({ tabela: 'Iniciando...', atual: 0, total: TABELAS_SISTEMA.length });
 
+      const filtrarPorEmpresa = !!empresaBackupId;
+
       const { jsonString, fileName, backupData } = await gerarBackupCompleto({
         isOnline: state.isOnline,
-        usuarioNome: state.user?.nome || 'Administrador',
-        usuarioId: state.user?.id,
-        empresaId: state.empresaSelecionada || undefined,
+        usuarioNome: usuarioNome || state.user?.nome || 'Administrador',
+        usuarioId: usuarioId || state.user?.id,
+        empresaId: empresaBackupId || undefined,
+        empresaNome: empresaBackupSelecionada?.nome_fantasia || undefined,
+        filtrarPorEmpresa,
         onProgress: (tabelaLabel, atual, total) => {
           setExportProgress({ tabela: tabelaLabel, atual, total });
         }
       });
 
-      // Dispara o download do arquivo .json
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -156,7 +184,10 @@ export const SistemaBackupPanel = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success(`Backup concluído! ${backupData.resumo.registros_total} registros salvos de ${backupData.resumo.tabelas_total} tabelas.`);
+      const descricaoEmpresa = filtrarPorEmpresa
+        ? `da empresa "${empresaBackupSelecionada?.nome_fantasia || empresaBackupId}"`
+        : 'completo (todas as empresas)';
+      toast.success(`Backup ${descricaoEmpresa} concluído! ${backupData.resumo.registros_total} registros salvos.`);
     } catch (error) {
       console.error('Erro ao gerar backup:', error);
       toast.error('Ocorreu um erro ao gerar o arquivo de backup.');
@@ -166,11 +197,10 @@ export const SistemaBackupPanel = () => {
     }
   };
 
-  // Processamento do Arquivo de Backup para Importação
+  // ─── Importação / Restauração ──────────────────────────────────────────────
   const processarArquivoBackup = (file: File) => {
     setBackupFile(file);
     setResultadoRestauracao(null);
-
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target?.result as string;
@@ -182,27 +212,25 @@ export const SistemaBackupPanel = () => {
         toast.success(`Backup validado: ${res.registros_total} registros encontrados.`);
       }
     };
-    reader.onerror = () => {
-      toast.error('Erro ao ler o arquivo selecionado.');
-    };
+    reader.onerror = () => toast.error('Erro ao ler o arquivo selecionado.');
     reader.readAsText(file);
   };
 
-  // Executar Restauração de Backup
   const handleExecutarRestauracao = () => {
     if (!analise || !analise.valido) {
       toast.error('Selecione um arquivo de backup válido primeiro.');
       return;
     }
 
-    if (!state.user || (state.user.nivel !== 'admin' && state.user.nivel !== 'super_admin')) {
-      toast.error('Permissão negada. Somente usuários administradores podem restaurar backups.');
-      return;
-    }
+    const empresaAlvo = empresaRestauracaoId || undefined;
+    const nomeEmpresaAlvo = empresas.find(e => e.id === empresaAlvo)?.nome_fantasia || empresaAlvo || 'todas as empresas';
+    const totalFiltrado = empresaAlvo
+      ? `dados da empresa "${nomeEmpresaAlvo}"`
+      : `${analise.registros_total} registros de ${analise.tabelas_total} tabelas`;
 
     confirm({
       title: 'Restaurar Dados do Backup?',
-      message: `Atenção: Você está prestes a restaurar ${analise.registros_total} registros em ${analise.tabelas_total} tabelas. Esta ação atualizará os dados do sistema. Deseja continuar?`,
+      message: `Você está prestes a restaurar ${totalFiltrado}. Esta ação atualizará os dados correspondentes no sistema. Deseja continuar?`,
       confirmText: 'Sim, Iniciar Restauração',
       cancelText: 'Cancelar',
       danger: true,
@@ -216,8 +244,9 @@ export const SistemaBackupPanel = () => {
             analise,
             isOnline: state.isOnline,
             modo: modoRestauracao,
-            usuarioId: state.user?.id,
-            empresaId: state.empresaSelecionada || undefined,
+            usuarioId: usuarioId || state.user?.id,
+            empresaId: usuarioEmpresaId || undefined,
+            empresaAlvo,
             onProgress: (tabelaLabel, progresso, totalTabelas, status) => {
               setRestoreProgress({ tabela: tabelaLabel, atual: progresso, total: totalTabelas, status });
             }
@@ -231,12 +260,11 @@ export const SistemaBackupPanel = () => {
           });
 
           if (resultado.sucesso) {
-            toast.success(`Restauração concluída com sucesso! ${resultado.registrosRestaurados} registros restaurados.`);
+            toast.success(`Restauração concluída! ${resultado.registrosRestaurados} registros restaurados.`);
           } else {
-            toast.error(`Restauração finalizada com alguns avisos. Verifique o relatório.`);
+            toast.error('Restauração finalizada com alguns avisos. Verifique o relatório.');
           }
         } catch (err: any) {
-          console.error('Erro na restauração:', err);
           toast.error(`Falha ao restaurar backup: ${err.message || 'Erro desconhecido'}`);
         } finally {
           setIsRestoring(false);
@@ -250,31 +278,91 @@ export const SistemaBackupPanel = () => {
     setBackupFile(null);
     setAnalise(null);
     setResultadoRestauracao(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    setEmpresaRestauracaoId(usuarioEmpresaId || '');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  // ─── Helper: nome da empresa de backup selecionada ────────────────────────
+  const labelEmpresaBackup = empresaBackupSelecionada?.nome_fantasia
+    || (empresaBackupId === '' ? 'Todas as empresas' : empresaBackupId);
 
   return (
     <div className="bg-[#181B34] border border-[#262A45] rounded-2xl overflow-hidden shadow-sm flex-1 flex flex-col p-6 max-w-5xl mx-auto w-full mt-6 space-y-8">
-      {/* Header */}
+      
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-[#262A45] pb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-[#3B82F6]/10 flex items-center justify-center text-[#3B82F6]">
             <Database className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Sistema & Backup</h2>
-            <p className="text-sm text-slate-400">Gerenciamento completo, exportação e restauração de dados de todas as tabelas.</p>
+            <h2 className="text-xl font-bold text-white">Sistema &amp; Backup</h2>
+            <p className="text-sm text-slate-400">Gerenciamento completo, exportação e restauração de dados por empresa.</p>
           </div>
         </div>
         <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 bg-[#101223] px-3 py-1.5 rounded-lg border border-[#262A45]">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>28 Tabelas Mapeadas</span>
+          <span>{TABELAS_SISTEMA.length} Tabelas Mapeadas</span>
         </div>
       </div>
 
-      {/* Warning & Info Box */}
+      {/* ── Seletor de Empresa (filtro global do painel) ────────────────────── */}
+      <div className="bg-[#101223] border border-[#3B82F6]/30 rounded-xl p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-8 h-8 rounded-lg bg-[#3B82F6]/10 flex items-center justify-center text-[#3B82F6]">
+            <Filter className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-white">Escopo do Backup</h3>
+            <p className="text-xs text-slate-400">Define a empresa cujos dados serão incluídos no backup e na restauração.</p>
+          </div>
+        </div>
+
+        {isSuperAdmin ? (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+              <select
+                value={empresaBackupId}
+                onChange={e => setEmpresaBackupId(e.target.value)}
+                className="flex-1 sm:w-72 px-3 py-2 bg-[#181B34] border border-[#262A45] rounded-xl text-sm text-white focus:outline-none focus:border-[#3B82F6] transition-colors"
+              >
+                <option value="">🌐 Todas as empresas (Backup Global)</option>
+                {empresas.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    🏢 {emp.nome_fantasia || emp.razao_social}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
+              empresaBackupId
+                ? 'bg-[#3B82F6]/10 border-[#3B82F6]/30 text-[#3B82F6]'
+                : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+            }`}>
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                {empresaBackupId
+                  ? `Backup filtrado: ${empresaBackupSelecionada?.nome_fantasia}`
+                  : 'Backup global: inclui dados de todas as empresas'}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 p-3 bg-[#181B34] rounded-xl border border-[#262A45]">
+            <Building2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-white">
+                {empresaBackupSelecionada?.nome_fantasia || 'Minha Empresa'}
+              </p>
+              <p className="text-xs text-slate-400">O backup será realizado somente com os dados desta empresa.</p>
+            </div>
+            <CheckCircle className="w-5 h-5 text-emerald-400 ml-auto shrink-0" />
+          </div>
+        )}
+      </div>
+
+      {/* ── Info de Escopo ─────────────────────────────────────────────────── */}
       <div className="bg-[#101223] border border-[#262A45] rounded-xl p-5">
         <div className="flex gap-4 items-start">
           <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/20 shrink-0">
@@ -283,12 +371,19 @@ export const SistemaBackupPanel = () => {
           <div className="space-y-2">
             <h3 className="text-white font-semibold">Segurança e Escopo de Backups</h3>
             <p className="text-sm text-slate-400 text-justify">
-              O arquivo de backup gerado contém a estrutura completa de todas as tabelas do sistema (empresas, usuários, planos, associados, dependentes, contratos, financeiro, caixas, atendimentos, requisições e documentos). Guarde o arquivo JSON em local seguro.
+              {empresaBackupId
+                ? `O backup será gerado somente com os dados da empresa "${empresaBackupSelecionada?.nome_fantasia}". Tabelas globais (tenants, usuários) incluem apenas registros vinculados a esta empresa.`
+                : 'O arquivo de backup gerado contém a estrutura completa de todas as tabelas do sistema de todas as empresas. Guarde o arquivo JSON em local seguro.'
+              }
             </p>
             <div className="text-xs text-slate-400 bg-[#0A0B16] p-2.5 rounded-lg border border-[#262A45] flex flex-wrap gap-1.5 items-center">
               <strong className="text-white mr-1">Tabelas abrangidas ({TABELAS_SISTEMA.length}):</strong>
               {TABELAS_SISTEMA.map(t => (
-                <span key={t.nome} className="bg-[#181B34] text-slate-300 px-2 py-0.5 rounded border border-[#262A45] text-[11px]">
+                <span key={t.nome} className={`px-2 py-0.5 rounded border text-[11px] ${
+                  t.colunaTenant && empresaBackupId
+                    ? 'bg-[#3B82F6]/10 text-blue-300 border-[#3B82F6]/20'
+                    : 'bg-[#181B34] text-slate-300 border-[#262A45]'
+                }`}>
                   {t.label}
                 </span>
               ))}
@@ -297,18 +392,29 @@ export const SistemaBackupPanel = () => {
         </div>
       </div>
 
-      {/* Grid: Backup Manual e Backup Automático */}
+      {/* ── Grid: Backup Manual e Backup Automático ─────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Manual Backup Card */}
+
+        {/* Card: Backup Manual */}
         <div className="bg-[#101223] border border-[#262A45] rounded-xl p-6 flex flex-col justify-between">
           <div>
             <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
               <DownloadCloud className="w-5 h-5 text-[#3B82F6]" />
-              Backup Manual Completo
+              Backup Manual
             </h3>
-            <p className="text-sm text-slate-400 mb-4">
-              Gera e baixa um arquivo estruturado <code className="text-[#3B82F6] font-mono">.JSON</code> com todos os registros de todas as tabelas do sistema.
+            <p className="text-sm text-slate-400 mb-1">
+              Gera e baixa um arquivo <code className="text-[#3B82F6] font-mono">.JSON</code> com os registros
+              {empresaBackupId
+                ? <> da empresa <strong className="text-white">{empresaBackupSelecionada?.nome_fantasia}</strong>.</>
+                : <> de <strong className="text-white">todas as empresas</strong>.</>
+              }
             </p>
+            {empresaBackupId && (
+              <div className="flex items-center gap-1.5 text-xs text-[#3B82F6] bg-[#3B82F6]/10 border border-[#3B82F6]/20 rounded-lg px-2.5 py-1.5 mt-2">
+                <Filter className="w-3.5 h-3.5 shrink-0" />
+                <span>Filtrado por empresa: {empresaBackupSelecionada?.nome_fantasia}</span>
+              </div>
+            )}
           </div>
 
           {exportProgress && (
@@ -318,46 +424,56 @@ export const SistemaBackupPanel = () => {
                 <span>{exportProgress.atual} de {exportProgress.total} tabelas</span>
               </div>
               <div className="w-full bg-[#101223] h-2 rounded-full overflow-hidden border border-[#262A45]">
-                <div 
+                <div
                   className="bg-gradient-to-r from-[#3B82F6] to-emerald-400 h-full transition-all duration-200"
                   style={{ width: `${(exportProgress.atual / exportProgress.total) * 100}%` }}
                 />
               </div>
             </div>
           )}
-          
+
           <button
             onClick={handleBackup}
             disabled={isExporting || isRestoring}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] hover:opacity-90 text-white rounded-xl font-medium transition-all shadow-lg shadow-[#3B82F6]/25 disabled:opacity-50 mt-4"
           >
             {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <DownloadCloud className="w-5 h-5" />}
-            {isExporting ? 'Compilando Todas as Tabelas...' : 'Gerar Backup Completo (.JSON)'}
+            {isExporting
+              ? 'Compilando tabelas...'
+              : empresaBackupId
+                ? `Gerar Backup — ${empresaBackupSelecionada?.nome_fantasia || 'Empresa'}`
+                : 'Gerar Backup Completo (.JSON)'
+            }
           </button>
         </div>
 
-        {/* Scheduled Backup Card */}
+        {/* Card: Backup Automático */}
         <div className="bg-[#101223] border border-[#262A45] rounded-xl p-6 flex flex-col justify-between">
           <div>
             <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
               <Clock className="w-5 h-5 text-emerald-400" />
               Backup Automático Programado
             </h3>
-            
+
+            {empresaBackupId && (
+              <div className="mb-3 flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-lg px-2.5 py-1.5">
+                <Building2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Configurado para: <strong>{empresaBackupSelecionada?.nome_fantasia}</strong></span>
+              </div>
+            )}
+
             {window.self !== window.top && (
               <div className="mb-4 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs p-3 rounded-lg flex gap-2 items-start text-justify">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  Para configurar a pasta local de backup automático, abra o sistema em uma <strong>nova aba</strong> do navegador.
-                </span>
+                <span>Para configurar a pasta local de backup automático, abra o sistema em uma <strong>nova aba</strong> do navegador.</span>
               </div>
             )}
-            
+
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">1. Pasta de Destino</label>
                 <div className="flex items-center gap-2">
-                  <button 
+                  <button
                     onClick={handleSelectFolder}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#181B34] border border-[#262A45] text-white rounded-xl hover:bg-[#262A45] transition-colors text-sm"
                   >
@@ -375,10 +491,10 @@ export const SistemaBackupPanel = () => {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">2. Horário Diário</label>
-                <input 
-                  type="time" 
+                <input
+                  type="time"
                   value={backupTime}
-                  onChange={(e) => setBackupTime(e.target.value)}
+                  onChange={e => setBackupTime(e.target.value)}
                   className="w-full px-4 py-2 bg-[#181B34] border border-[#262A45] rounded-xl text-white focus:outline-none focus:border-[#3B82F6] transition-colors text-sm"
                 />
               </div>
@@ -404,14 +520,14 @@ export const SistemaBackupPanel = () => {
             </div>
             {isScheduled && (
               <p className="text-xs text-emerald-400 mt-2 text-center">
-                Backup diário ativo às {backupTime}.
+                Backup diário ativo às {backupTime} — {labelEmpresaBackup}.
               </p>
             )}
           </div>
         </div>
       </div>
 
-      {/* SEÇÃO: IMPORTAÇÃO E RESTAURAÇÃO DE BACKUP */}
+      {/* ── SEÇÃO: IMPORTAÇÃO E RESTAURAÇÃO DE BACKUP ───────────────────────── */}
       <div className="bg-[#101223] border border-[#262A45] rounded-2xl p-6 space-y-6">
         <div className="flex items-center justify-between border-b border-[#262A45] pb-4">
           <div className="flex items-center gap-3">
@@ -420,20 +536,17 @@ export const SistemaBackupPanel = () => {
             </div>
             <div>
               <h3 className="text-lg font-bold text-white">Importação e Restauração de Backup</h3>
-              <p className="text-xs text-slate-400">Carregue um arquivo JSON gerado pelo sistema para restaurar todos os registros de todas as tabelas.</p>
+              <p className="text-xs text-slate-400">Carregue um arquivo JSON gerado pelo sistema para restaurar os registros de uma empresa.</p>
             </div>
           </div>
         </div>
 
-        {/* Dropzone de Arquivo de Backup */}
+        {/* Dropzone */}
         {!backupFile ? (
           <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDraggingFile(true);
-            }}
+            onDragOver={e => { e.preventDefault(); setIsDraggingFile(true); }}
             onDragLeave={() => setIsDraggingFile(false)}
-            onDrop={(e) => {
+            onDrop={e => {
               e.preventDefault();
               setIsDraggingFile(false);
               const file = e.dataTransfer.files?.[0];
@@ -446,8 +559,8 @@ export const SistemaBackupPanel = () => {
               }
             }}
             className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center transition-all ${
-              isDraggingFile 
-                ? 'border-purple-500 bg-purple-500/10 scale-[1.01]' 
+              isDraggingFile
+                ? 'border-purple-500 bg-purple-500/10 scale-[1.01]'
                 : 'border-[#262A45] hover:border-purple-500/50 bg-[#181B34]/60'
             }`}
           >
@@ -457,17 +570,12 @@ export const SistemaBackupPanel = () => {
               id="upload-backup-file"
               className="hidden"
               accept=".json,application/json"
-              onChange={(e) => {
+              onChange={e => {
                 const file = e.target.files?.[0];
-                if (file) {
-                  processarArquivoBackup(file);
-                }
+                if (file) processarArquivoBackup(file);
               }}
             />
-            <label
-              htmlFor="upload-backup-file"
-              className="cursor-pointer flex flex-col items-center group w-full"
-            >
+            <label htmlFor="upload-backup-file" className="cursor-pointer flex flex-col items-center group w-full">
               <div className="w-14 h-14 bg-[#101223] group-hover:bg-purple-500/10 rounded-2xl flex items-center justify-center mb-3 transition-colors">
                 <UploadCloud className="w-7 h-7 text-purple-400 group-hover:scale-110 transition-transform" />
               </div>
@@ -475,12 +583,11 @@ export const SistemaBackupPanel = () => {
                 Clique para selecionar o arquivo de backup ou arraste o arquivo aqui
               </p>
               <p className="text-xs text-slate-400 text-center">
-                Suporta backups completos no formato <code className="text-purple-400 font-mono">.JSON</code>
+                Suporta backups no formato <code className="text-purple-400 font-mono">.JSON</code>
               </p>
             </label>
           </div>
         ) : (
-          /* Card de Análise e Confirmação de Restauração */
           <div className="space-y-5">
             <div className="bg-[#181B34] border border-[#262A45] rounded-xl p-5 space-y-4">
               <div className="flex items-center justify-between">
@@ -507,11 +614,12 @@ export const SistemaBackupPanel = () => {
 
               {analise && analise.valido ? (
                 <div className="space-y-4 pt-3 border-t border-[#262A45]">
-                  {/* Grid de Metadados do Backup */}
+
+                  {/* Metadados do backup */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="bg-[#101223] p-3 rounded-xl border border-[#262A45]">
                       <p className="text-[10px] text-slate-400 uppercase font-semibold">Sistema / Versão</p>
-                      <p className="text-sm font-bold text-white">{analise.sistema} (v{analise.versao})</p>
+                      <p className="text-sm font-bold text-white">{analise.sistema || 'ERAS ERP'} (v{analise.versao || '2.0'})</p>
                     </div>
                     <div className="bg-[#101223] p-3 rounded-xl border border-[#262A45]">
                       <p className="text-[10px] text-slate-400 uppercase font-semibold">Data do Backup</p>
@@ -520,7 +628,7 @@ export const SistemaBackupPanel = () => {
                       </p>
                     </div>
                     <div className="bg-[#101223] p-3 rounded-xl border border-[#262A45]">
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold">Tabelas Identificadas</p>
+                      <p className="text-[10px] text-slate-400 uppercase font-semibold">Tabelas com Dados</p>
                       <p className="text-sm font-bold text-emerald-400">{analise.tabelas_total} tabelas</p>
                     </div>
                     <div className="bg-[#101223] p-3 rounded-xl border border-[#262A45]">
@@ -529,7 +637,71 @@ export const SistemaBackupPanel = () => {
                     </div>
                   </div>
 
-                  {/* Toggle para visualizar contagem por tabela */}
+                  {/* Origem do backup (empresa) */}
+                  <div className={`flex items-center gap-3 p-3 rounded-xl border text-sm ${
+                    analise.empresa_id
+                      ? 'bg-[#3B82F6]/10 border-[#3B82F6]/30 text-[#3B82F6]'
+                      : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                  }`}>
+                    <Building2 className="w-4 h-4 shrink-0" />
+                    <div className="flex-1">
+                      {analise.empresa_id ? (
+                        <>
+                          <span className="font-semibold">Backup de empresa específica: </span>
+                          <span>{empresas.find(e => e.id === analise.empresa_id)?.nome_fantasia || analise.empresa_id}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-semibold">Backup global </span>
+                          <span>— contém dados de todas as empresas.</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Seletor de empresa alvo da restauração */}
+                  <div className="bg-[#101223] p-4 rounded-xl border border-[#262A45] space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-purple-400" />
+                      <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Empresa Alvo da Restauração</p>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Somente os registros com <code className="text-purple-400">tenant_id</code> correspondente à empresa selecionada serão restaurados, protegendo os dados das demais empresas.
+                    </p>
+
+                    {isSuperAdmin ? (
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                        <select
+                          value={empresaRestauracaoId}
+                          onChange={e => setEmpresaRestauracaoId(e.target.value)}
+                          disabled={isRestoring}
+                          className="w-full sm:w-80 px-3 py-2 bg-[#181B34] border border-[#262A45] rounded-xl text-sm text-white focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50"
+                        >
+                          <option value="">🌐 Restaurar para todas as empresas</option>
+                          {empresas.map(emp => (
+                            <option key={emp.id} value={emp.id}>
+                              🏢 {emp.nome_fantasia || emp.razao_social}
+                            </option>
+                          ))}
+                        </select>
+                        {empresaRestauracaoId && (
+                          <span className="text-xs text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1.5 rounded-lg">
+                            Filtrado: {empresas.find(e => e.id === empresaRestauracaoId)?.nome_fantasia}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 p-3 bg-[#181B34] rounded-xl border border-[#262A45]">
+                        <Building2 className="w-4 h-4 text-emerald-400" />
+                        <p className="text-sm text-white font-medium">
+                          {empresas.find(e => e.id === usuarioEmpresaId)?.nome_fantasia || 'Minha Empresa'}
+                        </p>
+                        <CheckCircle className="w-4 h-4 text-emerald-400 ml-auto" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Detalhamento por tabela */}
                   <div className="bg-[#101223] rounded-xl border border-[#262A45] overflow-hidden">
                     <button
                       type="button"
@@ -538,7 +710,7 @@ export const SistemaBackupPanel = () => {
                     >
                       <span className="flex items-center gap-2">
                         <ListOrdered className="w-4 h-4 text-[#3B82F6]" />
-                        Detalhamento de registros por tabela ({analise.tabelas_total} com dados)
+                        Detalhamento por tabela ({analise.tabelas_total} com dados)
                       </span>
                       {showTabelasDetalhes ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
@@ -548,11 +720,11 @@ export const SistemaBackupPanel = () => {
                         {TABELAS_SISTEMA.map(tab => {
                           const count = analise.dadosNormalizados[tab.nome]?.length || 0;
                           return (
-                            <div 
-                              key={tab.nome} 
+                            <div
+                              key={tab.nome}
                               className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs ${
-                                count > 0 
-                                  ? 'bg-[#181B34] border-emerald-500/30 text-slate-200' 
+                                count > 0
+                                  ? 'bg-[#181B34] border-emerald-500/30 text-slate-200'
                                   : 'bg-[#14172B] border-[#262A45] text-slate-500 opacity-60'
                               }`}
                             >
@@ -569,20 +741,20 @@ export const SistemaBackupPanel = () => {
                     )}
                   </div>
 
-                  {/* Opção de Modo de Restauração */}
+                  {/* Modo de Restauração */}
                   <div className="bg-[#101223] p-4 rounded-xl border border-[#262A45] space-y-2">
                     <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Modo de Restauração</p>
                     <label className="flex items-center gap-3 cursor-pointer text-sm text-slate-300 hover:text-white transition-colors">
-                      <input 
-                        type="radio" 
-                        name="modoRestauracao" 
-                        value="upsert" 
+                      <input
+                        type="radio"
+                        name="modoRestauracao"
+                        value="upsert"
                         checked={modoRestauracao === 'upsert'}
                         onChange={() => setModoRestauracao('upsert')}
                         className="accent-[#3B82F6] w-4 h-4"
                       />
                       <span>
-                        <strong className="text-white">Mesclar e Atualizar Registros (Recomendado):</strong> Insere novos registros e atualiza registros existentes sem apagar dados atuais não presentes no backup.
+                        <strong className="text-white">Mesclar e Atualizar (Recomendado):</strong> Insere novos registros e atualiza existentes sem apagar dados atuais não presentes no backup.
                       </span>
                     </label>
                   </div>
@@ -601,12 +773,12 @@ export const SistemaBackupPanel = () => {
                 <div className="flex justify-between text-xs text-slate-300">
                   <span className="flex items-center gap-2">
                     <Loader2 className="w-3.5 h-3.5 text-purple-400 animate-spin" />
-                    <span>Restaurando tabela: <strong className="text-white">{restoreProgress.tabela}</strong></span>
+                    <span>Restaurando: <strong className="text-white">{restoreProgress.tabela}</strong></span>
                   </span>
                   <span className="font-mono text-purple-400">{restoreProgress.atual} de {restoreProgress.total}</span>
                 </div>
                 <div className="w-full bg-[#101223] h-2.5 rounded-full overflow-hidden border border-[#262A45]">
-                  <div 
+                  <div
                     className="bg-gradient-to-r from-purple-500 to-[#3B82F6] h-full transition-all duration-300"
                     style={{ width: `${(restoreProgress.atual / restoreProgress.total) * 100}%` }}
                   />
@@ -615,34 +787,35 @@ export const SistemaBackupPanel = () => {
               </div>
             )}
 
-            {/* Resultado Final da Restauração */}
+            {/* Resultado Final */}
             {resultadoRestauracao && (
               <div className={`p-4 rounded-xl border space-y-2 animate-in fade-in ${
-                resultadoRestauracao.sucesso 
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
+                resultadoRestauracao.sucesso
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
                   : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
               }`}>
                 <div className="flex items-center gap-2 font-semibold text-sm">
-                  {resultadoRestauracao.sucesso ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <AlertTriangle className="w-5 h-5 text-amber-400" />}
+                  {resultadoRestauracao.sucesso
+                    ? <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    : <AlertTriangle className="w-5 h-5 text-amber-400" />
+                  }
                   <span>
                     {resultadoRestauracao.sucesso ? 'Restauração Concluída com Sucesso!' : 'Restauração Concluída com Avisos'}
                   </span>
                 </div>
                 <p className="text-xs">
-                  Foram restaurados com sucesso <strong>{resultadoRestauracao.registros} registros</strong> em <strong>{resultadoRestauracao.tabelas} tabelas</strong> do sistema.
+                  Foram restaurados <strong>{resultadoRestauracao.registros} registros</strong> em <strong>{resultadoRestauracao.tabelas} tabelas</strong>.
                 </p>
                 {resultadoRestauracao.erros.length > 0 && (
                   <div className="pt-2 text-xs text-rose-400 space-y-1">
                     <p className="font-semibold">Ocorrências:</p>
-                    {resultadoRestauracao.erros.map((err, i) => (
-                      <p key={i}>• {err}</p>
-                    ))}
+                    {resultadoRestauracao.erros.map((err, i) => <p key={i}>• {err}</p>)}
                   </div>
                 )}
               </div>
             )}
 
-            {/* Botão de Ação: Executar Restauração */}
+            {/* Botões de Ação */}
             {analise && analise.valido && !resultadoRestauracao && (
               <div className="flex justify-end gap-3 pt-2">
                 <button
