@@ -228,6 +228,23 @@ export const MODULOS_SISTEMA: ModuloInfo[] = [
         paths: ['/documentos']
       }
     ]
+  },
+  {
+    id: 'tutorial',
+    label: 'Tutorial & Guia do Sistema',
+    descricao: 'Guia completo de orientação, manuais operacionais, passo a passo e FAQ',
+    categoria: 'Orientação & Treinamento',
+    iconName: 'GraduationCap',
+    paths: ['/tutorial'],
+    subModulos: [
+      {
+        id: 'tutorial_guia',
+        label: 'Guia Interativo & Manuais',
+        descricao: 'Acesso a todos os manuais operacionais e tutoriais passo a passo do sistema',
+        tipo: 'operacional',
+        paths: ['/tutorial']
+      }
+    ]
   }
 ];
 
@@ -249,25 +266,25 @@ export const PERFIS_PERMISSAO_PRESETS: PerfilPermissaoPreset[] = [
     id: 'atendimento_vendas',
     nome: 'Atendimento & Adesões PAX',
     descricao: 'Associados, atendimentos, contratos, planos e emissão de guias',
-    modulos: ['dashboard', 'dashboard_metricas', 'associados', 'associados_lista', 'associados_atendimentos', 'associados_contratos', 'associados_requisicoes', 'planos', 'planos_gestao']
+    modulos: ['dashboard', 'dashboard_metricas', 'associados', 'associados_lista', 'associados_atendimentos', 'associados_contratos', 'associados_requisicoes', 'planos', 'planos_gestao', 'tutorial', 'tutorial_guia']
   },
   {
     id: 'financeiro_caixas',
     nome: 'Operador Financeiro & Caixa',
     descricao: 'Contas a receber, contas a pagar, movimentação de caixas e faturamento',
-    modulos: ['dashboard', 'dashboard_metricas', 'financeiro', 'financeiro_receber', 'financeiro_pagar', 'financeiro_caixas', 'credenciados', 'credenciados_faturamentos']
+    modulos: ['dashboard', 'dashboard_metricas', 'financeiro', 'financeiro_receber', 'financeiro_pagar', 'financeiro_caixas', 'credenciados', 'credenciados_faturamentos', 'tutorial', 'tutorial_guia']
   },
   {
     id: 'funeraria_estoque',
     nome: 'Operações Funerárias & Estoque',
     descricao: 'Atendimentos, itens funerários, urnas e fornecedores',
-    modulos: ['dashboard', 'dashboard_metricas', 'associados', 'associados_atendimentos', 'itens_funerarios', 'itens_estoque', 'administracao', 'administracao_fornecedores']
+    modulos: ['dashboard', 'dashboard_metricas', 'associados', 'associados_atendimentos', 'itens_funerarios', 'itens_estoque', 'administracao', 'administracao_fornecedores', 'tutorial', 'tutorial_guia']
   },
   {
     id: 'convenios_saude',
     nome: 'Gestão de Convênios & Rede Credenciada',
     descricao: 'Prestadores, procedimentos, exames, guias e faturamento',
-    modulos: ['dashboard', 'dashboard_metricas', 'associados', 'associados_requisicoes', 'credenciados', 'credenciados_prestadores', 'credenciados_procedimentos', 'credenciados_faturamentos']
+    modulos: ['dashboard', 'dashboard_metricas', 'associados', 'associados_requisicoes', 'credenciados', 'credenciados_prestadores', 'credenciados_procedimentos', 'credenciados_faturamentos', 'tutorial', 'tutorial_guia']
   }
 ];
 
@@ -320,11 +337,16 @@ export const hasModuleAccess = (
   // Super Admin tem acesso irrestrito a todos os módulos
   if (user.nivel === 'super_admin') return true;
 
-  const permitidos = user.modulos_permitidos || [];
-  if (permitidos.includes('*')) return true;
-
   // 1. Limpa parâmetros de URL ou hashes caso seja uma rota
   const cleanPath = moduleIdOrPath.split('?')[0].split('#')[0];
+
+  // O Módulo de Tutorial é de orientação geral e é sempre liberado para qualquer usuário autenticado
+  if (cleanPath === '/tutorial' || moduleIdOrPath === 'tutorial' || moduleIdOrPath === 'tutorial_guia') {
+    return true;
+  }
+
+  const permitidos = user.modulos_permitidos || [];
+  if (permitidos.includes('*')) return true;
 
   // 2. Se for uma verificação por ROTA / PATH (ex: '/financeiro/contas-a-pagar', '/associados', '/requisicoes'):
   // Primeiro verificamos se esta rota pertence a um SUB-MÓDULO mapeado

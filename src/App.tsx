@@ -43,6 +43,7 @@ const FaturamentosPage = lazy(() => import('./pages/FaturamentosPage').then(m =>
 const FornecedoresPage = lazy(() => import('./pages/FornecedoresPage').then(m => ({ default: m.FornecedoresPage })));
 const CaixasPage = lazy(() => import('./pages/CaixasPage').then(m => ({ default: m.CaixasPage })));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
+const TutorialPage = lazy(() => import('./pages/TutorialPage').then(m => ({ default: m.TutorialPage })));
 
 export default function App() {
   return (
@@ -87,6 +88,7 @@ export default function App() {
                         <Route path="auditoria" element={<AuditoriaPage />} />
                         <Route path="documentos" element={<DocumentosPadroesPage />} />
                         <Route path="configuracoes" element={<ConfiguracoesPage />} />
+                        <Route path="tutorial" element={<TutorialPage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                       </Route>
                     </Route>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useFinanceiroAlerts } from '../../hooks/useFinanceiroAlerts';
-import { LayoutDashboard, Users, DollarSign, Settings, ShieldAlert, Package, Building2, ChevronLeft, ChevronRight, ChevronDown, Info, GripVertical, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Users, DollarSign, Settings, ShieldAlert, Package, Building2, ChevronLeft, ChevronRight, ChevronDown, Info, GripVertical, Briefcase, GraduationCap } from 'lucide-react';
 import { getFromIDB, saveToIDB } from '../../lib/idb';
 import { useAppContext } from '../../context/AppContext';
 import { hasModuleAccess } from '../../utils/permissions';
@@ -67,6 +67,7 @@ const defaultNavItems: NavItem[] = [
       { label: 'Documentos Padrões', path: '/documentos' },
     ]
   },
+  { id: 'tutorial', icon: GraduationCap, label: 'Tutorial & Guia', path: '/tutorial' },
 ];
 
 interface SidebarProps {

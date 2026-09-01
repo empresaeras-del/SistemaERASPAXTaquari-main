@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, 
   Layers, 
@@ -16,7 +17,9 @@ import {
   Copy, 
   Search, 
   Calendar,
-  Building2
+  Building2,
+  GraduationCap,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppContext } from '../../context/AppContext';
@@ -47,9 +50,15 @@ export interface AniversarianteItem {
 
 export const WelcomeModal = () => {
   const { state } = useAppContext();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'operacao' | 'aniversariantes'>('operacao');
+
+  const handleAbrirTutorial = () => {
+    setIsOpen(false);
+    navigate('/tutorial');
+  };
   
   const [caixaStatus, setCaixaStatus] = useState<any>(null);
   const [receberHoje, setReceberHoje] = useState<ParcelaReceber[]>([]);
@@ -294,6 +303,15 @@ export const WelcomeModal = () => {
             <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-purple-600/5 to-transparent pointer-events-none" />
             
             <button
+              onClick={handleAbrirTutorial}
+              className="absolute left-4 top-4 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all z-20 shadow-sm"
+              title="Abrir Tutorial do Sistema"
+            >
+              <GraduationCap className="w-4 h-4 text-blue-500" />
+              <span className="hidden sm:inline">Tutorial & Guia</span>
+            </button>
+
+            <button
               onClick={() => setIsOpen(false)}
               className="absolute right-4 top-4 p-2 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors z-20"
               title="Fechar"
@@ -376,6 +394,35 @@ export const WelcomeModal = () => {
               </div>
             ) : activeTab === 'operacao' ? (
               <div className="space-y-4">
+                {/* Banner de Acesso ao Novo Módulo de Tutorial Completo */}
+                <div 
+                  onClick={handleAbrirTutorial}
+                  className="cursor-pointer p-4 rounded-2xl bg-gradient-to-r from-blue-600/15 via-indigo-600/10 to-violet-600/15 border border-blue-500/30 hover:border-blue-500/60 transition-all flex items-center justify-between group shadow-sm"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                      <GraduationCap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-text-base flex items-center gap-1.5">
+                          Tutorial & Guia do Sistema
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white uppercase tracking-wider shadow-sm">
+                            NOVO
+                          </span>
+                        </h4>
+                      </div>
+                      <p className="text-xs text-text-subtle mt-0.5">
+                        Aprenda o passo a passo de associados, contratos, óbitos, guias, caixas e faturamento.
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 group-hover:translate-x-1 transition-transform flex items-center gap-1 shrink-0 ml-2">
+                    Abrir Guia <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+
                 {/* Banner de Aniversariantes do Mês */}
                 {aniversariantes.length > 0 && (
                   <div 
@@ -688,7 +735,17 @@ export const WelcomeModal = () => {
               )}
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap sm:flex-nowrap">
+              <button 
+                type="button"
+                onClick={handleAbrirTutorial}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/25 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95"
+                title="Abrir Central de Tutorial e Treinamento do Sistema"
+              >
+                <GraduationCap className="w-4 h-4 text-blue-500" />
+                <span>Tutorial Completo</span>
+              </button>
+
               <button 
                 type="button"
                 onClick={() => setIsOpen(false)}
