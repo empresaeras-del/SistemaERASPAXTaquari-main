@@ -308,6 +308,9 @@ export const getParentModuleId = (subModuleId: string): string | null => {
 
 /**
  * Verifica se um usuário possui acesso a um módulo, sub-módulo específico ou rota.
+ * Regra estrita: Para rotas e submódulos específicos, o sub.id DEVE estar explicitamente
+ * na lista de modulos_permitidos (ou o usuário ser super_admin / ter '*').
+ * O fato de o módulo pai estar presente NÃO concede acesso a submódulos não marcados.
  */
 export const hasModuleAccess = (
   user: Usuario | null | undefined,
@@ -320,37 +323,17 @@ export const hasModuleAccess = (
   const permitidos = user.modulos_permitidos || [];
   if (permitidos.includes('*')) return true;
 
-  // 1. Verificação direta se o ID do módulo ou sub-módulo está explicitamente na lista
-  if (permitidos.includes(moduleIdOrPath)) return true;
-
-  // 2. Se moduleIdOrPath for um módulo principal (ex: 'associados'):
-  // Se o módulo principal estiver na lista OU qualquer um de seus sub-módulos estiver permitido
-  const parentMod = MODULOS_SISTEMA.find(m => m.id === moduleIdOrPath);
-  if (parentMod) {
-    if (permitidos.includes(parentMod.id)) return true;
-    if (parentMod.subModulos.some(s => permitidos.includes(s.id))) return true;
-  }
-
-  // 3. Se moduleIdOrPath for um sub-módulo (ex: 'associados_lista'):
-  // Se o sub-módulo estiver na lista OU o módulo pai completo estiver na lista
-  for (const m of MODULOS_SISTEMA) {
-    const sub = m.subModulos.find(s => s.id === moduleIdOrPath);
-    if (sub) {
-      if (permitidos.includes(sub.id) || permitidos.includes(m.id)) {
-        return true;
-      }
-    }
-  }
-
-  // 4. Verificação por rota / path (ex: '/associados', '/financeiro/contas-a-receber', '/caixas')
+  // 1. Limpa parâmetros de URL ou hashes caso seja uma rota
   const cleanPath = moduleIdOrPath.split('?')[0].split('#')[0];
 
-  // Busca se há algum sub-módulo associado a este path
+  // 2. Se for uma verificação por ROTA / PATH (ex: '/financeiro/contas-a-pagar', '/associados', '/requisicoes'):
+  // Primeiro verificamos se esta rota pertence a um SUB-MÓDULO mapeado
+  let matchedSubModulo: SubModuloInfo | null = null;
+
   for (const m of MODULOS_SISTEMA) {
     for (const sub of m.subModulos) {
       const match = sub.paths.some(p => {
         if (p === '/') return cleanPath === '/';
-        // Suporta rotas com parâmetros como :id
         if (p.includes(':')) {
           const regex = new RegExp('^' + p.replace(/:[a-zA-Z0-9_]+/g, '[^/]+') + '$');
           return regex.test(cleanPath);
@@ -359,25 +342,50 @@ export const hasModuleAccess = (
       });
 
       if (match) {
-        // Tem acesso se o sub-módulo está permitido OU se o módulo pai completo está permitido
-        if (permitidos.includes(sub.id) || permitidos.includes(m.id)) {
-          return true;
-        }
+        matchedSubModulo = sub;
+        break;
       }
     }
+    if (matchedSubModulo) break;
+  }
 
-    // Se nenhum sub-módulo específico bateu, verifica o path do módulo principal
+  // Se a rota pertence a um sub-módulo específico:
+  // O usuário DEVE ter o ID do sub-módulo explicitamente permitido!
+  if (matchedSubModulo) {
+    return permitidos.includes(matchedSubModulo.id);
+  }
+
+  // Se a rota não pertence a nenhum sub-módulo específico, mas é uma rota genérica do módulo pai (ex: '/financeiro'):
+  for (const m of MODULOS_SISTEMA) {
     const parentMatch = m.paths.some(p => {
       if (p === '/') return cleanPath === '/';
       return cleanPath === p || cleanPath.startsWith(p + '/');
     });
 
-    if (parentMatch && permitidos.includes(m.id)) {
-      return true;
+    if (parentMatch) {
+      // Tem acesso à rota genérica se tiver o módulo pai OU qualquer um de seus submódulos
+      return permitidos.includes(m.id) || m.subModulos.some(s => permitidos.includes(s.id));
     }
   }
 
-  return false;
+  // 3. Se moduleIdOrPath for um ID de SUB-MÓDULO direto (ex: 'financeiro_pagar', 'associados_lista'):
+  for (const m of MODULOS_SISTEMA) {
+    const sub = m.subModulos.find(s => s.id === moduleIdOrPath);
+    if (sub) {
+      // Checa estritamente se o sub.id está na lista de permitidos
+      return permitidos.includes(sub.id);
+    }
+  }
+
+  // 4. Se moduleIdOrPath for um ID de MÓDULO PAI direto (ex: 'financeiro', 'associados', 'credenciados'):
+  const parentMod = MODULOS_SISTEMA.find(m => m.id === moduleIdOrPath);
+  if (parentMod) {
+    // O módulo pai é permitido se o pai estiver na lista OU qualquer um de seus submódulos estiver ativo
+    return permitidos.includes(parentMod.id) || parentMod.subModulos.some(s => permitidos.includes(s.id));
+  }
+
+  // 5. Fallback para comparação direta
+  return permitidos.includes(moduleIdOrPath);
 };
 
 /**
