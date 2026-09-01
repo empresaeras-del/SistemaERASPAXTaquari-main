@@ -6,6 +6,7 @@ import { useAppContext } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { VisualizadorDocumentoModal } from './VisualizadorDocumentoModal';
+import { CarteirinhaAssociadoModal } from './CarteirinhaAssociadoModal';
 import { downloadDocumento, isPdfDocument, isImageDocument } from '../../utils/documentUtils';
 
 interface Props {
@@ -19,6 +20,8 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
   const { state } = useAppContext();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [documentoVisualizando, setDocumentoVisualizando] = useState<DocumentoAssociado | null>(null);
+  const [carteirinhaModalOpen, setCarteirinhaModalOpen] = useState(false);
+  const [selectedBeneficiarioId, setSelectedBeneficiarioId] = useState<string | undefined>(undefined);
 
   const copiarTexto = async (texto: string, label: string, id: string) => {
     try {
@@ -235,7 +238,17 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
             </div>
           </div>
           <div className="flex items-center gap-2">
-            
+            <button
+              onClick={() => {
+                setSelectedBeneficiarioId(undefined);
+                setCarteirinhaModalOpen(true);
+              }}
+              title="Emitir Carteirinha do Associado e Dependentes"
+              className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-amber-500 hover:from-blue-500 hover:via-indigo-500 hover:to-amber-400 text-white rounded-xl shadow-md shadow-blue-500/20 font-medium text-xs transition-all hover:scale-[1.02]"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>Carteirinha</span>
+            </button>
             <button
               onClick={handlePrint}
               title="Imprimir Ficha"
@@ -343,10 +356,24 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
 
           {/* PLANO & CONTRATO */}
           <div className="bg-bg-surface p-5 rounded-2xl border border-border-default/60 space-y-4">
-            <h3 className="text-xs font-bold text-[#3B82F6] uppercase tracking-wider flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4" />
-              <span>Plano & Contrato</span>
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-[#3B82F6] uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Plano & Contrato</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedBeneficiarioId('titular');
+                  setCarteirinhaModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 text-xs text-[#3B82F6] hover:text-blue-400 font-semibold transition-colors"
+                title="Emitir Carteirinha do Titular"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Emitir Carteirinha</span>
+              </button>
+            </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-bg-subtle p-3 rounded-xl border border-border-default">
@@ -368,25 +395,54 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
 
           {/* DEPENDENTES */}
           <div className="bg-bg-surface p-5 rounded-2xl border border-border-default/60 space-y-4">
-            <h3 className="text-xs font-bold text-[#3B82F6] uppercase tracking-wider flex items-center gap-1.5">
-              <Heart className="w-4 h-4" />
-              <span>Dependentes ({associado.dependentes?.length || 0})</span>
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-[#3B82F6] uppercase tracking-wider flex items-center gap-1.5">
+                <Heart className="w-4 h-4" />
+                <span>Dependentes ({associado.dependentes?.length || 0})</span>
+              </h3>
+              {associado.dependentes && associado.dependentes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedBeneficiarioId(associado.dependentes[0]?.id);
+                    setCarteirinhaModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+                  title="Emitir Carteirinhas dos Dependentes"
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>Carteirinhas Dependentes</span>
+                </button>
+              )}
+            </div>
             
             {associado.dependentes && associado.dependentes.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {associado.dependentes.map(dep => (
-                  <div key={dep.id} className="flex items-center justify-between p-3 bg-bg-subtle border border-border-default rounded-xl">
+                  <div key={dep.id} className="flex items-center justify-between p-3 bg-bg-subtle border border-border-default rounded-xl hover:border-indigo-500/40 transition-colors">
                     <div>
                       <p className="text-sm font-semibold text-text-base">{dep.nome}</p>
                       <p className="text-xs text-text-subtle">{dep.parentesco} {dep.cpf ? `• CPF: ${dep.cpf}` : ''}</p>
                     </div>
-                    {dep.data_nascimento && (
-                      <div className="text-right">
-                         <p className="text-[10px] text-text-subtle uppercase">Nascimento</p>
-                         <p className="text-xs font-medium text-text-base">{formatLocalDate(dep.data_nascimento)}</p>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {dep.data_nascimento && (
+                        <div className="text-right mr-1">
+                           <p className="text-[10px] text-text-subtle uppercase">Nascimento</p>
+                           <p className="text-xs font-medium text-text-base">{formatLocalDate(dep.data_nascimento)}</p>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedBeneficiarioId(dep.id);
+                          setCarteirinhaModalOpen(true);
+                        }}
+                        title={`Emitir Carteirinha de ${dep.nome}`}
+                        className="p-1.5 text-text-subtle hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors border border-transparent hover:border-indigo-500/20"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -500,6 +556,16 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
         <VisualizadorDocumentoModal
           documento={documentoVisualizando}
           onClose={() => setDocumentoVisualizando(null)}
+        />
+      )}
+
+      {/* Modal de Carteirinha de Beneficiário */}
+      {carteirinhaModalOpen && (
+        <CarteirinhaAssociadoModal
+          isOpen={carteirinhaModalOpen}
+          onClose={() => setCarteirinhaModalOpen(false)}
+          associado={associado}
+          initialBeneficiarioId={selectedBeneficiarioId}
         />
       )}
     </div>
