@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Wifi, WifiOff, Bell, User, Building, Maximize, Minimize, Sun, Moon } from 'lucide-react';
+import { Wifi, WifiOff, Bell, User, Building, Building2, Lock, Maximize, Minimize, Sun, Moon, ChevronDown } from 'lucide-react';
 import { getEmpresas, Empresa } from '../../services/empresasService';
 import { NotificationCenter } from './NotificationCenter';
 import { useNotifications } from '../../hooks/useNotifications';
@@ -101,26 +101,48 @@ export const Topbar: React.FC = () => {
       <div className="flex items-center gap-4">
         {/* Company Selector */}
         <div className="flex items-center gap-2">
-          <Building className="w-5 h-5 text-text-subtle" />
-          
-          <select
-            value={state.empresaSelecionada || ''}
-            onChange={(e) => dispatch({ type: 'SET_EMPRESA', payload: e.target.value })}
-            className="bg-transparent text-sm font-semibold text-text-base focus:outline-none focus:ring-0 border-none cursor-pointer p-0 pr-6 appearance-none hover:text-text-base transition-colors"
-          >
-            {empresas.length === 0 ? (
-              <option value="" disabled className="bg-bg-surface">Carregando...</option>
-            ) : (
-              <>
-                {state.user?.nivel === 'super_admin' && <option value="all" className="bg-bg-surface">Todas as Empresas</option>}
-                {empresas.map((empresa) => (
-                  <option key={empresa.id} value={empresa.id} className="bg-bg-surface">
-                    {empresa.nome_fantasia}
-                  </option>
-                ))}
-              </>
-            )}
-          </select>
+          {state.user?.nivel === 'super_admin' ? (
+            // Super-admin: seletor interativo completo
+            <>
+              <Building className="w-5 h-5 text-text-subtle" />
+              <div className="relative">
+                <select
+                  value={state.empresaSelecionada || ''}
+                  onChange={(e) => dispatch({ type: 'SET_EMPRESA', payload: e.target.value })}
+                  className="bg-transparent text-sm font-semibold text-text-base focus:outline-none focus:ring-0 border-none cursor-pointer p-0 pr-6 appearance-none hover:text-text-base transition-colors"
+                >
+                  {empresas.length === 0 ? (
+                    <option value="" disabled className="bg-bg-surface">Carregando...</option>
+                  ) : (
+                    <>
+                      <option value="all" className="bg-bg-surface">Todas as Empresas</option>
+                      {empresas.map((empresa) => (
+                        <option key={empresa.id} value={empresa.id} className="bg-bg-surface">
+                          {empresa.nome_fantasia}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
+                <ChevronDown className="w-3 h-3 text-text-subtle absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </>
+          ) : (
+            // Usuário comum: badge somente leitura — sem possibilidade de troca
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 bg-bg-subtle border border-border-default rounded-xl cursor-default select-none"
+              title="Você está vinculado a esta empresa. Somente o Super Admin pode alterar."
+            >
+              <Building2 className="w-4 h-4 text-[#3B82F6] shrink-0" />
+              <span className="text-sm font-semibold text-text-base max-w-[180px] truncate">
+                {empresas.find(e => e.id === state.empresaSelecionada)?.nome_fantasia
+                  || empresas.find(e => e.id === state.user?.tenant_id)?.nome_fantasia
+                  || state.user?.tenant_id
+                  || 'Carregando...'}
+              </span>
+              <Lock className="w-3.5 h-3.5 text-text-subtle shrink-0" />
+            </div>
+          )}
         </div>
       </div>
 

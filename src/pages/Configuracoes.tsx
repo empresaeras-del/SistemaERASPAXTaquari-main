@@ -59,6 +59,7 @@ import {
 import { SistemaBackupPanel } from '../components/configuracoes/SistemaBackupPanel';
 import { MensagensConfigTab } from '../components/configuracoes/MensagensConfigTab';
 import { SessaoSegurancaCard } from '../components/configuracoes/SessaoSegurancaCard';
+import { OrganogramaCanvas } from '../components/configuracoes/OrganogramaCanvas';
 export const ConfiguracoesPage: React.FC = () => {
   const { state } = useAppContext();
   const toast = useToast();
@@ -92,6 +93,7 @@ export const ConfiguracoesPage: React.FC = () => {
     "todos" | "ativo" | "inativo"
   >("todos");
   const [usuarioTenantFilter, setUsuarioTenantFilter] = useState<string>("all");
+  const [usuarioSubTab, setUsuarioSubTab] = useState<'lista' | 'organograma'>('lista');
 
   const [initialEmpresaJson, setInitialEmpresaJson] = useState<string>('');
   const [initialUsuarioJson, setInitialUsuarioJson] = useState<string>('');
@@ -1116,21 +1118,50 @@ export const ConfiguracoesPage: React.FC = () => {
 
       {activeTab === "usuarios" && (
         <div className={`bg-[#181B34] border border-[#262A45] rounded-2xl overflow-hidden shadow-sm flex-1 flex flex-col ${previewUsuario ? 'hidden lg:flex' : 'flex'}`}>
-          <div className="p-4 border-b border-[#262A45] bg-[#101223]/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-slate-400" />
-              <h3 className="font-semibold text-white">
-                Usuários do Sistema
-              </h3>
+          {/* Header com subtabs */}
+          <div className="p-4 border-b border-[#262A45] bg-[#101223]/50 flex flex-col gap-3">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-slate-400" />
+                <h3 className="font-semibold text-white">Usuários do Sistema</h3>
+              </div>
+              {/* Subtabs: Lista / Organograma */}
+              <div className="flex items-center gap-1 bg-[#0D0F20] p-1 rounded-xl border border-[#262A45]">
+                <button
+                  onClick={() => setUsuarioSubTab('lista')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    usuarioSubTab === 'lista'
+                      ? 'bg-[#7E4CF3] text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Lista
+                </button>
+                <button
+                  onClick={() => setUsuarioSubTab('organograma')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    usuarioSubTab === 'organograma'
+                      ? 'bg-[#7E4CF3] text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  Organograma
+                </button>
+              </div>
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-              <div className="relative w-full sm:w-64">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar usuário..."
-                  value={usuarioSearchTerm}
-                  onChange={(e) => setUsuarioSearchTerm(e.target.value)}
+
+            {/* Filtros — só visíveis na lista */}
+            {usuarioSubTab === 'lista' && (
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar usuário..."
+                    value={usuarioSearchTerm}
+                    onChange={(e) => setUsuarioSearchTerm(e.target.value)}
                   className="w-full bg-[#101223] border border-[#262A45] rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-[#7E4CF3]"
                 />
               </div>
@@ -1160,8 +1191,22 @@ export const ConfiguracoesPage: React.FC = () => {
                 </select>
               </div>
             </div>
-          </div>
+          )}
+        </div>
 
+        {/* Vista Organograma */}
+          {usuarioSubTab === 'organograma' && (
+            <div className="p-6 flex-1 overflow-auto">
+              <OrganogramaCanvas
+                usuarios={usuarios}
+                tenantId={state.user?.nivel === 'super_admin' ? usuarioTenantFilter : (state.empresaSelecionada || state.user?.tenant_id || null)}
+                isSuperAdmin={state.user?.nivel === 'super_admin'}
+              />
+            </div>
+          )}
+
+          {/* Vista Lista */}
+          {usuarioSubTab === 'lista' && (
           <div className="overflow-x-auto flex-1">
             <table className="w-full text-left text-sm text-slate-300">
               <thead className="bg-[#101223]/30 border-b border-[#262A45]">
@@ -1266,6 +1311,7 @@ export const ConfiguracoesPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
 
