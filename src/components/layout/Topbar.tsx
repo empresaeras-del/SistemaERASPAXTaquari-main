@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Wifi, WifiOff, Bell, User, Building, Building2, Lock, Maximize, Minimize, Sun, Moon, ChevronDown } from 'lucide-react';
-import { getEmpresas, Empresa } from '../../services/empresasService';
+import { getEmpresas, getEmpresaById, Empresa } from '../../services/empresasService';
 import { NotificationCenter } from './NotificationCenter';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
@@ -57,13 +57,18 @@ export const Topbar: React.FC = () => {
     const loadEmpresas = async () => {
       try {
         const data = await getEmpresas(state.isOnline);
-        setEmpresas(data);
+        if (data && data.length > 0) {
+          setEmpresas(data);
+        } else if (state.user?.tenant_id) {
+          const emp = await getEmpresaById(state.user.tenant_id, state.isOnline);
+          if (emp) setEmpresas([emp]);
+        }
       } catch (error) {
         console.error('Failed to load empresas', error);
       }
     };
     loadEmpresas();
-  }, [state.isOnline]);
+  }, [state.isOnline, state.user?.tenant_id]);
 
   useEffect(() => {
     if (empresas.length > 0 && !state.empresaSelecionada) {
@@ -96,6 +101,10 @@ export const Topbar: React.FC = () => {
 
   const isAnySyncing = isQueueSyncing || isPriming;
 
+  const currentEmpresa = empresas.find(e => e.id === state.empresaSelecionada)
+    || empresas.find(e => e.id === state.user?.tenant_id)
+    || (empresas.length === 1 ? empresas[0] : null);
+
   return (
     <header className="h-16 bg-bg-base/80 backdrop-blur-xl border-b border-border-default flex items-center justify-between px-6 shrink-0 z-50 sticky top-0">
       <div className="flex items-center gap-4">
@@ -103,8 +112,16 @@ export const Topbar: React.FC = () => {
         <div className="flex items-center gap-2">
           {state.user?.nivel === 'super_admin' ? (
             // Super-admin: seletor interativo completo
-            <>
-              <Building className="w-5 h-5 text-text-subtle" />
+            <div className="flex items-center gap-2.5">
+              {currentEmpresa?.logo_url ? (
+                <img
+                  src={currentEmpresa.logo_url}
+                  alt={currentEmpresa.nome_fantasia || 'Logo da Empresa'}
+                  className="h-7 max-w-[100px] object-contain rounded shrink-0 drop-shadow-sm"
+                />
+              ) : (
+                <Building className="w-5 h-5 text-text-subtle shrink-0" />
+              )}
               <div className="relative">
                 <select
                   value={state.empresaSelecionada || ''}
@@ -126,17 +143,24 @@ export const Topbar: React.FC = () => {
                 </select>
                 <ChevronDown className="w-3 h-3 text-text-subtle absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
-            </>
+            </div>
           ) : (
-            // Usuário comum: badge somente leitura — sem possibilidade de troca
+            // Usuário comum: badge somente leitura — com logo da empresa
             <div
-              className="flex items-center gap-2 px-3 py-1.5 bg-bg-subtle border border-border-default rounded-xl cursor-default select-none"
+              className="flex items-center gap-2.5 px-3 py-1.5 bg-bg-subtle border border-border-default rounded-xl cursor-default select-none shadow-sm"
               title="Você está vinculado a esta empresa. Somente o Super Admin pode alterar."
             >
-              <Building2 className="w-4 h-4 text-[#3B82F6] shrink-0" />
-              <span className="text-sm font-semibold text-text-base max-w-[180px] truncate">
-                {empresas.find(e => e.id === state.empresaSelecionada)?.nome_fantasia
-                  || empresas.find(e => e.id === state.user?.tenant_id)?.nome_fantasia
+              {currentEmpresa?.logo_url ? (
+                <img
+                  src={currentEmpresa.logo_url}
+                  alt={currentEmpresa.nome_fantasia || 'Logo da Empresa'}
+                  className="h-7 max-w-[110px] object-contain rounded shrink-0 drop-shadow-sm"
+                />
+              ) : (
+                <Building2 className="w-4 h-4 text-[#3B82F6] shrink-0" />
+              )}
+              <span className="text-sm font-semibold text-text-base max-w-[220px] truncate">
+                {currentEmpresa?.nome_fantasia
                   || state.user?.tenant_id
                   || 'Carregando...'}
               </span>

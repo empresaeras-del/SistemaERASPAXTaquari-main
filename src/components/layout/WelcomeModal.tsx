@@ -735,29 +735,11 @@ export const WelcomeModal = () => {
               )}
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap sm:flex-nowrap">
-              <button 
-                type="button"
-                onClick={handleAbrirTutorial}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/25 rounded-xl font-semibold text-sm shadow-sm transition-all active:scale-95"
-                title="Abrir Central de Tutorial e Treinamento do Sistema"
-              >
-                <GraduationCap className="w-4 h-4 text-blue-500" />
-                <span>Tutorial Completo</span>
-              </button>
-
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
               <button 
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="px-4 py-2 text-sm text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl font-medium transition-colors"
-              >
-                Fechar
-              </button>
-
-              <button 
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/25 transition-all active:scale-95"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/25 transition-all active:scale-95"
               >
                 <span>Iniciar Operação</span>
                 <ArrowRight className="w-4 h-4" />
