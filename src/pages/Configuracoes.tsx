@@ -371,8 +371,8 @@ export const ConfiguracoesPage: React.FC = () => {
         toast.error("Você não tem permissão para cadastrar novos usuários.");
         return;
       }
-      if (state.user?.nivel === 'admin' && (editingUsuario.nivel === 'super_admin' || editingUsuario.nivel === 'admin')) {
-        toast.error("Administradores só podem criar usuários de nível Gerente ou Funcionário.");
+      if (state.user?.nivel === 'admin' && editingUsuario.nivel === 'super_admin') {
+        toast.error("Administradores não podem criar usuários de nível Super Admin.");
         return;
       }
       if (!senhaUsuario || senhaUsuario.trim().length < 6) {

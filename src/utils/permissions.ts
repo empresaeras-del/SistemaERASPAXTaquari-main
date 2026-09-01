@@ -564,19 +564,19 @@ export const canEditUser = (
     return true;
   }
   if (currentUser.nivel === 'admin') {
-    // Admin NÃO pode editar outros Admins nem Super Admins
-    if (targetUser.nivel === 'super_admin' || targetUser.nivel === 'admin') {
+    // Admin NÃO pode editar Super Admin
+    if (targetUser.nivel === 'super_admin') {
       return false;
     }
-    // Admin só pode editar gerentes e funcionários do seu próprio tenant
-    return currentUser.tenant_id === targetUser.tenant_id;
+    // Admin pode gerenciar Admin, Gerente e Funcionário
+    return true;
   }
   return false;
 };
 
 /**
  * Regra: Permitir ao respectivo usuário a edição da senha atual registrada.
- * Permitir ao usuário Super Admin realizar a alteração de senha de qualquer usuário independente do nível.
+ * Permitir ao usuário Super Admin e Admin realizar a alteração de senha dos usuários subordinados/mesmo nível.
  */
 export const canChangeUserPassword = (
   currentUser: Usuario | null | undefined,
@@ -589,15 +589,15 @@ export const canChangeUserPassword = (
   if (currentUser.nivel === 'super_admin') return true;
   // O próprio usuário pode alterar sua própria senha
   if (targetUser.id && currentUser.id === targetUser.id) return true;
-  // Admin pode alterar senha de usuários subordinados pertencentes à sua empresa
-  if (currentUser.nivel === 'admin' && targetUser.nivel !== 'super_admin' && targetUser.nivel !== 'admin') {
+  // Admin pode alterar senha de usuários (Admin, Gerente e Funcionário), exceto Super Admin
+  if (currentUser.nivel === 'admin' && targetUser.nivel !== 'super_admin') {
     return true;
   }
   return false;
 };
 
 /**
- * Regra: Permitir somente ao usuário Super Admin excluir usuários do mesmo nível (Super Admin e Admin).
+ * Regra: Permitir ao Super Admin e Admin excluir usuários (Admin não pode excluir Super Admin nem a si mesmo).
  */
 export const canDeleteUser = (
   currentUser: Usuario | null | undefined,
@@ -614,18 +614,19 @@ export const canDeleteUser = (
     return true;
   }
   if (currentUser.nivel === 'admin') {
-    if (targetUser.nivel === 'super_admin' || targetUser.nivel === 'admin') {
+    // Admin não pode excluir Super Admin
+    if (targetUser.nivel === 'super_admin') {
       return false;
     }
-    return currentUser.tenant_id === targetUser.tenant_id;
+    return true;
   }
   return false;
 };
 
 /**
  * Níveis de acesso que o usuário atual tem permissão para cadastrar ou atribuir:
- * - Super Admin: pode criar qualquer nível.
- * - Admin: pode criar Gerente ou Funcionário.
+ * - Super Admin: pode criar qualquer nível (Super Admin, Administrador, Gerente, Funcionário).
+ * - Admin: pode criar Administrador, Gerente ou Funcionário.
  */
 export const getAvailableNiveisForUser = (
   currentUser: Usuario | null | undefined
@@ -641,6 +642,7 @@ export const getAvailableNiveisForUser = (
   }
   if (currentUser.nivel === 'admin') {
     return [
+      { value: 'admin', label: 'Administrador' },
       { value: 'gerente', label: 'Gerente' },
       { value: 'funcionario', label: 'Funcionário' },
     ];
