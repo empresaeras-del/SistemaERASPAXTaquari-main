@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { WifiOff, Eye, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { TopNav } from './TopNav';
+import { AlertasPanel } from './AlertasPanel';
 import { useAppContext } from '../../context/AppContext';
 import { useBackgroundChecks } from '../../hooks/useBackgroundChecks';
 import { useScheduledBackup } from '../../hooks/useScheduledBackup';
@@ -11,14 +12,33 @@ import { WelcomeModal } from './WelcomeModal';
 import { InactivityManager } from '../auth/InactivityManager';
 import { OfflineBanner } from './OfflineBanner';
 import { hasModuleAccess } from '../../utils/permissions';
+import { getFromIDB, saveToIDB } from '../../lib/idb';
 
 export const Layout: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isAlertPanelCollapsed, setIsAlertPanelCollapsed] = useState(false);
   const { state } = useAppContext();
   const location = useLocation();
   const navigate = useNavigate();
   useBackgroundChecks();
   useScheduledBackup();
+
+  // Persist alert panel state in IDB
+  useEffect(() => {
+    getFromIDB<{ id: string; collapsed: boolean }>('preferencias', 'alertas_panel_collapsed')
+      .then(pref => {
+        if (pref && typeof pref.collapsed === 'boolean') {
+          setIsAlertPanelCollapsed(pref.collapsed);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleAlertPanelToggle = () => {
+    const next = !isAlertPanelCollapsed;
+    setIsAlertPanelCollapsed(next);
+    saveToIDB('preferencias', { id: 'alertas_panel_collapsed', collapsed: next }).catch(() => {});
+  };
 
   const isRouteAllowed = hasModuleAccess(state.user, location.pathname);
 
@@ -61,6 +81,15 @@ export const Layout: React.FC = () => {
           </div>
         </main>
       </div>
+
+      {/* Right-side alerts panel — only shown on lg+ screens */}
+      <div className="print:hidden">
+        <AlertasPanel
+          isCollapsed={isAlertPanelCollapsed}
+          onToggle={handleAlertPanelToggle}
+        />
+      </div>
+
       <WelcomeModal />
     </div>
   );
