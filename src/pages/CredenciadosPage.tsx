@@ -277,14 +277,6 @@ export const CredenciadosPage: React.FC = () => {
         {/* PRIMARY ACTIONS */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={handlePrintFichas}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-bg-surface text-text-base border border-border-default rounded-xl text-xs font-semibold hover:bg-bg-hover transition-colors shadow-sm"
-            title="Imprimir Fichas Cadastrais (PDF)"
-          >
-            <Printer className="w-4 h-4 text-text-subtle" />
-            <span>Imprimir Fichas</span>
-          </button>
-          <button
             onClick={handleExportPDF}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-bg-surface text-text-base border border-border-default rounded-xl text-xs font-semibold hover:bg-bg-hover transition-colors shadow-sm"
             title="Exportar credenciados em PDF"

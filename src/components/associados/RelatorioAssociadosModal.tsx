@@ -27,6 +27,16 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import toast from 'react-hot-toast';
 
+/**
+ * Máscara de CPF conforme LGPD — oculta os 6 dígitos centrais.
+ * Exemplo: 046.537.031-40 → 046.***.***-40
+ */
+const mascaraCpfLGPD = (cpf: string): string => {
+  const s = (cpf || '').replace(/\D/g, '');
+  if (s.length !== 11) return cpf || 'Não informado';
+  return `${s.slice(0, 3)}.***.***-${s.slice(9, 11)}`;
+};
+
 interface RelatorioAssociadosModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -202,7 +212,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
           <td>
             <div style="font-weight: 700; color: #0f172a; font-size: 10.5px;">${t.nome}</div>
             <div style="color: #64748b; font-size: 9px; margin-top: 1px;">
-              <span><strong>CPF:</strong> ${t.cpf}</span>
+              <span><strong>CPF:</strong> ${mascaraCpfLGPD(t.cpf)}</span>
               ${t.rg !== '-' ? ` | <span><strong>RG:</strong> ${t.rg}</span>` : ''}
               ${t.dataNascimento !== '-' ? ` | <span><strong>Nasc:</strong> ${t.dataNascimento}</span>` : ''}
             </div>
@@ -244,7 +254,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
           <td>
             <div style="font-weight: 700; color: #0f172a; font-size: 10.5px;">${d.dependente.nome}</div>
             <div style="color: #64748b; font-size: 9px; margin-top: 1px;">
-              ${d.dependente.cpf ? `<span><strong>CPF:</strong> ${d.dependente.cpf}</span> | ` : ''}
+              ${d.dependente.cpf ? `<span><strong>CPF:</strong> ${mascaraCpfLGPD(d.dependente.cpf)}</span> | ` : ''}
               <span><strong>Nasc:</strong> ${d.dependente.data_nascimento ? formatLocalDate(d.dependente.data_nascimento) : '-'}</span>
             </div>
           </td>
@@ -253,7 +263,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
           </td>
           <td>
             <div style="font-weight: 700; color: #0f172a; font-size: 10px;">${d.titularNome}</div>
-            <div style="color: #64748b; font-size: 8.5px;">CPF: ${d.titularCpf} | Plano: ${d.titularPlano}</div>
+            <div style="color: #64748b; font-size: 8.5px;">CPF: ${mascaraCpfLGPD(d.titularCpf)} | Plano: ${d.titularPlano}</div>
           </td>
           <td style="font-size: 9px; color: #334155; line-height: 1.25;">
             <div>${d.titularContato}</div>
@@ -438,7 +448,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
         tableHead = [['#', 'Associado Titular', 'Endereço Completo', 'Contato', 'Plano / Contrato', 'Adesão', 'Deps.', 'Status']];
         tableBody = listaTitulares.map(t => [
           t.index.toString(),
-          `${t.nome}\nCPF: ${t.cpf}${t.rg !== '-' ? ' | RG: ' + t.rg : ''}`,
+          `${t.nome}\nCPF: ${mascaraCpfLGPD(t.cpf)}${t.rg !== '-' ? ' | RG: ' + t.rg : ''}`,
           t.enderecoCompleto,
           t.contatoCompleto,
           `${t.plano}\nContrato: ${t.contrato}`,
@@ -450,9 +460,9 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
         tableHead = [['#', 'Dependente', 'Parentesco', 'Titular Responsável', 'Contato / Endereço', 'Status Titular']];
         tableBody = listaDependentes.map(d => [
           d.index.toString(),
-          `${d.dependente.nome}\n${d.dependente.cpf ? 'CPF: ' + d.dependente.cpf + ' | ' : ''}Nasc: ${d.dependente.data_nascimento ? formatLocalDate(d.dependente.data_nascimento) : '-'}`,
+          `${d.dependente.nome}\n${d.dependente.cpf ? 'CPF: ' + mascaraCpfLGPD(d.dependente.cpf) + ' | ' : ''}Nasc: ${d.dependente.data_nascimento ? formatLocalDate(d.dependente.data_nascimento) : '-'}`,
           d.dependente.parentesco || 'Dependente',
-          `${d.titularNome}\nCPF: ${d.titularCpf} | Plano: ${d.titularPlano}`,
+          `${d.titularNome}\nCPF: ${mascaraCpfLGPD(d.titularCpf)} | Plano: ${d.titularPlano}`,
           `${d.titularContato}\n${d.titularEndereco}`,
           d.titularStatus
         ]);
@@ -732,7 +742,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
                         <td className="py-2 px-3 border-r border-slate-200">
                           <div className="font-bold text-slate-900 text-xs">{t.nome}</div>
                           <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-1.5 items-center mt-0.5">
-                            <span><strong>CPF:</strong> {t.cpf}</span>
+                            <span><strong>CPF:</strong> {mascaraCpfLGPD(t.cpf)}</span>
                             {t.rg !== '-' && <span>| RG: {t.rg}</span>}
                             {t.dataNascimento !== '-' && <span>| Nasc: {t.dataNascimento}</span>}
                           </div>
@@ -759,7 +769,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
                         <td className="py-2 px-3 border-r border-slate-200">
                           <div className="font-bold text-slate-900 text-xs">{d.dependente.nome}</div>
                           <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-1.5 items-center mt-0.5">
-                            {d.dependente.cpf && <span><strong>CPF:</strong> {d.dependente.cpf}</span>}
+                            {d.dependente.cpf && <span><strong>CPF:</strong> {mascaraCpfLGPD(d.dependente.cpf)}</span>}
                             <span>Nasc: {d.dependente.data_nascimento ? formatLocalDate(d.dependente.data_nascimento) : '-'}</span>
                           </div>
                         </td>
@@ -768,7 +778,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
                         </td>
                         <td className="py-2 px-3 border-r border-slate-200">
                           <div className="font-bold text-slate-900 text-xs">{d.titularNome}</div>
-                          <div className="text-[10px] text-slate-500">CPF: {d.titularCpf} | {d.titularPlano}</div>
+                          <div className="text-[10px] text-slate-500">CPF: {mascaraCpfLGPD(d.titularCpf)} | {d.titularPlano}</div>
                         </td>
                         <td className="py-2 px-3 border-r border-slate-200 text-[10px] text-slate-700 leading-snug">
                           <div>{d.titularContato}</div>
