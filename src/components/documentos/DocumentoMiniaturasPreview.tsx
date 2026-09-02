@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Layers, Plus, FileText } from 'lucide-react';
 import { MargensConfig } from './DocumentoMargensModal';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 export interface DocumentoMiniaturasPreviewProps {
   htmlContent: string;
@@ -87,7 +88,7 @@ export const DocumentoMiniaturasPreview: React.FC<DocumentoMiniaturasPreviewProp
                   fontFamily: 'Arial, Helvetica, sans-serif',
                   fontSize: '11pt',
                 }}
-                dangerouslySetInnerHTML={{ __html: paginaHtml }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(paginaHtml) }}
               />
             </div>
           </div>

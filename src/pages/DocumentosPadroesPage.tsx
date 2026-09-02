@@ -15,6 +15,7 @@ import { DocumentoImageModal } from '../components/documentos/DocumentoImageModa
 import { DocumentoMiniaturasPreview } from '../components/documentos/DocumentoMiniaturasPreview';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 /* ─── Tipos para o painel de variáveis ─── */
 interface VariavelInfo {
@@ -1505,11 +1506,11 @@ export const DocumentosPadroesPage = () => {
                       <div 
                         className="document-preview-content prose max-w-none h-full"
                         style={{ fontSize: '11pt', lineHeight: '1.5', fontFamily: 'Arial, sans-serif', color: '#1a1a1a' }}
-                        dangerouslySetInnerHTML={{ 
-                          __html: editingDoc?.conteudo 
-                            ? editingDoc.conteudo 
+                        dangerouslySetInnerHTML={{
+                          __html: editingDoc?.conteudo
+                            ? sanitizeHtml(editingDoc.conteudo)
                             : '<p class="text-text-subtle italic text-center mt-20">Comece a digitar para ver a pré-visualização...</p>'
-                        }} 
+                        }}
                       />
                     </div>
                   </div>

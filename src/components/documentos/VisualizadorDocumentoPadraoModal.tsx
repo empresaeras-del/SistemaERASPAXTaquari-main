@@ -32,6 +32,7 @@ import { Atendimento } from '../../types/atendimentos';
 import { getAtendimentos } from '../../services/atendimentosService';
 import { PlanoPax } from '../../types/planosPax';
 import { Credenciado } from '../../types/credenciados';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import { Fornecedor } from '../../types/fornecedores';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { getAllFromIDB } from '../../lib/idb';
@@ -566,7 +567,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
       html = html.replace(regex, displayValue);
     });
 
-    return html;
+    return sanitizeHtml(html);
   }, [documento?.conteudo, placeholderValues]);
 
   // Contadores
