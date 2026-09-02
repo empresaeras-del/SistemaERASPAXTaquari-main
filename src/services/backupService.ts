@@ -210,7 +210,22 @@ export const analisarArquivoBackup = (conteudoJson: string): AnaliseBackup => {
     let tabelasComDados = 0;
 
     for (const tab of TABELAS_SISTEMA) {
-      let registros: any[] = dadosBrutos[tab.nome] || dadosBrutos[tab.supabaseTable] || dadosBrutos[tab.idbStore] || [];
+      // Busca pelo nome principal, supabaseTable, idbStore e aliases (compatibilidade v1.0)
+      let registros: any[] = [];
+      if (Array.isArray(dadosBrutos[tab.nome])) {
+        registros = dadosBrutos[tab.nome];
+      } else if (Array.isArray(dadosBrutos[tab.supabaseTable])) {
+        registros = dadosBrutos[tab.supabaseTable];
+      } else if (Array.isArray(dadosBrutos[tab.idbStore])) {
+        registros = dadosBrutos[tab.idbStore];
+      } else if (tab.aliases) {
+        for (const alias of tab.aliases) {
+          if (Array.isArray(dadosBrutos[alias])) {
+            registros = dadosBrutos[alias];
+            break;
+          }
+        }
+      }
       
       if (registros.length > 0) tabelasComDados++;
 

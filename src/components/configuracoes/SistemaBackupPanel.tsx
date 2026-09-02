@@ -111,10 +111,84 @@ export const SistemaBackupPanel: React.FC<SistemaBackupPanelProps> = ({
   // Inicializa empresa alvo da restauração quando analise carrega
   useEffect(() => {
     if (analise?.valido) {
-      // Pré-preenche com a empresa do arquivo, ou a empresa do usuário
       setEmpresaRestauracaoId(analise.empresa_id || usuarioEmpresaId || '');
     }
   }, [analise]);
+
+  // ─── Executor do Backup Automático ────────────────────────────────────────
+  // Verifica a cada minuto se chegou no horário configurado e executa o backup
+  useEffect(() => {
+    const verificarEExecutar = async () => {
+      // Percorre todas as chaves de backup agendado (por empresa ou global)
+      const chaves = Object.keys(localStorage).filter(k => k.startsWith('backup_time_'));
+
+      for (const chave of chaves) {
+        const horarioAlvo = localStorage.getItem(chave);
+        if (!horarioAlvo) continue;
+
+        const agora = new Date();
+        const horaAtual = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+        if (horaAtual !== horarioAlvo) continue;
+
+        // Evita execução dupla no mesmo minuto usando flag
+        const flagKey = `backup_executado_${chave}_${horaAtual}_${agora.toDateString()}`;
+        if (localStorage.getItem(flagKey)) continue;
+        localStorage.setItem(flagKey, '1');
+
+        // Limpa flags antigas (mantém apenas as de hoje)
+        Object.keys(localStorage)
+          .filter(k => k.startsWith('backup_executado_') && !k.includes(agora.toDateString()))
+          .forEach(k => localStorage.removeItem(k));
+
+        // Determina a empresa do backup a partir da chave (ex: backup_time_<empresaId>)
+        const sufixoChave = chave.replace('backup_time_', '');
+        const empId = sufixoChave === 'global' ? undefined : sufixoChave;
+        const folderKey = `backup_folder_handle_${sufixoChave}`;
+
+        try {
+          // Busca o handle da pasta salvo no IDB
+          const { get: getIdb } = await import('idb-keyval');
+          const dirHandle = await getIdb(folderKey) as any;
+          if (!dirHandle) continue;
+
+          // Solicita permissão se necessário
+          const permissao = await dirHandle.requestPermission({ mode: 'readwrite' });
+          if (permissao !== 'granted') continue;
+
+          const empNome = empId ? empresas.find(e => e.id === empId)?.nome_fantasia : undefined;
+
+          const { jsonString, fileName } = await gerarBackupCompleto({
+            isOnline: state.isOnline,
+            usuarioNome: usuarioNome || state.user?.nome || 'Administrador',
+            usuarioId: usuarioId || state.user?.id,
+            empresaId: empId,
+            empresaNome: empNome,
+            filtrarPorEmpresa: !!empId,
+            onProgress: () => {}
+          });
+
+          const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(jsonString);
+          await writable.close();
+
+          toast.success(`Backup automático ${empNome ? `de "${empNome}"` : 'global'} salvo em: ${dirHandle.name}/${fileName}`);
+        } catch (autoErr: any) {
+          if (autoErr?.name !== 'AbortError') {
+            console.warn('Erro no backup automático:', autoErr);
+          }
+        }
+      }
+    };
+
+    // Executa imediatamente ao montar (caso o horário já tenha passado neste minuto)
+    verificarEExecutar();
+
+    // Verifica a cada 60 segundos
+    const intervalo = setInterval(verificarEExecutar, 60_000);
+    return () => clearInterval(intervalo);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.isOnline, empresas]);
 
   // ─── Backup Automático ─────────────────────────────────────────────────────
   const handleSelectFolder = async () => {
@@ -215,6 +289,7 @@ export const SistemaBackupPanel: React.FC<SistemaBackupPanelProps> = ({
     reader.onerror = () => toast.error('Erro ao ler o arquivo selecionado.');
     reader.readAsText(file);
   };
+
 
   const handleExecutarRestauracao = () => {
     if (!analise || !analise.valido) {
