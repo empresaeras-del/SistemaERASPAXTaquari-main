@@ -35,3 +35,49 @@ jobs:
 
       - name: Build de produção
         run: npm run build
+
+  rls-policy-tests:
+    name: Testes de RLS (pgTAP)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar PostgreSQL 16 e pgTAP
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-16 postgresql-16-pgtap
+          sudo service postgresql start
+
+      - name: Aplicar migrations e rodar testes de RLS
+        run: |
+          set -e
+          DB=eras_rls_test
+
+          sudo -u postgres psql -c "DROP DATABASE IF EXISTS $DB;"
+          sudo -u postgres psql -c "CREATE DATABASE $DB;"
+
+          # Recria localmente o mínimo do ambiente que o Supabase hospedado já
+          # provisiona (schemas/roles/funções de auth e storage) — ver o
+          # cabeçalho de supabase/tests/000_bootstrap_fake_supabase.sql.
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -d "$DB" -f supabase/tests/000_bootstrap_fake_supabase.sql
+
+          for f in supabase/migrations/*.sql; do
+            echo "Aplicando $f"
+            sudo -u postgres psql -v ON_ERROR_STOP=1 -d "$DB" -f "$f"
+          done
+
+          FAILED=0
+          for f in supabase/tests/0[0-9][1-9]_*.sql; do
+            echo "=== $f ==="
+            OUTPUT=$(sudo -u postgres psql -t -A -v ON_ERROR_STOP=1 -d "$DB" -f "$f")
+            echo "$OUTPUT"
+            if echo "$OUTPUT" | grep -q "not ok"; then
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Um ou mais testes de RLS falharam — veja os 'not ok' acima."
+            exit 1
+          fi
