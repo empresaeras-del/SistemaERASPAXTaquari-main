@@ -242,7 +242,7 @@ export const AssociadoResumoFinanceiroTab: React.FC<Props> = ({ associado }) => 
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#1E293B', borderColor: '#334155', borderRadius: '8px' }}
                   itemStyle={{ color: '#F8FAFC' }}
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value) => formatCurrency(Number(value) || 0)}
                 />
                 <Legend wrapperStyle={{ paddingTop: '20px' }} />
                 <Bar dataKey="Recebido" stackId="a" fill="#10B981" radius={[0, 0, 4, 4]} />

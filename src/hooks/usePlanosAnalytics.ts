@@ -371,7 +371,7 @@ export function usePlanosAnalytics(planos: PlanoPaxCompleto[]) {
       });
 
       // ── 8. Consolidar totais ─────────────────────────────────────────────
-      let totais = {
+      const totais = {
         contratos_ativos: 0,
         contratos_inadimplentes: 0,
         contratos_total: 0,

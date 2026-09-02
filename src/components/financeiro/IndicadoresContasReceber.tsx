@@ -265,7 +265,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
       }
 
       // Resolução do Tipo de Devedor
-      let tipoDev = p.tipo_devedor || parentReceita?.tipo_devedor;
+      const tipoDev = p.tipo_devedor || parentReceita?.tipo_devedor;
       let tipoLabel = 'Cliente Geral';
       if (tipoDev === 'associado') tipoLabel = 'Associados PAX';
       else if (tipoDev === 'cliente_pj' || (parentReceita?.cliente_tipo === 'pj')) tipoLabel = 'Clientes PJ / Empresas';

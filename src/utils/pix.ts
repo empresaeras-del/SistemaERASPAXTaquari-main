@@ -52,7 +52,7 @@ export function generatePixPayload(
   const txidEMV = formatEMV('05', txid);
   const additionalDataField = formatEMV('62', txidEMV);
   
-  let payload = `${payloadFormat}${merchantAccountInfo}${merchantCategoryCode}${transactionCurrency}${transactionAmount}${countryCode}${merchantNameEMV}${merchantCityEMV}${additionalDataField}6304`;
+  const payload = `${payloadFormat}${merchantAccountInfo}${merchantCategoryCode}${transactionCurrency}${transactionAmount}${countryCode}${merchantNameEMV}${merchantCityEMV}${additionalDataField}6304`;
   
   const crc = crc16ccitt(payload);
   

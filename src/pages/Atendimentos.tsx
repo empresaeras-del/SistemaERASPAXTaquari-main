@@ -92,7 +92,7 @@ export const AtendimentosPage: React.FC = () => {
     setLoading(true);
     try {
       const [data, emp] = await Promise.all([
-        getAtendimentos(state.isOnline, state.empresaSelecionada),
+        getAtendimentos(state.isOnline, state.empresaSelecionada ?? undefined),
         getEmpresaById(state.empresaSelecionada || 'default_tenant', state.isOnline)
       ]);
       setAtendimentos(data || []);

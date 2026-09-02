@@ -117,7 +117,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Monitor de conectividade
   useEffect(() => {
-    const handleOnline = () => dispatch({ type: 'SET_ONLINE_STATUS', payload: true && isSupabaseConfigured });
+    const handleOnline = () => dispatch({ type: 'SET_ONLINE_STATUS', payload: isSupabaseConfigured });
     const handleOffline = () => dispatch({ type: 'SET_ONLINE_STATUS', payload: false });
 
     window.addEventListener('online', handleOnline);

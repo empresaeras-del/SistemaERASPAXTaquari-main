@@ -98,7 +98,7 @@ const MensalidadesGeracaoSubView = ({
   const gerarProjecao = useCallback(() => {
     if (!planoSelecionado) return;
 
-    let dt = new Date(dataInicio + "T12:00:00");
+    const dt = new Date(dataInicio + "T12:00:00");
     const arr = [];
     const adesao = planoSelecionado.taxa_adesao || 0;
     const baseParcela = (isAdminOrSuperAdmin && valorParcelaManual !== '' && !isNaN(Number(valorParcelaManual)) && Number(valorParcelaManual) >= 0)
@@ -804,7 +804,7 @@ export const AssociadoMensalidadesTab: React.FC<{
 
   // Handler para iniciar o wizard de geração de novas mensalidades
   const handleAbrirGeracao = () => {
-    let proximaData = format(new Date(), 'yyyy-MM-dd');
+    const proximaData = format(new Date(), 'yyyy-MM-dd');
     const pendentes = parcelas.filter(p => p.status === 'pendente' || p.status === 'vencido' || p.status === 'atrasado');
 
     if (pendentes.length > 0) {
@@ -854,7 +854,7 @@ export const AssociadoMensalidadesTab: React.FC<{
 
   // Filtragem para tabela
   const filtradasTabela = parcelas.filter(p => {
-    let matchStatus = filtroStatus === 'all' || p.status === filtroStatus;
+    const matchStatus = filtroStatus === 'all' || p.status === filtroStatus;
     let matchPeriodo = true;
     if (filtroPeriodoInicio) {
       matchPeriodo = matchPeriodo && new Date(p.data_vencimento) >= new Date(filtroPeriodoInicio);

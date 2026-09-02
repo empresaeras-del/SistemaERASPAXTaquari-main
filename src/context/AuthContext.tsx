@@ -37,11 +37,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadUserProfile = async (authUser: User): Promise<Usuario | null> => {
     try {
       // 1. Tenta buscar pelo ID do Auth
-      let { data, error } = await supabase
+      const { data: dataById } = await supabase
         .from('users')
         .select('*')
         .eq('id', authUser.id)
         .maybeSingle();
+      let data = dataById;
 
       // 2. Se não encontrar pelo ID, tenta pelo email (caso tenha sido criado com outro UUID)
       if (!data && authUser.email) {

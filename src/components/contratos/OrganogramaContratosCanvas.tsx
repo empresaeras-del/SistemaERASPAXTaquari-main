@@ -154,7 +154,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
     if (!canvasSearch.trim()) return;
 
     const term = canvasSearch.toLowerCase().trim();
-    const newExpanded = { ...expandedNodes, 'root': true };
+    const newExpanded: Record<string, boolean> = { ...expandedNodes, 'root': true };
 
     arvoreDados.planos.forEach(plano => {
       let planoHasMatch = plano.nome.toLowerCase().includes(term) || (plano.codigo && plano.codigo.toLowerCase().includes(term));

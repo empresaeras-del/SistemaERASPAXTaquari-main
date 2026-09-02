@@ -10,10 +10,11 @@ export function useAvisoExpiracaoContratos(diasAviso = 15) {
 
   useEffect(() => {
     if (!state.empresaSelecionada || !state.isOnline || alerted.current) return;
+    const empresaSelecionada = state.empresaSelecionada;
 
     const check = async () => {
       try {
-        const parcelas = await getParcelasReceber(state.isOnline, state.empresaSelecionada);
+        const parcelas = await getParcelasReceber(state.isOnline, empresaSelecionada);
         const today = startOfDay(new Date());
         const limit = addDays(today, diasAviso);
         

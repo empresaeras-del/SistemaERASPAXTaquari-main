@@ -130,8 +130,8 @@ export const ContasPagarPage: React.FC = () => {
         if (emp) setEmpresaData(emp);
       }
       const [dataParcelas, dataDespesas] = await Promise.all([
-        getParcelasPagar(state.isOnline, state.empresaSelecionada),
-        getDespesas(state.isOnline, state.empresaSelecionada)
+        getParcelasPagar(state.isOnline, state.empresaSelecionada || ''),
+        getDespesas(state.isOnline, state.empresaSelecionada || '')
       ]);
       setParcelas(dataParcelas);
       setDespesas(dataDespesas);
@@ -1142,7 +1142,7 @@ export const ContasPagarPage: React.FC = () => {
                 <button
                   onClick={() => {
                     if (parcelaDetalhes.despesa_id) {
-                      handleExcluirDespesaCompleta(parcelaDetalhes.despesa_id, parcelaDetalhes.descricao);
+                      handleExcluirDespesaCompleta(parcelaDetalhes.despesa_id, parcelaDetalhes.descricao || 'Despesa');
                     } else {
                       handleExcluirParcela(parcelaDetalhes);
                       setShowDetalhesModal(false);

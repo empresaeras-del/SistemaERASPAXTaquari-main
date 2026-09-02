@@ -93,7 +93,7 @@ export const AssociadosPage: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
 
   const filtered = React.useMemo(() => {
-    let result = associados.filter((a) => {
+    const result = associados.filter((a) => {
       if (!a) return false;
       const s = (searchTerm || '').trim().toLowerCase();
       const sDigits = s.replace(/\D/g, '');
@@ -206,7 +206,7 @@ export const AssociadosPage: React.FC = () => {
   }, [editingAssociado, planosCompletos, calcularValor]);
 
   const todosDependentes = React.useMemo(() => {
-    let deps: any[] = [];
+    const deps: any[] = [];
     associados.forEach(a => {
       if (a && a.dependentes && Array.isArray(a.dependentes)) {
         a.dependentes.forEach(d => {
@@ -3000,7 +3000,7 @@ export const AssociadosPage: React.FC = () => {
                       }}
                       nVidas={1 + (editingAssociado?.dependentes?.length || 0)}
                       idadesDependentes={editingAssociado?.dependentes?.filter(d => d.data_nascimento).map(d => {
-                        const ageDifMs = Date.now() - new Date(d.data_nascimento).getTime();
+                        const ageDifMs = Date.now() - new Date(d.data_nascimento!).getTime();
                         const ageDate = new Date(ageDifMs);
                         return Math.abs(ageDate.getUTCFullYear() - 1970);
                       }) || []}

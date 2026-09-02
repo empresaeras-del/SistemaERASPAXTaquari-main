@@ -239,10 +239,10 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
     if (!canvasSearch.trim()) return;
 
     const term = canvasSearch.toLowerCase().trim();
-    const newExpanded = { ...expandedNodes, 'root': true };
+    const newExpanded: Record<string, boolean> = { ...expandedNodes, 'root': true };
 
     arvoreDados.receitas.forEach(r => {
-      let receitaMatch = (r.descricao || '').toLowerCase().includes(term) ||
+      const receitaMatch = (r.descricao || '').toLowerCase().includes(term) ||
         (r.categoria || '').toLowerCase().includes(term) ||
         (r.status || '').toLowerCase().includes(term);
 

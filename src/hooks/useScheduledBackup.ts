@@ -34,9 +34,7 @@ export function useScheduledBackup() {
 
           // Verificar permissão
           const options = { mode: 'readwrite' };
-          // @ts-ignore
           if ((await directoryHandle.queryPermission(options)) !== 'granted') {
-            // @ts-ignore
             const req = await directoryHandle.requestPermission(options);
             if (req !== 'granted') {
               console.warn('Permissão negada para acessar a pasta de backup automática.');
@@ -53,9 +51,7 @@ export function useScheduledBackup() {
           
           const scheduledFileName = `eras_backup_auto_${currentDate}_${currentHour}${currentMinute}.json`;
           
-          // @ts-ignore
           const fileHandle = await directoryHandle.getFileHandle(scheduledFileName, { create: true });
-          // @ts-ignore
           const writable = await fileHandle.createWritable();
           await writable.write(jsonString);
           await writable.close();

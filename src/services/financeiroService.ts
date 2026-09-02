@@ -1146,11 +1146,13 @@ export const getReceitaCompleta = async (
     if (!receita.associado_cpf && parcelaRef?.devedor_cpf_cnpj) {
       receita.associado_cpf = parcelaRef.devedor_cpf_cnpj;
     }
-    if (!receita.forma_pagamento_padrao && (parcelaRef?.forma_pagamento || parcelas[0]?.forma_pagamento)) {
-      receita.forma_pagamento_padrao = parcelaRef?.forma_pagamento || parcelas[0]?.forma_pagamento;
+    const formaPagamentoFallback = parcelaRef?.forma_pagamento || parcelas[0]?.forma_pagamento;
+    if (!receita.forma_pagamento_padrao && formaPagamentoFallback) {
+      receita.forma_pagamento_padrao = formaPagamentoFallback;
     }
-    if (!receita.data_inicio_cobranca && (parcelas[0]?.data_vencimento || parcelaRef?.data_vencimento)) {
-      receita.data_inicio_cobranca = parcelas[0]?.data_vencimento || parcelaRef?.data_vencimento;
+    const dataInicioCobrancaFallback = parcelas[0]?.data_vencimento || parcelaRef?.data_vencimento;
+    if (!receita.data_inicio_cobranca && dataInicioCobrancaFallback) {
+      receita.data_inicio_cobranca = dataInicioCobrancaFallback;
     }
     if ((!receita.valor_total || Number(receita.valor_total) === 0) && parcelas.length > 0) {
       receita.valor_total = parcelas.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);

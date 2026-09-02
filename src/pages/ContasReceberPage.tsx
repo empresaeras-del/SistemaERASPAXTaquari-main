@@ -231,8 +231,8 @@ export const ContasReceberPage: React.FC = () => {
         if (assocs) setAssociados(assocs);
       }
       const [dataParcelas, dataReceitas] = await Promise.all([
-        getParcelasReceber(state.isOnline, state.empresaSelecionada),
-        getReceitas(state.isOnline, state.empresaSelecionada)
+        getParcelasReceber(state.isOnline, state.empresaSelecionada || ''),
+        getReceitas(state.isOnline, state.empresaSelecionada || '')
       ]);
       setParcelas(dataParcelas);
       setReceitas(dataReceitas);
@@ -1279,7 +1279,7 @@ export const ContasReceberPage: React.FC = () => {
                 <button
                   onClick={() => {
                     if (parcelaDetalhes.receita_id) {
-                      handleExcluirReceitaCompleta(parcelaDetalhes.receita_id, parcelaDetalhes.descricao);
+                      handleExcluirReceitaCompleta(parcelaDetalhes.receita_id, parcelaDetalhes.descricao || 'Receita');
                     } else {
                       handleExcluirParcela(parcelaDetalhes);
                       setShowDetalhesModal(false);

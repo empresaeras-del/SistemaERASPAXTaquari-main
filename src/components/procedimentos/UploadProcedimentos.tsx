@@ -159,7 +159,7 @@ export const UploadProcedimentos = () => {
     setIsProcessing(true);
     try {
       for (const row of validRows) {
-        let valorPadraoFormatado = parseFloat(row.valor_padrao.replace(/[R$\s]/g, '').replace(',', '.'));
+        const valorPadraoFormatado = parseFloat(row.valor_padrao.replace(/[R$\s]/g, '').replace(',', '.'));
         await criar({
           codigo_tuss: row.codigo_tuss,
           descricao: row.descricao,
