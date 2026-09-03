@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { X, Save, ChevronRight, ChevronLeft, Trash2, Plus } from 'lucide-react';
+import { X, Save, ChevronRight, ChevronLeft, Trash2, Plus, Check, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PlanoPaxFormData, PlanoPaxFaixa } from '../../types/planosPax';
 import { SeletorItensPax } from './SeletorItensPax';
@@ -12,6 +12,28 @@ import { Info, DollarSign, Clock, List as ListIcon, Users, MapPin, Shield, Credi
 import { RegrasCalculoInfo } from '../associados/RegrasCalculoInfo';
 import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
+
+export interface EtapaWizardConfig {
+  id: number;
+  key: string;
+  title: string;
+  subtitle: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+export const ETAPAS_WIZARD: EtapaWizardConfig[] = [
+  { id: 1, key: 'identificacao', title: 'Identificação', subtitle: 'Dados e tipo de plano', icon: Info },
+  { id: 2, key: 'valores', title: 'Valores e Limites', subtitle: 'Regras e mensalidade', icon: DollarSign },
+  { id: 3, key: 'carencia', title: 'Carência e Translado', subtitle: 'Prazos e cobertura', icon: Clock },
+  { id: 4, key: 'itens', title: 'Itens e Coberturas', subtitle: 'Urnas e serviços inclusos', icon: ListIcon },
+];
+
+const mascaraCpfLGPD = (cpf?: string | null): string => {
+  if (!cpf) return '-';
+  const limpo = cpf.replace(/\D/g, '');
+  if (limpo.length !== 11) return cpf;
+  return `${limpo.slice(0, 3)}.***.***-${limpo.slice(9, 11)}`;
+};
 
 
 const optNum = z.preprocess(val => (val === '' || val === null || val === undefined || Number.isNaN(val as any)) ? null : val, z.coerce.number().nullable().optional()) as unknown as z.ZodType<number | null | undefined>;
@@ -253,103 +275,188 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-bg-surface rounded-3xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in duration-300">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4">
+      <div className="bg-bg-surface rounded-3xl shadow-2xl w-[96vw] max-w-[1380px] h-[92vh] max-h-[94vh] flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in duration-300">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border-default shrink-0 bg-bg-surface/95 backdrop-blur z-10">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-[#3B82F6]/20 to-blue-500/10 rounded-2xl border border-[#3B82F6]/20">
-              <Shield className="w-6 h-6 text-[#3B82F6]" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-text-base tracking-tight">
-                {initialData ? 'Editar Plano PAX' : 'Novo Plano PAX'}
-              </h2>
-              {!initialData ? (
-                <div className="flex gap-2 mt-2">
-                  {[1, 2, 3, 4].map(s => (
-                    <div key={s} className={`h-1.5 w-16 rounded-full ${s <= step ? 'bg-[#3B82F6]' : 'bg-bg-hover'}`} />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-text-subtle font-medium">
-                  Configure as regras, valores e carências do plano.
+        <div className="border-b border-border-default shrink-0 bg-bg-surface/95 backdrop-blur z-10">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border-default/50">
+            <div className="flex items-center gap-3.5">
+              <div className="p-2.5 bg-gradient-to-br from-[#3B82F6]/20 to-blue-500/10 rounded-2xl border border-[#3B82F6]/20 text-[#3B82F6] shadow-sm">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-text-base tracking-tight flex items-center gap-2.5">
+                  <span>{initialData ? 'Editar Plano PAX' : 'Novo Plano PAX'}</span>
+                  {initialData?.codigo && (
+                    <span className="text-xs font-mono px-2.5 py-0.5 rounded-lg bg-bg-subtle border border-border-default text-text-subtle font-semibold">
+                      {initialData.codigo}
+                    </span>
+                  )}
+                </h2>
+                <p className="text-xs text-text-subtle font-medium mt-0.5">
+                  {initialData 
+                    ? 'Configure as regras, valores, carências e itens cobertos deste plano PAX.'
+                    : `Etapa ${step} de 4: ${ETAPAS_WIZARD[step - 1].title} — ${ETAPAS_WIZARD[step - 1].subtitle}`
+                  }
                 </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {!initialData && (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[#3B82F6]">
+                  <div className="w-2 h-2 rounded-full bg-[#3B82F6] animate-pulse" />
+                  <span className="text-xs font-extrabold tracking-wide">
+                    {Math.round((step / 4) * 100)}% Concluído
+                  </span>
+                </div>
               )}
+              <button 
+                onClick={onClose} 
+                className="p-2 text-text-subtle hover:bg-bg-subtle hover:text-text-base rounded-full transition-colors"
+                title="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 text-text-subtle hover:bg-bg-subtle hover:text-text-base rounded-full transition-colors">
-            <X className="w-6 h-6" />
-          </button>
+
+          {/* RÉGUA VISUAL DE ETAPAS DO FLUXO (NOVO PLANO) */}
+          {!initialData && (
+            <div className="bg-bg-subtle/40 px-6 py-3 border-b border-border-default/40">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4">
+                {ETAPAS_WIZARD.map((etapa) => {
+                  const isConcluido = etapa.id < step;
+                  const isAtivo = etapa.id === step;
+                  const Icon = etapa.icon;
+
+                  return (
+                    <button
+                      key={etapa.id}
+                      type="button"
+                      onClick={() => {
+                        if (etapa.id <= step) {
+                          setStep(etapa.id);
+                        }
+                      }}
+                      disabled={etapa.id > step}
+                      className={`flex items-center gap-3 p-2.5 rounded-2xl border transition-all text-left ${
+                        isAtivo 
+                          ? 'bg-blue-500/10 border-blue-500/30 ring-1 ring-blue-500/20 shadow-sm' 
+                          : isConcluido 
+                            ? 'bg-bg-surface/80 border-border-default/80 hover:border-blue-500/30 cursor-pointer' 
+                            : 'bg-transparent border-transparent opacity-40 cursor-not-allowed'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold transition-colors ${
+                        isAtivo 
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30' 
+                          : isConcluido 
+                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                            : 'bg-bg-subtle text-text-muted border border-border-default'
+                      }`}>
+                        {isConcluido ? <Check className="w-4 h-4" /> : etapa.id}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-bold truncate block ${
+                            isAtivo ? 'text-blue-400' : isConcluido ? 'text-text-base' : 'text-text-muted'
+                          }`}>
+                            {etapa.title}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-text-subtle truncate block">
+                          {etapa.subtitle}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Barra de Progresso com Percentual Contínuo */}
+              <div className="w-full bg-border-default/50 h-1.5 rounded-full overflow-hidden mt-3">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 transition-all duration-300 ease-out rounded-full"
+                  style={{ width: `${Math.round((step / 4) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar Tabs */}
           {initialData && (
-            <div className="w-64 border-r border-border-default bg-bg-subtle/30 flex flex-col py-4 shrink-0 overflow-y-auto">
-              <button
-              type="button"
-              onClick={() => setActiveTab('identificacao')}
-              className={`px-6 py-3.5 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
-                activeTab === 'identificacao'
-                  ? 'border-[#3B82F6] text-[#3B82F6] bg-[#3B82F6]/10'
-                  : 'border-transparent text-text-subtle hover:text-text-base hover:bg-white/5'
-              }`}
-            >
-              <Info className="w-4 h-4" />
-              Identificação
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('valores')}
-              className={`px-6 py-3.5 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
-                activeTab === 'valores'
-                  ? 'border-[#3B82F6] text-[#3B82F6] bg-[#3B82F6]/10'
-                  : 'border-transparent text-text-subtle hover:text-text-base hover:bg-white/5'
-              }`}
-            >
-              <DollarSign className="w-4 h-4" />
-              Valores e Limites
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('carencia')}
-              className={`px-6 py-3.5 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
-                activeTab === 'carencia'
-                  ? 'border-[#3B82F6] text-[#3B82F6] bg-[#3B82F6]/10'
-                  : 'border-transparent text-text-subtle hover:text-text-base hover:bg-white/5'
-              }`}
-            >
-              <Clock className="w-4 h-4" />
-              Carência e Translado
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('itens')}
-              className={`px-6 py-3.5 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
-                activeTab === 'itens'
-                  ? 'border-[#3B82F6] text-[#3B82F6] bg-[#3B82F6]/10'
-                  : 'border-transparent text-text-subtle hover:text-text-base hover:bg-white/5'
-              }`}
-            >
-              <ListIcon className="w-4 h-4" />
-              Itens e Coberturas
-            </button>
-            {initialData && (
+            <div className="w-64 md:w-72 border-r border-border-default bg-bg-subtle/30 flex flex-col py-4 shrink-0 overflow-y-auto">
               <button
                 type="button"
-                onClick={() => setActiveTab('associados')}
-                className={`px-6 py-3.5 text-left font-medium text-sm transition-colors border-l-2 flex items-center gap-3 ${
-                  activeTab === 'associados'
-                    ? 'border-[#3B82F6] text-[#3B82F6] bg-[#3B82F6]/10'
+                onClick={() => setActiveTab('identificacao')}
+                className={`px-6 py-3.5 text-left font-semibold text-xs transition-all border-l-2 flex items-center gap-3 ${
+                  activeTab === 'identificacao'
+                    ? 'border-[#3B82F6] text-[#3B82F6] bg-[#3B82F6]/10 shadow-sm'
                     : 'border-transparent text-text-subtle hover:text-text-base hover:bg-white/5'
                 }`}
               >
-                <Users className="w-4 h-4" />
-                Associados Vinculados
+                <Info className="w-4 h-4" />
+                <span>Identificação do Plano</span>
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => setActiveTab('valores')}
+                className={`px-6 py-3.5 text-left font-semibold text-xs transition-all border-l-2 flex items-center gap-3 ${
+                  activeTab === 'valores'
+                    ? 'border-[#3B82F6] text-[#3B82F6] bg-[#3B82F6]/10 shadow-sm'
+                    : 'border-transparent text-text-subtle hover:text-text-base hover:bg-white/5'
+                }`}
+              >
+                <DollarSign className="w-4 h-4" />
+                <span>Valores e Limites</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('carencia')}
+                className={`px-6 py-3.5 text-left font-semibold text-xs transition-all border-l-2 flex items-center gap-3 ${
+                  activeTab === 'carencia'
+                    ? 'border-[#3B82F6] text-[#3B82F6] bg-[#3B82F6]/10 shadow-sm'
+                    : 'border-transparent text-text-subtle hover:text-text-base hover:bg-white/5'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                <span>Carência e Translado</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('itens')}
+                className={`px-6 py-3.5 text-left font-semibold text-xs transition-all border-l-2 flex items-center gap-3 ${
+                  activeTab === 'itens'
+                    ? 'border-[#3B82F6] text-[#3B82F6] bg-[#3B82F6]/10 shadow-sm'
+                    : 'border-transparent text-text-subtle hover:text-text-base hover:bg-white/5'
+                }`}
+              >
+                <ListIcon className="w-4 h-4" />
+                <span>Itens e Coberturas</span>
+              </button>
+              {initialData && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('associados')}
+                  className={`px-6 py-3.5 text-left font-semibold text-xs transition-all border-l-2 flex items-center justify-between ${
+                    activeTab === 'associados'
+                      ? 'border-[#3B82F6] text-[#3B82F6] bg-[#3B82F6]/10 shadow-sm'
+                      : 'border-transparent text-text-subtle hover:text-text-base hover:bg-white/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Users className="w-4 h-4" />
+                    <span>Associados Vinculados</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#3B82F6]/20 text-[#3B82F6]">
+                    {associadosVinculados.length}
+                  </span>
+                </button>
+              )}
             </div>
           )}
 
@@ -369,7 +476,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             <div className="flex-1 overflow-y-auto p-8">
               
               {(!initialData ? step === 1 : activeTab === 'identificacao') && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300 max-w-3xl">
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full">
                   <div className="bg-bg-subtle/50 p-6 rounded-2xl border border-border-default/50 space-y-6">
                     <div className="flex items-center gap-3 border-b border-border-default/50 pb-4">
                       <div className="p-2 bg-[#3B82F6]/10 rounded-xl text-[#3B82F6]">
@@ -380,17 +487,17 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                       </h4>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-1">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="space-y-1 md:col-span-1">
                         <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Código do Plano *</label>
                         <input
                           {...register('codigo')}
-                          className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-subtle focus:outline-none cursor-not-allowed uppercase transition-all"
+                          className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-subtle focus:outline-none cursor-not-allowed uppercase transition-all font-mono"
                           placeholder="Gerado Autom." readOnly
                         />
                         {errors.codigo && <p className="text-red-400 text-xs mt-1">{errors.codigo.message}</p>}
                       </div>
-                      <div className="space-y-1">
+                      <div className="space-y-1 md:col-span-2">
                         <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Nome do Plano *</label>
                         <input
                           {...register('nome')}
@@ -480,7 +587,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
               )}
 
               {(!initialData ? step === 2 : activeTab === 'valores') && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300 max-w-4xl">
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full">
                   
                   <div className="bg-bg-subtle/50 p-6 rounded-2xl border border-border-default/50 space-y-6">
                     <div className="flex items-center gap-3 border-b border-border-default/50 pb-4">
@@ -571,27 +678,43 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     </div>
 
                     {(watch('regra_calculo') === 'fixo' || watch('regra_calculo') === 'por_vida') && (
-                      <div className="w-1/3 pt-2">
-                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
-                          Valor Base (R$) *
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          {...register('valor_mensalidade', { valueAsNumber: true })}
-                          className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all"
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-border-default/50">
+                        <div className="space-y-1">
+                          <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                            Valor Base Mensalidade (R$) *
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            {...register('valor_mensalidade', { valueAsNumber: true })}
+                            className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                            Taxa de Adesão (R$)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            {...register('taxa_adesao', { valueAsNumber: true })}
+                            className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all"
+                          />
+                        </div>
                       </div>
                     )}
 
                     {watch('regra_calculo') === 'faixa_etaria' && (
-                      <div className="pt-2">
-                        <div className="flex items-center justify-between mb-4">
-                          <h4 className="text-sm font-bold text-text-base">Tabela de Faixas</h4>
+                      <div className="pt-4 border-t border-border-default/50 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-sm font-bold text-text-base">Tabela de Faixas Etárias</h4>
+                            <p className="text-xs text-text-subtle">Defina os valores das mensalidades de acordo com a faixa de idade.</p>
+                          </div>
                           <button
                             type="button"
                             onClick={() => append({ idade_de: 0, idade_ate: 0, valor: 0 })}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-[#3B82F6]/10 text-[#3B82F6] rounded-lg text-sm font-medium hover:bg-[#3B82F6]/20 transition-colors"
+                            className="flex items-center gap-2 px-3.5 py-1.5 bg-[#3B82F6]/10 text-[#3B82F6] rounded-xl text-xs font-bold hover:bg-[#3B82F6]/20 transition-colors"
                           >
                             <Plus className="w-4 h-4" /> Adicionar Faixa
                           </button>
@@ -618,7 +741,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                 />
                               </div>
                               <div className="flex-1">
-                                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Valor (R$)</label>
+                                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Valor Mensalidade (R$)</label>
                                 <input
                                   type="number"
                                   step="0.01"
@@ -630,6 +753,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                 type="button"
                                 onClick={() => remove(index)}
                                 className="p-2 text-text-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors mb-0.5"
+                                title="Remover faixa"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -642,27 +766,27 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                             </p>
                           )}
                         </div>
+
+                        <div className="pt-2">
+                          <div className="max-w-xs space-y-1">
+                            <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Taxa de Adesão (R$)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              {...register('taxa_adesao', { valueAsNumber: true })}
+                              className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all"
+                            />
+                          </div>
+                        </div>
                       </div>
                     )}
-
-                    <div className="pt-4 border-t border-border-default/50">
-                      <div className="w-1/3">
-                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Taxa de Adesão (R$)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          {...register('taxa_adesao', { valueAsNumber: true })}
-                          className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all"
-                        />
-                      </div>
-                    </div>
 
                   </div>
                 </div>
               )}
 
               {(!initialData ? step === 3 : activeTab === 'carencia') && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300 max-w-3xl">
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full">
                   <div className="bg-bg-subtle/50 p-6 rounded-2xl border border-border-default/50 space-y-6">
                     <div className="flex items-center gap-3 border-b border-border-default/50 pb-4">
                       <div className="p-2 bg-orange-500/10 rounded-xl text-orange-400">
@@ -751,10 +875,11 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                           </div>
                           
                           {tipoTranslado === 'raio' && (
-                            <div className="w-1/3 space-y-1">
-                              <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Até ___ km</label>
+                            <div className="max-w-xs space-y-1">
+                              <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Raio Máximo (KM)</label>
                               <input
                                 type="number"
+                                placeholder="Ex: 100"
                                 {...register('km_translado_coberto', { valueAsNumber: true })}
                                 className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all"
                               />
@@ -768,7 +893,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
               )}
 
               {(!initialData ? step === 4 : activeTab === 'itens') && (
-                <div className="h-full flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="h-full min-h-[580px] flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="bg-bg-subtle/50 p-6 rounded-2xl border border-border-default/50 flex-1 flex flex-col min-h-0">
                     <div className="flex items-center gap-3 border-b border-border-default/50 pb-4 mb-4 shrink-0">
                       <div className="p-2 bg-teal-500/10 rounded-xl text-teal-400">
@@ -795,7 +920,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
               )}
 
               {initialData && activeTab === 'associados' && (
-                <div className="h-full flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="h-full min-h-[520px] flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="bg-bg-subtle/50 p-6 rounded-2xl border border-border-default/50 flex flex-col flex-1 min-h-0">
                     <div className="flex items-center justify-between border-b border-border-default/50 pb-4 mb-4 shrink-0">
                       <div className="flex items-center gap-3">
@@ -842,7 +967,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                               <tr key={a.id} className="hover:bg-bg-hover/50 transition-colors">
                                 <td className="px-6 py-4">
                                   <div className="font-medium text-text-base">{a.nome}</div>
-                                  <div className="text-xs">{a.cpf}</div>
+                                  <div className="text-xs text-text-muted">{mascaraCpfLGPD(a.cpf)}</div>
                                 </td>
                                 <td className="px-6 py-4 font-medium text-text-base">
                                   {a.n_vidas}
@@ -873,31 +998,41 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
             </div>
             
             {/* Footer Form Actions */}
-            <div className="p-6 border-t border-border-default bg-bg-surface/50 flex justify-between shrink-0">
+            <div className="px-8 py-4 border-t border-border-default bg-bg-surface/90 backdrop-blur flex justify-between items-center shrink-0">
               <button
                 type="button"
                 onClick={!initialData && step > 1 ? prevStep : onClose}
-                className="px-6 py-2.5 bg-bg-hover text-text-base rounded-xl font-medium hover:bg-[#64748B] transition-colors"
+                className="flex items-center gap-2 px-6 py-2.5 bg-bg-hover text-text-base rounded-xl font-semibold hover:bg-[#64748B]/30 transition-colors text-xs"
               >
-                {!initialData && step > 1 ? 'Voltar' : 'Cancelar'}
+                {!initialData && step > 1 && <ChevronLeft className="w-4 h-4" />}
+                <span>{!initialData && step > 1 ? 'Voltar Etapa' : 'Cancelar'}</span>
               </button>
+
+              {!initialData && (
+                <div className="hidden sm:flex items-center gap-2 text-xs text-text-subtle">
+                  <span>Etapa <strong className="text-text-base">{step}</strong> de 4</span>
+                  <span>•</span>
+                  <span className="font-semibold text-blue-400">{Math.round((step / 4) * 100)}% concluído</span>
+                </div>
+              )}
               
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
                 {!initialData && step < 4 ? (
                   <button
                     key="btn-next"
                     type="button"
                     onClick={nextStep}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white rounded-xl font-bold hover:opacity-90 transition-opacity"
+                    className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white rounded-xl font-bold text-xs hover:opacity-90 transition-opacity shadow-lg shadow-blue-500/25"
                   >
-                    Próximo <ChevronRight className="w-4 h-4" />
+                    <span>Próximo: {ETAPAS_WIZARD[step]?.title}</span>
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                 ) : (
                   <BotaoSalvar
                     key="btn-submit"
                     type="submit"
                     salvando={isSubmitting}
-                    texto={initialData ? 'Salvar Alterações' : 'Salvar Plano'}
+                    texto={initialData ? 'Salvar Alterações' : 'Concluir e Salvar Plano'}
                     textoSalvando="Salvando Plano..."
                     textoSalvo="Plano Salvo com Sucesso!"
                     variante="emerald"
