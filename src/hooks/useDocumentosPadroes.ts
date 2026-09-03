@@ -84,6 +84,8 @@ export function useDocumentosPadroes() {
         conteudo: data.conteudo || '',
         conteudo_html: data.conteudo || '',
         arquivo_url: data.arquivo_url || null,
+        assinatura_pos_x: data.assinatura_pos_x ?? null,
+        assinatura_pos_y: data.assinatura_pos_y ?? null,
         ativo: data.ativo !== undefined ? data.ativo : true,
         empresa_id: tenantId,
         tenant_id: tenantId,
@@ -114,6 +116,10 @@ export function useDocumentosPadroes() {
           if (err.message.includes('criado_em')) {
             delete payloadToTry.criado_em;
             delete payloadToTry.atualizado_em;
+          }
+          if (err.message.includes('assinatura_pos')) {
+            delete payloadToTry.assinatura_pos_x;
+            delete payloadToTry.assinatura_pos_y;
           }
           const retryRes = await supabase
             .from('documentos_padroes')
@@ -188,6 +194,10 @@ export function useDocumentosPadroes() {
           if (err.message.includes('atualizado_em')) {
             delete payloadToTry.atualizado_em;
             delete payloadToTry.criado_em;
+          }
+          if (err.message.includes('assinatura_pos')) {
+            delete payloadToTry.assinatura_pos_x;
+            delete payloadToTry.assinatura_pos_y;
           }
           const retryRes = await supabase
             .from('documentos_padroes')

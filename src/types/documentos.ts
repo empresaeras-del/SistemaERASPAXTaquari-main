@@ -7,6 +7,11 @@ export interface DocumentoPadrao {
   tipo: TipoDocumento;
   conteudo: string; // The HTML or markdown template with variables like {{associado_nome}}, {{empresa_nome}}, etc.
   arquivo_url?: string; // Optional URL for uploaded PDF/Docx templates
+  // Posição da assinatura da empresa na página (% da largura/altura da
+  // folha A4), escolhida por drag-and-drop no editor. null = usa o rodapé
+  // fixo padrão (comportamento anterior à posição livre).
+  assinatura_pos_x?: number | null;
+  assinatura_pos_y?: number | null;
   ativo: boolean;
   criado_em: string;
   atualizado_em: string;

@@ -16,6 +16,7 @@ import { DocumentoMiniaturasPreview } from '../components/documentos/DocumentoMi
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
+import { AssinaturaPosicionavel } from '../components/documentos/AssinaturaPosicionavel';
 import { MODULOS, VariavelInfo, ModuloInfo, resolverAssociado, resolverEmpresa } from '../utils/documentVariaveis';
 
 /* ─── Sub-componente: botão de variável ─── */
@@ -222,6 +223,7 @@ export const DocumentosPadroesPage = () => {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorRef = useRef<any>(null);
+  const a4PreviewRef = useRef<HTMLDivElement>(null);
 
   const editorConfig = useMemo(() => ({
     readonly: false,
@@ -1295,7 +1297,8 @@ export const DocumentosPadroesPage = () => {
                     </span>
                   </div>
                   <div className="flex-1 overflow-y-auto p-8 flex flex-col items-center gap-6 bg-[#323639] custom-scrollbar pb-24">
-                    <div 
+                    <div
+                      ref={a4PreviewRef}
                       className="a4-simulated shrink-0 shadow-2xl relative"
                       style={{
                         padding: `${margens.top}mm ${margens.right}mm ${margens.bottom}mm ${margens.left}mm`,
@@ -1305,7 +1308,7 @@ export const DocumentosPadroesPage = () => {
                         boxSizing: 'border-box'
                       }}
                     >
-                      <div 
+                      <div
                         className="document-preview-content prose max-w-none h-full"
                         style={{ fontSize: '11pt', lineHeight: '1.5', fontFamily: 'Arial, sans-serif', color: '#1a1a1a' }}
                         dangerouslySetInnerHTML={{
@@ -1314,8 +1317,22 @@ export const DocumentosPadroesPage = () => {
                             : '<p class="text-text-subtle italic text-center mt-20">Comece a digitar para ver a pré-visualização...</p>'
                         }}
                       />
+                      <AssinaturaPosicionavel
+                        containerRef={a4PreviewRef}
+                        assinaturaUrl={currentEmpresa?.assinatura_url}
+                        nomeEmpresa={currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social}
+                        cnpjEmpresa={currentEmpresa?.cnpj}
+                        x={editingDoc?.assinatura_pos_x}
+                        y={editingDoc?.assinatura_pos_y}
+                        editable
+                        onPositionChange={(x, y) => setEditingDoc(prev => ({ ...prev, assinatura_pos_x: x, assinatura_pos_y: y }))}
+                      />
                     </div>
                   </div>
+                  <p className="px-4 pb-3 text-[11px] text-slate-300 flex items-center gap-1.5 shrink-0">
+                    <Sparkles className="w-3 h-3 text-blue-400 shrink-0" />
+                    Arraste a assinatura na folha para escolher onde ela aparece no documento final.
+                  </p>
                 </div>
               )}
             </div>

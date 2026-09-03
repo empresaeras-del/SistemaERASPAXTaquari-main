@@ -35,6 +35,7 @@ import { getAtendimentos } from '../../services/atendimentosService';
 import { PlanoPax } from '../../types/planosPax';
 import { Credenciado } from '../../types/credenciados';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
+import { AssinaturaPosicionavel } from './AssinaturaPosicionavel';
 import { Fornecedor } from '../../types/fornecedores';
 import { Requisicao } from '../../types/requisicoes';
 import { getRequisicoes } from '../../services/requisicoesService';
@@ -1419,7 +1420,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 padding: '22mm 20mm',
                 boxSizing: 'border-box'
               }}
-              className="bg-white text-slate-900 shadow-[0_20px_50px_rgba(0,0,0,0.6)] rounded-sm flex flex-col justify-between"
+              className="bg-white text-slate-900 shadow-[0_20px_50px_rgba(0,0,0,0.6)] rounded-sm flex flex-col justify-between relative"
             >
               <div>
                 {/* Cabeçalho Oficial da Empresa */}
@@ -1458,26 +1459,39 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 />
               </div>
 
-              {/* Rodapé Oficial da Empresa com Assinatura */}
-              <div className="doc-footer w-full mt-12 pt-6 border-t border-slate-300 flex flex-col items-center justify-center text-center">
-                {currentEmpresa?.assinatura_url && (
-                  <div className="mb-2 flex justify-center">
-                    <img 
-                      src={currentEmpresa.assinatura_url} 
-                      alt="Assinatura da Empresa" 
-                      style={{ maxHeight: '70px', maxWidth: '260px', objectFit: 'contain' }}
-                    />
-                  </div>
-                )}
-                
-                <div className="signature-line w-72 border-t border-slate-900 my-1"></div>
-                <p className="text-xs font-bold text-slate-900 uppercase">
-                  {currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social || 'Assinatura Autorizada'}
-                </p>
-                {currentEmpresa?.cnpj && (
-                  <p className="text-[10px] text-slate-600">CNPJ: {currentEmpresa.cnpj}</p>
-                )}
-              </div>
+              {/* Assinatura da empresa: posição livre (escolhida no editor do
+                  modelo) quando definida, senão o rodapé fixo de sempre. */}
+              {documento?.assinatura_pos_x != null && documento?.assinatura_pos_y != null ? (
+                <AssinaturaPosicionavel
+                  containerRef={printAreaRef}
+                  assinaturaUrl={currentEmpresa?.assinatura_url}
+                  nomeEmpresa={currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social}
+                  cnpjEmpresa={currentEmpresa?.cnpj}
+                  x={documento.assinatura_pos_x}
+                  y={documento.assinatura_pos_y}
+                  editable={false}
+                />
+              ) : (
+                <div className="doc-footer w-full mt-12 pt-6 border-t border-slate-300 flex flex-col items-center justify-center text-center">
+                  {currentEmpresa?.assinatura_url && (
+                    <div className="mb-2 flex justify-center">
+                      <img
+                        src={currentEmpresa.assinatura_url}
+                        alt="Assinatura da Empresa"
+                        style={{ maxHeight: '70px', maxWidth: '260px', objectFit: 'contain' }}
+                      />
+                    </div>
+                  )}
+
+                  <div className="signature-line w-72 border-t border-slate-900 my-1"></div>
+                  <p className="text-xs font-bold text-slate-900 uppercase">
+                    {currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social || 'Assinatura Autorizada'}
+                  </p>
+                  {currentEmpresa?.cnpj && (
+                    <p className="text-[10px] text-slate-600">CNPJ: {currentEmpresa.cnpj}</p>
+                  )}
+                </div>
+              )}
 
             </div>
           </div>
