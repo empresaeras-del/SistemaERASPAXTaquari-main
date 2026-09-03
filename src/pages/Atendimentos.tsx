@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { Plus, AlertTriangle, Search, Filter, CheckCircle, Clock, XCircle, Edit2, X, Download, FileText, AlertOctagon, Building2, CheckCircle2, Archive, Ban, LayoutGrid, List, Kanban } from 'lucide-react';
+import { Plus, AlertTriangle, Search, Filter, CheckCircle, Clock, XCircle, Edit2, X, Download, FileText, AlertOctagon, Building2, CheckCircle2, Archive, Ban, LayoutGrid, List, Kanban, Trash2 } from 'lucide-react';
 import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
 import { exportToPDF } from "../lib/pdfExport";
 import { getEmpresaById, Empresa } from "../services/empresasService";
@@ -19,7 +19,8 @@ import { cancelarReceitasPorAtendimento } from '../services/financeiroService';
 import { AtendimentoDetailsModal } from '../components/atendimentos/AtendimentoDetailsModal';
 import { NovoAtendimentoWizard } from '../components/atendimentos/NovoAtendimentoWizard';
 import { AtendimentosKanban } from '../components/AtendimentosKanban';
-import { canEditAtendimentos, alertPermissionRestriction } from '../utils/permissions';
+import { ExcluirAtendimentoModal } from '../components/atendimentos/ExcluirAtendimentoModal';
+import { canEditAtendimentos, canDeleteAtendimento, isAtendimentoExcluivel, alertPermissionRestriction } from '../utils/permissions';
 
 export const AtendimentosPage: React.FC = () => {
   const { state } = useAppContext();
@@ -35,6 +36,7 @@ export const AtendimentosPage: React.FC = () => {
   const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
   const [showRelatorioModal, setShowRelatorioModal] = useState(false);
   const [viewAtendimento, setViewAtendimento] = useState<Atendimento | null>(null);
+  const [atendimentoParaExcluir, setAtendimentoParaExcluir] = useState<Atendimento | null>(null);
 
   const [statusChangeModal, setStatusChangeModal] = useState<{ isOpen: boolean, atendimento: Atendimento | null, newStatus: Atendimento['status'] | null, justificativa: string }>({ isOpen: false, atendimento: null, newStatus: null, justificativa: '' });
 
@@ -501,7 +503,12 @@ export const AtendimentosPage: React.FC = () => {
            <p className="text-sm text-text-subtle text-center">Tente ajustar seus filtros ou cadastre um novo atendimento.</p>
         </div>
       ) : viewMode === 'kanban' ? (
-          <AtendimentosKanban atendimentos={filtered} onStatusChangeRequest={handleStatusChangeRequest} onViewAtendimento={setViewAtendimento} />
+          <AtendimentosKanban 
+            atendimentos={filtered} 
+            onStatusChangeRequest={handleStatusChangeRequest} 
+            onViewAtendimento={setViewAtendimento} 
+            onDeleteAtendimento={setAtendimentoParaExcluir}
+          />
         ) : (
         <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "flex flex-col gap-3"}>
           {filtered.map(a => (
@@ -532,10 +539,28 @@ export const AtendimentosPage: React.FC = () => {
                    </div>
                 </div>
                 
-                <div className="pt-4 border-t border-border-default flex justify-between items-end">
+                <div className="pt-4 border-t border-border-default flex justify-between items-center">
                    <div>
                      <p className="text-[10px] uppercase font-bold text-text-subtle tracking-wider mb-0.5">Valor Extras</p>
-                     <p className="text-lg font-black text-text-base">R$ {a.valor_total.toFixed(2)}</p>
+                     <p className="text-base font-black text-text-base">R$ {a.valor_total.toFixed(2)}</p>
+                   </div>
+                   <div className="flex items-center gap-1.5">
+                     {canDeleteAtendimento(state.user, state.isOnline) && isAtendimentoExcluivel(a.status) && (
+                       <button
+                         type="button"
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           setAtendimentoParaExcluir(a);
+                         }}
+                         className="p-2 rounded-xl text-text-subtle hover:text-rose-500 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all"
+                         title="Excluir Atendimento (Admin)"
+                       >
+                         <Trash2 className="w-4 h-4" />
+                       </button>
+                     )}
+                     <div className="text-primary opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 font-semibold text-xs bg-primary/10 px-2.5 py-1.5 rounded-lg">
+                       Ver Detalhes
+                     </div>
                    </div>
                 </div>
               </div>
@@ -623,6 +648,18 @@ export const AtendimentosPage: React.FC = () => {
           statusFilter
         }}
         userName={state.user?.nome || 'Operador'}
+      />
+
+      {/* Modal de Exclusão de Atendimento com Verificação Financeira e Auditoria */}
+      <ExcluirAtendimentoModal
+        isOpen={Boolean(atendimentoParaExcluir)}
+        onClose={() => setAtendimentoParaExcluir(null)}
+        atendimento={atendimentoParaExcluir}
+        onSuccess={() => {
+          setAtendimentoParaExcluir(null);
+          setViewAtendimento(null);
+          loadData();
+        }}
       />
     </div>
   );

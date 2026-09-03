@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Atendimento } from '../types/atendimentos';
-import { Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, AlertCircle, Trash2 } from 'lucide-react';
 import { formatLocalDate } from '../utils/dateUtils';
+import { useAppContext } from '../context/AppContext';
+import { canDeleteAtendimento, isAtendimentoExcluivel } from '../utils/permissions';
 
 interface AtendimentosKanbanProps {
   atendimentos: Atendimento[];
   onStatusChangeRequest: (atendimento: Atendimento, novoStatus: Atendimento['status']) => void;
   onViewAtendimento: (atendimento: Atendimento) => void;
+  onDeleteAtendimento?: (atendimento: Atendimento) => void;
 }
 
 const STATUSES: { id: Atendimento['status'], label: string, color: string, icon: React.ReactNode }[] = [
@@ -16,7 +19,13 @@ const STATUSES: { id: Atendimento['status'], label: string, color: string, icon:
   { id: 'cancelado', label: 'Cancelado', color: 'bg-rose-500/10 text-rose-500 border-rose-500/20', icon: <XCircle className="w-4 h-4" /> },
 ];
 
-export const AtendimentosKanban: React.FC<AtendimentosKanbanProps> = ({ atendimentos, onStatusChangeRequest, onViewAtendimento }) => {
+export const AtendimentosKanban: React.FC<AtendimentosKanbanProps> = ({ 
+  atendimentos, 
+  onStatusChangeRequest, 
+  onViewAtendimento,
+  onDeleteAtendimento 
+}) => {
+  const { state } = useAppContext();
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
@@ -84,6 +93,19 @@ export const AtendimentosKanban: React.FC<AtendimentosKanbanProps> = ({ atendime
                     <span className="text-xs font-semibold text-text-base">
                       R$ {item.valor_total.toFixed(2)}
                     </span>
+                    {canDeleteAtendimento(state.user, state.isOnline) && isAtendimentoExcluivel(item.status) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteAtendimento?.(item);
+                        }}
+                        className="p-1.5 rounded-lg text-text-subtle hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                        title="Excluir Atendimento"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

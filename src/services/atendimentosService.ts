@@ -1,8 +1,21 @@
 import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { Atendimento } from '../types/atendimentos';
+import { excluirReceitasPorAtendimento } from './financeiroService';
 
 const STORE_NAME = 'atendimentos';
+
+export interface DadosAuditoriaExclusaoAtendimento {
+  falecido_nome?: string;
+  falecido_cpf?: string;
+  tipo_cliente?: string;
+  status?: string;
+  valor_total?: number;
+  usuario_nome?: string;
+  usuario_email?: string;
+  usuario_nivel?: string;
+  justificativa?: string;
+}
 
 export const getAtendimentos = async (isOnline: boolean, tenantId?: string): Promise<Atendimento[]> => {
   if (isOnline) {
@@ -69,8 +82,24 @@ export const saveAtendimento = async (atendimento: Atendimento, isOnline: boolea
   await saveToIDB(STORE_NAME, atendimento);
 };
 
-export const excluirAtendimento = async (id: string, isOnline: boolean): Promise<void> => {
-  // 1. Limpeza local no IndexedDB
+export const excluirAtendimento = async (
+  id: string,
+  isOnline: boolean,
+  dadosAuditoria?: DadosAuditoriaExclusaoAtendimento
+): Promise<void> => {
+  // 1. Exclusão em cascata das receitas vinculadas e suas respectivas parcelas
+  let finInfo: { receitasExcluidas: string[]; parcelasExcluidasCount: number } = {
+    receitasExcluidas: [],
+    parcelasExcluidasCount: 0
+  };
+
+  try {
+    finInfo = await excluirReceitasPorAtendimento(id, isOnline);
+  } catch (errFin) {
+    console.warn('Aviso ao excluir receitas vinculadas ao atendimento:', errFin);
+  }
+
+  // 2. Limpeza local no IndexedDB
   await deleteFromIDB(STORE_NAME, id);
   try {
     const allItens = await getAllFromIDB<any>('atendimento_itens');
@@ -79,7 +108,7 @@ export const excluirAtendimento = async (id: string, isOnline: boolean): Promise
     }
   } catch (e) {}
 
-  // 2. Exclusão no Supabase ou enfileiramento
+  // 3. Exclusão no Supabase ou atualização preventiva
   if (isOnline) {
     try {
       // a) Exclui itens do atendimento
@@ -95,7 +124,23 @@ export const excluirAtendimento = async (id: string, isOnline: boolean): Promise
     }
   }
 
+  // 4. Registro formal no log de auditoria
   try {
-    await registrarAuditoria('Excluir Atendimento', { id });
-  } catch (e) {}
+    await registrarAuditoria('Excluir Atendimento', {
+      atendimento_id: id,
+      falecido_nome: dadosAuditoria?.falecido_nome,
+      falecido_cpf: dadosAuditoria?.falecido_cpf,
+      tipo_cliente: dadosAuditoria?.tipo_cliente,
+      status_anterior: dadosAuditoria?.status,
+      valor_total: dadosAuditoria?.valor_total,
+      receitas_excluidas: finInfo.receitasExcluidas,
+      parcelas_excluidas_count: finInfo.parcelasExcluidasCount,
+      justificativa: dadosAuditoria?.justificativa || 'Exclusão confirmada por administrador',
+      usuario_solicitante: dadosAuditoria?.usuario_nome || dadosAuditoria?.usuario_email || 'Operador',
+      usuario_nivel: dadosAuditoria?.usuario_nivel,
+      data_exclusao: new Date().toISOString()
+    });
+  } catch (e) {
+    console.warn('Erro ao registrar auditoria de exclusão de atendimento:', e);
+  }
 };

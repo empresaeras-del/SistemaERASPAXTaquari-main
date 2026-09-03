@@ -1450,6 +1450,118 @@ export const getParcelasReceberPorAtendimento = async (atendimentoId: string, is
   return parcelas;
 };
 
+export interface VerificacaoFinanceiraAtendimento {
+  temReceita: boolean;
+  receitas: Receita[];
+  parcelas: ParcelaReceber[];
+  temParcelaQuitada: boolean;
+  parcelasQuitadas: ParcelaReceber[];
+  parcelasPendentes: ParcelaReceber[];
+  valorTotalReceitas: number;
+  valorTotalQuitado: number;
+  valorTotalPendente: number;
+}
+
+export const getReceitasPorAtendimento = async (atendimentoId: string, isOnline: boolean): Promise<Receita[]> => {
+  let receitas: Receita[] = [];
+
+  if (isOnline) {
+    try {
+      const { data, error } = await supabase
+        .from('receitas')
+        .select('*')
+        .eq('atendimento_id', atendimentoId);
+
+      if (!error && data && data.length > 0) {
+        return data as Receita[];
+      }
+
+      // Fallback para buscar na descrição
+      const { data: dataDesc, error: errorDesc } = await supabase
+        .from('receitas')
+        .select('*')
+        .ilike('descricao', `%${atendimentoId}%`);
+
+      if (!errorDesc && dataDesc && dataDesc.length > 0) {
+        return dataDesc as Receita[];
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar receitas por atendimento online:', e);
+    }
+  }
+
+  // IDB fallback
+  try {
+    const allReceitas = await getAllFromIDB<Receita>('receitas');
+    receitas = (allReceitas || []).filter(
+      r => r && (r.atendimento_id === atendimentoId || (r.descricao && r.descricao.includes(atendimentoId)))
+    );
+  } catch (e) {
+    console.warn('Erro ao buscar receitas por atendimento no IDB:', e);
+  }
+
+  return receitas;
+};
+
+export const verificarFinanceiroAtendimento = async (
+  atendimentoId: string,
+  isOnline: boolean
+): Promise<VerificacaoFinanceiraAtendimento> => {
+  const receitas = await getReceitasPorAtendimento(atendimentoId, isOnline);
+  const parcelas = await getParcelasReceberPorAtendimento(atendimentoId, isOnline);
+
+  const parcelasQuitadas = parcelas.filter(p => {
+    return (
+      p.status === 'pago' ||
+      p.status === 'recebido' ||
+      Boolean(p.data_pagamento) ||
+      Boolean(p.valor_pago && p.valor_pago > 0) ||
+      Boolean(p.data_recebimento)
+    );
+  });
+
+  const parcelasPendentes = parcelas.filter(p => !parcelasQuitadas.includes(p));
+
+  const valorTotalReceitas = receitas.reduce((acc, r) => acc + (Number(r.valor_total) || 0), 0);
+  const valorTotalQuitado = parcelasQuitadas.reduce(
+    (acc, p) => acc + (Number(p.valor_pago) || Number(p.valor_recebido) || Number(p.valor) || 0),
+    0
+  );
+  const valorTotalPendente = parcelasPendentes.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+
+  return {
+    temReceita: receitas.length > 0,
+    receitas,
+    parcelas,
+    temParcelaQuitada: parcelasQuitadas.length > 0,
+    parcelasQuitadas,
+    parcelasPendentes,
+    valorTotalReceitas,
+    valorTotalQuitado,
+    valorTotalPendente
+  };
+};
+
+export const excluirReceitasPorAtendimento = async (
+  atendimentoId: string,
+  isOnline: boolean
+): Promise<{ receitasExcluidas: string[]; parcelasExcluidasCount: number }> => {
+  const receitas = await getReceitasPorAtendimento(atendimentoId, isOnline);
+  const parcelas = await getParcelasReceberPorAtendimento(atendimentoId, isOnline);
+
+  const idsExcluidos: string[] = [];
+
+  for (const rec of receitas) {
+    await excluirReceita(isOnline, rec.id);
+    idsExcluidos.push(rec.id);
+  }
+
+  return {
+    receitasExcluidas: idsExcluidos,
+    parcelasExcluidasCount: parcelas.length
+  };
+};
+
 export const getDespesas = async (isOnline: boolean, tenantId: string): Promise<Despesa[]> => {
   let despesas: Despesa[] = [];
   const localDespesas = await getAllFromIDB<Despesa>('despesas');

@@ -13,7 +13,8 @@ import { formatLocalDate } from '../../utils/dateUtils';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
-import { canEditAtendimentos, alertPermissionRestriction } from '../../utils/permissions';
+import { canEditAtendimentos, canDeleteAtendimento, isAtendimentoExcluivel, alertPermissionRestriction } from '../../utils/permissions';
+import { ExcluirAtendimentoModal } from './ExcluirAtendimentoModal';
 
 interface Props {
   atendimento: Atendimento;
@@ -30,6 +31,7 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Atendimento>({ ...atendimento });
+  const [showExcluirModal, setShowExcluirModal] = useState(false);
 
   // Load items with details
   const [itemsList, setItemsList] = useState<AtendimentoItem[]>(atendimento.itens || []);
@@ -159,6 +161,18 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {!isEditing && canDeleteAtendimento(state.user, state.isOnline) && isAtendimentoExcluivel(formData.status) && (
+              <button 
+                type="button"
+                onClick={() => setShowExcluirModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 rounded-xl font-semibold text-xs transition-all shadow-sm"
+                title="Excluir Atendimento (Admin)"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Excluir
+              </button>
+            )}
+
             {!isEditing ? (
               <button 
                 type="button"
@@ -615,7 +629,22 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
             </div>
           </div>
         )}
+
       </div>
+
+      {/* Modal de Exclusão de Atendimento */}
+      {showExcluirModal && (
+        <ExcluirAtendimentoModal
+          isOpen={showExcluirModal}
+          onClose={() => setShowExcluirModal(false)}
+          atendimento={formData}
+          onSuccess={() => {
+            setShowExcluirModal(false);
+            onSaved();
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 };

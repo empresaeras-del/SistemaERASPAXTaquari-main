@@ -649,3 +649,25 @@ export const getAvailableNiveisForUser = (
   }
   return [];
 };
+
+/**
+ * Regra: Apenas Super Admin e Admin têm permissão para excluir atendimentos (somente online).
+ */
+export const canDeleteAtendimento = (
+  user: Usuario | null | undefined,
+  isOnline?: boolean
+): boolean => {
+  if (isOnline === false) return false;
+  if (!user) return false;
+  const nivel = String(user.nivel || '').toLowerCase().replace('-', '_');
+  return nivel === 'super_admin' || nivel === 'admin';
+};
+
+/**
+ * Regra: Somente atendimentos com status EM ABERTO ('aberto') ou EM ANDAMENTO ('em_andamento')
+ * podem ser excluídos. Atendimentos concluídos ou cancelados são bloqueados para exclusão.
+ */
+export const isAtendimentoExcluivel = (status?: string | null): boolean => {
+  if (!status) return false;
+  return status === 'aberto' || status === 'em_andamento';
+};
