@@ -8,22 +8,7 @@ import prettierConfig from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: [
-      'dist',
-      'dev-dist',
-      'node_modules',
-      'src/pages/**/*.bak',
-      // Scripts de debug/patch ad-hoc na raiz do repositório, não fazem
-      // parte da aplicação (ver relatório de arquitetura — item de limpeza
-      // de repositório, fora do escopo desta rede de segurança de lint).
-      '*.cjs',
-      'test*.js',
-      'test*.ts',
-      'test*.tsx',
-      'decoded_caixas.js',
-      'fix_tabs.js',
-      'vite-test.ts',
-    ],
+    ignores: ['dist', 'dev-dist', 'node_modules'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
