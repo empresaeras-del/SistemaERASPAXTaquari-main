@@ -22,7 +22,9 @@ import {
   ChevronRight,
   Sparkles,
   RotateCcw,
-  Layers
+  Layers,
+  ClipboardList,
+  Wallet
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { DocumentoPadrao, TipoDocumento } from '../../types/documentos';
@@ -34,11 +36,24 @@ import { PlanoPax } from '../../types/planosPax';
 import { Credenciado } from '../../types/credenciados';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import { Fornecedor } from '../../types/fornecedores';
+import { Requisicao } from '../../types/requisicoes';
+import { getRequisicoes } from '../../services/requisicoesService';
+import { Receita, ParcelaReceber, getReceitas, getParcelasReceber } from '../../services/financeiroService';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { getAllFromIDB } from '../../lib/idb';
 import { supabase } from '../../lib/supabase';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
+import {
+  resolverAssociado,
+  resolverAtendimento,
+  resolverCredenciado,
+  resolverEmpresa,
+  resolverFinanceiro,
+  resolverFornecedor,
+  resolverPlano,
+  resolverRequisicao,
+} from '../../utils/documentVariaveis';
 
 const TIPO_LABELS: Record<TipoDocumento, string> = {
   'contrato_adesao': 'Contrato de Adesão',
@@ -59,6 +74,9 @@ export interface VisualizadorDocumentoPadraoModalProps {
   planos?: PlanoPax[];
   credenciados?: Credenciado[];
   fornecedores?: Fornecedor[];
+  requisicoes?: Requisicao[];
+  receitas?: Receita[];
+  parcelasReceber?: ParcelaReceber[];
   initialPlaceholderValues?: Record<string, string>;
   onEmpresaSelect?: (empresaId: string) => void;
   onAssociadoSelect?: (associadoId: string) => void;
@@ -66,6 +84,8 @@ export interface VisualizadorDocumentoPadraoModalProps {
   onPlanoSelect?: (planoId: string) => void;
   onCredenciadoSelect?: (credenciadoId: string) => void;
   onFornecedorSelect?: (fornecedorId: string) => void;
+  onRequisicaoSelect?: (requisicaoId: string) => void;
+  onParcelaSelect?: (parcelaId: string) => void;
   customTitle?: string;
 }
 
@@ -80,6 +100,9 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   planos: propPlanos = [],
   credenciados: propCredenciados = [],
   fornecedores: propFornecedores = [],
+  requisicoes: propRequisicoes = [],
+  receitas: propReceitas = [],
+  parcelasReceber: propParcelasReceber = [],
   initialPlaceholderValues = {},
   onEmpresaSelect,
   onAssociadoSelect,
@@ -87,6 +110,8 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   onPlanoSelect,
   onCredenciadoSelect,
   onFornecedorSelect,
+  onRequisicaoSelect,
+  onParcelaSelect,
   customTitle
 }) => {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
@@ -102,6 +127,9 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   const [planos, setPlanos] = useState<PlanoPax[]>(propPlanos);
   const [credenciados, setCredenciados] = useState<Credenciado[]>(propCredenciados);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>(propFornecedores);
+  const [requisicoes, setRequisicoes] = useState<Requisicao[]>(propRequisicoes);
+  const [receitas, setReceitas] = useState<Receita[]>(propReceitas);
+  const [parcelasReceber, setParcelasReceber] = useState<ParcelaReceber[]>(propParcelasReceber);
 
   // Seleções ativas
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<string>('');
@@ -110,6 +138,8 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   const [selectedPlanoId, setSelectedPlanoId] = useState<string>('');
   const [selectedCredenciadoId, setSelectedCredenciadoId] = useState<string>('');
   const [selectedFornecedorId, setSelectedFornecedorId] = useState<string>('');
+  const [selectedRequisicaoId, setSelectedRequisicaoId] = useState<string>('');
+  const [selectedParcelaId, setSelectedParcelaId] = useState<string>('');
 
   const [currentEmpresa, setCurrentEmpresa] = useState<Empresa | null>(initialEmpresaData || null);
   const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>(initialPlaceholderValues);
@@ -122,6 +152,8 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     plano: false,
     credenciado: false,
     fornecedor: false,
+    requisicao: false,
+    financeiro: false,
   });
 
   const printAreaRef = useRef<HTMLDivElement>(null);
@@ -133,6 +165,9 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   useEffect(() => { if (propPlanos.length > 0) setPlanos(propPlanos); }, [propPlanos]);
   useEffect(() => { if (propCredenciados.length > 0) setCredenciados(propCredenciados); }, [propCredenciados]);
   useEffect(() => { if (propFornecedores.length > 0) setFornecedores(propFornecedores); }, [propFornecedores]);
+  useEffect(() => { if (propRequisicoes.length > 0) setRequisicoes(propRequisicoes); }, [propRequisicoes]);
+  useEffect(() => { if (propReceitas.length > 0) setReceitas(propReceitas); }, [propReceitas]);
+  useEffect(() => { if (propParcelasReceber.length > 0) setParcelasReceber(propParcelasReceber); }, [propParcelasReceber]);
 
   // Carregamento autônomo e unificado caso as listas não sejam passadas por props
   useEffect(() => {
@@ -198,6 +233,18 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
             setFornecedores(idbForns || []);
           }
         }
+        if (requisicoes.length === 0) {
+          const reqs = await getRequisicoes(true, 'all');
+          setRequisicoes(reqs || []);
+        }
+        if (receitas.length === 0) {
+          const recs = await getReceitas(true, 'all');
+          setReceitas(recs || []);
+        }
+        if (parcelasReceber.length === 0) {
+          const parcs = await getParcelasReceber(true, 'all');
+          setParcelasReceber(parcs || []);
+        }
       } catch (e) {
         console.warn('Erro ao carregar entidades para o visualizador:', e);
       }
@@ -216,15 +263,17 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
 
   // Detecção inteligente de módulos a partir das tags do documento
   const modulosDetectados = useMemo(() => {
-    if (!documento?.conteudo) return { hasAtendimento: false, hasAssociado: false, hasPlano: false, hasCredenciado: false, hasFornecedor: false, hasEmpresa: true };
+    if (!documento?.conteudo) return { hasAtendimento: false, hasAssociado: false, hasPlano: false, hasCredenciado: false, hasFornecedor: false, hasRequisicao: false, hasFinanceiro: false, hasEmpresa: true };
     const content = documento.conteudo.toLowerCase();
-    
+
     return {
       hasAtendimento: /\{\{(falecido_|data_obito|hora_obito|local_obito|local_velorio|local_sepultamento|data_velorio|data_sepultamento|atendimento_|declaracao|medico_|crm_medico|rqe_medico|tanato|datanasc_falecido|cor_falecido|sexo_falecido)/i.test(content),
       hasAssociado: /\{\{(associado_|numero_contrato|data_adesao|quantidade_dependentes|valor_mensalidade)/i.test(content),
       hasPlano: /\{\{(plano_|valor_mensalidade)/i.test(content),
       hasCredenciado: /\{\{credenciado_/i.test(content),
       hasFornecedor: /\{\{fornecedor_/i.test(content),
+      hasRequisicao: /\{\{(requisicao_|paciente_|medico_solicitante|crm_solicitante)/i.test(content),
+      hasFinanceiro: /\{\{(parcela_|receita_|forma_pagamento)/i.test(content),
       hasEmpresa: /\{\{empresa_/i.test(content),
     };
   }, [documento?.conteudo]);
@@ -274,6 +323,8 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
       plano: modulosDetectados.hasPlano,
       credenciado: modulosDetectados.hasCredenciado,
       fornecedor: modulosDetectados.hasFornecedor,
+      requisicao: modulosDetectados.hasRequisicao,
+      financeiro: modulosDetectados.hasFinanceiro,
     });
   }, [documento, isOpen, modulosDetectados]);
 
@@ -284,16 +335,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     setCurrentEmpresa(emp);
 
     if (emp) {
-      setPlaceholderValues(prev => ({
-        ...prev,
-        '{{empresa_nome}}': emp.nome_fantasia || emp.razao_social || '',
-        '{{empresa_razao_social}}': emp.razao_social || emp.nome_fantasia || '',
-        '{{empresa_cnpj}}': emp.cnpj || '',
-        '{{empresa_endereco}}': emp.endereco || '',
-        '{{empresa_telefone}}': emp.telefone || '',
-        '{{empresa_email}}': emp.email || '',
-        '{{empresa_chave_pix}}': emp.chave_pix || '',
-      }));
+      setPlaceholderValues(prev => ({ ...prev, ...resolverEmpresa(emp) }));
     }
 
     if (onEmpresaSelect) {
@@ -307,45 +349,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const assoc = associados.find(a => a.id === associadoId);
     if (!assoc) return;
 
-    const enderecoCompleto = [
-      assoc.endereco_logradouro || assoc.logradouro,
-      (assoc.endereco_numero || assoc.numero) ? `nº ${assoc.endereco_numero || assoc.numero}` : '',
-      assoc.endereco_bairro || assoc.bairro,
-      assoc.endereco_cidade || assoc.cidade,
-      (assoc.endereco_cep || assoc.cep) ? `CEP: ${assoc.endereco_cep || assoc.cep}` : ''
-    ].filter(Boolean).join(', ');
-
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const setVar = (k: string, v: string) => { nv[k] = v; };
-
-      setVar('{{associado_nome}}', assoc.nome || '');
-      setVar('{{associado_cpf}}', assoc.cpf || '');
-      setVar('{{associado_rg}}', assoc.rg || '');
-      setVar('{{associado_data_nasc}}', assoc.data_nascimento ? formatLocalDate(assoc.data_nascimento) : '');
-      setVar('{{associado_sexo}}', assoc.sexo || '');
-      setVar('{{associado_nome_pai}}', assoc.nome_pai || '');
-      setVar('{{associado_nome_mae}}', assoc.nome_mae || '');
-      setVar('{{associado_telefone}}', assoc.telefone || '');
-      setVar('{{associado_email}}', assoc.email || '');
-      setVar('{{associado_endereco}}', enderecoCompleto);
-      setVar('{{associado_logradouro}}', assoc.endereco_logradouro || assoc.logradouro || '');
-      setVar('{{associado_numero}}', assoc.endereco_numero || assoc.numero || '');
-      setVar('{{associado_bairro}}', assoc.endereco_bairro || assoc.bairro || '');
-      setVar('{{associado_cidade}}', assoc.endereco_cidade || assoc.cidade || '');
-      setVar('{{associado_cep}}', assoc.endereco_cep || assoc.cep || '');
-      setVar('{{associado_status}}', (assoc.status || '').toUpperCase());
-      setVar('{{plano_atual}}', assoc.plano_nome || '');
-      setVar('{{plano_nome}}', assoc.plano_nome || '');
-      setVar('{{numero_contrato}}', assoc.numero_contrato || (assoc as any).numero_contrato_fisico || assoc.id.substring(0, 8).toUpperCase());
-      setVar('{{valor_mensalidade}}', assoc.valor_plano ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(assoc.valor_plano) : '');
-      setVar('{{quantidade_dependentes}}', (assoc.dependentes?.length || 0).toString());
-      setVar('{{data_adesao}}', assoc.data_adesao ? formatLocalDate(assoc.data_adesao) : '');
-      setVar('{{associado_dependentes}}', (assoc.dependentes && assoc.dependentes.length > 0) 
-        ? assoc.dependentes.map(d => `${d.nome} (${d.parentesco || 'Dependente'} - CPF: ${d.cpf || 'Não inf.'})`).join('<br/>') 
-        : 'Nenhum dependente vinculado');
-      return nv;
-    });
+    setPlaceholderValues(prev => ({ ...prev, ...resolverAssociado(assoc) }));
 
     if (onAssociadoSelect) {
       onAssociadoSelect(associadoId);
@@ -358,37 +362,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const atd = atendimentos.find(a => a.id === atendimentoId);
     if (!atd) return;
 
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const setVar = (k: string, v: string) => { nv[k] = v; };
-
-      setVar('{{falecido_nome}}', atd.falecido_nome || '');
-      setVar('{{atendimento_falecido_nome}}', atd.falecido_nome || '');
-      setVar('{{falecido_cpf}}', atd.falecido_cpf || '');
-      setVar('{{falecido_data_nascimento}}', atd.falecido_data_nascimento ? formatLocalDate(atd.falecido_data_nascimento) : '');
-      setVar('{{datanasc_falecido}}', atd.falecido_data_nascimento ? formatLocalDate(atd.falecido_data_nascimento) : '');
-      setVar('{{data_obito}}', atd.data_obito ? formatLocalDate(atd.data_obito) : '');
-      setVar('{{hora_obito}}', (atd as any).hora_obito || '');
-      setVar('{{local_obito}}', (atd as any).local_obito || '');
-      setVar('{{local_velorio}}', atd.local_velorio || '');
-      setVar('{{local_sepultamento}}', atd.local_sepultamento || '');
-      setVar('{{data_velorio}}', atd.data_velorio ? formatLocalDate(atd.data_velorio) : '');
-      setVar('{{data_sepultamento}}', atd.data_sepultamento ? formatLocalDate(atd.data_sepultamento) : '');
-      setVar('{{atendimento_valor}}', atd.valor_total ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(atd.valor_total) : 'R$ 0,00');
-      setVar('{{atendimento_status}}', (atd.status || '').toUpperCase());
-      setVar('{{cor_falecido}}', (atd as any).cor_falecido || (atd as any).etnia || '');
-      setVar('{{sexo_falecido}}', (atd as any).sexo_falecido || (atd as any).sexo || '');
-      setVar('{{declaracaoobito}}', (atd as any).declaracao_obito || (atd as any).numero_do || '');
-      setVar('{{declaracao_obito}}', (atd as any).declaracao_obito || (atd as any).numero_do || '');
-      setVar('{{medico_resp}}', (atd as any).medico_responsavel || (atd as any).medico_resp || '');
-      setVar('{{medico_responsavel}}', (atd as any).medico_responsavel || (atd as any).medico_resp || '');
-      setVar('{{crm_medico}}', (atd as any).crm_medico || '');
-      setVar('{{rqe_medico}}', (atd as any).rqe_medico || '');
-      setVar('{{inicio_tanato}}', (atd as any).inicio_tanato || '');
-      setVar('{{termino_tanato}}', (atd as any).termino_tanato || '');
-
-      return nv;
-    });
+    setPlaceholderValues(prev => ({ ...prev, ...resolverAtendimento(atd) }));
 
     // Se o atendimento possui associado_id vinculado, preenche automaticamente os dados do associado
     if (atd.associado_id && (!selectedAssociadoId || selectedAssociadoId !== atd.associado_id)) {
@@ -406,26 +380,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const plano = planos.find(p => p.id === planoId);
     if (!plano) return;
 
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const setVar = (k: string, v: string) => { nv[k] = v; };
-
-      setVar('{{plano_nome}}', plano.nome || '');
-      setVar('{{plano_atual}}', plano.nome || '');
-      setVar('{{plano_codigo}}', plano.codigo || '');
-      setVar('{{plano_tipo}}', plano.tipo_plano === 'individual' ? 'Individual' : 'Coletivo / Familiar');
-      setVar('{{valor_mensalidade}}', plano.valor_mensalidade ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plano.valor_mensalidade) : 'R$ 0,00');
-      setVar('{{plano_taxa_adesao}}', plano.taxa_adesao ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plano.taxa_adesao) : 'R$ 0,00');
-      setVar('{{plano_carencia}}', `${plano.carencia_geral_dias || 0} dias`);
-      setVar('{{plano_carencia_geral}}', `${plano.carencia_geral_dias || 0} dias`);
-      setVar('{{plano_carencia_acidente}}', `${plano.carencia_acidente_dias || 0} dias`);
-      setVar('{{plano_carencia_morte_natural}}', `${plano.carencia_morte_natural_dias || 0} dias`);
-      setVar('{{plano_limite_vidas}}', plano.limite_vidas ? String(plano.limite_vidas) : 'Ilimitado');
-      setVar('{{plano_vigencia_inicio}}', plano.vigencia_inicio ? formatLocalDate(plano.vigencia_inicio) : '');
-      setVar('{{plano_vigencia_fim}}', plano.vigencia_fim ? formatLocalDate(plano.vigencia_fim) : '');
-
-      return nv;
-    });
+    setPlaceholderValues(prev => ({ ...prev, ...resolverPlano(plano) }));
 
     if (onPlanoSelect) {
       onPlanoSelect(planoId);
@@ -438,33 +393,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const cred = credenciados.find(c => c.id === credenciadoId);
     if (!cred) return;
 
-    const enderecoCompleto = [
-      cred.endereco,
-      cred.numero ? `nº ${cred.numero}` : '',
-      cred.complemento,
-      cred.bairro,
-      cred.cidade,
-      cred.estado,
-      cred.cep ? `CEP: ${cred.cep}` : ''
-    ].filter(Boolean).join(', ');
-
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const setVar = (k: string, v: string) => { nv[k] = v; };
-
-      setVar('{{credenciado_nome}}', cred.razao_social || cred.nome_fantasia || '');
-      setVar('{{credenciado_fantasia}}', cred.nome_fantasia || cred.razao_social || '');
-      setVar('{{credenciado_cnpj}}', cred.cnpj_cpf || '');
-      setVar('{{credenciado_endereco}}', enderecoCompleto);
-      setVar('{{credenciado_cidade}}', cred.cidade ? `${cred.cidade}${cred.estado ? ' - ' + cred.estado : ''}` : '');
-      setVar('{{credenciado_telefone}}', cred.telefone || '');
-      setVar('{{credenciado_email}}', cred.email || '');
-      setVar('{{credenciado_responsavel}}', cred.responsavel_nome || '');
-      setVar('{{credenciado_ramo}}', cred.ramo_atividade || '');
-      setVar('{{credenciado_chave_pix}}', cred.chave_pix || '');
-
-      return nv;
-    });
+    setPlaceholderValues(prev => ({ ...prev, ...resolverCredenciado(cred) }));
 
     if (onCredenciadoSelect) {
       onCredenciadoSelect(credenciadoId);
@@ -477,35 +406,44 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const forn = fornecedores.find(f => f.id === fornecedorId);
     if (!forn) return;
 
-    const enderecoCompleto = [
-      forn.logradouro,
-      forn.numero ? `nº ${forn.numero}` : '',
-      forn.complemento,
-      forn.bairro,
-      forn.cidade,
-      forn.uf,
-      forn.cep ? `CEP: ${forn.cep}` : ''
-    ].filter(Boolean).join(', ');
-
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const setVar = (k: string, v: string) => { nv[k] = v; };
-
-      setVar('{{fornecedor_nome}}', forn.razao_social || forn.nome_fantasia || '');
-      setVar('{{fornecedor_fantasia}}', forn.nome_fantasia || forn.razao_social || '');
-      setVar('{{fornecedor_cnpj}}', forn.cnpj_cpf || '');
-      setVar('{{fornecedor_endereco}}', enderecoCompleto);
-      setVar('{{fornecedor_cidade}}', forn.cidade ? `${forn.cidade}${forn.uf ? ' - ' + forn.uf : ''}` : '');
-      setVar('{{fornecedor_telefone}}', forn.telefone || forn.celular_whatsapp || '');
-      setVar('{{fornecedor_email}}', forn.email || '');
-      setVar('{{fornecedor_contato}}', forn.contato_nome || '');
-      setVar('{{fornecedor_chave_pix}}', forn.dados_bancarios?.chave_pix || '');
-
-      return nv;
-    });
+    setPlaceholderValues(prev => ({ ...prev, ...resolverFornecedor(forn) }));
 
     if (onFornecedorSelect) {
       onFornecedorSelect(fornecedorId);
+    }
+  };
+
+  // Manipulador de seleção de Requisição / Guia
+  const handleRequisicaoChange = (requisicaoId: string) => {
+    setSelectedRequisicaoId(requisicaoId);
+    const req = requisicoes.find(r => r.id === requisicaoId);
+    if (!req) return;
+
+    setPlaceholderValues(prev => ({ ...prev, ...resolverRequisicao(req) }));
+
+    if (req.associado_id && (!selectedAssociadoId || selectedAssociadoId !== req.associado_id)) {
+      handleAssociadoChange(req.associado_id);
+    }
+    if (req.credenciado_id && (!selectedCredenciadoId || selectedCredenciadoId !== req.credenciado_id)) {
+      handleCredenciadoChange(req.credenciado_id);
+    }
+
+    if (onRequisicaoSelect) {
+      onRequisicaoSelect(requisicaoId);
+    }
+  };
+
+  // Manipulador de seleção de parcela financeira (Contas a Receber)
+  const handleParcelaChange = (parcelaId: string) => {
+    setSelectedParcelaId(parcelaId);
+    const parcela = parcelasReceber.find(p => p.id === parcelaId);
+    if (!parcela) return;
+
+    const receita = receitas.find(r => r.id === parcela.receita_id) || null;
+    setPlaceholderValues(prev => ({ ...prev, ...resolverFinanceiro(parcela, receita) }));
+
+    if (onParcelaSelect) {
+      onParcelaSelect(parcelaId);
     }
   };
 
@@ -521,6 +459,8 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     setSelectedPlanoId('');
     setSelectedCredenciadoId('');
     setSelectedFornecedorId('');
+    setSelectedRequisicaoId('');
+    setSelectedParcelaId('');
     toast.success('Seleções limpas.');
   };
 
@@ -1229,8 +1169,100 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 )}
               </div>
 
+              {/* ── SELETOR 7: REQUISIÇÃO / GUIA ── */}
+              <div className={`bg-[#181d27] rounded-xl border transition-all ${
+                modulosDetectados.hasRequisicao ? 'border-cyan-500/50 shadow-md shadow-cyan-500/5' : 'border-[#2d3544]'
+              } overflow-hidden`}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('requisicao')}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-[#202735] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-cyan-400 uppercase tracking-wider">
+                    <ClipboardList className="w-4 h-4" />
+                    <span>Requisição / Guia</span>
+                    {modulosDetectados.hasRequisicao && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Detectado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedRequisicaoId && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Requisição Selecionada" />}
+                    {openSections.requisicao ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {openSections.requisicao && (
+                  <div className="p-3 pt-0 border-t border-[#2d3544]/60 space-y-2">
+                    <select
+                      value={selectedRequisicaoId}
+                      onChange={(e) => handleRequisicaoChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-cyan-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione a requisição...</option>
+                      {requisicoes.map(r => (
+                        <option key={r.id} value={r.id}>
+                          {r.codigo_requisicao} - {r.paciente_nome} {r.credenciado_nome ? `(${r.credenciado_nome})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400">
+                      Preenche código, datas, paciente, médico solicitante, valor e coparticipação. Vincula associado e credenciado se houver.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── SELETOR 8: FINANCEIRO / PARCELA ── */}
+              <div className={`bg-[#181d27] rounded-xl border transition-all ${
+                modulosDetectados.hasFinanceiro ? 'border-green-500/50 shadow-md shadow-green-500/5' : 'border-[#2d3544]'
+              } overflow-hidden`}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('financeiro')}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-[#202735] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-green-400 uppercase tracking-wider">
+                    <Wallet className="w-4 h-4" />
+                    <span>Financeiro / Pagamentos</span>
+                    {modulosDetectados.hasFinanceiro && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300 border border-green-500/30 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Detectado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedParcelaId && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Parcela Selecionada" />}
+                    {openSections.financeiro ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {openSections.financeiro && (
+                  <div className="p-3 pt-0 border-t border-[#2d3544]/60 space-y-2">
+                    <select
+                      value={selectedParcelaId}
+                      onChange={(e) => handleParcelaChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-green-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione a parcela...</option>
+                      {parcelasReceber.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.descricao || `Parcela ${p.numero_parcela}`} - {formatLocalDate(p.data_vencimento)}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400">
+                      Preenche número, valor e vencimento da parcela, além da descrição, categoria e valor total da receita.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Botão para limpar seleções */}
-              {(selectedAssociadoId || selectedAtendimentoId || selectedPlanoId || selectedCredenciadoId || selectedFornecedorId) && (
+              {(selectedAssociadoId || selectedAtendimentoId || selectedPlanoId || selectedCredenciadoId || selectedFornecedorId || selectedRequisicaoId || selectedParcelaId) && (
                 <div className="flex justify-end">
                   <button
                     type="button"

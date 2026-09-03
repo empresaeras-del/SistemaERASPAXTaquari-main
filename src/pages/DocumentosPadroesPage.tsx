@@ -16,172 +16,7 @@ import { DocumentoMiniaturasPreview } from '../components/documentos/DocumentoMi
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
-
-/* ─── Tipos para o painel de variáveis ─── */
-interface VariavelInfo {
-  variavel: string;
-  label: string;
-  descricao: string;
-}
-interface ModuloInfo {
-  id: string;
-  label: string;
-  icon: string;
-  cor: string;
-  variaveis: VariavelInfo[];
-}
-
-const MODULOS: ModuloInfo[] = [
-  {
-    id: 'associado', label: 'Associado', icon: '👤', cor: '#3B82F6',
-    variaveis: [
-      { variavel: '{{associado_nome}}',       label: 'Nome completo',      descricao: 'Nome completo do associado' },
-      { variavel: '{{associado_cpf}}',         label: 'CPF',                descricao: 'CPF do associado (formatado)' },
-      { variavel: '{{associado_rg}}',          label: 'RG',                 descricao: 'Registro Geral do associado' },
-      { variavel: '{{associado_data_nasc}}',   label: 'Data de nascimento', descricao: 'Data de nascimento do associado' },
-      { variavel: '{{associado_sexo}}',        label: 'Sexo',               descricao: 'Sexo do associado' },
-      { variavel: '{{associado_nome_pai}}',    label: 'Nome do pai',        descricao: 'Nome do pai do associado' },
-      { variavel: '{{associado_nome_mae}}',    label: 'Nome da mãe',        descricao: 'Nome da mãe do associado' },
-      { variavel: '{{associado_telefone}}',    label: 'Telefone',           descricao: 'Telefone do associado' },
-      { variavel: '{{associado_email}}',       label: 'E-mail',             descricao: 'E-mail do associado' },
-      { variavel: '{{associado_endereco}}',    label: 'Endereço completo',  descricao: 'Logradouro, número, bairro e cidade' },
-      { variavel: '{{associado_logradouro}}',  label: 'Logradouro',         descricao: 'Rua/Avenida do associado' },
-      { variavel: '{{associado_numero}}',      label: 'Número',             descricao: 'Número do endereço' },
-      { variavel: '{{associado_bairro}}',      label: 'Bairro',             descricao: 'Bairro do associado' },
-      { variavel: '{{associado_cidade}}',      label: 'Cidade',             descricao: 'Cidade do associado' },
-      { variavel: '{{associado_cep}}',         label: 'CEP',                descricao: 'CEP do associado' },
-      { variavel: '{{associado_status}}',      label: 'Status',             descricao: 'Status do associado (ativo, inativo...)' },
-      { variavel: '{{numero_contrato}}',       label: 'Nº do contrato',     descricao: 'Número do contrato do associado' },
-      { variavel: '{{data_adesao}}',           label: 'Data de adesão',     descricao: 'Data de adesão do associado ao plano' },
-    ]
-  },
-  {
-    id: 'dependentes', label: 'Dependentes', icon: '👨‍👩‍👧', cor: '#8B5CF6',
-    variaveis: [
-      { variavel: '{{associado_dependentes}}',  label: 'Lista de dependentes',  descricao: 'Nome, parentesco e CPF de cada dependente' },
-      { variavel: '{{quantidade_dependentes}}', label: 'Qtd. de dependentes',   descricao: 'Número total de dependentes vinculados' },
-    ]
-  },
-  {
-    id: 'plano', label: 'Plano / Financeiro', icon: '💳', cor: '#10B981',
-    variaveis: [
-      { variavel: '{{plano_nome}}',            label: 'Nome do plano',       descricao: 'Nome do plano contratado' },
-      { variavel: '{{plano_atual}}',           label: 'Plano atual',         descricao: 'Nome do plano atual do associado' },
-      { variavel: '{{plano_codigo}}',          label: 'Código do plano',     descricao: 'Código identificador do plano' },
-      { variavel: '{{plano_tipo}}',            label: 'Tipo do plano',       descricao: 'Individual ou coletivo' },
-      { variavel: '{{valor_mensalidade}}',     label: 'Valor da mensalidade',descricao: 'Valor mensal formatado em R$' },
-      { variavel: '{{plano_taxa_adesao}}',     label: 'Taxa de adesão',      descricao: 'Valor da taxa de adesão ao plano' },
-      { variavel: '{{plano_carencia}}',        label: 'Carência geral',      descricao: 'Dias de carência geral do plano' },
-      { variavel: '{{plano_limite_vidas}}',    label: 'Limite de vidas',     descricao: 'Número máximo de vidas no plano' },
-      { variavel: '{{plano_vigencia_inicio}}', label: 'Vigência início',     descricao: 'Data de início de vigência do plano' },
-      { variavel: '{{plano_vigencia_fim}}',    label: 'Vigência fim',        descricao: 'Data de fim de vigência do plano' },
-    ]
-  },
-  {
-    id: 'empresa', label: 'Empresa Emissora', icon: '🏢', cor: '#F59E0B',
-    variaveis: [
-      { variavel: '{{empresa_nome}}',         label: 'Nome da empresa',  descricao: 'Nome fantasia da empresa emissora' },
-      { variavel: '{{empresa_razao_social}}', label: 'Razão social',     descricao: 'Razão social da empresa emissora' },
-      { variavel: '{{empresa_cnpj}}',         label: 'CNPJ',             descricao: 'CNPJ da empresa emissora' },
-      { variavel: '{{empresa_endereco}}',     label: 'Endereço',         descricao: 'Endereço da empresa emissora' },
-      { variavel: '{{empresa_telefone}}',     label: 'Telefone',         descricao: 'Telefone da empresa emissora' },
-      { variavel: '{{empresa_email}}',        label: 'E-mail',           descricao: 'E-mail da empresa emissora' },
-      { variavel: '{{empresa_chave_pix}}',    label: 'Chave PIX',        descricao: 'Chave PIX da empresa emissora' },
-    ]
-  },
-  {
-    id: 'credenciado', label: 'Credenciado', icon: '🏥', cor: '#EF4444',
-    variaveis: [
-      { variavel: '{{credenciado_nome}}',        label: 'Nome/Razão social',  descricao: 'Razão social do credenciado' },
-      { variavel: '{{credenciado_fantasia}}',    label: 'Nome fantasia',      descricao: 'Nome fantasia do credenciado' },
-      { variavel: '{{credenciado_cnpj}}',        label: 'CNPJ/CPF',           descricao: 'CNPJ ou CPF do credenciado' },
-      { variavel: '{{credenciado_endereco}}',    label: 'Endereço',           descricao: 'Endereço completo do credenciado' },
-      { variavel: '{{credenciado_cidade}}',      label: 'Cidade',             descricao: 'Cidade do credenciado' },
-      { variavel: '{{credenciado_telefone}}',    label: 'Telefone',           descricao: 'Telefone do credenciado' },
-      { variavel: '{{credenciado_email}}',       label: 'E-mail',             descricao: 'E-mail do credenciado' },
-      { variavel: '{{credenciado_responsavel}}', label: 'Responsável',        descricao: 'Nome do responsável técnico' },
-      { variavel: '{{credenciado_ramo}}',        label: 'Ramo de atividade',  descricao: 'Ramo de atividade do credenciado' },
-      { variavel: '{{credenciado_chave_pix}}',   label: 'Chave PIX',          descricao: 'Chave PIX do credenciado' },
-    ]
-  },
-  {
-    id: 'atendimento', label: 'Atendimento / Óbito', icon: '🕯️', cor: '#64748B',
-    variaveis: [
-      { variavel: '{{falecido_nome}}',            label: 'Nome do falecido',      descricao: 'Nome do falecido registrado no atendimento' },
-      { variavel: '{{falecido_cpf}}',             label: 'CPF do falecido',       descricao: 'CPF do falecido' },
-      { variavel: '{{falecido_data_nascimento}}', label: 'Data nascimento (falecido)', descricao: 'Data de nascimento do falecido' },
-      { variavel: '{{datanasc_falecido}}',        label: 'Data nasc. (alias)',    descricao: 'Tag alternativa para data de nascimento' },
-      { variavel: '{{cor_falecido}}',             label: 'Cor / Raça',            descricao: 'Cor ou etnia do falecido' },
-      { variavel: '{{sexo_falecido}}',            label: 'Sexo do falecido',      descricao: 'Sexo do falecido' },
-      { variavel: '{{data_obito}}',               label: 'Data do óbito',         descricao: 'Data do falecimento' },
-      { variavel: '{{hora_obito}}',               label: 'Hora do óbito',         descricao: 'Horário do falecimento' },
-      { variavel: '{{local_obito}}',              label: 'Local do óbito',        descricao: 'Local onde ocorreu o óbito' },
-      { variavel: '{{declaracaoobito}}',          label: 'Nº da Declaração Óbito',descricao: 'Número da certidão / declaração de óbito' },
-      { variavel: '{{medico_resp}}',              label: 'Médico responsável',    descricao: 'Nome do médico que atestou' },
-      { variavel: '{{crm_medico}}',               label: 'CRM do Médico',         descricao: 'CRM do médico responsável' },
-      { variavel: '{{rqe_medico}}',               label: 'RQE do Médico',         descricao: 'RQE do médico responsável' },
-      { variavel: '{{local_velorio}}',            label: 'Local do velório',      descricao: 'Local onde será o velório' },
-      { variavel: '{{local_sepultamento}}',       label: 'Local de sepultamento', descricao: 'Cemitério / Local de sepultamento' },
-      { variavel: '{{data_velorio}}',             label: 'Data do velório',       descricao: 'Data do velório' },
-      { variavel: '{{data_sepultamento}}',        label: 'Data do sepultamento',  descricao: 'Data do sepultamento' },
-      { variavel: '{{inicio_tanato}}',            label: 'Início Tanatopraxia',   descricao: 'Horário de início da tanatopraxia' },
-      { variavel: '{{termino_tanato}}',           label: 'Término Tanatopraxia',  descricao: 'Horário de término da tanatopraxia' },
-      { variavel: '{{atendimento_valor}}',        label: 'Valor total',           descricao: 'Valor total do atendimento funerário' },
-      { variavel: '{{atendimento_status}}',       label: 'Status',                descricao: 'Status do atendimento (aberto, concluído...)' },
-    ]
-  },
-  {
-    id: 'requisicao', label: 'Requisição / Guia', icon: '📋', cor: '#06B6D4',
-    variaveis: [
-      { variavel: '{{requisicao_codigo}}',   label: 'Código da requisição',  descricao: 'Código único (ex: REQ-2026-001)' },
-      { variavel: '{{requisicao_data}}',     label: 'Data de emissão',       descricao: 'Data de emissão da requisição' },
-      { variavel: '{{requisicao_validade}}', label: 'Data de validade',      descricao: 'Data de validade da requisição' },
-      { variavel: '{{paciente_nome}}',       label: 'Nome do paciente',      descricao: 'Nome do paciente (titular ou dependente)' },
-      { variavel: '{{paciente_cpf}}',        label: 'CPF do paciente',       descricao: 'CPF do paciente' },
-      { variavel: '{{paciente_tipo}}',       label: 'Tipo de paciente',      descricao: 'Titular ou dependente' },
-      { variavel: '{{medico_solicitante}}',  label: 'Médico solicitante',    descricao: 'Nome do médico solicitante' },
-      { variavel: '{{crm_solicitante}}',     label: 'CRM do médico',         descricao: 'CRM do médico solicitante' },
-      { variavel: '{{requisicao_valor}}',    label: 'Valor total',           descricao: 'Valor total da requisição' },
-      { variavel: '{{requisicao_copart}}',   label: 'Coparticipação',        descricao: 'Valor total de coparticipação' },
-    ]
-  },
-  {
-    id: 'financeiro', label: 'Financeiro / Pagamentos', icon: '💰', cor: '#22C55E',
-    variaveis: [
-      { variavel: '{{parcela_numero}}',       label: 'Nº da parcela',        descricao: 'Número da parcela (ex: 1/12)' },
-      { variavel: '{{parcela_valor}}',        label: 'Valor da parcela',     descricao: 'Valor da parcela formatado em R$' },
-      { variavel: '{{parcela_vencimento}}',   label: 'Vencimento',           descricao: 'Data de vencimento da parcela' },
-      { variavel: '{{receita_descricao}}',    label: 'Descrição da receita', descricao: 'Descrição do lançamento de receita' },
-      { variavel: '{{receita_categoria}}',    label: 'Categoria',            descricao: 'Categoria do lançamento financeiro' },
-      { variavel: '{{receita_valor_total}}',  label: 'Valor total',          descricao: 'Valor total do lançamento' },
-      { variavel: '{{forma_pagamento}}',      label: 'Forma de pagamento',   descricao: 'Forma de pagamento (PIX, boleto...)' },
-    ]
-  },
-  {
-    id: 'fornecedor', label: 'Fornecedor', icon: '🚚', cor: '#F97316',
-    variaveis: [
-      { variavel: '{{fornecedor_nome}}',      label: 'Razão social',  descricao: 'Razão social do fornecedor' },
-      { variavel: '{{fornecedor_fantasia}}',  label: 'Nome fantasia', descricao: 'Nome fantasia do fornecedor' },
-      { variavel: '{{fornecedor_cnpj}}',      label: 'CNPJ/CPF',      descricao: 'CNPJ ou CPF do fornecedor' },
-      { variavel: '{{fornecedor_endereco}}',  label: 'Endereço',      descricao: 'Endereço completo do fornecedor' },
-      { variavel: '{{fornecedor_cidade}}',    label: 'Cidade',        descricao: 'Cidade do fornecedor' },
-      { variavel: '{{fornecedor_telefone}}',  label: 'Telefone',      descricao: 'Telefone do fornecedor' },
-      { variavel: '{{fornecedor_email}}',     label: 'E-mail',        descricao: 'E-mail do fornecedor' },
-      { variavel: '{{fornecedor_contato}}',   label: 'Contato',       descricao: 'Nome do contato no fornecedor' },
-      { variavel: '{{fornecedor_chave_pix}}', label: 'Chave PIX',     descricao: 'Chave PIX do fornecedor' },
-    ]
-  },
-  {
-    id: 'sistema', label: 'Sistema / Data', icon: '🖥️', cor: '#94A3B8',
-    variaveis: [
-      { variavel: '{{data_atual}}',      label: 'Data atual',       descricao: 'Data atual no momento da emissão' },
-      { variavel: '{{hora_atual}}',      label: 'Hora atual',       descricao: 'Hora atual no momento da emissão' },
-      { variavel: '{{data_hora_atual}}', label: 'Data e hora atual',descricao: 'Data e hora completas de emissão' },
-      { variavel: '{{mes_atual}}',       label: 'Mês atual',        descricao: 'Nome do mês atual por extenso' },
-      { variavel: '{{ano_atual}}',       label: 'Ano atual',        descricao: 'Ano atual (ex: 2026)' },
-    ]
-  },
-];
+import { MODULOS, VariavelInfo, ModuloInfo, resolverAssociado, resolverEmpresa } from '../utils/documentVariaveis';
 
 /* ─── Sub-componente: botão de variável ─── */
 interface VariavelButtonProps {
@@ -585,35 +420,7 @@ export const DocumentosPadroesPage = () => {
   const handleAssociadoChange = (associadoId: string) => {
     const associado = associados.find(a => a.id === associadoId);
     if (!associado) return;
-    const endereco = [associado.endereco_logradouro, associado.endereco_numero, associado.endereco_bairro, associado.endereco_cidade].filter(Boolean).join(', ');
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const s = (k: string, v: string) => { if (k in nv) nv[k] = v; };
-      s('{{associado_nome}}', associado.nome || '');
-      s('{{associado_cpf}}', associado.cpf || '');
-      s('{{associado_rg}}', associado.rg || '');
-      s('{{associado_data_nasc}}', associado.data_nascimento ? formatLocalDate(associado.data_nascimento) : '');
-      s('{{associado_sexo}}', associado.sexo || '');
-      s('{{associado_nome_pai}}', associado.nome_pai || '');
-      s('{{associado_nome_mae}}', associado.nome_mae || '');
-      s('{{associado_telefone}}', associado.telefone || '');
-      s('{{associado_email}}', associado.email || '');
-      s('{{associado_endereco}}', endereco);
-      s('{{associado_logradouro}}', associado.endereco_logradouro || '');
-      s('{{associado_numero}}', associado.endereco_numero || '');
-      s('{{associado_bairro}}', associado.endereco_bairro || '');
-      s('{{associado_cidade}}', associado.endereco_cidade || '');
-      s('{{associado_cep}}', associado.endereco_cep || '');
-      s('{{associado_status}}', associado.status || '');
-      s('{{plano_atual}}', associado.plano_nome || '');
-      s('{{plano_nome}}', associado.plano_nome || '');
-      s('{{numero_contrato}}', associado.numero_contrato || associado.id.substring(0, 8).toUpperCase());
-      s('{{valor_mensalidade}}', associado.valor_plano ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(associado.valor_plano) : '');
-      s('{{quantidade_dependentes}}', (associado.dependentes?.length || 0).toString());
-      s('{{data_adesao}}', associado.data_adesao ? formatLocalDate(associado.data_adesao) : '');
-      s('{{associado_dependentes}}', (associado.dependentes && associado.dependentes.length > 0) ? associado.dependentes.map(d => `${d.nome} - Parentesco: ${d.parentesco} - CPF: ${d.cpf || 'Não informado'}`).join('<br/>') : 'Nenhum dependente vinculado');
-      return nv;
-    });
+    setPlaceholderValues(prev => ({ ...prev, ...resolverAssociado(associado) }));
   };
 
   const handleEmpresaChange = (empresaId: string) => {
@@ -623,12 +430,7 @@ export const DocumentosPadroesPage = () => {
     setCurrentEmpresa(empresa);
 
     setPlaceholderValues(prev => {
-      const newVals = { ...prev };
-      newVals['{{empresa_nome}}'] = empresa.nome_fantasia || empresa.razao_social || '';
-      newVals['{{empresa_cnpj}}'] = empresa.cnpj || '';
-      newVals['{{empresa_endereco}}'] = `${empresa.endereco || ''}`;
-      newVals['{{empresa_telefone}}'] = empresa.telefone || '';
-      newVals['{{empresa_email}}'] = empresa.email || '';
+      const newVals = { ...prev, ...resolverEmpresa(empresa) };
       return newVals;
     });
   };

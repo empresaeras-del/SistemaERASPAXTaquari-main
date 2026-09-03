@@ -1,3 +1,6 @@
+export const formatCurrencyBRL = (value: number | null | undefined) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+
 export const formatCPF = (value: string) => {
   if (!value) return '';
   let v = value.replace(/\D/g, '');
