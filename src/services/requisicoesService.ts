@@ -38,7 +38,7 @@ export const getRequisicoes = async (isOnline: boolean, tenantId: string): Promi
       if (!error && data) {
         fetchedFromSupa = true;
         const reqIds = data.map(r => r.id).filter(Boolean);
-        let itensMap: Record<string, RequisicaoItem[]> = {};
+        const itensMap: Record<string, RequisicaoItem[]> = {};
 
         if (reqIds.length > 0) {
           try {
@@ -461,7 +461,7 @@ export const gerarPDFGuiaRequisicao = async (req: Requisicao, empresa?: any) => 
   doc.text('O beneficiário e o credenciado declaram ciência dos termos do regulamento da assistência contratada.', 14, termoY + 4);
 
   // Linhas de Assinatura
-  let sigY = termoY + 30;
+  const sigY = termoY + 30;
   
   if (empresa?.assinatura_url) {
     try {

@@ -861,7 +861,7 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
               {currentFilters.searchTerm && (
                 <div className="flex items-center gap-1.5">
                   <span className="font-semibold text-slate-900">Filtro Texto:</span>
-                  <span className="italic text-slate-800">"{currentFilters.searchTerm}"</span>
+                  <span className="italic text-slate-800">&quot;{currentFilters.searchTerm}&quot;</span>
                 </div>
               )}
 

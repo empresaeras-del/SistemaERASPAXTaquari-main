@@ -306,7 +306,7 @@ export const gerarPDFRelatorioFaturamento = async (
   doc.text(`REMESSA: ${remessa.codigo_remessa}`, 196, currentY, { align: 'right' });
   currentY += 10;
   
-  let startY = currentY;
+  const startY = currentY;
 
   // Bloco de Informações da Remessa
   doc.setTextColor(30, 41, 59);

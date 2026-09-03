@@ -98,7 +98,7 @@ const MensalidadesGeracaoSubView = ({
   const gerarProjecao = useCallback(() => {
     if (!planoSelecionado) return;
 
-    let dt = new Date(dataInicio + "T12:00:00");
+    const dt = new Date(dataInicio + "T12:00:00");
     const arr = [];
     const adesao = planoSelecionado.taxa_adesao || 0;
     const baseParcela = (isAdminOrSuperAdmin && valorParcelaManual !== '' && !isNaN(Number(valorParcelaManual)) && Number(valorParcelaManual) >= 0)
@@ -202,7 +202,7 @@ const MensalidadesGeracaoSubView = ({
       <div className="p-8 text-center text-text-subtle bg-bg-surface rounded-2xl border border-dashed border-border-default space-y-3">
         <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
         <p className="font-medium text-text-base">Nenhum plano selecionado</p>
-        <p className="text-xs">Selecione um plano na aba "Contratos" antes de gerar mensalidades para este associado.</p>
+        <p className="text-xs">Selecione um plano na aba &quot;Contratos&quot; antes de gerar mensalidades para este associado.</p>
         <button
           type="button"
           onClick={onCancel}
@@ -804,7 +804,7 @@ export const AssociadoMensalidadesTab: React.FC<{
 
   // Handler para iniciar o wizard de geração de novas mensalidades
   const handleAbrirGeracao = () => {
-    let proximaData = format(new Date(), 'yyyy-MM-dd');
+    const proximaData = format(new Date(), 'yyyy-MM-dd');
     const pendentes = parcelas.filter(p => p.status === 'pendente' || p.status === 'vencido' || p.status === 'atrasado');
 
     if (pendentes.length > 0) {
@@ -854,7 +854,7 @@ export const AssociadoMensalidadesTab: React.FC<{
 
   // Filtragem para tabela
   const filtradasTabela = parcelas.filter(p => {
-    let matchStatus = filtroStatus === 'all' || p.status === filtroStatus;
+    const matchStatus = filtroStatus === 'all' || p.status === filtroStatus;
     let matchPeriodo = true;
     if (filtroPeriodoInicio) {
       matchPeriodo = matchPeriodo && new Date(p.data_vencimento) >= new Date(filtroPeriodoInicio);
@@ -1318,7 +1318,7 @@ export const AssociadoMensalidadesTab: React.FC<{
 
               <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-text-subtle space-y-2">
                 <p>
-                  Você está prestes a excluir a receita <strong className="text-white">"{receitaToDelete.descricao}"</strong>.
+                  Você está prestes a excluir a receita <strong className="text-white">&quot;{receitaToDelete.descricao}&quot;</strong>.
                 </p>
                 <p className="text-rose-400 font-medium">
                   ⚠️ Atenção: Esta ação excluirá permanentemente a receita mestre e todas as parcelas vinculadas a ela.
@@ -1493,7 +1493,7 @@ export const AssociadoMensalidadesTab: React.FC<{
               </div>
 
               <p className="text-xs text-text-subtle">
-                Você está prestes a excluir a parcela <strong className="text-white">"{parcelaToDelete.descricao}"</strong> no valor de <strong className="text-emerald-400">{formatCurrency(parcelaToDelete.valor)}</strong>.
+                Você está prestes a excluir a parcela <strong className="text-white">&quot;{parcelaToDelete.descricao}&quot;</strong> no valor de <strong className="text-emerald-400">{formatCurrency(parcelaToDelete.valor)}</strong>.
               </p>
 
               <div>

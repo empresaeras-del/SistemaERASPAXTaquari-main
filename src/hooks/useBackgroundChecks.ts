@@ -9,13 +9,14 @@ export function useBackgroundChecks() {
   
   useEffect(() => {
     if (!state.empresaSelecionada || !state.isOnline) return;
-    
-    let isMounted = true;
-    
+    const empresaId = state.empresaSelecionada;
+
+    const isMounted = true;
+
     const runChecks = async () => {
       try {
-        const associados = await getAssociados(state.isOnline, state.empresaSelecionada);
-        const parcelas = await getParcelasReceber(state.isOnline, state.empresaSelecionada);
+        const associados = await getAssociados(state.isOnline, empresaId);
+        const parcelas = await getParcelasReceber(state.isOnline, empresaId);
         
         const today = startOfDay(new Date());
         const overdueMap: Record<string, number> = {};

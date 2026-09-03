@@ -209,7 +209,7 @@ export async function resilientSupabaseUpsert(
   onConflict: string = 'id',
   maxRetries: number = 8
 ): Promise<{ data: any; error: any }> {
-  let currentPayload = { ...data };
+  const currentPayload = { ...data };
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const { data: resData, error } = await supabase

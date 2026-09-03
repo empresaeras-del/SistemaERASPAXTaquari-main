@@ -1147,10 +1147,10 @@ export const getReceitaCompleta = async (
       receita.associado_cpf = parcelaRef.devedor_cpf_cnpj;
     }
     if (!receita.forma_pagamento_padrao && (parcelaRef?.forma_pagamento || parcelas[0]?.forma_pagamento)) {
-      receita.forma_pagamento_padrao = parcelaRef?.forma_pagamento || parcelas[0]?.forma_pagamento;
+      receita.forma_pagamento_padrao = parcelaRef?.forma_pagamento || parcelas[0]?.forma_pagamento || 'pix';
     }
     if (!receita.data_inicio_cobranca && (parcelas[0]?.data_vencimento || parcelaRef?.data_vencimento)) {
-      receita.data_inicio_cobranca = parcelas[0]?.data_vencimento || parcelaRef?.data_vencimento;
+      receita.data_inicio_cobranca = parcelas[0]?.data_vencimento || parcelaRef?.data_vencimento || new Date().toISOString().split('T')[0];
     }
     if ((!receita.valor_total || Number(receita.valor_total) === 0) && parcelas.length > 0) {
       receita.valor_total = parcelas.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);

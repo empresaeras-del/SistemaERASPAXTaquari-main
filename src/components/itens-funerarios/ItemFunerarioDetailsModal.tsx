@@ -128,7 +128,7 @@ export const ItemFunerarioDetailsModal: React.FC<Props> = ({ item, onClose, onEd
                         </div>
                         {cob.observacao && (
                           <p className="text-xs text-text-subtle mt-1 italic">
-                            Obs: "{cob.observacao}"
+                            Obs: &quot;{cob.observacao}&quot;
                           </p>
                         )}
                       </div>

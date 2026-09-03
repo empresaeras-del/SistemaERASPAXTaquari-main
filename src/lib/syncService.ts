@@ -82,7 +82,7 @@ export const clearFailedSyncTasks = async () => {
 };
 
 async function resilientSyncUpsert(tableName: string, data: Record<string, any>, onConflict = 'id', maxRetries = 6): Promise<any> {
-  let current = { ...data };
+  const current = { ...data };
   for (let i = 0; i < maxRetries; i++) {
     const { data: resData, error } = await supabase.from(tableName).upsert(current, { onConflict });
     if (!error) return resData;
@@ -371,7 +371,7 @@ export const processSyncQueue = async (isOnline: boolean) => {
           lastError: error?.message || String(error)
         };
 
-        if (updatedTask.retries >= MAX_RETRIES) {
+        if ((updatedTask.retries ?? 0) >= MAX_RETRIES) {
           // Se atingiu o limite, remove para evitar loop infinito
           await deleteFromIDB(SYNC_QUEUE_STORE, task.id);
         } else {

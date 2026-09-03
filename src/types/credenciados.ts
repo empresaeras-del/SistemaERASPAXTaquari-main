@@ -37,8 +37,8 @@ export interface Credenciado {
   updated_at?: string;
 }
 
-export interface CredenciadoInsert extends Omit<Credenciado, 'id' | 'created_at' | 'updated_at'> {}
-export interface CredenciadoUpdate extends Partial<CredenciadoInsert> {}
+export type CredenciadoInsert = Omit<Credenciado, 'id' | 'created_at' | 'updated_at'>;
+export type CredenciadoUpdate = Partial<CredenciadoInsert>;
 
 export interface CredenciadoPlano {
   id: string;
@@ -50,8 +50,8 @@ export interface CredenciadoPlano {
   created_at?: string;
 }
 
-export interface CredenciadoPlanoInsert extends Omit<CredenciadoPlano, 'id' | 'created_at'> {}
-export interface CredenciadoPlanoUpdate extends Partial<CredenciadoPlanoInsert> {}
+export type CredenciadoPlanoInsert = Omit<CredenciadoPlano, 'id' | 'created_at'>;
+export type CredenciadoPlanoUpdate = Partial<CredenciadoPlanoInsert>;
 
 export interface CredenciadoProcedimento {
   id: string;
@@ -62,5 +62,5 @@ export interface CredenciadoProcedimento {
   created_at?: string;
 }
 
-export interface CredenciadoProcedimentoInsert extends Omit<CredenciadoProcedimento, 'id' | 'created_at'> {}
-export interface CredenciadoProcedimentoUpdate extends Partial<CredenciadoProcedimentoInsert> {}
+export type CredenciadoProcedimentoInsert = Omit<CredenciadoProcedimento, 'id' | 'created_at'>;
+export type CredenciadoProcedimentoUpdate = Partial<CredenciadoProcedimentoInsert>;

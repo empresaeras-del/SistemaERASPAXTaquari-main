@@ -731,7 +731,7 @@ export const ConfiguracoesPage: React.FC = () => {
               >
                 Dados Gerais
               </button>
-              {true && (
+              {(
                 <button
                   type="button"
                   onClick={() => setModalActiveTab('contas')}

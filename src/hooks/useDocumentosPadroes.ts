@@ -94,8 +94,8 @@ export function useDocumentosPadroes() {
       };
       
       if (isOnline) {
-        let inserted = null;
-        let payloadToTry: any = { ...docPayload };
+        const inserted = null;
+        const payloadToTry: any = { ...docPayload };
 
         let { data: resData, error: err } = await supabase
           .from('documentos_padroes')
@@ -170,7 +170,7 @@ export function useDocumentosPadroes() {
       }
 
       if (isOnline) {
-        let payloadToTry: any = { ...updatePayload };
+        const payloadToTry: any = { ...updatePayload };
         let { data: updated, error: err } = await supabase
           .from('documentos_padroes')
           .update(payloadToTry)

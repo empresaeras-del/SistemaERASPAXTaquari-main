@@ -93,7 +93,7 @@ export const AssociadosPage: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
 
   const filtered = React.useMemo(() => {
-    let result = associados.filter((a) => {
+    const result = associados.filter((a) => {
       if (!a) return false;
       const s = (searchTerm || '').trim().toLowerCase();
       const sDigits = s.replace(/\D/g, '');
@@ -206,7 +206,7 @@ export const AssociadosPage: React.FC = () => {
   }, [editingAssociado, planosCompletos, calcularValor]);
 
   const todosDependentes = React.useMemo(() => {
-    let deps: any[] = [];
+    const deps: any[] = [];
     associados.forEach(a => {
       if (a && a.dependentes && Array.isArray(a.dependentes)) {
         a.dependentes.forEach(d => {
@@ -862,7 +862,7 @@ export const AssociadosPage: React.FC = () => {
         </div>
       </div>
 
-      {true && (
+      {(
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-bg-surface p-4 rounded-2xl border border-border-default shadow-sm flex items-center gap-4">
             <div className="p-3 bg-[#3B82F6]/10 text-[#3B82F6] rounded-2xl border border-[#3B82F6]/20 shrink-0">
@@ -3000,7 +3000,7 @@ export const AssociadosPage: React.FC = () => {
                       }}
                       nVidas={1 + (editingAssociado?.dependentes?.length || 0)}
                       idadesDependentes={editingAssociado?.dependentes?.filter(d => d.data_nascimento).map(d => {
-                        const ageDifMs = Date.now() - new Date(d.data_nascimento).getTime();
+                        const ageDifMs = Date.now() - new Date(d.data_nascimento!).getTime();
                         const ageDate = new Date(ageDifMs);
                         return Math.abs(ageDate.getUTCFullYear() - 1970);
                       }) || []}

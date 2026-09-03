@@ -500,7 +500,7 @@ export const DocumentosPadroesPage = () => {
         setEmpresas(activeEmps);
 
         const targetEmpId = state.empresaSelecionada || (docToPrint?.empresa_id) || '';
-        let targetEmp = activeEmps.find(e => e.id === targetEmpId) || activeEmps[0] || null;
+        let targetEmp: Empresa | null = activeEmps.find(e => e.id === targetEmpId) || activeEmps[0] || null;
         if (!targetEmp && targetEmpId) {
           targetEmp = await getEmpresaById(targetEmpId, isOnline);
         }

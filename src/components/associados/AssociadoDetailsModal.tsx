@@ -257,7 +257,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
               <Printer className="w-5 h-5" />
             </button>
             <button
-              onClick={() => onEdit(associado)}
+              onClick={() => onEdit?.(associado)}
               className="flex items-center gap-2 px-4 py-2 bg-[#3B82F6]/10 text-[#3B82F6] rounded-xl hover:bg-[#3B82F6]/20 transition-colors font-medium text-xs"
             >
               <Edit2 className="w-4 h-4" />

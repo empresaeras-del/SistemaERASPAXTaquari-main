@@ -99,8 +99,8 @@ export const exportFichasToPDF = async (title: string, credenciados: any[], file
       currentY += 14;
       
       doc.setFontSize(10);
-      let col = 14;
-      let startY = currentY;
+      const col = 14;
+      const startY = currentY;
       
       for (const field of fields) {
         if (!field.value) continue;

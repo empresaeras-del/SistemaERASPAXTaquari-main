@@ -667,7 +667,7 @@ export const ContasReceberFormPage: React.FC = () => {
             
             {parcelasFields.length === 0 ? (
               <div className="text-center py-8 text-text-subtle border border-dashed border-border-default rounded-xl">
-                Preencha o valor total e clique em "Gerar / Atualizar Parcelas" (ou elas serão geradas automaticamente ao salvar).
+                Preencha o valor total e clique em &quot;Gerar / Atualizar Parcelas&quot; (ou elas serão geradas automaticamente ao salvar).
               </div>
             ) : (
               <div className="overflow-x-auto">
