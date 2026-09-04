@@ -88,8 +88,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       try {
         const pref = await getFromIDB<{id: string, order: string[]}>('preferencias', 'sidebar_menu_order');
         if (pref && pref.order) {
-          const newOrder = pref.order.map(label => defaultNavItems.find(item => item.label === label)).filter(Boolean) as NavItem[];
-          const missingItems = defaultNavItems.filter(item => !pref.order.includes(item.label));
+          // If the saved order contains spaces, it's the old label-based format. We should ignore it to let it reset.
+          if (pref.order.length > 0 && pref.order[0].includes(' ')) {
+             return;
+          }
+          const newOrder = pref.order.map(id => defaultNavItems.find(item => item.id === id)).filter(Boolean) as NavItem[];
+          const missingItems = defaultNavItems.filter(item => !pref.order.includes(item.id));
           setNavItems([...newOrder, ...missingItems]);
         }
       } catch (err) {
@@ -101,7 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
 
   const saveOrder = async (newOrder: NavItem[]) => {
     try {
-      await saveToIDB('preferencias', { id: 'sidebar_menu_order', order: newOrder.map(item => item.label) });
+      await saveToIDB('preferencias', { id: 'sidebar_menu_order', order: newOrder.map(item => item.id) });
     } catch (err) {
       console.error("Erro ao salvar ordem do menu", err);
     }
