@@ -5,6 +5,13 @@ import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb'
 import { useAppContext } from '../context/AppContext';
 import { DocumentoPadrao, DocumentoPadraoInsert, DocumentoPadraoUpdate } from '../types/documentos';
 
+/** Extrai o nome da coluna ausente de um erro PGRST204 do PostgREST (ex.: "Could not find the 'foo' column of 'bar' in the schema cache"). */
+function extrairColunaAusente(message: string | undefined): string | null {
+  if (!message) return null;
+  const match = message.match(/'([^']+)'\s+column/);
+  return match ? match[1] : null;
+}
+
 export function useDocumentosPadroes() {
   const [documentos, setDocumentos] = useState<DocumentoPadrao[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +91,14 @@ export function useDocumentosPadroes() {
         conteudo: data.conteudo || '',
         conteudo_html: data.conteudo || '',
         arquivo_url: data.arquivo_url || null,
+        cabecalho_html: data.cabecalho_html || null,
+        rodape_html: data.rodape_html || null,
+        margens: data.margens || null,
+        orientacao: data.orientacao || 'retrato',
+        tamanho_papel: data.tamanho_papel || 'a4',
+        padrao: data.padrao !== undefined ? data.padrao : false,
+        variaveis_disponiveis: data.variaveis_disponiveis || [],
+        assinatura_config: data.assinatura_config || null,
         ativo: data.ativo !== undefined ? data.ativo : true,
         empresa_id: tenantId,
         tenant_id: tenantId,
@@ -92,9 +107,8 @@ export function useDocumentosPadroes() {
         criado_em: now,
         atualizado_em: now
       };
-      
+
       if (isOnline) {
-        const inserted = null;
         const payloadToTry: any = { ...docPayload };
 
         let { data: resData, error: err } = await supabase
@@ -103,18 +117,14 @@ export function useDocumentosPadroes() {
           .select()
           .single();
 
-        // Se uma coluna específica não existir no cache do PostgREST, remove e retenta
-        if (err && err.code === 'PGRST204') {
-          if (err.message.includes('descricao')) {
-            delete payloadToTry.descricao;
-          }
-          if (err.message.includes('conteudo_html')) {
-            delete payloadToTry.conteudo_html;
-          }
-          if (err.message.includes('criado_em')) {
-            delete payloadToTry.criado_em;
-            delete payloadToTry.atualizado_em;
-          }
+        // Se colunas não existirem no cache do PostgREST (ambiente sem a migration mais recente),
+        // remove a coluna ausente e retenta, até funcionar ou esgotar as colunas opcionais.
+        let tentativas = 0;
+        while (err && err.code === 'PGRST204' && tentativas < 12) {
+          const coluna = extrairColunaAusente(err.message);
+          if (!coluna || !(coluna in payloadToTry)) break;
+          delete payloadToTry[coluna];
+          if (coluna === 'criado_em') delete payloadToTry.atualizado_em;
           const retryRes = await supabase
             .from('documentos_padroes')
             .insert([payloadToTry])
@@ -122,6 +132,7 @@ export function useDocumentosPadroes() {
             .single();
           resData = retryRes.data;
           err = retryRes.error;
+          tentativas++;
         }
 
         if (err) {
@@ -178,17 +189,12 @@ export function useDocumentosPadroes() {
           .select()
           .single();
 
-        if (err && err.code === 'PGRST204') {
-          if (err.message.includes('descricao')) {
-            delete payloadToTry.descricao;
-          }
-          if (err.message.includes('conteudo_html')) {
-            delete payloadToTry.conteudo_html;
-          }
-          if (err.message.includes('atualizado_em')) {
-            delete payloadToTry.atualizado_em;
-            delete payloadToTry.criado_em;
-          }
+        let tentativas = 0;
+        while (err && err.code === 'PGRST204' && tentativas < 12) {
+          const coluna = extrairColunaAusente(err.message);
+          if (!coluna || !(coluna in payloadToTry)) break;
+          delete payloadToTry[coluna];
+          if (coluna === 'atualizado_em') delete payloadToTry.criado_em;
           const retryRes = await supabase
             .from('documentos_padroes')
             .update(payloadToTry)
@@ -197,6 +203,7 @@ export function useDocumentosPadroes() {
             .single();
           updated = retryRes.data;
           err = retryRes.error;
+          tentativas++;
         }
 
         if (err) {

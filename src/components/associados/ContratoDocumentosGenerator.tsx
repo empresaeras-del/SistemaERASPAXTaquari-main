@@ -5,8 +5,13 @@ import { Associado } from '../../services/associadosService';
 import { DocumentoPadrao } from '../../types/documentos';
 import { getEmpresas, getEmpresaById, Empresa } from '../../services/empresasService';
 import { useAppContext } from '../../context/AppContext';
-import { formatLocalDate } from '../../utils/dateUtils';
 import { VisualizadorDocumentoPadraoModal } from '../documentos/VisualizadorDocumentoPadraoModal';
+import {
+  resolverVariaveisAssociado,
+  resolverVariaveisContrato,
+  resolverVariaveisEmpresa,
+  resolverVariaveisSistema,
+} from '../../utils/documentoVariaveis';
 
 interface Props {
   associado: Associado;
@@ -21,8 +26,6 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
   const { documentos, loading } = useDocumentosPadroes();
   const [selectedDoc, setSelectedDoc] = useState<string>('');
   const [docToPrint, setDocToPrint] = useState<DocumentoPadrao | null>(null);
-
-  const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   useEffect(() => {
     const loadEmpresas = async () => {
@@ -43,48 +46,16 @@ export const ContratoDocumentosGenerator: React.FC<Props> = ({ associado, valorM
     const doc = documentos.find(d => d.id === selectedDoc);
     if (!doc) return;
 
-    const dataAtual = new Date();
-    const enderecoCompleto = [
-      associado.endereco_logradouro,
-      associado.endereco_numero ? `nº ${associado.endereco_numero}` : '',
-      associado.endereco_bairro ? `Bairro: ${associado.endereco_bairro}` : '',
-      associado.endereco_cidade || '',
-      associado.endereco_cep ? `CEP: ${associado.endereco_cep}` : ''
-    ].filter(Boolean).join(' - ');
-
     const vars: Record<string, string> = {
-      '{{associado_nome}}': associado.nome || '',
-      '{{associado_cpf}}': associado.cpf || '',
-      '{{associado_rg}}': associado.rg || '',
-      '{{associado_telefone}}': associado.telefone || '',
-      '{{associado_email}}': associado.email || '',
-      '{{associado_endereco}}': enderecoCompleto,
-      '{{associado_logradouro}}': associado.endereco_logradouro || '',
-      '{{associado_numero}}': associado.endereco_numero || '',
-      '{{associado_bairro}}': associado.endereco_bairro || '',
-      '{{associado_cidade}}': associado.endereco_cidade || '',
-      '{{associado_cep}}': associado.endereco_cep || '',
-      '{{associado_status}}': associado.status || '',
-      '{{plano_atual}}': associado.plano_nome || '',
-      '{{plano_nome}}': associado.plano_nome || '',
-      '{{valor_mensalidade}}': formatBRL(valorMensalidade || associado.valor_plano || 0),
-      '{{data_adesao}}': associado.data_adesao ? formatLocalDate(associado.data_adesao) : '',
-      '{{numero_contrato}}': (associado as any).numero_contrato || (associado as any).numero_contrato_fisico || associado.id.substring(0, 8).toUpperCase(),
-      '{{associado_dependentes}}': (associado.dependentes && associado.dependentes.length > 0) 
-        ? associado.dependentes.map(d => `${d.nome} (${d.parentesco || 'Dependente'} - CPF: ${d.cpf || 'Não informado'})`).join('<br/>') 
-        : 'Nenhum dependente vinculado',
-      '{{quantidade_dependentes}}': (associado.dependentes?.length || 0).toString(),
-      '{{data_atual}}': formatLocalDate(dataAtual),
-      '{{hora_atual}}': dataAtual.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      '{{data_hora_atual}}': `${formatLocalDate(dataAtual)} às ${dataAtual.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
-      '{{mes_atual}}': dataAtual.toLocaleDateString('pt-BR', { month: 'long' }),
-      '{{ano_atual}}': dataAtual.getFullYear().toString(),
-      '{{empresa_nome}}': empresaData?.nome_fantasia || empresaData?.razao_social || '',
-      '{{empresa_cnpj}}': empresaData?.cnpj || '',
-      '{{empresa_endereco}}': empresaData?.endereco || '',
-      '{{empresa_telefone}}': empresaData?.telefone || '',
-      '{{empresa_email}}': empresaData?.email || '',
+      ...resolverVariaveisSistema(),
+      ...(empresaData ? resolverVariaveisEmpresa(empresaData) : {}),
+      ...resolverVariaveisAssociado(associado),
+      ...resolverVariaveisContrato(associado),
     };
+    if (valorMensalidade) {
+      vars['{{valor_mensalidade}}'] = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorMensalidade);
+      vars['{{contrato_valor_mensalidade}}'] = vars['{{valor_mensalidade}}'];
+    }
 
     const regex = /\{\{([^}]+)\}\}/g;
     const matches = [...(doc.conteudo || '').matchAll(regex)];

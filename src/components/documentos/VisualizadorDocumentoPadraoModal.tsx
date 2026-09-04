@@ -22,20 +22,47 @@ import {
   ChevronRight,
   Sparkles,
   RotateCcw,
-  Layers
+  Layers,
+  Wallet,
+  ClipboardList,
+  UserCircle2,
+  Move,
+  Check,
+  Undo2
 } from 'lucide-react';
+import { Rnd } from 'react-rnd';
 import { format } from 'date-fns';
-import { DocumentoPadrao, TipoDocumento } from '../../types/documentos';
+import { DocumentoPadrao, TipoDocumento, AssinaturaConfig } from '../../types/documentos';
 import { Empresa, getEmpresas } from '../../services/empresasService';
-import { Associado, getAssociados } from '../../services/associadosService';
+import { Associado, Dependente, getAssociados } from '../../services/associadosService';
 import { Atendimento } from '../../types/atendimentos';
 import { getAtendimentos } from '../../services/atendimentosService';
 import { PlanoPax } from '../../types/planosPax';
 import { Credenciado } from '../../types/credenciados';
 import { Fornecedor } from '../../types/fornecedores';
+import { Receita, ParcelaReceber, getReceitas, getParcelasReceber } from '../../services/financeiroService';
+import { Requisicao } from '../../types/requisicoes';
+import { getRequisicoes } from '../../services/requisicoesService';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { getAllFromIDB } from '../../lib/idb';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+import {
+  resolverVariaveisEmpresa,
+  resolverVariaveisAssociado,
+  resolverVariaveisDependente,
+  resolverVariaveisContrato,
+  resolverVariaveisAtendimento,
+  resolverVariaveisPlano,
+  resolverVariaveisCredenciado,
+  resolverVariaveisFornecedor,
+  resolverVariaveisUsuario,
+  resolverVariaveisReceita,
+  resolverVariaveisParcelaReceber,
+  resolverVariaveisRequisicao,
+  resolverVariaveisSistema,
+} from '../../utils/documentoVariaveis';
+import { montarHtmlImpressaoDocumento } from '../../utils/documentoPrintStyles';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
 
@@ -66,6 +93,8 @@ export interface VisualizadorDocumentoPadraoModalProps {
   onCredenciadoSelect?: (credenciadoId: string) => void;
   onFornecedorSelect?: (fornecedorId: string) => void;
   customTitle?: string;
+  /** Quando informado, habilita o modo de posicionamento livre (drag-and-drop) da assinatura da empresa e persiste a escolha através deste callback. */
+  onSaveAssinaturaConfig?: (config: AssinaturaConfig | null) => void;
 }
 
 export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPadraoModalProps> = ({
@@ -86,7 +115,8 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   onPlanoSelect,
   onCredenciadoSelect,
   onFornecedorSelect,
-  customTitle
+  customTitle,
+  onSaveAssinaturaConfig
 }) => {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [zoom, setZoom] = useState<number>(100);
@@ -101,14 +131,23 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   const [planos, setPlanos] = useState<PlanoPax[]>(propPlanos);
   const [credenciados, setCredenciados] = useState<Credenciado[]>(propCredenciados);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>(propFornecedores);
+  const [receitas, setReceitas] = useState<Receita[]>([]);
+  const [parcelasReceber, setParcelasReceber] = useState<ParcelaReceber[]>([]);
+  const [requisicoes, setRequisicoes] = useState<Requisicao[]>([]);
 
   // Seleções ativas
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<string>('');
   const [selectedAssociadoId, setSelectedAssociadoId] = useState<string>('');
+  const [selectedDependenteId, setSelectedDependenteId] = useState<string>('');
   const [selectedAtendimentoId, setSelectedAtendimentoId] = useState<string>('');
   const [selectedPlanoId, setSelectedPlanoId] = useState<string>('');
   const [selectedCredenciadoId, setSelectedCredenciadoId] = useState<string>('');
   const [selectedFornecedorId, setSelectedFornecedorId] = useState<string>('');
+  const [selectedReceitaId, setSelectedReceitaId] = useState<string>('');
+  const [selectedParcelaReceberId, setSelectedParcelaReceberId] = useState<string>('');
+  const [selectedRequisicaoId, setSelectedRequisicaoId] = useState<string>('');
+
+  const { user: usuarioLogado } = useAuth();
 
   const [currentEmpresa, setCurrentEmpresa] = useState<Empresa | null>(initialEmpresaData || null);
   const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>(initialPlaceholderValues);
@@ -121,9 +160,16 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     plano: false,
     credenciado: false,
     fornecedor: false,
+    financeiro: false,
+    requisicao: false,
   });
 
   const printAreaRef = useRef<HTMLDivElement>(null);
+
+  // Posicionamento livre (drag-and-drop) da assinatura da empresa
+  const [assinaturaConfig, setAssinaturaConfig] = useState<AssinaturaConfig | null>(null);
+  const [isPosicionandoAssinatura, setIsPosicionandoAssinatura] = useState(false);
+  const DEFAULT_ASSINATURA_CONFIG: AssinaturaConfig = { x: 35, y: 82, largura: 30, altura: 10, pagina: 0 };
 
   // Sincroniza listas vindas de props
   useEffect(() => { if (propEmpresas.length > 0) setEmpresas(propEmpresas); }, [propEmpresas]);
@@ -197,6 +243,18 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
             setFornecedores(idbForns || []);
           }
         }
+        if (receitas.length === 0) {
+          const rec = await getReceitas(true, 'all');
+          setReceitas(rec || []);
+        }
+        if (parcelasReceber.length === 0) {
+          const parc = await getParcelasReceber(true, 'all');
+          setParcelasReceber(parc || []);
+        }
+        if (requisicoes.length === 0) {
+          const reqs = await getRequisicoes(true, 'all');
+          setRequisicoes(reqs || []);
+        }
       } catch (e) {
         console.warn('Erro ao carregar entidades para o visualizador:', e);
       }
@@ -215,16 +273,23 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
 
   // Detecção inteligente de módulos a partir das tags do documento
   const modulosDetectados = useMemo(() => {
-    if (!documento?.conteudo) return { hasAtendimento: false, hasAssociado: false, hasPlano: false, hasCredenciado: false, hasFornecedor: false, hasEmpresa: true };
+    if (!documento?.conteudo) {
+      return {
+        hasAtendimento: false, hasAssociado: false, hasPlano: false, hasCredenciado: false,
+        hasFornecedor: false, hasEmpresa: true, hasFinanceiro: false, hasRequisicao: false,
+      };
+    }
     const content = documento.conteudo.toLowerCase();
-    
+
     return {
       hasAtendimento: /\{\{(falecido_|data_obito|hora_obito|local_obito|local_velorio|local_sepultamento|data_velorio|data_sepultamento|atendimento_|declaracao|medico_|crm_medico|rqe_medico|tanato|datanasc_falecido|cor_falecido|sexo_falecido)/i.test(content),
-      hasAssociado: /\{\{(associado_|numero_contrato|data_adesao|quantidade_dependentes|valor_mensalidade)/i.test(content),
+      hasAssociado: /\{\{(associado_|numero_contrato|contrato_|data_adesao|quantidade_dependentes|valor_mensalidade|dependente_)/i.test(content),
       hasPlano: /\{\{(plano_|valor_mensalidade)/i.test(content),
       hasCredenciado: /\{\{credenciado_/i.test(content),
       hasFornecedor: /\{\{fornecedor_/i.test(content),
       hasEmpresa: /\{\{empresa_/i.test(content),
+      hasFinanceiro: /\{\{(receita_|parcela_|devedor_|forma_pagamento)/i.test(content),
+      hasRequisicao: /\{\{requisicao_/i.test(content),
     };
   }, [documento?.conteudo]);
 
@@ -235,15 +300,12 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const regex = /\{\{([^}]+)\}\}/g;
     const matches = [...(documento.conteudo || '').matchAll(regex)];
     const initialVals: Record<string, string> = { ...initialPlaceholderValues };
-    const now = new Date();
 
-    // Valores padrão automáticos de data/hora
+    // Valores automáticos: data/hora do sistema, empresa atual e usuário logado
     const autoValues: Record<string, string> = {
-      '{{data_atual}}': formatLocalDate(now),
-      '{{hora_atual}}': now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      '{{data_hora_atual}}': `${formatLocalDate(now)} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
-      '{{mes_atual}}': now.toLocaleDateString('pt-BR', { month: 'long' }),
-      '{{ano_atual}}': now.getFullYear().toString(),
+      ...resolverVariaveisSistema(),
+      ...(currentEmpresa ? resolverVariaveisEmpresa(currentEmpresa) : {}),
+      ...(usuarioLogado ? resolverVariaveisUsuario(usuarioLogado) : {}),
     };
 
     matches.forEach(match => {
@@ -253,17 +315,9 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
       }
     });
 
-    if (currentEmpresa) {
-      if (!initialVals['{{empresa_nome}}']) initialVals['{{empresa_nome}}'] = currentEmpresa.nome_fantasia || currentEmpresa.razao_social || '';
-      if (!initialVals['{{empresa_razao_social}}']) initialVals['{{empresa_razao_social}}'] = currentEmpresa.razao_social || currentEmpresa.nome_fantasia || '';
-      if (!initialVals['{{empresa_cnpj}}']) initialVals['{{empresa_cnpj}}'] = currentEmpresa.cnpj || '';
-      if (!initialVals['{{empresa_endereco}}']) initialVals['{{empresa_endereco}}'] = currentEmpresa.endereco || '';
-      if (!initialVals['{{empresa_telefone}}']) initialVals['{{empresa_telefone}}'] = currentEmpresa.telefone || '';
-      if (!initialVals['{{empresa_email}}']) initialVals['{{empresa_email}}'] = currentEmpresa.email || '';
-      if (!initialVals['{{empresa_chave_pix}}']) initialVals['{{empresa_chave_pix}}'] = currentEmpresa.chave_pix || '';
-    }
-
     setPlaceholderValues(initialVals);
+    setAssinaturaConfig(documento.assinatura_config ?? null);
+    setIsPosicionandoAssinatura(false);
 
     // Ajusta seções abertas com base no tipo de documento detectado
     setOpenSections({
@@ -272,9 +326,46 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
       associado: modulosDetectados.hasAssociado,
       plano: modulosDetectados.hasPlano,
       credenciado: modulosDetectados.hasCredenciado,
+      financeiro: modulosDetectados.hasFinanceiro,
+      requisicao: modulosDetectados.hasRequisicao,
       fornecedor: modulosDetectados.hasFornecedor,
     });
   }, [documento, isOpen, modulosDetectados]);
+
+  // ── Posicionamento livre (drag-and-drop) da assinatura ──
+  const handleIniciarPosicionamentoAssinatura = () => {
+    setAssinaturaConfig(prev => prev || DEFAULT_ASSINATURA_CONFIG);
+    setIsPosicionandoAssinatura(true);
+  };
+
+  const handleAssinaturaDragResizeStop = (xPx: number, yPx: number, larguraPx: number, alturaPx: number) => {
+    // Usa clientWidth/clientHeight (espaço de layout) em vez de getBoundingClientRect() (espaço visual),
+    // pois o zoom da folha é aplicado via CSS transform: scale() num ancestral — o Rnd posiciona a
+    // assinatura em coordenadas de layout, não visuais, então a conversão precisa usar a mesma base.
+    const container = printAreaRef.current;
+    if (!container) return;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    if (width === 0 || height === 0) return;
+    setAssinaturaConfig({
+      x: (xPx / width) * 100,
+      y: (yPx / height) * 100,
+      largura: (larguraPx / width) * 100,
+      altura: (alturaPx / height) * 100,
+      pagina: 0,
+    });
+  };
+
+  const handleSalvarPosicaoAssinatura = () => {
+    setIsPosicionandoAssinatura(false);
+    if (onSaveAssinaturaConfig) onSaveAssinaturaConfig(assinaturaConfig);
+  };
+
+  const handleRemoverPosicaoPersonalizada = () => {
+    setAssinaturaConfig(null);
+    setIsPosicionandoAssinatura(false);
+    if (onSaveAssinaturaConfig) onSaveAssinaturaConfig(null);
+  };
 
   // Manipulador de troca de empresa
   const handleEmpresaChange = (empresaId: string) => {
@@ -283,16 +374,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     setCurrentEmpresa(emp);
 
     if (emp) {
-      setPlaceholderValues(prev => ({
-        ...prev,
-        '{{empresa_nome}}': emp.nome_fantasia || emp.razao_social || '',
-        '{{empresa_razao_social}}': emp.razao_social || emp.nome_fantasia || '',
-        '{{empresa_cnpj}}': emp.cnpj || '',
-        '{{empresa_endereco}}': emp.endereco || '',
-        '{{empresa_telefone}}': emp.telefone || '',
-        '{{empresa_email}}': emp.email || '',
-        '{{empresa_chave_pix}}': emp.chave_pix || '',
-      }));
+      setPlaceholderValues(prev => ({ ...prev, ...resolverVariaveisEmpresa(emp) }));
     }
 
     if (onEmpresaSelect) {
@@ -303,52 +385,28 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   // Manipulador de seleção de associado para preenchimento rápido
   const handleAssociadoChange = (associadoId: string) => {
     setSelectedAssociadoId(associadoId);
+    setSelectedDependenteId('');
     const assoc = associados.find(a => a.id === associadoId);
     if (!assoc) return;
 
-    const enderecoCompleto = [
-      assoc.endereco_logradouro || assoc.logradouro,
-      (assoc.endereco_numero || assoc.numero) ? `nº ${assoc.endereco_numero || assoc.numero}` : '',
-      assoc.endereco_bairro || assoc.bairro,
-      assoc.endereco_cidade || assoc.cidade,
-      (assoc.endereco_cep || assoc.cep) ? `CEP: ${assoc.endereco_cep || assoc.cep}` : ''
-    ].filter(Boolean).join(', ');
-
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const setVar = (k: string, v: string) => { nv[k] = v; };
-
-      setVar('{{associado_nome}}', assoc.nome || '');
-      setVar('{{associado_cpf}}', assoc.cpf || '');
-      setVar('{{associado_rg}}', assoc.rg || '');
-      setVar('{{associado_data_nasc}}', assoc.data_nascimento ? formatLocalDate(assoc.data_nascimento) : '');
-      setVar('{{associado_sexo}}', assoc.sexo || '');
-      setVar('{{associado_nome_pai}}', assoc.nome_pai || '');
-      setVar('{{associado_nome_mae}}', assoc.nome_mae || '');
-      setVar('{{associado_telefone}}', assoc.telefone || '');
-      setVar('{{associado_email}}', assoc.email || '');
-      setVar('{{associado_endereco}}', enderecoCompleto);
-      setVar('{{associado_logradouro}}', assoc.endereco_logradouro || assoc.logradouro || '');
-      setVar('{{associado_numero}}', assoc.endereco_numero || assoc.numero || '');
-      setVar('{{associado_bairro}}', assoc.endereco_bairro || assoc.bairro || '');
-      setVar('{{associado_cidade}}', assoc.endereco_cidade || assoc.cidade || '');
-      setVar('{{associado_cep}}', assoc.endereco_cep || assoc.cep || '');
-      setVar('{{associado_status}}', (assoc.status || '').toUpperCase());
-      setVar('{{plano_atual}}', assoc.plano_nome || '');
-      setVar('{{plano_nome}}', assoc.plano_nome || '');
-      setVar('{{numero_contrato}}', assoc.numero_contrato || (assoc as any).numero_contrato_fisico || assoc.id.substring(0, 8).toUpperCase());
-      setVar('{{valor_mensalidade}}', assoc.valor_plano ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(assoc.valor_plano) : '');
-      setVar('{{quantidade_dependentes}}', (assoc.dependentes?.length || 0).toString());
-      setVar('{{data_adesao}}', assoc.data_adesao ? formatLocalDate(assoc.data_adesao) : '');
-      setVar('{{associado_dependentes}}', (assoc.dependentes && assoc.dependentes.length > 0) 
-        ? assoc.dependentes.map(d => `${d.nome} (${d.parentesco || 'Dependente'} - CPF: ${d.cpf || 'Não inf.'})`).join('<br/>') 
-        : 'Nenhum dependente vinculado');
-      return nv;
-    });
+    setPlaceholderValues(prev => ({
+      ...prev,
+      ...resolverVariaveisAssociado(assoc),
+      ...resolverVariaveisContrato(assoc),
+    }));
 
     if (onAssociadoSelect) {
       onAssociadoSelect(associadoId);
     }
+  };
+
+  // Preenche variáveis de um dependente específico do associado selecionado
+  const handleDependenteChange = (dependenteId: string) => {
+    setSelectedDependenteId(dependenteId);
+    const assoc = associados.find(a => a.id === selectedAssociadoId);
+    const dep = assoc?.dependentes?.find((d: Dependente) => d.id === dependenteId);
+    if (!dep) return;
+    setPlaceholderValues(prev => ({ ...prev, ...resolverVariaveisDependente(dep) }));
   };
 
   // Manipulador de seleção de Atendimento Funerário / Óbito
@@ -357,37 +415,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const atd = atendimentos.find(a => a.id === atendimentoId);
     if (!atd) return;
 
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const setVar = (k: string, v: string) => { nv[k] = v; };
-
-      setVar('{{falecido_nome}}', atd.falecido_nome || '');
-      setVar('{{atendimento_falecido_nome}}', atd.falecido_nome || '');
-      setVar('{{falecido_cpf}}', atd.falecido_cpf || '');
-      setVar('{{falecido_data_nascimento}}', atd.falecido_data_nascimento ? formatLocalDate(atd.falecido_data_nascimento) : '');
-      setVar('{{datanasc_falecido}}', atd.falecido_data_nascimento ? formatLocalDate(atd.falecido_data_nascimento) : '');
-      setVar('{{data_obito}}', atd.data_obito ? formatLocalDate(atd.data_obito) : '');
-      setVar('{{hora_obito}}', (atd as any).hora_obito || '');
-      setVar('{{local_obito}}', (atd as any).local_obito || '');
-      setVar('{{local_velorio}}', atd.local_velorio || '');
-      setVar('{{local_sepultamento}}', atd.local_sepultamento || '');
-      setVar('{{data_velorio}}', atd.data_velorio ? formatLocalDate(atd.data_velorio) : '');
-      setVar('{{data_sepultamento}}', atd.data_sepultamento ? formatLocalDate(atd.data_sepultamento) : '');
-      setVar('{{atendimento_valor}}', atd.valor_total ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(atd.valor_total) : 'R$ 0,00');
-      setVar('{{atendimento_status}}', (atd.status || '').toUpperCase());
-      setVar('{{cor_falecido}}', (atd as any).cor_falecido || (atd as any).etnia || '');
-      setVar('{{sexo_falecido}}', (atd as any).sexo_falecido || (atd as any).sexo || '');
-      setVar('{{declaracaoobito}}', (atd as any).declaracao_obito || (atd as any).numero_do || '');
-      setVar('{{declaracao_obito}}', (atd as any).declaracao_obito || (atd as any).numero_do || '');
-      setVar('{{medico_resp}}', (atd as any).medico_responsavel || (atd as any).medico_resp || '');
-      setVar('{{medico_responsavel}}', (atd as any).medico_responsavel || (atd as any).medico_resp || '');
-      setVar('{{crm_medico}}', (atd as any).crm_medico || '');
-      setVar('{{rqe_medico}}', (atd as any).rqe_medico || '');
-      setVar('{{inicio_tanato}}', (atd as any).inicio_tanato || '');
-      setVar('{{termino_tanato}}', (atd as any).termino_tanato || '');
-
-      return nv;
-    });
+    setPlaceholderValues(prev => ({ ...prev, ...resolverVariaveisAtendimento(atd) }));
 
     // Se o atendimento possui associado_id vinculado, preenche automaticamente os dados do associado
     if (atd.associado_id && (!selectedAssociadoId || selectedAssociadoId !== atd.associado_id)) {
@@ -405,26 +433,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const plano = planos.find(p => p.id === planoId);
     if (!plano) return;
 
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const setVar = (k: string, v: string) => { nv[k] = v; };
-
-      setVar('{{plano_nome}}', plano.nome || '');
-      setVar('{{plano_atual}}', plano.nome || '');
-      setVar('{{plano_codigo}}', plano.codigo || '');
-      setVar('{{plano_tipo}}', plano.tipo_plano === 'individual' ? 'Individual' : 'Coletivo / Familiar');
-      setVar('{{valor_mensalidade}}', plano.valor_mensalidade ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plano.valor_mensalidade) : 'R$ 0,00');
-      setVar('{{plano_taxa_adesao}}', plano.taxa_adesao ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plano.taxa_adesao) : 'R$ 0,00');
-      setVar('{{plano_carencia}}', `${plano.carencia_geral_dias || 0} dias`);
-      setVar('{{plano_carencia_geral}}', `${plano.carencia_geral_dias || 0} dias`);
-      setVar('{{plano_carencia_acidente}}', `${plano.carencia_acidente_dias || 0} dias`);
-      setVar('{{plano_carencia_morte_natural}}', `${plano.carencia_morte_natural_dias || 0} dias`);
-      setVar('{{plano_limite_vidas}}', plano.limite_vidas ? String(plano.limite_vidas) : 'Ilimitado');
-      setVar('{{plano_vigencia_inicio}}', plano.vigencia_inicio ? formatLocalDate(plano.vigencia_inicio) : '');
-      setVar('{{plano_vigencia_fim}}', plano.vigencia_fim ? formatLocalDate(plano.vigencia_fim) : '');
-
-      return nv;
-    });
+    setPlaceholderValues(prev => ({ ...prev, ...resolverVariaveisPlano(plano) }));
 
     if (onPlanoSelect) {
       onPlanoSelect(planoId);
@@ -437,33 +446,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const cred = credenciados.find(c => c.id === credenciadoId);
     if (!cred) return;
 
-    const enderecoCompleto = [
-      cred.endereco,
-      cred.numero ? `nº ${cred.numero}` : '',
-      cred.complemento,
-      cred.bairro,
-      cred.cidade,
-      cred.estado,
-      cred.cep ? `CEP: ${cred.cep}` : ''
-    ].filter(Boolean).join(', ');
-
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const setVar = (k: string, v: string) => { nv[k] = v; };
-
-      setVar('{{credenciado_nome}}', cred.razao_social || cred.nome_fantasia || '');
-      setVar('{{credenciado_fantasia}}', cred.nome_fantasia || cred.razao_social || '');
-      setVar('{{credenciado_cnpj}}', cred.cnpj_cpf || '');
-      setVar('{{credenciado_endereco}}', enderecoCompleto);
-      setVar('{{credenciado_cidade}}', cred.cidade ? `${cred.cidade}${cred.estado ? ' - ' + cred.estado : ''}` : '');
-      setVar('{{credenciado_telefone}}', cred.telefone || '');
-      setVar('{{credenciado_email}}', cred.email || '');
-      setVar('{{credenciado_responsavel}}', cred.responsavel_nome || '');
-      setVar('{{credenciado_ramo}}', cred.ramo_atividade || '');
-      setVar('{{credenciado_chave_pix}}', cred.chave_pix || '');
-
-      return nv;
-    });
+    setPlaceholderValues(prev => ({ ...prev, ...resolverVariaveisCredenciado(cred) }));
 
     if (onCredenciadoSelect) {
       onCredenciadoSelect(credenciadoId);
@@ -476,36 +459,35 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const forn = fornecedores.find(f => f.id === fornecedorId);
     if (!forn) return;
 
-    const enderecoCompleto = [
-      forn.logradouro,
-      forn.numero ? `nº ${forn.numero}` : '',
-      forn.complemento,
-      forn.bairro,
-      forn.cidade,
-      forn.uf,
-      forn.cep ? `CEP: ${forn.cep}` : ''
-    ].filter(Boolean).join(', ');
-
-    setPlaceholderValues(prev => {
-      const nv = { ...prev };
-      const setVar = (k: string, v: string) => { nv[k] = v; };
-
-      setVar('{{fornecedor_nome}}', forn.razao_social || forn.nome_fantasia || '');
-      setVar('{{fornecedor_fantasia}}', forn.nome_fantasia || forn.razao_social || '');
-      setVar('{{fornecedor_cnpj}}', forn.cnpj_cpf || '');
-      setVar('{{fornecedor_endereco}}', enderecoCompleto);
-      setVar('{{fornecedor_cidade}}', forn.cidade ? `${forn.cidade}${forn.uf ? ' - ' + forn.uf : ''}` : '');
-      setVar('{{fornecedor_telefone}}', forn.telefone || forn.celular_whatsapp || '');
-      setVar('{{fornecedor_email}}', forn.email || '');
-      setVar('{{fornecedor_contato}}', forn.contato_nome || '');
-      setVar('{{fornecedor_chave_pix}}', forn.dados_bancarios?.chave_pix || '');
-
-      return nv;
-    });
+    setPlaceholderValues(prev => ({ ...prev, ...resolverVariaveisFornecedor(forn) }));
 
     if (onFornecedorSelect) {
       onFornecedorSelect(fornecedorId);
     }
+  };
+
+  // Manipulador de seleção de Receita (financeiro)
+  const handleReceitaChange = (receitaId: string) => {
+    setSelectedReceitaId(receitaId);
+    const receita = receitas.find(r => r.id === receitaId);
+    if (!receita) return;
+    setPlaceholderValues(prev => ({ ...prev, ...resolverVariaveisReceita(receita) }));
+  };
+
+  // Manipulador de seleção de Parcela a Receber (financeiro — ideal para recibos)
+  const handleParcelaReceberChange = (parcelaId: string) => {
+    setSelectedParcelaReceberId(parcelaId);
+    const parcela = parcelasReceber.find(p => p.id === parcelaId);
+    if (!parcela) return;
+    setPlaceholderValues(prev => ({ ...prev, ...resolverVariaveisParcelaReceber(parcela) }));
+  };
+
+  // Manipulador de seleção de Requisição / Guia
+  const handleRequisicaoChange = (requisicaoId: string) => {
+    setSelectedRequisicaoId(requisicaoId);
+    const req = requisicoes.find(r => r.id === requisicaoId);
+    if (!req) return;
+    setPlaceholderValues(prev => ({ ...prev, ...resolverVariaveisRequisicao(req) }));
   };
 
   // Toggle de seção do accordion
@@ -516,10 +498,14 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   // Reset de seleções automáticas
   const handleResetSelections = () => {
     setSelectedAssociadoId('');
+    setSelectedDependenteId('');
     setSelectedAtendimentoId('');
     setSelectedPlanoId('');
     setSelectedCredenciadoId('');
     setSelectedFornecedorId('');
+    setSelectedReceitaId('');
+    setSelectedParcelaReceberId('');
+    setSelectedRequisicaoId('');
     toast.success('Seleções limpas.');
   };
 
@@ -587,150 +573,11 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
       return;
     }
 
-    const pageOrientationCss = orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
-
-    const printHtml = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <title>${documento?.nome || 'Documento Oficial'}</title>
-          <style>
-            @page {
-              ${pageOrientationCss}
-              margin: 15mm 15mm 15mm 15mm;
-            }
-            *, *::before, *::after {
-              box-sizing: border-box;
-            }
-            html, body {
-              margin: 0;
-              padding: 0;
-              background-color: #ffffff;
-              color: #0f172a;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              font-size: 11pt;
-              line-height: 1.6;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            .doc-container {
-              width: 100%;
-              max-width: 100%;
-              margin: 0 auto;
-              background: #ffffff;
-            }
-            .doc-header {
-              width: 100%;
-              text-align: center;
-              border-bottom: 2px solid #0f172a;
-              padding-bottom: 14px;
-              margin-bottom: 22px;
-              page-break-inside: avoid;
-              break-inside: avoid;
-            }
-            .doc-header img {
-              max-height: 90px;
-              width: 100%;
-              object-fit: contain;
-              display: block;
-              margin: 0 auto;
-            }
-            .doc-content {
-              width: 100%;
-              page-break-inside: auto;
-              break-inside: auto;
-            }
-            .doc-content p, 
-            .doc-content div, 
-            .doc-content h1, 
-            .doc-content h2, 
-            .doc-content h3, 
-            .doc-content h4, 
-            .doc-content table, 
-            .doc-content ul, 
-            .doc-content ol {
-              page-break-inside: auto;
-              break-inside: auto;
-              margin-bottom: 12px;
-            }
-            .doc-footer {
-              width: 100%;
-              margin-top: 40px;
-              padding-top: 18px;
-              border-top: 1px solid #cbd5e1;
-              text-align: center;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              page-break-inside: avoid;
-              break-inside: avoid;
-            }
-            .doc-footer img {
-              max-height: 75px;
-              max-width: 280px;
-              object-fit: contain;
-              margin-bottom: 6px;
-            }
-            .signature-line {
-              width: 280px;
-              border-top: 1px solid #0f172a;
-              margin: 6px auto;
-            }
-            h1, h2, h3, h4 {
-              color: #0f172a;
-              margin-top: 14px;
-              margin-bottom: 8px;
-            }
-            strong {
-              font-weight: bold;
-              color: #000000;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 12px 0;
-            }
-            table th, table td {
-              border: 1px solid #cbd5e1;
-              padding: 6px 10px;
-              font-size: 10pt;
-            }
-            table th {
-              background-color: #f1f5f9;
-              font-weight: bold;
-            }
-            table.tabela-sem-grade,
-            table.tabela-sem-grade td,
-            table.tabela-sem-grade th,
-            table[style*="border: none"],
-            table[style*="border: 0"] {
-              border: none !important;
-            }
-            table.tabela-zebrada tr:nth-child(even) td {
-              background-color: #f8fafc !important;
-            }
-            .page-break {
-              page-break-after: always;
-              break-after: page;
-              height: 0;
-              margin: 0;
-              padding: 0;
-              border: none !important;
-            }
-            .page-break span {
-              display: none !important;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="doc-container">
-            ${printArea.innerHTML}
-          </div>
-        </body>
-      </html>
-    `;
+    const printHtml = montarHtmlImpressaoDocumento(
+      documento?.nome || 'Documento Oficial',
+      printArea.innerHTML,
+      orientation
+    );
 
     printWindow.document.write(printHtml);
     printWindow.document.close();
@@ -889,15 +736,52 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
               <ZoomIn className="w-4 h-4" />
             </button>
           </div>
+
+          {onSaveAssinaturaConfig && (
+            <>
+              <div className="h-4 w-px bg-[#2d3544]" />
+              {!isPosicionandoAssinatura ? (
+                <button
+                  onClick={handleIniciarPosicionamentoAssinatura}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544] transition-colors"
+                  title="Escolher livremente onde a assinatura da empresa aparece no documento"
+                >
+                  <Move className="w-3.5 h-3.5 text-fuchsia-400" />
+                  <span className="hidden md:inline">Posicionar Assinatura</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="hidden md:inline text-[10px] text-fuchsia-300 font-semibold">Arraste/redimensione a assinatura na folha</span>
+                  {assinaturaConfig && (
+                    <button
+                      onClick={handleRemoverPosicaoPersonalizada}
+                      className="p-1.5 rounded-lg text-slate-300 hover:text-rose-300 hover:bg-[#2d3544] transition-colors"
+                      title="Remover posicionamento personalizado (voltar ao rodapé padrão)"
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={handleSalvarPosicaoAssinatura}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-fuchsia-600 hover:bg-fuchsia-500 text-white rounded-lg text-xs font-bold transition-colors"
+                    title="Concluir e salvar a posição da assinatura"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">Concluir</span>
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Lado Direito: Ações (Salvar PDF, Imprimir, Fechar) */}
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={handleExportPDF}
-            disabled={isExportingPDF}
+            disabled={isExportingPDF || isPosicionandoAssinatura}
             className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-colors shadow-lg shadow-emerald-600/20 active:scale-95"
-            title="Baixar arquivo PDF diretamente"
+            title={isPosicionandoAssinatura ? 'Conclua o posicionamento da assinatura antes de exportar' : 'Baixar arquivo PDF diretamente'}
           >
             <Download className="w-4 h-4" />
             <span className="hidden sm:inline">Salvar PDF</span>
@@ -905,8 +789,9 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
 
           <button
             onClick={handleImprimir}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs transition-colors shadow-lg shadow-blue-600/20 active:scale-95"
-            title="Abrir impressão limpa nativa / Salvar como PDF"
+            disabled={isPosicionandoAssinatura}
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-colors shadow-lg shadow-blue-600/20 active:scale-95"
+            title={isPosicionandoAssinatura ? 'Conclua o posicionamento da assinatura antes de imprimir' : 'Abrir impressão limpa nativa / Salvar como PDF'}
           >
             <Printer className="w-4 h-4" />
             <span className="hidden sm:inline">Imprimir</span>
@@ -1086,6 +971,35 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                     <p className="text-[10px] text-slate-400">
                       Preenche nome, CPF, endereço, número do contrato, plano, dependentes e data de adesão.
                     </p>
+
+                    {selectedAssociadoId && (() => {
+                      const assocSelecionado = associados.find(a => a.id === selectedAssociadoId);
+                      const dependentes = assocSelecionado?.dependentes || [];
+                      if (dependentes.length === 0) return null;
+                      return (
+                        <div className="pt-2 border-t border-[#2d3544]/60 space-y-1.5">
+                          <label className="flex items-center gap-1.5 text-[10px] font-semibold text-blue-300 uppercase tracking-wider">
+                            <UserCircle2 className="w-3 h-3" />
+                            Dependente (opcional)
+                          </label>
+                          <select
+                            value={selectedDependenteId}
+                            onChange={(e) => handleDependenteChange(e.target.value)}
+                            className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none transition-colors"
+                          >
+                            <option value="">Selecione um dependente...</option>
+                            {dependentes.map((d: Dependente) => (
+                              <option key={d.id} value={d.id}>
+                                {d.nome} {d.cpf ? `(CPF: ${d.cpf})` : ''} {d.parentesco ? `[${d.parentesco}]` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-slate-400">
+                            Preenche nome, CPF, data de nascimento e parentesco do dependente selecionado.
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -1228,8 +1142,112 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 )}
               </div>
 
+              {/* ── SELETOR 7: FINANCEIRO (RECEITA / PARCELA A RECEBER) ── */}
+              <div className={`bg-[#181d27] rounded-xl border transition-all ${
+                modulosDetectados.hasFinanceiro ? 'border-teal-500/50 shadow-md shadow-teal-500/5' : 'border-[#2d3544]'
+              } overflow-hidden`}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('financeiro')}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-[#202735] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-teal-400 uppercase tracking-wider">
+                    <Wallet className="w-4 h-4" />
+                    <span>Financeiro (Receita / Recibo)</span>
+                    {modulosDetectados.hasFinanceiro && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Detectado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {(selectedReceitaId || selectedParcelaReceberId) && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Selecionado" />}
+                    {openSections.financeiro ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {openSections.financeiro && (
+                  <div className="p-3 pt-0 border-t border-[#2d3544]/60 space-y-2">
+                    <select
+                      value={selectedReceitaId}
+                      onChange={(e) => handleReceitaChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-teal-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione a receita...</option>
+                      {receitas.map(r => (
+                        <option key={r.id} value={r.id}>
+                          {r.descricao} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.valor_total || 0)}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedParcelaReceberId}
+                      onChange={(e) => handleParcelaReceberChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-teal-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione a parcela a receber...</option>
+                      {parcelasReceber.map(p => (
+                        <option key={p.id} value={p.id}>
+                          Parcela {p.numero_parcela} - {p.devedor_nome || 'Sem devedor'} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor || 0)}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400">
+                      Preenche descrição, categoria, valores, vencimento/pagamento, status e dados do devedor — ideal para recibos.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── SELETOR 8: REQUISIÇÃO / GUIA ── */}
+              <div className={`bg-[#181d27] rounded-xl border transition-all ${
+                modulosDetectados.hasRequisicao ? 'border-cyan-500/50 shadow-md shadow-cyan-500/5' : 'border-[#2d3544]'
+              } overflow-hidden`}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection('requisicao')}
+                  className="w-full p-3 flex items-center justify-between text-left hover:bg-[#202735] transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-cyan-400 uppercase tracking-wider">
+                    <ClipboardList className="w-4 h-4" />
+                    <span>Requisição / Guia</span>
+                    {modulosDetectados.hasRequisicao && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        Detectado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedRequisicaoId && <span className="w-2 h-2 rounded-full bg-emerald-400" title="Requisição Selecionada" />}
+                    {openSections.requisicao ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {openSections.requisicao && (
+                  <div className="p-3 pt-0 border-t border-[#2d3544]/60 space-y-2">
+                    <select
+                      value={selectedRequisicaoId}
+                      onChange={(e) => handleRequisicaoChange(e.target.value)}
+                      className="w-full bg-[#13171f] border border-[#2d3544] rounded-lg px-3 py-2 text-white text-xs focus:border-cyan-500 outline-none transition-colors"
+                    >
+                      <option value="">Selecione a requisição...</option>
+                      {requisicoes.map(r => (
+                        <option key={r.id} value={r.id}>
+                          {r.codigo_requisicao} - {r.paciente_nome} ({(r.status || '').toUpperCase()})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400">
+                      Preenche código, datas, paciente, credenciado, médico solicitante, itens e valor total.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Botão para limpar seleções */}
-              {(selectedAssociadoId || selectedAtendimentoId || selectedPlanoId || selectedCredenciadoId || selectedFornecedorId) && (
+              {(selectedAssociadoId || selectedAtendimentoId || selectedPlanoId || selectedCredenciadoId || selectedFornecedorId || selectedReceitaId || selectedParcelaReceberId || selectedRequisicaoId) && (
                 <div className="flex justify-end">
                   <button
                     type="button"
@@ -1384,7 +1402,8 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 width: orientation === 'landscape' ? '297mm' : '210mm',
                 minHeight: orientation === 'landscape' ? '210mm' : '297mm',
                 padding: '22mm 20mm',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                position: 'relative'
               }}
               className="bg-white text-slate-900 shadow-[0_20px_50px_rgba(0,0,0,0.6)] rounded-sm flex flex-col justify-between"
             >
@@ -1425,26 +1444,80 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 />
               </div>
 
-              {/* Rodapé Oficial da Empresa com Assinatura */}
-              <div className="doc-footer w-full mt-12 pt-6 border-t border-slate-300 flex flex-col items-center justify-center text-center">
-                {currentEmpresa?.assinatura_url && (
-                  <div className="mb-2 flex justify-center">
-                    <img 
-                      src={currentEmpresa.assinatura_url} 
-                      alt="Assinatura da Empresa" 
-                      style={{ maxHeight: '70px', maxWidth: '260px', objectFit: 'contain' }}
-                    />
-                  </div>
-                )}
-                
-                <div className="signature-line w-72 border-t border-slate-900 my-1"></div>
-                <p className="text-xs font-bold text-slate-900 uppercase">
-                  {currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social || 'Assinatura Autorizada'}
-                </p>
-                {currentEmpresa?.cnpj && (
-                  <p className="text-[10px] text-slate-600">CNPJ: {currentEmpresa.cnpj}</p>
-                )}
-              </div>
+              {/* Rodapé Oficial da Empresa com Assinatura (comportamento padrão/legado: rodapé fixo centralizado) */}
+              {!assinaturaConfig && (
+                <div className="doc-footer w-full mt-12 pt-6 border-t border-slate-300 flex flex-col items-center justify-center text-center">
+                  {currentEmpresa?.assinatura_url && (
+                    <div className="mb-2 flex justify-center">
+                      <img
+                        src={currentEmpresa.assinatura_url}
+                        alt="Assinatura da Empresa"
+                        style={{ maxHeight: '70px', maxWidth: '260px', objectFit: 'contain' }}
+                      />
+                    </div>
+                  )}
+
+                  <div className="signature-line w-72 border-t border-slate-900 my-1"></div>
+                  <p className="text-xs font-bold text-slate-900 uppercase">
+                    {currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social || 'Assinatura Autorizada'}
+                  </p>
+                  {currentEmpresa?.cnpj && (
+                    <p className="text-[10px] text-slate-600">CNPJ: {currentEmpresa.cnpj}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Assinatura com posicionamento livre (drag-and-drop), quando configurada */}
+              {assinaturaConfig && isPosicionandoAssinatura && (
+                <Rnd
+                  bounds="parent"
+                  position={{
+                    x: (assinaturaConfig.x / 100) * (printAreaRef.current?.clientWidth || 1),
+                    y: (assinaturaConfig.y / 100) * (printAreaRef.current?.clientHeight || 1),
+                  }}
+                  size={{
+                    width: (assinaturaConfig.largura / 100) * (printAreaRef.current?.clientWidth || 1),
+                    height: (assinaturaConfig.altura / 100) * (printAreaRef.current?.clientHeight || 1),
+                  }}
+                  onDragStop={(_e, d) => handleAssinaturaDragResizeStop(
+                    d.x, d.y,
+                    (assinaturaConfig.largura / 100) * (printAreaRef.current?.clientWidth || 1),
+                    (assinaturaConfig.altura / 100) * (printAreaRef.current?.clientHeight || 1)
+                  )}
+                  onResizeStop={(_e, _dir, ref, _delta, pos) => handleAssinaturaDragResizeStop(
+                    pos.x, pos.y, ref.offsetWidth, ref.offsetHeight
+                  )}
+                  className="border-2 border-dashed border-fuchsia-500 bg-fuchsia-500/5 flex flex-col items-center justify-center text-center cursor-move z-10"
+                >
+                  {currentEmpresa?.assinatura_url && (
+                    <img src={currentEmpresa.assinatura_url} alt="Assinatura da Empresa" className="max-h-full max-w-full object-contain pointer-events-none" />
+                  )}
+                  <div className="signature-line w-4/5 border-t border-slate-900 my-1 pointer-events-none"></div>
+                  <p className="text-[10px] font-bold text-slate-900 uppercase pointer-events-none">
+                    {currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social || 'Assinatura Autorizada'}
+                  </p>
+                </Rnd>
+              )}
+
+              {assinaturaConfig && !isPosicionandoAssinatura && (
+                <div
+                  className="absolute flex flex-col items-center justify-center text-center"
+                  style={{
+                    left: `${assinaturaConfig.x}%`,
+                    top: `${assinaturaConfig.y}%`,
+                    width: `${assinaturaConfig.largura}%`,
+                    height: `${assinaturaConfig.altura}%`,
+                  }}
+                >
+                  {currentEmpresa?.assinatura_url && (
+                    <img src={currentEmpresa.assinatura_url} alt="Assinatura da Empresa" className="max-h-full max-w-full object-contain" />
+                  )}
+                  <div className="signature-line w-4/5 border-t border-slate-900 my-1"></div>
+                  <p className="text-[10px] font-bold text-slate-900 uppercase">
+                    {currentEmpresa?.nome_fantasia || currentEmpresa?.razao_social || 'Assinatura Autorizada'}
+                  </p>
+                </div>
+              )}
 
             </div>
           </div>

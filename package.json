@@ -37,6 +37,7 @@
     "react-dom": "^19.0.1",
     "react-hook-form": "^7.84.0",
     "react-hot-toast": "^2.6.0",
+    "react-rnd": "^10.5.3",
     "react-router-dom": "^7.18.2",
     "recharts": "^3.10.1",
     "uuid": "^14.0.1",

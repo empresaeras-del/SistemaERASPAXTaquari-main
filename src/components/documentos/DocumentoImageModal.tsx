@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Image as ImageIcon, Upload, Link, Building2, Check, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { X, Image as ImageIcon, Upload, Link, Building2, Check, AlignLeft, AlignCenter, AlignRight, PenTool } from 'lucide-react';
 import { Empresa } from '../../services/empresasService';
 import toast from 'react-hot-toast';
 
@@ -18,7 +18,7 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
   empresaData,
   empresas = []
 }) => {
-  const [tab, setTab] = useState<'upload' | 'url' | 'empresa'>('upload');
+  const [tab, setTab] = useState<'upload' | 'url' | 'empresa' | 'assinatura'>('upload');
   const [imageUrl, setImageUrl] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageWidth, setImageWidth] = useState<'80px' | '150px' | '280px' | '480px' | '100%'>('280px');
@@ -56,6 +56,17 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
       setAltText(`Logomarca - ${emp.nome_fantasia || emp.razao_social}`);
     } else {
       toast.error('Esta empresa não possui logomarca cadastrada.');
+    }
+  };
+
+  const handleSelectEmpresaAssinatura = (emp: Empresa) => {
+    if (emp.assinatura_url) {
+      setImagePreview(emp.assinatura_url);
+      setImageUrl(emp.assinatura_url);
+      setAltText(`Assinatura - ${emp.nome_fantasia || emp.razao_social}`);
+      setImageWidth('150px');
+    } else {
+      toast.error('Esta empresa não possui assinatura cadastrada.');
     }
   };
 
@@ -149,6 +160,19 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
 
           <button
             type="button"
+            onClick={() => setTab('assinatura')}
+            className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+              tab === 'assinatura'
+                ? 'border-emerald-500 text-emerald-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <PenTool className="w-3.5 h-3.5" />
+            Assinatura da Empresa
+          </button>
+
+          <button
+            type="button"
             onClick={() => setTab('url')}
             className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
               tab === 'url'
@@ -211,6 +235,38 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-white truncate">{emp.nome_fantasia || emp.razao_social}</p>
                       <p className="text-[10px] text-slate-400">{emp.logo_url ? 'Logomarca disponível' : 'Sem logo cadastrada'}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tab: Assinatura da Empresa */}
+          {tab === 'assinatura' && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400">
+                Insira a assinatura da empresa como uma imagem fixa em um ponto específico do texto. Para posicionar a
+                assinatura livremente sobre a folha (arrastar e redimensionar), use o botão &quot;Posicionar Assinatura&quot; na barra de visualização do documento.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {empresas.map((emp) => (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => handleSelectEmpresaAssinatura(emp)}
+                    className="p-3 bg-[#13171f] hover:bg-[#1f2634] border border-[#2d3544] hover:border-emerald-500 rounded-2xl text-left transition-all flex items-center gap-3"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                      {emp.assinatura_url ? (
+                        <img src={emp.assinatura_url} alt={emp.nome_fantasia} className="max-w-full max-h-full object-contain" />
+                      ) : (
+                        <PenTool className="w-5 h-5 text-slate-500" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{emp.nome_fantasia || emp.razao_social}</p>
+                      <p className="text-[10px] text-slate-400">{emp.assinatura_url ? 'Assinatura disponível' : 'Sem assinatura cadastrada'}</p>
                     </div>
                   </button>
                 ))}

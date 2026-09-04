@@ -6,8 +6,14 @@ import { getEmpresas, getEmpresaById, Empresa } from '../../services/empresasSer
 import { useAppContext } from '../../context/AppContext';
 import { useDocumentosPadroes } from '../../hooks/useDocumentosPadroes';
 import { getAssociados, Associado } from '../../services/associadosService';
-import { formatLocalDate } from '../../utils/dateUtils';
 import { VisualizadorDocumentoPadraoModal } from '../documentos/VisualizadorDocumentoPadraoModal';
+import {
+  resolverVariaveisAtendimento,
+  resolverVariaveisAtendimentoParcelas,
+  resolverVariaveisAssociado,
+  resolverVariaveisEmpresa,
+  resolverVariaveisSistema,
+} from '../../utils/documentoVariaveis';
 
 interface Props {
   atendimento: Atendimento;
@@ -52,73 +58,12 @@ export const AtendimentoDocumentosGenerator: React.FC<Props> = ({ atendimento, p
     const doc = documentos.find(d => d.id === selectedDoc);
     if (!doc) return;
 
-    const dataAtual = new Date();
-    
-    // Format itens
-    const itensStr = (atendimento.itens || []).map(i => `${i.quantidade}x ${i.item_nome || 'Item'} (R$ ${(i.valor_unitario * i.quantidade).toFixed(2)})`).join(', ') || 'Nenhum item adicionado';
-    
-    // Format parcelas
-    const parcelasStr = parcelas.map(p => `Parcela ${p.numero_parcela} - Vencimento: ${formatLocalDate(p.data_vencimento)} - Valor: R$ ${p.valor.toFixed(2)} - Status: ${p.status}`).join('<br/>') || 'Nenhuma parcela financeira';
-
     const vars: Record<string, string> = {
-      // Atendimento Data (suporta tanto prefixo atendimento_ quanto chaves diretas)
-      '{{atendimento_id}}': atendimento.id,
-      '{{atendimento_tipo}}': atendimento.tipo_cliente === 'associado' ? 'Associado' : 'Cliente Externo',
-      '{{atendimento_falecido_nome}}': atendimento.falecido_nome || '',
-      '{{falecido_nome}}': atendimento.falecido_nome || '',
-      '{{atendimento_falecido_cpf}}': atendimento.falecido_cpf || '',
-      '{{falecido_cpf}}': atendimento.falecido_cpf || '',
-      '{{atendimento_falecido_data_nascimento}}': formatLocalDate(atendimento.falecido_data_nascimento, 'dd/MM/yyyy', ''),
-      '{{falecido_data_nascimento}}': formatLocalDate(atendimento.falecido_data_nascimento, 'dd/MM/yyyy', ''),
-      '{{datanasc_falecido}}': formatLocalDate(atendimento.falecido_data_nascimento, 'dd/MM/yyyy', ''),
-      '{{cor_falecido}}': (atendimento as any).cor_falecido || (atendimento as any).etnia || '',
-      '{{sexo_falecido}}': (atendimento as any).sexo_falecido || (atendimento as any).sexo || '',
-      '{{atendimento_local_velorio}}': atendimento.local_velorio || '',
-      '{{local_velorio}}': atendimento.local_velorio || '',
-      '{{atendimento_local_sepultamento}}': atendimento.local_sepultamento || '',
-      '{{local_sepultamento}}': atendimento.local_sepultamento || '',
-      '{{atendimento_data_obito}}': formatLocalDate(atendimento.data_obito, 'dd/MM/yyyy', ''),
-      '{{data_obito}}': formatLocalDate(atendimento.data_obito, 'dd/MM/yyyy', ''),
-      '{{hora_obito}}': (atendimento as any).hora_obito || '',
-      '{{local_obito}}': (atendimento as any).local_obito || '',
-      '{{declaracaoobito}}': (atendimento as any).declaracao_obito || (atendimento as any).numero_do || '',
-      '{{declaracao_obito}}': (atendimento as any).declaracao_obito || (atendimento as any).numero_do || '',
-      '{{medico_resp}}': (atendimento as any).medico_responsavel || (atendimento as any).medico_resp || '',
-      '{{crm_medico}}': (atendimento as any).crm_medico || '',
-      '{{rqe_medico}}': (atendimento as any).rqe_medico || '',
-      '{{inicio_tanato}}': (atendimento as any).inicio_tanato || '',
-      '{{termino_tanato}}': (atendimento as any).termino_tanato || '',
-      '{{atendimento_data_velorio}}': formatLocalDate(atendimento.data_velorio, 'dd/MM/yyyy', ''),
-      '{{data_velorio}}': formatLocalDate(atendimento.data_velorio, 'dd/MM/yyyy', ''),
-      '{{atendimento_data_sepultamento}}': formatLocalDate(atendimento.data_sepultamento, 'dd/MM/yyyy', ''),
-      '{{data_sepultamento}}': formatLocalDate(atendimento.data_sepultamento, 'dd/MM/yyyy', ''),
-      '{{atendimento_valor}}': `R$ ${(atendimento.valor_total || 0).toFixed(2)}`,
-      '{{atendimento_valor_total}}': `R$ ${(atendimento.valor_total || 0).toFixed(2)}`,
-      '{{atendimento_status}}': (atendimento.status || '').toUpperCase(),
-      '{{atendimento_itens_lista}}': itensStr,
-      '{{atendimento_parcelas_lista}}': parcelasStr,
-      '{{data_atual}}': formatLocalDate(dataAtual),
-      '{{hora_atual}}': dataAtual.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      '{{data_hora_atual}}': `${formatLocalDate(dataAtual)} às ${dataAtual.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
-      '{{ano_atual}}': dataAtual.getFullYear().toString(),
-      '{{mes_atual}}': dataAtual.toLocaleDateString('pt-BR', { month: 'long' }),
-      
-      // Associado Data (if applicable)
-      '{{associado_nome}}': associadoData?.nome || '',
-      '{{associado_cpf}}': associadoData?.cpf || '',
-      '{{associado_rg}}': associadoData?.rg || '',
-      '{{associado_telefone}}': associadoData?.telefone || '',
-      '{{associado_endereco}}': `${associadoData?.endereco_logradouro || ''} ${associadoData?.endereco_numero || ''}`.trim(),
-      '{{associado_cidade}}': associadoData?.endereco_cidade || '',
-      '{{associado_estado}}': (associadoData as any)?.endereco_estado || '',
-      '{{associado_cep}}': associadoData?.endereco_cep || '',
-
-      // Empresa
-      '{{empresa_nome}}': empresaData?.nome_fantasia || empresaData?.razao_social || '',
-      '{{empresa_cnpj}}': empresaData?.cnpj || '',
-      '{{empresa_endereco}}': empresaData?.endereco || '',
-      '{{empresa_telefone}}': empresaData?.telefone || '',
-      '{{empresa_email}}': empresaData?.email || '',
+      ...resolverVariaveisSistema(),
+      ...resolverVariaveisAtendimento(atendimento),
+      ...resolverVariaveisAtendimentoParcelas(parcelas),
+      ...(associadoData ? resolverVariaveisAssociado(associadoData) : {}),
+      ...(empresaData ? resolverVariaveisEmpresa(empresaData) : {}),
     };
 
     const regex = /\{\{([^}]+)\}\}/g;

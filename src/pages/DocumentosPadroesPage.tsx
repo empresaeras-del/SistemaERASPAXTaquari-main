@@ -2,185 +2,24 @@ import { getEmpresaById, getEmpresas, Empresa } from '../services/empresasServic
 import { getAssociados, Associado } from '../services/associadosService';
 import React, { useState, useRef, useMemo } from 'react';
 import JoditEditor from 'jodit-react';
+import toast from 'react-hot-toast';
 import { useDocumentosPadroes } from '../hooks/useDocumentosPadroes';
 import { useAppContext } from '../context/AppContext';
 import { DocumentoPadrao, TipoDocumento } from '../types/documentos';
 import { canDelete } from '../utils/permissions';
 import { formatLocalDate } from '../utils/dateUtils';
-import { FileText, Plus, Search, Pencil, Power, PowerOff, X, Download, Eye, Maximize, Minimize, Trash2, Printer, ChevronDown, ChevronRight, Copy, Tag, Info, Layout, Table as TableIcon, Image as ImageIcon, Scissors, Layers, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { FileText, Plus, Search, Pencil, Power, PowerOff, X, Download, Eye, Maximize, Minimize, Trash2, Printer, ChevronDown, ChevronRight, Copy, Tag, Info, Layout, Table as TableIcon, Image as ImageIcon, Scissors, Layers, SlidersHorizontal, Sparkles, Grid3x3 } from 'lucide-react';
 import { VisualizadorDocumentoPadraoModal } from '../components/documentos/VisualizadorDocumentoPadraoModal';
 import { DocumentoMargensModal, MargensConfig } from '../components/documentos/DocumentoMargensModal';
 import { DocumentoTableModal } from '../components/documentos/DocumentoTableModal';
+import { DocumentoTableEditModal } from '../components/documentos/DocumentoTableEditModal';
 import { DocumentoImageModal } from '../components/documentos/DocumentoImageModal';
 import { DocumentoMiniaturasPreview } from '../components/documentos/DocumentoMiniaturasPreview';
+import { resolverVariaveisAssociado, resolverVariaveisContrato, resolverVariaveisEmpresa } from '../utils/documentoVariaveis';
+import { montarHtmlImpressaoDocumento } from '../utils/documentoPrintStyles';
+import { MODULOS_VARIAVEIS as MODULOS, VariavelInfo, ModuloInfo } from '../config/documentoVariaveis.config';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
-
-/* ─── Tipos para o painel de variáveis ─── */
-interface VariavelInfo {
-  variavel: string;
-  label: string;
-  descricao: string;
-}
-interface ModuloInfo {
-  id: string;
-  label: string;
-  icon: string;
-  cor: string;
-  variaveis: VariavelInfo[];
-}
-
-const MODULOS: ModuloInfo[] = [
-  {
-    id: 'associado', label: 'Associado', icon: '👤', cor: '#3B82F6',
-    variaveis: [
-      { variavel: '{{associado_nome}}',       label: 'Nome completo',      descricao: 'Nome completo do associado' },
-      { variavel: '{{associado_cpf}}',         label: 'CPF',                descricao: 'CPF do associado (formatado)' },
-      { variavel: '{{associado_rg}}',          label: 'RG',                 descricao: 'Registro Geral do associado' },
-      { variavel: '{{associado_data_nasc}}',   label: 'Data de nascimento', descricao: 'Data de nascimento do associado' },
-      { variavel: '{{associado_sexo}}',        label: 'Sexo',               descricao: 'Sexo do associado' },
-      { variavel: '{{associado_nome_pai}}',    label: 'Nome do pai',        descricao: 'Nome do pai do associado' },
-      { variavel: '{{associado_nome_mae}}',    label: 'Nome da mãe',        descricao: 'Nome da mãe do associado' },
-      { variavel: '{{associado_telefone}}',    label: 'Telefone',           descricao: 'Telefone do associado' },
-      { variavel: '{{associado_email}}',       label: 'E-mail',             descricao: 'E-mail do associado' },
-      { variavel: '{{associado_endereco}}',    label: 'Endereço completo',  descricao: 'Logradouro, número, bairro e cidade' },
-      { variavel: '{{associado_logradouro}}',  label: 'Logradouro',         descricao: 'Rua/Avenida do associado' },
-      { variavel: '{{associado_numero}}',      label: 'Número',             descricao: 'Número do endereço' },
-      { variavel: '{{associado_bairro}}',      label: 'Bairro',             descricao: 'Bairro do associado' },
-      { variavel: '{{associado_cidade}}',      label: 'Cidade',             descricao: 'Cidade do associado' },
-      { variavel: '{{associado_cep}}',         label: 'CEP',                descricao: 'CEP do associado' },
-      { variavel: '{{associado_status}}',      label: 'Status',             descricao: 'Status do associado (ativo, inativo...)' },
-      { variavel: '{{numero_contrato}}',       label: 'Nº do contrato',     descricao: 'Número do contrato do associado' },
-      { variavel: '{{data_adesao}}',           label: 'Data de adesão',     descricao: 'Data de adesão do associado ao plano' },
-    ]
-  },
-  {
-    id: 'dependentes', label: 'Dependentes', icon: '👨‍👩‍👧', cor: '#8B5CF6',
-    variaveis: [
-      { variavel: '{{associado_dependentes}}',  label: 'Lista de dependentes',  descricao: 'Nome, parentesco e CPF de cada dependente' },
-      { variavel: '{{quantidade_dependentes}}', label: 'Qtd. de dependentes',   descricao: 'Número total de dependentes vinculados' },
-    ]
-  },
-  {
-    id: 'plano', label: 'Plano / Financeiro', icon: '💳', cor: '#10B981',
-    variaveis: [
-      { variavel: '{{plano_nome}}',            label: 'Nome do plano',       descricao: 'Nome do plano contratado' },
-      { variavel: '{{plano_atual}}',           label: 'Plano atual',         descricao: 'Nome do plano atual do associado' },
-      { variavel: '{{plano_codigo}}',          label: 'Código do plano',     descricao: 'Código identificador do plano' },
-      { variavel: '{{plano_tipo}}',            label: 'Tipo do plano',       descricao: 'Individual ou coletivo' },
-      { variavel: '{{valor_mensalidade}}',     label: 'Valor da mensalidade',descricao: 'Valor mensal formatado em R$' },
-      { variavel: '{{plano_taxa_adesao}}',     label: 'Taxa de adesão',      descricao: 'Valor da taxa de adesão ao plano' },
-      { variavel: '{{plano_carencia}}',        label: 'Carência geral',      descricao: 'Dias de carência geral do plano' },
-      { variavel: '{{plano_limite_vidas}}',    label: 'Limite de vidas',     descricao: 'Número máximo de vidas no plano' },
-      { variavel: '{{plano_vigencia_inicio}}', label: 'Vigência início',     descricao: 'Data de início de vigência do plano' },
-      { variavel: '{{plano_vigencia_fim}}',    label: 'Vigência fim',        descricao: 'Data de fim de vigência do plano' },
-    ]
-  },
-  {
-    id: 'empresa', label: 'Empresa Emissora', icon: '🏢', cor: '#F59E0B',
-    variaveis: [
-      { variavel: '{{empresa_nome}}',         label: 'Nome da empresa',  descricao: 'Nome fantasia da empresa emissora' },
-      { variavel: '{{empresa_razao_social}}', label: 'Razão social',     descricao: 'Razão social da empresa emissora' },
-      { variavel: '{{empresa_cnpj}}',         label: 'CNPJ',             descricao: 'CNPJ da empresa emissora' },
-      { variavel: '{{empresa_endereco}}',     label: 'Endereço',         descricao: 'Endereço da empresa emissora' },
-      { variavel: '{{empresa_telefone}}',     label: 'Telefone',         descricao: 'Telefone da empresa emissora' },
-      { variavel: '{{empresa_email}}',        label: 'E-mail',           descricao: 'E-mail da empresa emissora' },
-      { variavel: '{{empresa_chave_pix}}',    label: 'Chave PIX',        descricao: 'Chave PIX da empresa emissora' },
-    ]
-  },
-  {
-    id: 'credenciado', label: 'Credenciado', icon: '🏥', cor: '#EF4444',
-    variaveis: [
-      { variavel: '{{credenciado_nome}}',        label: 'Nome/Razão social',  descricao: 'Razão social do credenciado' },
-      { variavel: '{{credenciado_fantasia}}',    label: 'Nome fantasia',      descricao: 'Nome fantasia do credenciado' },
-      { variavel: '{{credenciado_cnpj}}',        label: 'CNPJ/CPF',           descricao: 'CNPJ ou CPF do credenciado' },
-      { variavel: '{{credenciado_endereco}}',    label: 'Endereço',           descricao: 'Endereço completo do credenciado' },
-      { variavel: '{{credenciado_cidade}}',      label: 'Cidade',             descricao: 'Cidade do credenciado' },
-      { variavel: '{{credenciado_telefone}}',    label: 'Telefone',           descricao: 'Telefone do credenciado' },
-      { variavel: '{{credenciado_email}}',       label: 'E-mail',             descricao: 'E-mail do credenciado' },
-      { variavel: '{{credenciado_responsavel}}', label: 'Responsável',        descricao: 'Nome do responsável técnico' },
-      { variavel: '{{credenciado_ramo}}',        label: 'Ramo de atividade',  descricao: 'Ramo de atividade do credenciado' },
-      { variavel: '{{credenciado_chave_pix}}',   label: 'Chave PIX',          descricao: 'Chave PIX do credenciado' },
-    ]
-  },
-  {
-    id: 'atendimento', label: 'Atendimento / Óbito', icon: '🕯️', cor: '#64748B',
-    variaveis: [
-      { variavel: '{{falecido_nome}}',            label: 'Nome do falecido',      descricao: 'Nome do falecido registrado no atendimento' },
-      { variavel: '{{falecido_cpf}}',             label: 'CPF do falecido',       descricao: 'CPF do falecido' },
-      { variavel: '{{falecido_data_nascimento}}', label: 'Data nascimento (falecido)', descricao: 'Data de nascimento do falecido' },
-      { variavel: '{{datanasc_falecido}}',        label: 'Data nasc. (alias)',    descricao: 'Tag alternativa para data de nascimento' },
-      { variavel: '{{cor_falecido}}',             label: 'Cor / Raça',            descricao: 'Cor ou etnia do falecido' },
-      { variavel: '{{sexo_falecido}}',            label: 'Sexo do falecido',      descricao: 'Sexo do falecido' },
-      { variavel: '{{data_obito}}',               label: 'Data do óbito',         descricao: 'Data do falecimento' },
-      { variavel: '{{hora_obito}}',               label: 'Hora do óbito',         descricao: 'Horário do falecimento' },
-      { variavel: '{{local_obito}}',              label: 'Local do óbito',        descricao: 'Local onde ocorreu o óbito' },
-      { variavel: '{{declaracaoobito}}',          label: 'Nº da Declaração Óbito',descricao: 'Número da certidão / declaração de óbito' },
-      { variavel: '{{medico_resp}}',              label: 'Médico responsável',    descricao: 'Nome do médico que atestou' },
-      { variavel: '{{crm_medico}}',               label: 'CRM do Médico',         descricao: 'CRM do médico responsável' },
-      { variavel: '{{rqe_medico}}',               label: 'RQE do Médico',         descricao: 'RQE do médico responsável' },
-      { variavel: '{{local_velorio}}',            label: 'Local do velório',      descricao: 'Local onde será o velório' },
-      { variavel: '{{local_sepultamento}}',       label: 'Local de sepultamento', descricao: 'Cemitério / Local de sepultamento' },
-      { variavel: '{{data_velorio}}',             label: 'Data do velório',       descricao: 'Data do velório' },
-      { variavel: '{{data_sepultamento}}',        label: 'Data do sepultamento',  descricao: 'Data do sepultamento' },
-      { variavel: '{{inicio_tanato}}',            label: 'Início Tanatopraxia',   descricao: 'Horário de início da tanatopraxia' },
-      { variavel: '{{termino_tanato}}',           label: 'Término Tanatopraxia',  descricao: 'Horário de término da tanatopraxia' },
-      { variavel: '{{atendimento_valor}}',        label: 'Valor total',           descricao: 'Valor total do atendimento funerário' },
-      { variavel: '{{atendimento_status}}',       label: 'Status',                descricao: 'Status do atendimento (aberto, concluído...)' },
-    ]
-  },
-  {
-    id: 'requisicao', label: 'Requisição / Guia', icon: '📋', cor: '#06B6D4',
-    variaveis: [
-      { variavel: '{{requisicao_codigo}}',   label: 'Código da requisição',  descricao: 'Código único (ex: REQ-2026-001)' },
-      { variavel: '{{requisicao_data}}',     label: 'Data de emissão',       descricao: 'Data de emissão da requisição' },
-      { variavel: '{{requisicao_validade}}', label: 'Data de validade',      descricao: 'Data de validade da requisição' },
-      { variavel: '{{paciente_nome}}',       label: 'Nome do paciente',      descricao: 'Nome do paciente (titular ou dependente)' },
-      { variavel: '{{paciente_cpf}}',        label: 'CPF do paciente',       descricao: 'CPF do paciente' },
-      { variavel: '{{paciente_tipo}}',       label: 'Tipo de paciente',      descricao: 'Titular ou dependente' },
-      { variavel: '{{medico_solicitante}}',  label: 'Médico solicitante',    descricao: 'Nome do médico solicitante' },
-      { variavel: '{{crm_solicitante}}',     label: 'CRM do médico',         descricao: 'CRM do médico solicitante' },
-      { variavel: '{{requisicao_valor}}',    label: 'Valor total',           descricao: 'Valor total da requisição' },
-      { variavel: '{{requisicao_copart}}',   label: 'Coparticipação',        descricao: 'Valor total de coparticipação' },
-    ]
-  },
-  {
-    id: 'financeiro', label: 'Financeiro / Pagamentos', icon: '💰', cor: '#22C55E',
-    variaveis: [
-      { variavel: '{{parcela_numero}}',       label: 'Nº da parcela',        descricao: 'Número da parcela (ex: 1/12)' },
-      { variavel: '{{parcela_valor}}',        label: 'Valor da parcela',     descricao: 'Valor da parcela formatado em R$' },
-      { variavel: '{{parcela_vencimento}}',   label: 'Vencimento',           descricao: 'Data de vencimento da parcela' },
-      { variavel: '{{receita_descricao}}',    label: 'Descrição da receita', descricao: 'Descrição do lançamento de receita' },
-      { variavel: '{{receita_categoria}}',    label: 'Categoria',            descricao: 'Categoria do lançamento financeiro' },
-      { variavel: '{{receita_valor_total}}',  label: 'Valor total',          descricao: 'Valor total do lançamento' },
-      { variavel: '{{forma_pagamento}}',      label: 'Forma de pagamento',   descricao: 'Forma de pagamento (PIX, boleto...)' },
-    ]
-  },
-  {
-    id: 'fornecedor', label: 'Fornecedor', icon: '🚚', cor: '#F97316',
-    variaveis: [
-      { variavel: '{{fornecedor_nome}}',      label: 'Razão social',  descricao: 'Razão social do fornecedor' },
-      { variavel: '{{fornecedor_fantasia}}',  label: 'Nome fantasia', descricao: 'Nome fantasia do fornecedor' },
-      { variavel: '{{fornecedor_cnpj}}',      label: 'CNPJ/CPF',      descricao: 'CNPJ ou CPF do fornecedor' },
-      { variavel: '{{fornecedor_endereco}}',  label: 'Endereço',      descricao: 'Endereço completo do fornecedor' },
-      { variavel: '{{fornecedor_cidade}}',    label: 'Cidade',        descricao: 'Cidade do fornecedor' },
-      { variavel: '{{fornecedor_telefone}}',  label: 'Telefone',      descricao: 'Telefone do fornecedor' },
-      { variavel: '{{fornecedor_email}}',     label: 'E-mail',        descricao: 'E-mail do fornecedor' },
-      { variavel: '{{fornecedor_contato}}',   label: 'Contato',       descricao: 'Nome do contato no fornecedor' },
-      { variavel: '{{fornecedor_chave_pix}}', label: 'Chave PIX',     descricao: 'Chave PIX do fornecedor' },
-    ]
-  },
-  {
-    id: 'sistema', label: 'Sistema / Data', icon: '🖥️', cor: '#94A3B8',
-    variaveis: [
-      { variavel: '{{data_atual}}',      label: 'Data atual',       descricao: 'Data atual no momento da emissão' },
-      { variavel: '{{hora_atual}}',      label: 'Hora atual',       descricao: 'Hora atual no momento da emissão' },
-      { variavel: '{{data_hora_atual}}', label: 'Data e hora atual',descricao: 'Data e hora completas de emissão' },
-      { variavel: '{{mes_atual}}',       label: 'Mês atual',        descricao: 'Nome do mês atual por extenso' },
-      { variavel: '{{ano_atual}}',       label: 'Ano atual',        descricao: 'Ano atual (ex: 2026)' },
-    ]
-  },
-];
 
 /* ─── Sub-componente: botão de variável ─── */
 interface VariavelButtonProps {
@@ -190,8 +29,9 @@ interface VariavelButtonProps {
   onCopy: (text: string) => void;
   tooltip: string | null;
   setTooltip: (v: string | null) => void;
+  onRemove?: (text: string) => void;
 }
-const VariavelButton: React.FC<VariavelButtonProps> = ({ v, cor, onInsert, onCopy, tooltip, setTooltip }) => {
+const VariavelButton: React.FC<VariavelButtonProps> = ({ v, cor, onInsert, onCopy, tooltip, setTooltip, onRemove }) => {
   const [copied, setCopied] = React.useState(false);
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -219,6 +59,16 @@ const VariavelButton: React.FC<VariavelButtonProps> = ({ v, cor, onInsert, onCop
       >
         {copied ? <span className="text-[9px] text-emerald-400 font-bold">✓</span> : <Copy className="w-3 h-3" />}
       </button>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRemove(v.variavel); }}
+          className="p-1 text-text-subtle hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mr-1"
+          title="Remover variável personalizada"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
       {tooltip === v.variavel && (
         <div className="absolute left-full top-0 ml-2 z-50 w-52 bg-bg-surface border border-border-default rounded-lg p-2.5 shadow-xl pointer-events-none">
           <p className="text-[10px] font-mono mb-1" style={{ color: cor }}>{v.variavel}</p>
@@ -368,6 +218,7 @@ export const DocumentosPadroesPage = () => {
   const [margens, setMargens] = useState<MargensConfig>({ top: 20, bottom: 20, left: 25, right: 25 });
   const [isMargensModalOpen, setIsMargensModalOpen] = useState(false);
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
+  const [isTableEditModalOpen, setIsTableEditModalOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'editor' | 'miniaturas' | 'preview_split'>('miniaturas');
 
@@ -584,33 +435,10 @@ export const DocumentosPadroesPage = () => {
   const handleAssociadoChange = (associadoId: string) => {
     const associado = associados.find(a => a.id === associadoId);
     if (!associado) return;
-    const endereco = [associado.endereco_logradouro, associado.endereco_numero, associado.endereco_bairro, associado.endereco_cidade].filter(Boolean).join(', ');
+    const resolvidas = { ...resolverVariaveisAssociado(associado), ...resolverVariaveisContrato(associado) };
     setPlaceholderValues(prev => {
       const nv = { ...prev };
-      const s = (k: string, v: string) => { if (k in nv) nv[k] = v; };
-      s('{{associado_nome}}', associado.nome || '');
-      s('{{associado_cpf}}', associado.cpf || '');
-      s('{{associado_rg}}', associado.rg || '');
-      s('{{associado_data_nasc}}', associado.data_nascimento ? formatLocalDate(associado.data_nascimento) : '');
-      s('{{associado_sexo}}', associado.sexo || '');
-      s('{{associado_nome_pai}}', associado.nome_pai || '');
-      s('{{associado_nome_mae}}', associado.nome_mae || '');
-      s('{{associado_telefone}}', associado.telefone || '');
-      s('{{associado_email}}', associado.email || '');
-      s('{{associado_endereco}}', endereco);
-      s('{{associado_logradouro}}', associado.endereco_logradouro || '');
-      s('{{associado_numero}}', associado.endereco_numero || '');
-      s('{{associado_bairro}}', associado.endereco_bairro || '');
-      s('{{associado_cidade}}', associado.endereco_cidade || '');
-      s('{{associado_cep}}', associado.endereco_cep || '');
-      s('{{associado_status}}', associado.status || '');
-      s('{{plano_atual}}', associado.plano_nome || '');
-      s('{{plano_nome}}', associado.plano_nome || '');
-      s('{{numero_contrato}}', associado.numero_contrato || associado.id.substring(0, 8).toUpperCase());
-      s('{{valor_mensalidade}}', associado.valor_plano ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(associado.valor_plano) : '');
-      s('{{quantidade_dependentes}}', (associado.dependentes?.length || 0).toString());
-      s('{{data_adesao}}', associado.data_adesao ? formatLocalDate(associado.data_adesao) : '');
-      s('{{associado_dependentes}}', (associado.dependentes && associado.dependentes.length > 0) ? associado.dependentes.map(d => `${d.nome} - Parentesco: ${d.parentesco} - CPF: ${d.cpf || 'Não informado'}`).join('<br/>') : 'Nenhum dependente vinculado');
+      Object.entries(resolvidas).forEach(([k, v]) => { if (k in nv) nv[k] = v; });
       return nv;
     });
   };
@@ -621,15 +449,8 @@ export const DocumentosPadroesPage = () => {
     if (!empresa) return;
     setCurrentEmpresa(empresa);
 
-    setPlaceholderValues(prev => {
-      const newVals = { ...prev };
-      newVals['{{empresa_nome}}'] = empresa.nome_fantasia || empresa.razao_social || '';
-      newVals['{{empresa_cnpj}}'] = empresa.cnpj || '';
-      newVals['{{empresa_endereco}}'] = `${empresa.endereco || ''}`;
-      newVals['{{empresa_telefone}}'] = empresa.telefone || '';
-      newVals['{{empresa_email}}'] = empresa.email || '';
-      return newVals;
-    });
+    const resolvidas = resolverVariaveisEmpresa(empresa);
+    setPlaceholderValues(prev => ({ ...prev, ...resolvidas }));
   };
 
   const handlePrint = () => {
@@ -641,110 +462,9 @@ export const DocumentosPadroesPage = () => {
 
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-          <head>
-            <meta charset="utf-8" />
-            <title>${docToPrint?.nome || 'Documento'}</title>
-            <style>
-              @page {
-                size: A4 portrait;
-                margin: 15mm 15mm 15mm 15mm;
-              }
-              *, *::before, *::after {
-                box-sizing: border-box;
-              }
-              html, body {
-                margin: 0;
-                padding: 0;
-                background-color: #ffffff;
-                color: #000000;
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: 11pt;
-                line-height: 1.5;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-              }
-              .doc-container {
-                width: 100%;
-                max-width: 100%;
-                margin: 0 auto;
-                background: #ffffff;
-              }
-              .doc-header {
-                width: 100%;
-                text-align: center;
-                border-bottom: 2px solid #0f172a;
-                padding-bottom: 12px;
-                margin-bottom: 20px;
-                page-break-inside: avoid;
-                break-inside: avoid;
-              }
-              .doc-header img {
-                max-height: 95px;
-                width: 100%;
-                object-fit: contain;
-                display: block;
-                margin: 0 auto;
-              }
-              .doc-content {
-                width: 100%;
-                page-break-inside: auto;
-                break-inside: auto;
-              }
-              .doc-content p, 
-              .doc-content div, 
-              .doc-content h1, 
-              .doc-content h2, 
-              .doc-content h3, 
-              .doc-content h4, 
-              .doc-content table, 
-              .doc-content ul, 
-              .doc-content ol {
-                page-break-inside: auto;
-                break-inside: auto;
-                margin-bottom: 10px;
-              }
-              .doc-footer {
-                width: 100%;
-                margin-top: 35px;
-                padding-top: 15px;
-                border-top: 1px solid #cbd5e1;
-                text-align: center;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                page-break-inside: avoid;
-                break-inside: avoid;
-              }
-              .doc-footer img {
-                max-height: 80px;
-                max-width: 280px;
-                object-fit: contain;
-                margin-bottom: 5px;
-              }
-              .signature-line {
-                width: 280px;
-                border-top: 1px solid #0f172a;
-                margin: 5px auto;
-              }
-              h1, h2, h3, h4 {
-                color: #000000;
-              }
-              strong {
-                font-weight: bold;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="doc-container">
-              ${printArea.innerHTML}
-            </div>
-          </body>
-        </html>
-      `);
+      printWindow.document.write(
+        montarHtmlImpressaoDocumento(docToPrint?.nome || 'Documento', printArea.innerHTML, 'portrait')
+      );
       printWindow.document.close();
       printWindow.focus();
       setTimeout(() => {
@@ -770,6 +490,7 @@ export const DocumentosPadroesPage = () => {
     setIsFormOpen(true);
     setVarSearch('');
     setExpandedModules(new Set(['associado']));
+    setCustomVariables((initialObj.variaveis_disponiveis || []).map(v => v.chave));
   };
 
   const handleDelete = async (doc: DocumentoPadrao) => {
@@ -830,16 +551,29 @@ export const DocumentosPadroesPage = () => {
   const handleAddVariable = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (newVariable.trim()) {
-      let formatted = newVariable.trim();
+      const label = newVariable.trim();
+      let formatted = label;
       if (!formatted.startsWith('{{')) formatted = '{{' + formatted;
       if (!formatted.endsWith('}}')) formatted = formatted + '}}';
       formatted = formatted.replace(/\s+/g, '_').toLowerCase();
-      
+
       if (!customVariables.includes(formatted)) {
         setCustomVariables([...customVariables, formatted]);
+        setEditingDoc(prev => prev ? {
+          ...prev,
+          variaveis_disponiveis: [...(prev.variaveis_disponiveis || []), { chave: formatted, label, descricao: 'Variável personalizada' }],
+        } : prev);
       }
       setNewVariable('');
     }
+  };
+
+  const handleRemoveVariable = (chave: string) => {
+    setCustomVariables(prev => prev.filter(cv => cv !== chave));
+    setEditingDoc(prev => prev ? {
+      ...prev,
+      variaveis_disponiveis: (prev.variaveis_disponiveis || []).filter(v => v.chave !== chave),
+    } : prev);
   };
 
   const insertAtCursor = (text: string) => {
@@ -1074,6 +808,16 @@ export const DocumentosPadroesPage = () => {
         initialPlaceholderValues={placeholderValues}
         onEmpresaSelect={handleEmpresaChange}
         onAssociadoSelect={handleAssociadoChange}
+        onSaveAssinaturaConfig={async (config) => {
+          if (!docToPrint) return;
+          try {
+            await editar(docToPrint.id, { assinatura_config: config });
+            toast.success(config ? 'Posição da assinatura salva!' : 'Posicionamento personalizado removido.');
+          } catch (err) {
+            console.error('Erro ao salvar posição da assinatura:', err);
+            toast.error('Erro ao salvar a posição da assinatura.');
+          }
+        }}
       />
 {/* Form Modal */}
       {isFormOpen && (
@@ -1221,7 +965,7 @@ export const DocumentosPadroesPage = () => {
                             )}
                             <div className="space-y-0.5">
                               {customVariables.map(cv => (
-                                <VariavelButton key={cv} v={{ variavel: cv, label: cv.replace(/[{}]/g, '').replace(/_/g, ' '), descricao: 'Variável personalizada' }} cor="#94A3B8" onInsert={insertAtCursor} onCopy={copyToClipboard} tooltip={tooltipVar} setTooltip={setTooltipVar} />
+                                <VariavelButton key={cv} v={{ variavel: cv, label: cv.replace(/[{}]/g, '').replace(/_/g, ' '), descricao: 'Variável personalizada' }} cor="#94A3B8" onInsert={insertAtCursor} onCopy={copyToClipboard} tooltip={tooltipVar} setTooltip={setTooltipVar} onRemove={handleRemoveVariable} />
                               ))}
                             </div>
                           </div>
@@ -1375,6 +1119,17 @@ export const DocumentosPadroesPage = () => {
                         >
                           <TableIcon className="w-3.5 h-3.5 text-indigo-400" />
                           <span>Tabelas & Grades</span>
+                        </button>
+
+                        {/* Botão Editor de Tabelas Office */}
+                        <button
+                          type="button"
+                          onClick={() => setIsTableEditModalOpen(true)}
+                          className="px-3 py-1.5 bg-[#1e2533] hover:bg-fuchsia-500/20 text-slate-200 hover:text-fuchsia-300 border border-[#2d3544] hover:border-fuchsia-500/40 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                          title="Mesclar, dividir, redimensionar e formatar células de tabelas já existentes no documento"
+                        >
+                          <Grid3x3 className="w-3.5 h-3.5 text-fuchsia-400" />
+                          <span>Editar Tabela</span>
                         </button>
 
                         {/* Botão Inserir Imagem */}
@@ -1552,6 +1307,13 @@ export const DocumentosPadroesPage = () => {
         isOpen={isTableModalOpen}
         onClose={() => setIsTableModalOpen(false)}
         onInsertTable={insertAtCursor}
+      />
+
+      <DocumentoTableEditModal
+        isOpen={isTableEditModalOpen}
+        onClose={() => setIsTableEditModalOpen(false)}
+        htmlContent={editingDoc?.conteudo || ''}
+        onSave={(newHtml) => setEditingDoc(prev => prev ? { ...prev, conteudo: newHtml } : prev)}
       />
 
       <DocumentoImageModal

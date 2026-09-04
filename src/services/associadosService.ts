@@ -29,6 +29,12 @@ export interface Associado {
   uf?: string;
   plano_id?: string;
   tipo_pessoa?: 'PF' | 'PJ';
+  empresa_id?: string;
+  celular_whatsapp?: string;
+  tipo_associado?: 'titular' | 'dependente';
+  estado_civil?: string;
+  profissao?: string;
+  observacoes?: string;
   fornecedor_id?: string;
   plano_pax_id?: string;
   numero_contrato?: string;
