@@ -13,6 +13,7 @@ import { useToast } from '../../context/ToastContext';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
+import { falecidoExternoSchema } from '../../schemas/atendimentoSchema';
 import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 
@@ -145,7 +146,12 @@ export const NovoAtendimentoWizard: React.FC<{
         if (!selectedAssociado) return toast.error("Selecione um associado");
         if (!falecidoId) return toast.error("Selecione quem é o falecido (titular ou dependente)");
       } else {
-        if (!falecidoNome) return toast.error("Preencha o nome do falecido");
+        const parsed = falecidoExternoSchema.safeParse({
+          falecido_nome: falecidoNome,
+          falecido_cpf: falecidoCpf,
+          falecido_data_nascimento: falecidoDataNascimento,
+        });
+        if (!parsed.success) return toast.error(parsed.error.issues[0].message);
       }
     }
     if (step === 2) {

@@ -1,0 +1,180 @@
+# CLAUDE.md
+
+Guia de arquitetura e convenções para quem (humano ou agente) for mexer neste repositório. Leia
+antes de abrir um PR — em especial as seções de schema drift e do padrão de migrations.
+
+## Estrutura do projeto
+
+```
+src/
+  pages/         Uma página por rota (Associados.tsx, Atendimentos.tsx, DocumentosPadroesPage.tsx...)
+  components/    Componentes organizados por domínio (associados/, atendimentos/, documentos/, financeiro/...)
+  services/      Acesso a dados: Supabase + fallback IndexedDB (associadosService.ts, financeiroService.ts...)
+  hooks/         Hooks que encapsulam um service para uso em componentes (useDocumentosPadroes.ts...)
+  utils/         Funções puras (documentoVariaveis.ts, tableGridModel.ts, dateUtils.ts...) — é aqui
+                 que a maior parte da cobertura de testes vive, porque são fáceis de testar isoladas
+  types/         Interfaces TypeScript por domínio
+  config/        Catálogos/configuração estática (documentoVariaveis.config.ts)
+  context/       AppContext (estado global: tenant selecionado, isOnline, usuário) e outros providers
+  schemas/       Schemas Zod (adoção parcial — ver seção "Validação" abaixo)
+supabase/
+  migrations/    Migrations SQL, aplicadas via Supabase MCP nas sessões mais recentes
+```
+
+## Multi-tenant e RLS
+
+Toda tabela em `public` tem RLS habilitado, com uma política reaproveitando funções centrais:
+`has_tenant_access(tenant_id)`, `current_tenant_id()`, `current_user_nivel()`, `is_super_admin()`.
+Não escreva uma política nova do zero — reaproveite essas funções, como o resto do schema já faz.
+
+No frontend, o tenant/empresa selecionado vive em `AppContext` (`state.empresaSelecionada`). Um
+valor `'all'` significa "sem filtro de tenant" (usado por telas administrativas) — não confunda com
+um `tenant_id` real.
+
+## Padrão offline-first
+
+Praticamente todo `service` segue o mesmo formato:
+
+```ts
+export const getX = async (isOnline: boolean, tenantId?: string) => {
+  if (isOnline) {
+    try {
+      const { data, error } = await supabase.from('x').select('*')...
+      if (!error && data) { for (const item of data) await saveToIDB('x', item); return data; }
+    } catch { /* cai para o IDB */ }
+  }
+  return getAllFromIDB('x'); // fallback local
+};
+```
+
+Ao adicionar um service novo, siga esse mesmo formato em vez de inventar um novo padrão.
+
+## Supabase: migrations e o cuidado com o histórico de rastreamento
+
+**Contexto importante**: até setembro de 2026, os 28 arquivos de migration em
+`supabase/migrations/` haviam sido aplicados ao banco de produção, mas a tabela de controle
+(`supabase_migrations.schema_migrations`) estava vazia — ou seja, o schema real e o histórico
+rastreado haviam divergido silenciosamente. As migrations aplicadas a partir de
+`20260904130000_documentos_padroes_complete_columns.sql` foram feitas via `mcp__Supabase__apply_migration`,
+que registra corretamente no histórico — a partir desse ponto o rastreamento volta a refletir a
+realidade. Os arquivos anteriores a essa data **não têm garantia de que o arquivo corresponde
+exatamente ao que está em produção** — se precisar confirmar o schema real de uma tabela, consulte
+o banco diretamente (`information_schema.columns` via MCP ou dashboard) em vez de confiar cegamente
+no `.sql`.
+
+Ao criar uma migration nova:
+1. Prefira aplicá-la via `apply_migration` (Supabase MCP) quando tiver acesso — isso mantém o
+   histórico rastreado.
+2. Sempre crie também o arquivo `.sql` correspondente em `supabase/migrations/` com timestamp novo,
+   para o repositório continuar sendo a documentação de referência.
+3. Use `ADD COLUMN IF NOT EXISTS` / `COMMENT ON COLUMN` como nas migrations mais recentes — torna a
+   migration idempotente e autodocumentada.
+
+### O bug recorrente: campo no TypeScript sem a coluna correspondente no banco
+
+Já aconteceu duas vezes (`documentos_padroes` e `atendimentos`): alguém adiciona um campo opcional
+à interface TypeScript, o código já lê/grava esse campo, mas ninguém cria a migration — o Supabase
+responde `PGRST204` (coluna não encontrada) e, como vários services têm uma rotina que descarta
+silenciosamente qualquer coluna ausente e tenta salvar de novo (ver `useDocumentosPadroes.ts`), o
+dado do usuário é **salvo com sucesso aparente e perdido**, sem erro visível. Ao adicionar um campo
+novo a uma interface que é persistida no Supabase, **sempre** crie a migration na mesma tarefa —
+nunca depois "quando der tempo".
+
+## Schema drift conhecido — colunas duplicadas
+
+Duas tabelas têm pares de colunas para o mesmo dado, por terem evoluído em momentos diferentes sem
+migração da coluna antiga:
+
+- **`associados`**: `endereco_logradouro`/`logradouro`, `endereco_numero`/`numero`,
+  `endereco_bairro`/`bairro`, `endereco_cidade`/`cidade`, `endereco_cep`/`cep`,
+  `endereco_estado`/`uf`, e `plano_id`/`plano_pax_id`. O código atual lê com fallback
+  (`assoc.endereco_logradouro || assoc.logradouro`, ver `utils/documentoVariaveis.ts`), mas grava
+  majoritariamente no par `endereco_*`/`plano_pax_id` — trate esse par como o canônico ao escrever
+  código novo.
+- **`documentos_padroes`**: `conteudo`/`conteudo_html` e `created_at`/`updated_at` convivendo com
+  `criado_em`/`atualizado_em`. O par canônico em uso pelo código atual é `conteudo` e
+  `criado_em`/`atualizado_em`.
+
+**Plano de deprecação** (ainda não iniciado — item de médio prazo, não execute sem planejamento):
+1. Confirmar, consultando o banco real, se as colunas legadas (`logradouro`, `plano_id`,
+   `conteudo_html`, `created_at`/`updated_at`) ainda recebem escrita de algum caminho de código ou
+   de uma integração externa.
+2. Se não recebem, migrar os poucos registros divergentes (`UPDATE ... WHERE canonical IS NULL`)
+   para consolidar no par canônico.
+3. Manter a coluna legada por um ciclo de release como alias somente-leitura (não remover ainda).
+4. Só então dropar a coluna legada, numa migration própria, depois de confirmar nos logs/advisors
+   que nada mais a referencia.
+
+Não pule direto para o passo 4 — dropar uma coluna que algo ainda escreve quebra silenciosamente
+esse algo mais tarde.
+
+## Módulo de Documentos Padrões
+
+Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do
+sistema:
+
+- **Variáveis `{{...}}`**: toda a resolução vive em `utils/documentoVariaveis.ts` (uma função pura
+  por entidade — `resolverVariaveisAssociado`, `resolverVariaveisAtendimento` etc.) e o catálogo
+  correspondente (usado no painel de inserção de variáveis) em
+  `config/documentoVariaveis.config.ts`. **As duas fontes precisam ficar em sincronia**: uma tag no
+  catálogo que não existe no resolver correspondente nunca vai preencher (já aconteceu com
+  requisição e financeiro antes de setembro de 2026).
+- **Editor de tabelas**: `utils/tableGridModel.ts` implementa uma grade de ocupação (o modelo padrão
+  para lidar com `colspan`/`rowspan` em merge/split/insert/delete de linhas e colunas). Mude com
+  cuidado e sempre com teste — é código com bastante superfície de casos-limite (ver
+  `tableGridModel.test.ts`).
+- **CSS de impressão**: compartilhado entre o visualizador e a página de modelos via
+  `utils/documentoPrintStyles.ts` — não duplique o `<style>` de novo se precisar mexer na impressão.
+- **Sanitização**: todo `dangerouslySetInnerHTML` de conteúdo de documento passa por
+  `utils/sanitizeHtml.ts` (DOMPurify). Se adicionar um novo ponto de renderização de HTML de
+  documento, sanitize também.
+- **Assinatura com posição livre**: `assinatura_config` (JSONB, `{x, y, largura, altura, pagina}` em
+  % da página) no registro do documento; drag-and-drop via `react-rnd` em
+  `VisualizadorDocumentoPadraoModal.tsx`.
+
+## Validação (Zod)
+
+Adoção parcial: `FornecedorFormModal.tsx`, `ItemFunerarioForm.tsx`, `PlanoPaxForm.tsx`,
+`contratoSchema.ts`, `ContasPagarFormPage.tsx`, `ContasReceberFormPage.tsx` já usam
+Zod + `react-hook-form` + `@hookform/resolvers`. `schemas/atendimentoSchema.ts` segue um padrão mais
+leve — `schema.safeParse()` chamado direto num handler existente, sem migrar o componente inteiro
+para `react-hook-form` — útil quando o formulário já é grande e usa `useState` disperso
+(`NovoAtendimentoWizard.tsx`): dá para validar de forma estruturada e testável sem reescrever a tela
+toda de uma vez. Associados, Credenciados, Usuários e Configurações ainda validam só com `if`/HTML
+`required` — ao mexer numa dessas telas, prefira extrair um schema Zod para o que você está
+tocando em vez de adicionar mais um `if`.
+
+Decomposição de "god component" (seção acima) e migração completa de validação para Zod nas telas
+grandes restantes foram deliberadamente deixadas de fora desta rodada: ambas exigem clicar na UI
+real (login) para confirmar que nada quebrou, e este ambiente não tem esse acesso. Antes de
+encarar uma delas, garanta acesso a um ambiente onde dá para testar interativamente — não faça às
+cegas num arquivo sem cobertura de teste.
+
+## "God components" conhecidos
+
+Alguns arquivos concentram dados + validação + UI num único componente grande demais para revisar
+ou testar com conforto: `pages/Associados.tsx` (~3100 linhas),
+`components/associados/AssociadoMensalidadesTab.tsx` (~1800), `services/financeiroService.ts`
+(~1650), `pages/Configuracoes.tsx` (~1650), `pages/Auditoria.tsx` (~1550). Decompor esses arquivos é
+trabalho de médio/longo prazo — não foi feito ainda porque exige cobertura de teste e navegação
+manual pela UI real (login) antes de mexer, para não introduzir regressão silenciosa num arquivo
+sem rede de segurança. Se for tocar em um desses arquivos por outro motivo, é uma boa oportunidade
+para extrair a parte que você já está mexendo para um hook ou subcomponente — não precisa ser tudo
+de uma vez.
+
+## Segurança
+
+- Funções `SECURITY DEFINER` sensíveis (`admin_alterar_senha_usuario`, `admin_excluir_usuario`) só
+  têm `EXECUTE` concedido a `authenticated` — nunca reconceda a `PUBLIC`/`anon` sem necessidade real
+  (lembre que revogar de `anon` sozinho não basta: revogue de `PUBLIC` também, senão o grant padrão
+  do Postgres continua valendo por herança).
+- Toda função nova `SECURITY DEFINER` deve fixar `search_path` (`SET search_path = public, pg_temp`)
+  — sem isso, o linter de segurança do Supabase acusa `function_search_path_mutable`.
+- HTML de documento (conteúdo editável por usuário) sempre passa por `sanitizeDocumentoHtml` antes
+  de `dangerouslySetInnerHTML` — é a única forma de HTML não confiável no sistema hoje.
+
+## Testes
+
+Ver `README.md`. Ao mexer num arquivo de `utils/` ou numa função pura de `services/`, adicione ou
+atualize o teste correspondente — é o único jeito de saber se uma mudança quebrou algo, já que não
+há suíte de testes de componente/UI ainda.
