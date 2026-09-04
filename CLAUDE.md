@@ -51,16 +51,27 @@ Ao adicionar um service novo, siga esse mesmo formato em vez de inventar um novo
 
 ## Supabase: migrations e o cuidado com o histórico de rastreamento
 
-**Contexto importante**: até setembro de 2026, os 28 arquivos de migration em
-`supabase/migrations/` haviam sido aplicados ao banco de produção, mas a tabela de controle
-(`supabase_migrations.schema_migrations`) estava vazia — ou seja, o schema real e o histórico
-rastreado haviam divergido silenciosamente. As migrations aplicadas a partir de
-`20260904130000_documentos_padroes_complete_columns.sql` foram feitas via `mcp__Supabase__apply_migration`,
-que registra corretamente no histórico — a partir desse ponto o rastreamento volta a refletir a
-realidade. Os arquivos anteriores a essa data **não têm garantia de que o arquivo corresponde
-exatamente ao que está em produção** — se precisar confirmar o schema real de uma tabela, consulte
-o banco diretamente (`information_schema.columns` via MCP ou dashboard) em vez de confiar cegamente
-no `.sql`.
+**Contexto histórico (resolvido em 04/09/2026)**: até essa data, os 28 arquivos de migration
+anteriores a `20260904130000_documentos_padroes_complete_columns.sql` haviam sido aplicados ao banco
+de produção, mas a tabela de controle (`supabase_migrations.schema_migrations`) estava vazia — o
+schema real e o histórico rastreado haviam divergido silenciosamente.
+
+Reconciliação feita: cada um dos 28 arquivos foi verificado contra o schema real em produção antes
+de qualquer escrita — comparando programaticamente todo `ADD COLUMN`/`CREATE TABLE`/
+`CREATE OR REPLACE FUNCTION` de cada arquivo contra `information_schema.columns` e `pg_proc` reais
+(cuidando de não considerar como "faltando" uma coluna de um `CREATE TABLE IF NOT EXISTS` que já era
+inerte por a tabela ter sido criada antes por outro arquivo — só a **primeira** migration a criar
+cada tabela foi validada coluna a coluna). As 28 bateram exatamente com a produção, sem nenhuma
+divergência. Só depois disso as 28 versões (extraídas do nome de cada arquivo, ex.
+`20260803120000_itens_funerarios.sql` → versão `20260803120000`) foram inseridas em
+`supabase_migrations.schema_migrations` via SQL direto (equivalente ao `supabase migration repair
+--status applied`, que este ambiente não tem como rodar via CLI por falta de link/autenticação ao
+projeto). O rastreamento agora reflete a realidade desde a primeira migration.
+
+Convenção mantida daqui para frente: toda migration nova deve ser aplicada via
+`mcp__Supabase__apply_migration` (ou `supabase migration repair` quando for só reconciliar), nunca só
+como arquivo `.sql` no repositório sem aplicar — é assim que o histórico rastreado continua
+correspondendo à produção.
 
 Ao criar uma migration nova:
 1. Prefira aplicá-la via `apply_migration` (Supabase MCP) quando tiver acesso — isso mantém o
