@@ -1,7 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { X, GripVertical, Check, Eye, EyeOff } from 'lucide-react';
 
-export type WidgetId = 'atalhos_rapidos' | 'stat_associados' | 'stat_atendimentos' | 'stat_faturamento' | 'stat_conversao' | 'stat_vidas_planos' | 'chart_atendimentos' | 'chart_recebimentos' | 'acoes_recentes' | 'status_sistema' | 'stat_receitas' | 'stat_despesas' | 'chart_saude_financeira' | 'widget_assoc_sem_mensalidade';
+export type WidgetId =
+  | 'atalhos_rapidos'
+  | 'stat_associados'
+  | 'stat_atendimentos'
+  | 'stat_faturamento'
+  | 'stat_conversao'
+  | 'stat_vidas_planos'
+  | 'chart_atendimentos'
+  | 'chart_recebimentos'
+  | 'acoes_recentes'
+  | 'status_sistema'
+  | 'stat_receitas'
+  | 'stat_despesas'
+  | 'chart_saude_financeira'
+  | 'widget_assoc_sem_mensalidade';
 
 export interface WidgetConfig {
   id: WidgetId;
@@ -20,7 +34,11 @@ export const defaultWidgets: WidgetConfig[] = [
   { id: 'stat_vidas_planos', visible: true, title: 'Vidas por Plano' },
   { id: 'chart_atendimentos', visible: true, title: 'Gráfico Atendimentos Mensais' },
   { id: 'chart_recebimentos', visible: true, title: 'Gráfico Recebimentos (KPI)' },
-  { id: 'chart_saude_financeira', visible: true, title: 'Gráfico Saúde Financeira (Receitas x Despesas)' },
+  {
+    id: 'chart_saude_financeira',
+    visible: true,
+    title: 'Gráfico Saúde Financeira (Receitas x Despesas)',
+  },
   { id: 'acoes_recentes', visible: true, title: 'Ações Recentes' },
   { id: 'status_sistema', visible: true, title: 'Status do Sistema' },
   { id: 'widget_assoc_sem_mensalidade', visible: true, title: 'Alertas: Sem Mensalidade' },
@@ -41,7 +59,7 @@ export const DashboardSettingsModal: React.FC<Props> = ({ isOpen, onClose, layou
     if (isOpen) {
       // Ensure any new default widgets are merged if missing
       let current = layout.length ? [...layout] : [...defaultWidgets];
-      const missing = defaultWidgets.filter(dw => !current.find(cw => cw.id === dw.id));
+      const missing = defaultWidgets.filter((dw) => !current.find((cw) => cw.id === dw.id));
       if (missing.length) {
         current = [...current, ...missing];
       }
@@ -69,12 +87,12 @@ export const DashboardSettingsModal: React.FC<Props> = ({ isOpen, onClose, layou
 
     const newWidgets = [...widgets];
     const draggedItem = newWidgets[draggedIdx];
-    
+
     // Remove from old pos
     newWidgets.splice(draggedIdx, 1);
     // Insert in new pos
     newWidgets.splice(index, 0, draggedItem);
-    
+
     setDraggedIdx(index);
     setWidgets(newWidgets);
   };
@@ -87,7 +105,7 @@ export const DashboardSettingsModal: React.FC<Props> = ({ isOpen, onClose, layou
   };
 
   const toggleVisibility = (id: string) => {
-    setWidgets(widgets.map(w => w.id === id ? { ...w, visible: !w.visible } : w));
+    setWidgets(widgets.map((w) => (w.id === id ? { ...w, visible: !w.visible } : w)));
   };
 
   return (
@@ -98,13 +116,18 @@ export const DashboardSettingsModal: React.FC<Props> = ({ isOpen, onClose, layou
           <div className="relative z-10 flex items-center gap-3">
             <div className="w-1.5 h-9 rounded-full bg-gradient-to-b from-[#3B82F6] to-[#60A5FA] shadow-[0_0_12px_rgba(59,130,246,0.5)]" />
             <div>
-              <h3 className="text-lg font-extrabold text-text-base tracking-tight">Personalizar Dashboard</h3>
-              <p className="text-xs text-text-subtle mt-0.5">Arraste para reordenar ou oculte widgets</p>
+              <h3 className="text-lg font-extrabold text-text-base tracking-tight">
+                Personalizar Dashboard
+              </h3>
+              <p className="text-xs text-text-subtle mt-0.5">
+                Arraste para reordenar ou oculte widgets
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="relative z-10 p-2 text-text-subtle hover:text-text-base bg-bg-subtle rounded-lg transition-colors border border-border-subtle"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
@@ -126,7 +149,9 @@ export const DashboardSettingsModal: React.FC<Props> = ({ isOpen, onClose, layou
             >
               <div className="flex items-center gap-3">
                 <GripVertical className="w-4.5 h-4.5 text-text-subtle" />
-                <span className={`text-sm font-medium ${widget.visible ? 'text-text-base' : 'text-text-subtle line-through'}`}>
+                <span
+                  className={`text-sm font-medium ${widget.visible ? 'text-text-base' : 'text-text-subtle line-through'}`}
+                >
                   {widget.title}
                 </span>
               </div>

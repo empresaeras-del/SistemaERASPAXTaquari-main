@@ -1,22 +1,22 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { 
-  Bell, 
-  Check, 
-  Trash2, 
-  Info, 
-  AlertTriangle, 
-  CheckCircle, 
-  XCircle, 
-  FileText, 
-  FileCheck2, 
-  Receipt, 
-  Clock, 
-  ArrowRight, 
-  ShieldCheck, 
-  User, 
-  Building2, 
+import {
+  Bell,
+  Check,
+  Trash2,
+  Info,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  FileText,
+  FileCheck2,
+  Receipt,
+  Clock,
+  ArrowRight,
+  ShieldCheck,
+  User,
+  Building2,
   X,
-  ExternalLink
+  ExternalLink,
 } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import { Link, useNavigate } from 'react-router-dom';
@@ -29,19 +29,19 @@ interface NotificationCenterProps {
 }
 
 export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, onClose }) => {
-  const { 
-    notificacoes, 
-    pendingRequisicoes, 
-    pendingRemessas, 
-    unreadCount, 
-    pendingReqCount, 
-    pendingRemCount, 
+  const {
+    notificacoes,
+    pendingRequisicoes,
+    pendingRemessas,
+    unreadCount,
+    pendingReqCount,
+    pendingRemCount,
     totalAlertsCount,
-    loading, 
-    handleMarkAsRead, 
-    handleMarkAllAsRead, 
+    loading,
+    handleMarkAsRead,
+    handleMarkAllAsRead,
     handleDelete,
-    handleAutorizarRequisicaoRapida
+    handleAutorizarRequisicaoRapida,
   } = useNotifications();
 
   const [activeTab, setActiveTab] = useState<'geral' | 'requisicoes' | 'remessas'>('geral');
@@ -64,34 +64,47 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
 
   if (!isOpen) return null;
 
-  const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  const formatBRL = (val: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   const getIcon = (tipo: string) => {
     switch (tipo) {
-      case 'info': return <Info className="w-4 h-4 text-blue-400" />;
-      case 'alerta': return <AlertTriangle className="w-4 h-4 text-amber-400" />;
-      case 'sucesso': return <CheckCircle className="w-4 h-4 text-emerald-400" />;
-      case 'erro': return <XCircle className="w-4 h-4 text-rose-400" />;
-      case 'acao': return <FileText className="w-4 h-4 text-purple-400" />;
-      default: return <Bell className="w-4 h-4 text-text-subtle" />;
+      case 'info':
+        return <Info className="w-4 h-4 text-blue-400" />;
+      case 'alerta':
+        return <AlertTriangle className="w-4 h-4 text-amber-400" />;
+      case 'sucesso':
+        return <CheckCircle className="w-4 h-4 text-emerald-400" />;
+      case 'erro':
+        return <XCircle className="w-4 h-4 text-rose-400" />;
+      case 'acao':
+        return <FileText className="w-4 h-4 text-purple-400" />;
+      default:
+        return <Bell className="w-4 h-4 text-text-subtle" />;
     }
   };
 
   const getBgColor = (tipo: string, lida: boolean) => {
     if (lida) return 'bg-transparent';
     switch (tipo) {
-      case 'info': return 'bg-blue-400/5';
-      case 'alerta': return 'bg-amber-400/5';
-      case 'sucesso': return 'bg-emerald-400/5';
-      case 'erro': return 'bg-rose-400/5';
-      case 'acao': return 'bg-purple-400/5';
-      default: return 'bg-slate-400/5';
+      case 'info':
+        return 'bg-blue-400/5';
+      case 'alerta':
+        return 'bg-amber-400/5';
+      case 'sucesso':
+        return 'bg-emerald-400/5';
+      case 'erro':
+        return 'bg-rose-400/5';
+      case 'acao':
+        return 'bg-purple-400/5';
+      default:
+        return 'bg-slate-400/5';
     }
   };
 
   return (
-    <div 
-      ref={menuRef} 
+    <div
+      ref={menuRef}
       className="absolute top-14 right-2 sm:right-6 w-[92vw] sm:w-[460px] bg-bg-surface border border-border-default shadow-2xl rounded-2xl overflow-hidden flex flex-col z-50 max-h-[85vh] animate-in fade-in zoom-in-95"
     >
       {/* HEADER */}
@@ -113,9 +126,10 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
           </div>
         </div>
 
-        <button 
+        <button
           onClick={onClose}
           className="text-text-subtle hover:text-text-base p-1.5 rounded-lg hover:bg-bg-hover transition-colors"
+          aria-label="Fechar"
         >
           <X className="w-4 h-4" />
         </button>
@@ -190,7 +204,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
             <div className="flex items-center justify-between pb-2 px-1 border-b border-border-default/50 text-xs">
               <span className="text-text-subtle font-medium">Notificações gerais do sistema</span>
               {unreadCount > 0 && (
-                <button 
+                <button
                   onClick={handleMarkAllAsRead}
                   className="text-xs font-medium text-[#3B82F6] hover:underline flex items-center gap-1"
                 >
@@ -204,32 +218,39 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
               <div className="py-12 text-center text-text-subtle flex flex-col items-center">
                 <Bell className="w-10 h-10 mb-3 opacity-20" />
                 <p className="text-sm font-medium text-text-base">Nenhuma notificação cadastrada</p>
-                <p className="text-xs mt-1 text-text-subtle">Você não possui avisos do sistema pendentes.</p>
+                <p className="text-xs mt-1 text-text-subtle">
+                  Você não possui avisos do sistema pendentes.
+                </p>
               </div>
             ) : (
-              notificacoes.map(notif => (
-                <div 
+              notificacoes.map((notif) => (
+                <div
                   key={notif.id}
                   className={`p-3 rounded-xl border border-border-default hover:bg-bg-subtle transition-colors relative group flex gap-3 ${getBgColor(notif.tipo, notif.lida)}`}
                 >
-                  <div className="shrink-0 mt-0.5">
-                    {getIcon(notif.tipo)}
-                  </div>
+                  <div className="shrink-0 mt-0.5">{getIcon(notif.tipo)}</div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start mb-1 gap-2">
-                      <h4 className={`text-xs font-bold truncate ${notif.lida ? 'text-text-subtle' : 'text-text-base'}`}>
+                      <h4
+                        className={`text-xs font-bold truncate ${notif.lida ? 'text-text-subtle' : 'text-text-base'}`}
+                      >
                         {notif.titulo}
                       </h4>
                       <span className="text-[10px] font-medium text-text-subtle whitespace-nowrap shrink-0">
-                        {new Date(notif.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                        {new Date(notif.created_at).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: 'short',
+                        })}
                       </span>
                     </div>
-                    <p className={`text-xs ${notif.lida ? 'text-text-subtle' : 'text-text-base'} line-clamp-2`}>
+                    <p
+                      className={`text-xs ${notif.lida ? 'text-text-subtle' : 'text-text-base'} line-clamp-2`}
+                    >
                       {notif.mensagem}
                     </p>
-                    
+
                     {notif.link && (
-                      <Link 
+                      <Link
                         to={notif.link}
                         onClick={() => {
                           if (!notif.lida) handleMarkAsRead(notif.id);
@@ -246,7 +267,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                   {/* Actions on hover */}
                   <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-bg-surface p-1 rounded-lg shadow-md border border-border-default">
                     {!notif.lida && (
-                      <button 
+                      <button
                         onClick={() => handleMarkAsRead(notif.id)}
                         className="p-1 text-text-subtle hover:text-emerald-500 rounded transition-colors"
                         title="Marcar como lida"
@@ -254,7 +275,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                         <Check className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    <button 
+                    <button
                       onClick={() => handleDelete(notif.id)}
                       className="p-1 text-text-subtle hover:text-rose-500 rounded transition-colors"
                       title="Excluir notificação"
@@ -290,19 +311,25 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
             {pendingRequisicoes.length === 0 ? (
               <div className="py-12 text-center text-text-subtle flex flex-col items-center">
                 <CheckCircle className="w-10 h-10 mb-3 text-emerald-500/40" />
-                <p className="text-sm font-medium text-text-base">Todas as requisições estão autorizadas!</p>
-                <p className="text-xs mt-1 text-text-subtle">Nenhuma guia pendente de aprovação no momento.</p>
+                <p className="text-sm font-medium text-text-base">
+                  Todas as requisições estão autorizadas!
+                </p>
+                <p className="text-xs mt-1 text-text-subtle">
+                  Nenhuma guia pendente de aprovação no momento.
+                </p>
               </div>
             ) : (
-              pendingRequisicoes.map(req => (
-                <div 
+              pendingRequisicoes.map((req) => (
+                <div
                   key={req.id}
                   className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors space-y-2.5 relative"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-text-base">{req.codigo_requisicao}</span>
+                        <span className="font-bold text-sm text-text-base">
+                          {req.codigo_requisicao}
+                        </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
                           EMITIDA / PENDENTE
                         </span>
@@ -311,7 +338,9 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                         </div>
                       </div>
                     </div>
-                    <span className="font-bold text-sm text-text-base">{formatBRL(req.valor_total)}</span>
+                    <span className="font-bold text-sm text-text-base">
+                      {formatBRL(req.valor_total)}
+                    </span>
                   </div>
 
                   <div className="text-xs space-y-1 bg-bg-surface/80 p-2.5 rounded-lg border border-border-default">
@@ -324,7 +353,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                       <span>Prestador: {req.credenciado_nome}</span>
                     </div>
                     <div className="text-text-subtle text-[11px] pt-1 border-t border-border-default/50">
-                      Itens: {req.itens.map(i => `${i.descricao} (${i.quantidade}x)`).join(', ')}
+                      Itens: {req.itens.map((i) => `${i.descricao} (${i.quantidade}x)`).join(', ')}
                     </div>
                   </div>
 
@@ -371,18 +400,22 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
               <div className="py-12 text-center text-text-subtle flex flex-col items-center">
                 <Receipt className="w-10 h-10 mb-3 text-purple-500/40" />
                 <p className="text-sm font-medium text-text-base">Nenhuma remessa em aberto</p>
-                <p className="text-xs mt-1 text-text-subtle">Todas as remessas foram processadas e fechadas.</p>
+                <p className="text-xs mt-1 text-text-subtle">
+                  Todas as remessas foram processadas e fechadas.
+                </p>
               </div>
             ) : (
-              pendingRemessas.map(rem => (
-                <div 
+              pendingRemessas.map((rem) => (
+                <div
                   key={rem.id}
                   className="p-3.5 rounded-xl border border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 transition-colors space-y-2.5 relative"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-text-base">{rem.codigo_remessa}</span>
+                        <span className="font-bold text-sm text-text-base">
+                          {rem.codigo_remessa}
+                        </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-500 border border-purple-500/20">
                           EM ABERTO
                         </span>
@@ -391,7 +424,9 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                         Criação: {formatLocalDateTime(rem.data_criacao)}
                       </div>
                     </div>
-                    <span className="font-bold text-sm text-emerald-500">{formatBRL(rem.valor_liquido)}</span>
+                    <span className="font-bold text-sm text-emerald-500">
+                      {formatBRL(rem.valor_liquido)}
+                    </span>
                   </div>
 
                   <div className="text-xs space-y-1 bg-bg-surface/80 p-2.5 rounded-lg border border-border-default">
@@ -402,7 +437,9 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                     <div className="flex items-center justify-between text-text-subtle pt-1 border-t border-border-default/50">
                       <span>{rem.qtd_guias} guias inclusas</span>
                       {rem.valor_desconto_glosa > 0 && (
-                        <span className="text-rose-500 font-medium">Glosa: - {formatBRL(rem.valor_desconto_glosa)}</span>
+                        <span className="text-rose-500 font-medium">
+                          Glosa: - {formatBRL(rem.valor_desconto_glosa)}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -438,4 +475,3 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
     </div>
   );
 };
-

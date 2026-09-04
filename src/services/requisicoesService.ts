@@ -6,10 +6,8 @@ import { Requisicao, RequisicaoItem, StatusRequisicao } from '../types/requisico
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
-import jsPDF from 'jspdf';
 import { fetchImageAsBase64, fetchImageWithDimensions } from '../utils/imageUtils';
-import autoTable from 'jspdf-autotable';
-import { getEmpresaById } from './empresasService';
+import { getEmpresaById, Empresa } from './empresasService';
 
 export const gerarCodigoRequisicao = (indexNumber: number = 1): string => {
   const dataHoje = new Date();
@@ -348,7 +346,15 @@ export const atualizarStatusRequisicao = async (
 };
 
 // IMPRESSÃO / EXPORTAÇÃO PDF DA GUIA
-export const gerarPDFGuiaRequisicao = async (req: Requisicao, empresa?: any) => {
+export const gerarPDFGuiaRequisicao = async (req: Requisicao, empresa?: Empresa | null) => {
+  // jsPDF/jspdf-autotable só são carregados quando esta função de fato roda — mantém o pacote
+  // (>400KB) fora do bundle inicial, já que requisicoesService.ts também é importado só para
+  // buscar/listar dados (ex.: pelo hook de notificações, presente em toda página autenticada).
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+
   if (!empresa) {
     try {
       empresa = await getEmpresaById(req.tenant_id || 'default_tenant', true);

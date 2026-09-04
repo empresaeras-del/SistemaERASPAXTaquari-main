@@ -2,13 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { X, Save, ChevronRight, ChevronLeft, Trash2, Plus, Check, CheckCircle2 } from 'lucide-react';
+import {
+  X,
+  Save,
+  ChevronRight,
+  ChevronLeft,
+  Trash2,
+  Plus,
+  Check,
+  CheckCircle2,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PlanoPaxFormData, PlanoPaxFaixa } from '../../types/planosPax';
 import { SeletorItensPax } from './SeletorItensPax';
 import { useAppContext } from '../../context/AppContext';
 import { getAssociados } from '../../services/associadosService';
-import { Info, DollarSign, Clock, List as ListIcon, Users, MapPin, Shield, CreditCard, ArrowRight, ArrowLeft } from 'lucide-react';
+import {
+  Info,
+  DollarSign,
+  Clock,
+  List as ListIcon,
+  Users,
+  MapPin,
+  Shield,
+  CreditCard,
+  ArrowRight,
+  ArrowLeft,
+} from 'lucide-react';
 import { RegrasCalculoInfo } from '../associados/RegrasCalculoInfo';
 import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
@@ -22,10 +42,34 @@ export interface EtapaWizardConfig {
 }
 
 export const ETAPAS_WIZARD: EtapaWizardConfig[] = [
-  { id: 1, key: 'identificacao', title: 'Identificação', subtitle: 'Dados e tipo de plano', icon: Info },
-  { id: 2, key: 'valores', title: 'Valores e Limites', subtitle: 'Regras e mensalidade', icon: DollarSign },
-  { id: 3, key: 'carencia', title: 'Carência e Translado', subtitle: 'Prazos e cobertura', icon: Clock },
-  { id: 4, key: 'itens', title: 'Itens e Coberturas', subtitle: 'Urnas e serviços inclusos', icon: ListIcon },
+  {
+    id: 1,
+    key: 'identificacao',
+    title: 'Identificação',
+    subtitle: 'Dados e tipo de plano',
+    icon: Info,
+  },
+  {
+    id: 2,
+    key: 'valores',
+    title: 'Valores e Limites',
+    subtitle: 'Regras e mensalidade',
+    icon: DollarSign,
+  },
+  {
+    id: 3,
+    key: 'carencia',
+    title: 'Carência e Translado',
+    subtitle: 'Prazos e cobertura',
+    icon: Clock,
+  },
+  {
+    id: 4,
+    key: 'itens',
+    title: 'Itens e Coberturas',
+    subtitle: 'Urnas e serviços inclusos',
+    icon: ListIcon,
+  },
 ];
 
 const mascaraCpfLGPD = (cpf?: string | null): string => {
@@ -35,47 +79,70 @@ const mascaraCpfLGPD = (cpf?: string | null): string => {
   return `${limpo.slice(0, 3)}.***.***-${limpo.slice(9, 11)}`;
 };
 
+const optNum = z.preprocess(
+  (val) =>
+    val === '' || val === null || val === undefined || Number.isNaN(val as any) ? null : val,
+  z.coerce.number().nullable().optional(),
+) as unknown as z.ZodType<number | null | undefined>;
+const reqNum = z.preprocess(
+  (val) => (val === '' || val === null || val === undefined || Number.isNaN(val as any) ? 0 : val),
+  z.coerce.number().min(0),
+) as unknown as z.ZodType<number>;
 
-const optNum = z.preprocess(val => (val === '' || val === null || val === undefined || Number.isNaN(val as any)) ? null : val, z.coerce.number().nullable().optional()) as unknown as z.ZodType<number | null | undefined>;
-const reqNum = z.preprocess(val => (val === '' || val === null || val === undefined || Number.isNaN(val as any)) ? 0 : val, z.coerce.number().min(0)) as unknown as z.ZodType<number>;
-
-const schema = z.object({
-  codigo: z.string().min(1, 'Obrigatório').transform(v => v.toUpperCase()),
-  nome: z.string().min(1, 'Obrigatório'),
-  descricao: z.string().optional().nullable(),
-  tipo_plano: z.enum(['individual', 'coletivo']),
-  limite_vidas: optNum,
-  minimo_vidas_calculo: optNum,
-  ativo: z.boolean(),
-  vigencia_inicio: z.string().optional().nullable(),
-  vigencia_fim: z.string().optional().nullable(),
-  regra_calculo: z.enum(['fixo', 'por_vida', 'faixa_etaria']),
-  valor_mensalidade: reqNum,
-  taxa_adesao: reqNum,
-  idade_minima: reqNum,
-  idade_maxima: optNum,
-  carencia_geral_dias: reqNum,
-  carencia_acidente_dias: reqNum,
-  carencia_morte_natural_dias: reqNum,
-  km_translado_coberto: optNum,
-  faixas: z.array(z.object({
-    idade_de: reqNum,
-    idade_ate: reqNum,
-    valor: reqNum
-  })).optional(),
-}).refine(data => {
-  if (data.tipo_plano === 'coletivo' && data.limite_vidas === null) return false;
-  return true;
-}, {
-  message: "Plano coletivo requer informar o limite máximo de vidas",
-  path: ["limite_vidas"]
-}).refine(data => {
-  if (data.regra_calculo === 'faixa_etaria' && (!data.faixas || data.faixas.length === 0)) return false;
-  return true;
-}, {
-  message: "Regra por faixa etária requer ao menos uma faixa cadastrada",
-  path: ["regra_calculo"]
-});
+const schema = z
+  .object({
+    codigo: z
+      .string()
+      .min(1, 'Obrigatório')
+      .transform((v) => v.toUpperCase()),
+    nome: z.string().min(1, 'Obrigatório'),
+    descricao: z.string().optional().nullable(),
+    tipo_plano: z.enum(['individual', 'coletivo']),
+    limite_vidas: optNum,
+    minimo_vidas_calculo: optNum,
+    ativo: z.boolean(),
+    vigencia_inicio: z.string().optional().nullable(),
+    vigencia_fim: z.string().optional().nullable(),
+    regra_calculo: z.enum(['fixo', 'por_vida', 'faixa_etaria']),
+    valor_mensalidade: reqNum,
+    taxa_adesao: reqNum,
+    idade_minima: reqNum,
+    idade_maxima: optNum,
+    carencia_geral_dias: reqNum,
+    carencia_acidente_dias: reqNum,
+    carencia_morte_natural_dias: reqNum,
+    km_translado_coberto: optNum,
+    faixas: z
+      .array(
+        z.object({
+          idade_de: reqNum,
+          idade_ate: reqNum,
+          valor: reqNum,
+        }),
+      )
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.tipo_plano === 'coletivo' && data.limite_vidas === null) return false;
+      return true;
+    },
+    {
+      message: 'Plano coletivo requer informar o limite máximo de vidas',
+      path: ['limite_vidas'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.regra_calculo === 'faixa_etaria' && (!data.faixas || data.faixas.length === 0))
+        return false;
+      return true;
+    },
+    {
+      message: 'Regra por faixa etária requer ao menos uma faixa cadastrada',
+      path: ['regra_calculo'],
+    },
+  );
 
 type FormData = z.infer<typeof schema>;
 
@@ -100,10 +167,12 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         setLoadingAssociados(true);
         try {
           const todos = await getAssociados(state.isOnline, state.empresaSelecionada);
-          const vinculados = todos.filter(a => a.plano_pax_id === initialData.id && a.status === 'ativo');
+          const vinculados = todos.filter(
+            (a) => a.plano_pax_id === initialData.id && a.status === 'ativo',
+          );
           setAssociadosVinculados(vinculados);
         } catch (e) {
-          console.error("Erro ao buscar associados vinculados:", e);
+          console.error('Erro ao buscar associados vinculados:', e);
         } finally {
           setLoadingAssociados(false);
         }
@@ -119,7 +188,15 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
   const [incluiTranslado, setIncluiTranslado] = useState(true);
   const [tipoTranslado, setTipoTranslado] = useState<'local' | 'raio'>('local');
 
-  const { register, control, handleSubmit, watch, reset, setValue, formState: { errors, isDirty } } = useForm<FormData>({
+  const {
+    register,
+    control,
+    handleSubmit,
+    watch,
+    reset,
+    setValue,
+    formState: { errors, isDirty },
+  } = useForm<FormData>({
     resolver: zodResolver(schema as any),
     defaultValues: {
       codigo: '',
@@ -135,13 +212,13 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       carencia_morte_natural_dias: 90,
       idade_minima: 0,
       ativo: true,
-      faixas: []
-    }
+      faixas: [],
+    },
   });
 
   const { fields, append, remove } = useFieldArray({
     control,
-    name: "faixas"
+    name: 'faixas',
   });
 
   useEffect(() => {
@@ -149,13 +226,20 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       if (initialData) {
         reset({
           ...initialData,
-          limite_vidas: initialData.limite_vidas !== undefined && initialData.limite_vidas !== null ? initialData.limite_vidas : 0,
-          minimo_vidas_calculo: initialData.minimo_vidas_calculo !== undefined && initialData.minimo_vidas_calculo !== null ? initialData.minimo_vidas_calculo : 0,
+          limite_vidas:
+            initialData.limite_vidas !== undefined && initialData.limite_vidas !== null
+              ? initialData.limite_vidas
+              : 0,
+          minimo_vidas_calculo:
+            initialData.minimo_vidas_calculo !== undefined &&
+            initialData.minimo_vidas_calculo !== null
+              ? initialData.minimo_vidas_calculo
+              : 0,
           idade_maxima: initialData.idade_maxima || null,
           vigencia_inicio: initialData.vigencia_inicio || null,
           vigencia_fim: initialData.vigencia_fim || null,
         });
-        
+
         if (initialData.km_translado_coberto === null) {
           setIncluiTranslado(false);
         } else {
@@ -165,8 +249,12 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         }
 
         if (initialData.coberturas) {
-          const cob = initialData.coberturas.filter((c: any) => c.tipo_cobertura === 'coberto').map((c: any) => c.item_id);
-          const exc = initialData.coberturas.filter((c: any) => c.tipo_cobertura === 'excluido').map((c: any) => c.item_id);
+          const cob = initialData.coberturas
+            .filter((c: any) => c.tipo_cobertura === 'coberto')
+            .map((c: any) => c.item_id);
+          const exc = initialData.coberturas
+            .filter((c: any) => c.tipo_cobertura === 'excluido')
+            .map((c: any) => c.item_id);
           const obs: Record<string, string> = {};
           initialData.coberturas.forEach((c: any) => {
             if (c.observacao) obs[c.item_id] = c.observacao;
@@ -177,7 +265,11 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         }
       } else {
         reset({
-          codigo: 'PLN' + Math.floor(Math.random() * 100000).toString().padStart(5, '0'),
+          codigo:
+            'PLN' +
+            Math.floor(Math.random() * 100000)
+              .toString()
+              .padStart(5, '0'),
           nome: '',
           tipo_plano: 'individual',
           limite_vidas: 0,
@@ -190,7 +282,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
           carencia_morte_natural_dias: 90,
           idade_minima: 0,
           ativo: true,
-          faixas: []
+          faixas: [],
         });
         setItensCobertos([]);
         setItensExcluidos([]);
@@ -230,10 +322,10 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
       if (data.regra_calculo !== 'por_vida') {
         data.minimo_vidas_calculo = 0;
       }
-      
+
       const vigencia_inicio = data.vigencia_inicio === '' ? null : data.vigencia_inicio;
       const vigencia_fim = data.vigencia_fim === '' ? null : data.vigencia_fim;
-      
+
       await onSave({
         ...data,
         vigencia_inicio,
@@ -242,9 +334,9 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
         itensCobertos,
         itensExcluidos,
         observacoesItens,
-        faixas: data.faixas as Omit<PlanoPaxFaixa, 'id' | 'plano_id'>[]
+        faixas: data.faixas as Omit<PlanoPaxFaixa, 'id' | 'plano_id'>[],
       } as PlanoPaxFormData);
-      
+
       toast.success(initialData ? 'Plano atualizado!' : 'Plano criado!');
       onClose();
     } catch (error: any) {
@@ -254,30 +346,29 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
     }
   };
 
-  
   const nextStep = () => {
     if (initialData) return;
-    setStep(s => Math.min(4, s + 1));
+    setStep((s) => Math.min(4, s + 1));
   };
-  
+
   const prevStep = () => {
     if (initialData) return;
-    setStep(s => Math.max(1, s - 1));
+    setStep((s) => Math.max(1, s - 1));
   };
 
   const onError = (errors: any) => {
-    console.error("Erros de validação:", errors);
-    const errorFields = Object.keys(errors).map(key => key.replace(/_/g, ' ')).join(', ');
-    toast.error(`Existem campos inválidos: ${errorFields}. Volte nas etapas anteriores para corrigir.`);
+    console.error('Erros de validação:', errors);
+    const errorFields = Object.keys(errors)
+      .map((key) => key.replace(/_/g, ' '))
+      .join(', ');
+    toast.error(
+      `Existem campos inválidos: ${errorFields}. Volte nas etapas anteriores para corrigir.`,
+    );
   };
-
-  
-  
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4">
       <div className="bg-bg-surface rounded-3xl shadow-2xl w-[96vw] max-w-[1380px] h-[92vh] max-h-[94vh] flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in duration-300">
-        
         {/* Header */}
         <div className="border-b border-border-default shrink-0 bg-bg-surface/95 backdrop-blur z-10">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border-default/50">
@@ -295,10 +386,9 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                   )}
                 </h2>
                 <p className="text-xs text-text-subtle font-medium mt-0.5">
-                  {initialData 
+                  {initialData
                     ? 'Configure as regras, valores, carências e itens cobertos deste plano PAX.'
-                    : `Etapa ${step} de 4: ${ETAPAS_WIZARD[step - 1].title} — ${ETAPAS_WIZARD[step - 1].subtitle}`
-                  }
+                    : `Etapa ${step} de 4: ${ETAPAS_WIZARD[step - 1].title} — ${ETAPAS_WIZARD[step - 1].subtitle}`}
                 </p>
               </div>
             </div>
@@ -312,10 +402,11 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                   </span>
                 </div>
               )}
-              <button 
-                onClick={onClose} 
+              <button
+                onClick={onClose}
                 className="p-2 text-text-subtle hover:bg-bg-subtle hover:text-text-base rounded-full transition-colors"
                 title="Fechar"
+                aria-label="Fechar"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -342,27 +433,35 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                       }}
                       disabled={etapa.id > step}
                       className={`flex items-center gap-3 p-2.5 rounded-2xl border transition-all text-left ${
-                        isAtivo 
-                          ? 'bg-blue-500/10 border-blue-500/30 ring-1 ring-blue-500/20 shadow-sm' 
-                          : isConcluido 
-                            ? 'bg-bg-surface/80 border-border-default/80 hover:border-blue-500/30 cursor-pointer' 
+                        isAtivo
+                          ? 'bg-blue-500/10 border-blue-500/30 ring-1 ring-blue-500/20 shadow-sm'
+                          : isConcluido
+                            ? 'bg-bg-surface/80 border-border-default/80 hover:border-blue-500/30 cursor-pointer'
                             : 'bg-transparent border-transparent opacity-40 cursor-not-allowed'
                       }`}
                     >
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold transition-colors ${
-                        isAtivo 
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30' 
-                          : isConcluido 
-                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
-                            : 'bg-bg-subtle text-text-muted border border-border-default'
-                      }`}>
+                      <div
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold transition-colors ${
+                          isAtivo
+                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30'
+                            : isConcluido
+                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                              : 'bg-bg-subtle text-text-muted border border-border-default'
+                        }`}
+                      >
                         {isConcluido ? <Check className="w-4 h-4" /> : etapa.id}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
-                          <span className={`text-xs font-bold truncate block ${
-                            isAtivo ? 'text-blue-400' : isConcluido ? 'text-text-base' : 'text-text-muted'
-                          }`}>
+                          <span
+                            className={`text-xs font-bold truncate block ${
+                              isAtivo
+                                ? 'text-blue-400'
+                                : isConcluido
+                                  ? 'text-text-base'
+                                  : 'text-text-muted'
+                            }`}
+                          >
                             {etapa.title}
                           </span>
                         </div>
@@ -377,7 +476,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
               {/* Barra de Progresso com Percentual Contínuo */}
               <div className="w-full bg-border-default/50 h-1.5 rounded-full overflow-hidden mt-3">
-                <div 
+                <div
                   className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 transition-all duration-300 ease-out rounded-full"
                   style={{ width: `${Math.round((step / 4) * 100)}%` }}
                 />
@@ -461,7 +560,11 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
           )}
 
           {/* Form Content */}
-          <form id="plano-pax-form" onSubmit={handleSubmit(onSubmit, onError)} className="flex-1 flex flex-col overflow-hidden">
+          <form
+            id="plano-pax-form"
+            onSubmit={handleSubmit(onSubmit, onError)}
+            className="flex-1 flex flex-col overflow-hidden"
+          >
             {isDirty && (
               <div className="px-8 pt-4 shrink-0">
                 <AlertaAlteracoesPendentes
@@ -474,7 +577,6 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
               </div>
             )}
             <div className="flex-1 overflow-y-auto p-8">
-              
               {(!initialData ? step === 1 : activeTab === 'identificacao') && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full">
                   <div className="bg-bg-subtle/50 p-6 rounded-2xl border border-border-default/50 space-y-6">
@@ -486,30 +588,41 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         Identificação do Plano
                       </h4>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="space-y-1 md:col-span-1">
-                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Código do Plano *</label>
+                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                          Código do Plano *
+                        </label>
                         <input
                           {...register('codigo')}
                           className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-subtle focus:outline-none cursor-not-allowed uppercase transition-all font-mono"
-                          placeholder="Gerado Autom." readOnly
+                          placeholder="Gerado Autom."
+                          readOnly
                         />
-                        {errors.codigo && <p className="text-red-400 text-xs mt-1">{errors.codigo.message}</p>}
+                        {errors.codigo && (
+                          <p className="text-red-400 text-xs mt-1">{errors.codigo.message}</p>
+                        )}
                       </div>
                       <div className="space-y-1 md:col-span-2">
-                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Nome do Plano *</label>
+                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                          Nome do Plano *
+                        </label>
                         <input
                           {...register('nome')}
                           className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all"
                           placeholder="Ex: Plano Ouro"
                         />
-                        {errors.nome && <p className="text-red-400 text-xs mt-1">{errors.nome.message}</p>}
+                        {errors.nome && (
+                          <p className="text-red-400 text-xs mt-1">{errors.nome.message}</p>
+                        )}
                       </div>
                     </div>
 
                     <div className="space-y-1">
-                      <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Descrição</label>
+                      <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                        Descrição
+                      </label>
                       <textarea
                         {...register('descricao')}
                         rows={3}
@@ -519,7 +632,9 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     </div>
 
                     <div className="p-5 bg-bg-surface rounded-2xl border border-border-default space-y-4 shadow-sm">
-                      <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider">Tipo de Plano</label>
+                      <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider">
+                        Tipo de Plano
+                      </label>
                       <div className="flex gap-6">
                         <label className="flex items-center gap-3 cursor-pointer group">
                           <input
@@ -528,7 +643,9 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                             {...register('tipo_plano')}
                             className="w-4 h-4 text-[#3B82F6] bg-bg-surface border-border-default focus:ring-[#3B82F6] focus:ring-2"
                           />
-                          <span className="text-text-base font-medium group-hover:text-[#3B82F6] transition-colors">Individual</span>
+                          <span className="text-text-base font-medium group-hover:text-[#3B82F6] transition-colors">
+                            Individual
+                          </span>
                         </label>
                         <label className="flex items-center gap-3 cursor-pointer group">
                           <input
@@ -537,16 +654,23 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                             {...register('tipo_plano')}
                             className="w-4 h-4 text-[#3B82F6] bg-bg-surface border-border-default focus:ring-[#3B82F6] focus:ring-2"
                           />
-                          <span className="text-text-base font-medium group-hover:text-[#3B82F6] transition-colors">Coletivo (Familiar)</span>
+                          <span className="text-text-base font-medium group-hover:text-[#3B82F6] transition-colors">
+                            Coletivo (Familiar)
+                          </span>
                         </label>
                       </div>
 
                       {/* Card com as Regras de Cálculo de Mensalidades para Planos Individuais e Coletivos */}
                       <div className="pt-2">
-                        <RegrasCalculoInfo 
-                          initialTab={watch('tipo_plano') === 'coletivo' ? 'coletivo' : 'individual'}
+                        <RegrasCalculoInfo
+                          initialTab={
+                            watch('tipo_plano') === 'coletivo' ? 'coletivo' : 'individual'
+                          }
                           onTabChange={(tab) => {
-                            setValue('tipo_plano', tab, { shouldValidate: true, shouldDirty: true });
+                            setValue('tipo_plano', tab, {
+                              shouldValidate: true,
+                              shouldDirty: true,
+                            });
                           }}
                         />
                       </div>
@@ -554,7 +678,9 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-1">
-                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Início da Vigência</label>
+                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                          Início da Vigência
+                        </label>
                         <input
                           type="date"
                           {...register('vigencia_inicio')}
@@ -562,7 +688,9 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Fim da Vigência</label>
+                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                          Fim da Vigência
+                        </label>
                         <input
                           type="date"
                           {...register('vigencia_fim')}
@@ -578,7 +706,10 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         {...register('ativo')}
                         className="w-5 h-5 rounded border-border-default bg-bg-surface text-[#3B82F6] focus:ring-[#3B82F6] focus:ring-2"
                       />
-                      <label htmlFor="ativo" className="text-sm font-semibold text-text-base cursor-pointer">
+                      <label
+                        htmlFor="ativo"
+                        className="text-sm font-semibold text-text-base cursor-pointer"
+                      >
                         Plano Ativo para comercialização
                       </label>
                     </div>
@@ -588,7 +719,6 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
               {(!initialData ? step === 2 : activeTab === 'valores') && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full">
-                  
                   <div className="bg-bg-subtle/50 p-6 rounded-2xl border border-border-default/50 space-y-6">
                     <div className="flex items-center gap-3 border-b border-border-default/50 pb-4">
                       <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-400">
@@ -601,19 +731,27 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {watch('tipo_plano') === 'coletivo' && (
                         <div className="space-y-1">
-                          <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Limite Máximo de Vidas *</label>
+                          <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                            Limite Máximo de Vidas *
+                          </label>
                           <input
                             type="number"
                             {...register('limite_vidas', { valueAsNumber: true })}
                             className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] transition-all"
                           />
-                          {errors.limite_vidas && <p className="text-red-400 text-xs mt-1">{errors.limite_vidas.message}</p>}
+                          {errors.limite_vidas && (
+                            <p className="text-red-400 text-xs mt-1">
+                              {errors.limite_vidas.message}
+                            </p>
+                          )}
                         </div>
                       )}
-                      
-                                            {watch('tipo_plano') !== 'coletivo' && (
+
+                      {watch('tipo_plano') !== 'coletivo' && (
                         <div className="space-y-1">
-                          <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Mínimo de Vidas (Cálculo)</label>
+                          <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                            Mínimo de Vidas (Cálculo)
+                          </label>
                           <input
                             type="number"
                             {...register('minimo_vidas_calculo', { valueAsNumber: true })}
@@ -635,7 +773,9 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <label className={`flex items-start p-4 border rounded-xl cursor-pointer transition-colors ${watch('regra_calculo') === 'fixo' ? 'border-[#3B82F6] bg-[#3B82F6]/5' : 'border-border-default bg-bg-surface hover:bg-bg-hover'}`}>
+                      <label
+                        className={`flex items-start p-4 border rounded-xl cursor-pointer transition-colors ${watch('regra_calculo') === 'fixo' ? 'border-[#3B82F6] bg-[#3B82F6]/5' : 'border-border-default bg-bg-surface hover:bg-bg-hover'}`}
+                      >
                         <div className="flex items-center h-5">
                           <input
                             type="radio"
@@ -646,38 +786,55 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         </div>
                         <div className="ml-3 flex flex-col">
                           <span className="text-sm font-bold text-text-base mb-1">Valor Fixo</span>
-                          <span className="text-xs text-text-muted">Valor único independente do número de vidas.</span>
+                          <span className="text-xs text-text-muted">
+                            Valor único independente do número de vidas.
+                          </span>
                         </div>
                       </label>
-                      <label className={`flex items-start p-4 border rounded-xl transition-colors ${watch('regra_calculo') === 'por_vida' ? 'border-[#3B82F6] bg-[#3B82F6]/5' : 'border-border-default bg-bg-surface'} ${watch('tipo_plano') === 'coletivo' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-bg-hover'}`}>
+                      <label
+                        className={`flex items-start p-4 border rounded-xl transition-colors ${watch('regra_calculo') === 'por_vida' ? 'border-[#3B82F6] bg-[#3B82F6]/5' : 'border-border-default bg-bg-surface'} ${watch('tipo_plano') === 'coletivo' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-bg-hover'}`}
+                      >
                         <div className="flex items-center h-5">
                           <input
                             type="radio"
                             value="por_vida"
                             {...register('regra_calculo')}
-                            className="w-4 h-4 text-[#3B82F6] bg-bg-surface border-border-default focus:ring-[#3B82F6]" disabled={watch('tipo_plano') === 'coletivo'} />
+                            className="w-4 h-4 text-[#3B82F6] bg-bg-surface border-border-default focus:ring-[#3B82F6]"
+                            disabled={watch('tipo_plano') === 'coletivo'}
+                          />
                         </div>
                         <div className="ml-3 flex flex-col">
                           <span className="text-sm font-bold text-text-base mb-1">Por Vida</span>
-                          <span className="text-xs text-text-muted">Multiplica o valor pelo total de associado + dependentes.</span>
+                          <span className="text-xs text-text-muted">
+                            Multiplica o valor pelo total de associado + dependentes.
+                          </span>
                         </div>
                       </label>
-                      <label className={`flex items-start p-4 border rounded-xl transition-colors ${watch('regra_calculo') === 'faixa_etaria' ? 'border-[#3B82F6] bg-[#3B82F6]/5' : 'border-border-default bg-bg-surface'} ${watch('tipo_plano') === 'coletivo' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-bg-hover'}`}>
+                      <label
+                        className={`flex items-start p-4 border rounded-xl transition-colors ${watch('regra_calculo') === 'faixa_etaria' ? 'border-[#3B82F6] bg-[#3B82F6]/5' : 'border-border-default bg-bg-surface'} ${watch('tipo_plano') === 'coletivo' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-bg-hover'}`}
+                      >
                         <div className="flex items-center h-5">
                           <input
                             type="radio"
                             value="faixa_etaria"
                             {...register('regra_calculo')}
-                            className="w-4 h-4 text-[#3B82F6] bg-bg-surface border-border-default focus:ring-[#3B82F6]" disabled={watch('tipo_plano') === 'coletivo'} />
+                            className="w-4 h-4 text-[#3B82F6] bg-bg-surface border-border-default focus:ring-[#3B82F6]"
+                            disabled={watch('tipo_plano') === 'coletivo'}
+                          />
                         </div>
                         <div className="ml-3 flex flex-col">
-                          <span className="text-sm font-bold text-text-base mb-1">Faixa Etária</span>
-                          <span className="text-xs text-text-muted">Valor varia conforme a idade de cada vida.</span>
+                          <span className="text-sm font-bold text-text-base mb-1">
+                            Faixa Etária
+                          </span>
+                          <span className="text-xs text-text-muted">
+                            Valor varia conforme a idade de cada vida.
+                          </span>
                         </div>
                       </label>
                     </div>
 
-                    {(watch('regra_calculo') === 'fixo' || watch('regra_calculo') === 'por_vida') && (
+                    {(watch('regra_calculo') === 'fixo' ||
+                      watch('regra_calculo') === 'por_vida') && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-border-default/50">
                         <div className="space-y-1">
                           <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -708,8 +865,12 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                       <div className="pt-4 border-t border-border-default/50 space-y-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h4 className="text-sm font-bold text-text-base">Tabela de Faixas Etárias</h4>
-                            <p className="text-xs text-text-subtle">Defina os valores das mensalidades de acordo com a faixa de idade.</p>
+                            <h4 className="text-sm font-bold text-text-base">
+                              Tabela de Faixas Etárias
+                            </h4>
+                            <p className="text-xs text-text-subtle">
+                              Defina os valores das mensalidades de acordo com a faixa de idade.
+                            </p>
                           </div>
                           <button
                             type="button"
@@ -719,13 +880,22 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                             <Plus className="w-4 h-4" /> Adicionar Faixa
                           </button>
                         </div>
-                        {errors.regra_calculo && <p className="text-red-400 text-xs mb-3">{errors.regra_calculo.message}</p>}
-                        
+                        {errors.regra_calculo && (
+                          <p className="text-red-400 text-xs mb-3">
+                            {errors.regra_calculo.message}
+                          </p>
+                        )}
+
                         <div className="space-y-3">
                           {fields.map((field, index) => (
-                            <div key={field.id} className="flex gap-4 items-end bg-bg-surface p-4 rounded-xl border border-border-default">
+                            <div
+                              key={field.id}
+                              className="flex gap-4 items-end bg-bg-surface p-4 rounded-xl border border-border-default"
+                            >
                               <div className="flex-1">
-                                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">De (anos)</label>
+                                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+                                  De (anos)
+                                </label>
                                 <input
                                   type="number"
                                   {...register(`faixas.${index}.idade_de`, { valueAsNumber: true })}
@@ -733,15 +903,21 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                                 />
                               </div>
                               <div className="flex-1">
-                                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Até (anos)</label>
+                                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+                                  Até (anos)
+                                </label>
                                 <input
                                   type="number"
-                                  {...register(`faixas.${index}.idade_ate`, { valueAsNumber: true })}
+                                  {...register(`faixas.${index}.idade_ate`, {
+                                    valueAsNumber: true,
+                                  })}
                                   className="w-full bg-bg-subtle border border-border-default rounded-lg px-3 py-2 text-text-base focus:outline-none focus:border-[#3B82F6]"
                                 />
                               </div>
                               <div className="flex-1">
-                                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Valor Mensalidade (R$)</label>
+                                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
+                                  Valor Mensalidade (R$)
+                                </label>
                                 <input
                                   type="number"
                                   step="0.01"
@@ -769,7 +945,9 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
                         <div className="pt-2">
                           <div className="max-w-xs space-y-1">
-                            <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Taxa de Adesão (R$)</label>
+                            <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                              Taxa de Adesão (R$)
+                            </label>
                             <input
                               type="number"
                               step="0.01"
@@ -780,7 +958,6 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         </div>
                       </div>
                     )}
-
                   </div>
                 </div>
               )}
@@ -796,10 +973,12 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         Regras de Carência (dias)
                       </h4>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="space-y-1">
-                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Geral</label>
+                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                          Geral
+                        </label>
                         <input
                           type="number"
                           {...register('carencia_geral_dias', { valueAsNumber: true })}
@@ -807,7 +986,9 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Morte Acidental</label>
+                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                          Morte Acidental
+                        </label>
                         <input
                           type="number"
                           {...register('carencia_acidente_dias', { valueAsNumber: true })}
@@ -815,7 +996,9 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Morte Natural</label>
+                        <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                          Morte Natural
+                        </label>
                         <input
                           type="number"
                           {...register('carencia_morte_natural_dias', { valueAsNumber: true })}
@@ -830,9 +1013,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                       <div className="p-2 bg-purple-500/10 rounded-xl text-purple-400">
                         <MapPin className="w-5 h-5" />
                       </div>
-                      <h4 className="text-lg font-bold text-text-base tracking-tight">
-                        Translado
-                      </h4>
+                      <h4 className="text-lg font-bold text-text-base tracking-tight">Translado</h4>
                     </div>
 
                     <div className="space-y-6">
@@ -844,39 +1025,48 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                           onChange={(e) => setIncluiTranslado(e.target.checked)}
                           className="w-5 h-5 rounded border-border-default bg-bg-surface text-[#3B82F6] focus:ring-[#3B82F6] focus:ring-2"
                         />
-                        <label htmlFor="incluiTranslado" className="text-sm font-bold text-text-base cursor-pointer">
+                        <label
+                          htmlFor="incluiTranslado"
+                          className="text-sm font-bold text-text-base cursor-pointer"
+                        >
                           Inclui serviço de translado
                         </label>
                       </div>
-                      
+
                       {incluiTranslado && (
                         <div className="pl-8 pt-2 space-y-6">
                           <div className="flex gap-6">
                             <label className="flex items-center gap-2 cursor-pointer group">
-                              <input 
-                                type="radio" 
-                                name="tipoTranslado" 
-                                checked={tipoTranslado === 'local'} 
+                              <input
+                                type="radio"
+                                name="tipoTranslado"
+                                checked={tipoTranslado === 'local'}
                                 onChange={() => setTipoTranslado('local')}
-                                className="w-4 h-4 text-[#3B82F6] focus:ring-[#3B82F6] bg-bg-surface border-border-default" 
+                                className="w-4 h-4 text-[#3B82F6] focus:ring-[#3B82F6] bg-bg-surface border-border-default"
                               />
-                              <span className="text-sm font-medium text-text-base group-hover:text-[#3B82F6] transition-colors">Translado local apenas</span>
+                              <span className="text-sm font-medium text-text-base group-hover:text-[#3B82F6] transition-colors">
+                                Translado local apenas
+                              </span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer group">
-                              <input 
-                                type="radio" 
-                                name="tipoTranslado" 
-                                checked={tipoTranslado === 'raio'} 
+                              <input
+                                type="radio"
+                                name="tipoTranslado"
+                                checked={tipoTranslado === 'raio'}
                                 onChange={() => setTipoTranslado('raio')}
-                                className="w-4 h-4 text-[#3B82F6] focus:ring-[#3B82F6] bg-bg-surface border-border-default" 
+                                className="w-4 h-4 text-[#3B82F6] focus:ring-[#3B82F6] bg-bg-surface border-border-default"
                               />
-                              <span className="text-sm font-medium text-text-base group-hover:text-[#3B82F6] transition-colors">Raio de cobertura (KM)</span>
+                              <span className="text-sm font-medium text-text-base group-hover:text-[#3B82F6] transition-colors">
+                                Raio de cobertura (KM)
+                              </span>
                             </label>
                           </div>
-                          
+
                           {tipoTranslado === 'raio' && (
                             <div className="max-w-xs space-y-1">
-                              <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">Raio Máximo (KM)</label>
+                              <label className="block text-sm font-semibold text-text-muted uppercase tracking-wider mb-1">
+                                Raio Máximo (KM)
+                              </label>
                               <input
                                 type="number"
                                 placeholder="Ex: 100"
@@ -939,14 +1129,17 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                       <div className="flex items-center gap-2 bg-[#3B82F6]/10 px-4 py-2 rounded-xl border border-[#3B82F6]/20">
                         <CreditCard className="w-5 h-5 text-[#3B82F6]" />
                         <span className="font-bold text-[#3B82F6]">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                            associadosVinculados.reduce((acc, a) => acc + (a.valor_plano || 0), 0)
+                          {new Intl.NumberFormat('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL',
+                          }).format(
+                            associadosVinculados.reduce((acc, a) => acc + (a.valor_plano || 0), 0),
                           )}
                         </span>
                         <span className="text-xs text-[#3B82F6]/70 ml-1">/mês total</span>
                       </div>
                     </div>
-                    
+
                     <div className="flex-1 overflow-y-auto bg-bg-surface rounded-xl border border-border-default">
                       {loadingAssociados ? (
                         <div className="flex items-center justify-center h-40">
@@ -967,13 +1160,18 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                               <tr key={a.id} className="hover:bg-bg-hover/50 transition-colors">
                                 <td className="px-6 py-4">
                                   <div className="font-medium text-text-base">{a.nome}</div>
-                                  <div className="text-xs text-text-muted">{mascaraCpfLGPD(a.cpf)}</div>
+                                  <div className="text-xs text-text-muted">
+                                    {mascaraCpfLGPD(a.cpf)}
+                                  </div>
                                 </td>
                                 <td className="px-6 py-4 font-medium text-text-base">
                                   {a.n_vidas}
                                 </td>
                                 <td className="px-6 py-4 font-bold text-emerald-400">
-                                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(a.valor_plano || 0)}
+                                  {new Intl.NumberFormat('pt-BR', {
+                                    style: 'currency',
+                                    currency: 'BRL',
+                                  }).format(a.valor_plano || 0)}
                                 </td>
                                 <td className="px-6 py-4">
                                   <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-xs font-bold uppercase tracking-wider">
@@ -994,9 +1192,8 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                   </div>
                 </div>
               )}
-
             </div>
-            
+
             {/* Footer Form Actions */}
             <div className="px-8 py-4 border-t border-border-default bg-bg-surface/90 backdrop-blur flex justify-between items-center shrink-0">
               <button
@@ -1010,12 +1207,16 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
 
               {!initialData && (
                 <div className="hidden sm:flex items-center gap-2 text-xs text-text-subtle">
-                  <span>Etapa <strong className="text-text-base">{step}</strong> de 4</span>
+                  <span>
+                    Etapa <strong className="text-text-base">{step}</strong> de 4
+                  </span>
                   <span>•</span>
-                  <span className="font-semibold text-blue-400">{Math.round((step / 4) * 100)}% concluído</span>
+                  <span className="font-semibold text-blue-400">
+                    {Math.round((step / 4) * 100)}% concluído
+                  </span>
                 </div>
               )}
-              
+
               <div className="flex items-center gap-3">
                 {!initialData && step < 4 ? (
                   <button

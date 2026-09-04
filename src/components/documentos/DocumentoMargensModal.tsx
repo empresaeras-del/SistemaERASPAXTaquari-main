@@ -20,33 +20,33 @@ export const PRESETS_MARGENS = [
     id: 'normal',
     label: 'Normal / Padrão',
     descricao: 'Superior: 20mm · Inferior: 20mm · Esquerda: 25mm · Direita: 25mm',
-    config: { top: 20, bottom: 20, left: 25, right: 25 }
+    config: { top: 20, bottom: 20, left: 25, right: 25 },
   },
   {
     id: 'estreita',
     label: 'Estreita (Mais espaço)',
     descricao: 'Superior: 12.7mm · Inferior: 12.7mm · Esquerda: 12.7mm · Direita: 12.7mm',
-    config: { top: 12.7, bottom: 12.7, left: 12.7, right: 12.7 }
+    config: { top: 12.7, bottom: 12.7, left: 12.7, right: 12.7 },
   },
   {
     id: 'moderada',
     label: 'Moderada',
     descricao: 'Superior: 25.4mm · Inferior: 25.4mm · Esquerda: 19mm · Direita: 19mm',
-    config: { top: 25.4, bottom: 25.4, left: 19, right: 19 }
+    config: { top: 25.4, bottom: 25.4, left: 19, right: 19 },
   },
   {
     id: 'larga',
     label: 'Larga (Mais margem)',
     descricao: 'Superior: 25.4mm · Inferior: 25.4mm · Esquerda: 35mm · Direita: 35mm',
-    config: { top: 25.4, bottom: 25.4, left: 35, right: 35 }
-  }
+    config: { top: 25.4, bottom: 25.4, left: 35, right: 35 },
+  },
 ];
 
 export const DocumentoMargensModal: React.FC<DocumentoMargensModalProps> = ({
   isOpen,
   onClose,
   margens,
-  onSave
+  onSave,
 }) => {
   const [top, setTop] = useState(margens.top);
   const [bottom, setBottom] = useState(margens.bottom);
@@ -67,7 +67,7 @@ export const DocumentoMargensModal: React.FC<DocumentoMargensModalProps> = ({
       top: Math.max(0, Number(top) || 0),
       bottom: Math.max(0, Number(bottom) || 0),
       left: Math.max(0, Number(left) || 0),
-      right: Math.max(0, Number(right) || 0)
+      right: Math.max(0, Number(right) || 0),
     });
     onClose();
   };
@@ -82,14 +82,19 @@ export const DocumentoMargensModal: React.FC<DocumentoMargensModalProps> = ({
               <Layout className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white leading-tight">Margens da Página (A4)</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Defina o espaçamento das margens do documento</p>
+              <h3 className="text-base font-bold text-white leading-tight">
+                Margens da Página (A4)
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Defina o espaçamento das margens do documento
+              </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-white hover:bg-[#232936] rounded-xl transition-colors"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
@@ -125,7 +130,9 @@ export const DocumentoMargensModal: React.FC<DocumentoMargensModalProps> = ({
                       <span className="text-xs font-bold text-white">{preset.label}</span>
                       {isSelected && <Check className="w-4 h-4 text-blue-400" />}
                     </div>
-                    <span className="text-[10px] text-slate-400 leading-tight">{preset.descricao}</span>
+                    <span className="text-[10px] text-slate-400 leading-tight">
+                      {preset.descricao}
+                    </span>
                   </button>
                 );
               })}
@@ -150,7 +157,9 @@ export const DocumentoMargensModal: React.FC<DocumentoMargensModalProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#13171f] p-4 rounded-2xl border border-[#2d3544]">
               {/* Superior */}
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-400">Superior (mm)</label>
+                <label className="block text-[11px] font-semibold text-slate-400">
+                  Superior (mm)
+                </label>
                 <input
                   type="number"
                   min={0}
@@ -164,7 +173,9 @@ export const DocumentoMargensModal: React.FC<DocumentoMargensModalProps> = ({
 
               {/* Inferior */}
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-400">Inferior (mm)</label>
+                <label className="block text-[11px] font-semibold text-slate-400">
+                  Inferior (mm)
+                </label>
                 <input
                   type="number"
                   min={0}
@@ -178,7 +189,9 @@ export const DocumentoMargensModal: React.FC<DocumentoMargensModalProps> = ({
 
               {/* Esquerda */}
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-400">Esquerda (mm)</label>
+                <label className="block text-[11px] font-semibold text-slate-400">
+                  Esquerda (mm)
+                </label>
                 <input
                   type="number"
                   min={0}
@@ -192,7 +205,9 @@ export const DocumentoMargensModal: React.FC<DocumentoMargensModalProps> = ({
 
               {/* Direita */}
               <div className="space-y-1">
-                <label className="block text-[11px] font-semibold text-slate-400">Direita (mm)</label>
+                <label className="block text-[11px] font-semibold text-slate-400">
+                  Direita (mm)
+                </label>
                 <input
                   type="number"
                   min={0}
@@ -217,7 +232,7 @@ export const DocumentoMargensModal: React.FC<DocumentoMargensModalProps> = ({
                 paddingTop: `${(top / 297) * 100}%`,
                 paddingBottom: `${(bottom / 297) * 100}%`,
                 paddingLeft: `${(left / 210) * 100}%`,
-                paddingRight: `${(right / 210) * 100}%`
+                paddingRight: `${(right / 210) * 100}%`,
               }}
             >
               <div className="w-full h-full border border-dashed border-blue-400/80 bg-blue-50/50 flex flex-col justify-between p-1">

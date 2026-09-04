@@ -10,11 +10,12 @@ export const initSentry = () => {
         Sentry.browserTracingIntegration(),
         Sentry.replayIntegration(),
       ],
-      // Performance Monitoring
-      tracesSampleRate: 1.0, 
+      // Performance Monitoring — 100% em dev (depuração local), amostrado em produção para não
+      // crescer linearmente com o tráfego real. Ajuste conforme o volume/cota do projeto no Sentry.
+      tracesSampleRate: import.meta.env.DEV ? 1.0 : 0.2,
       // Session Replay
-      replaysSessionSampleRate: 0.1, 
-      replaysOnErrorSampleRate: 1.0, 
+      replaysSessionSampleRate: 0.1,
+      replaysOnErrorSampleRate: 1.0,
     });
   } else {
     console.warn('Sentry DSN not configured, skipping initialization.');

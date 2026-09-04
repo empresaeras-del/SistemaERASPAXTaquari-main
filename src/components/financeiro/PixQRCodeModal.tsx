@@ -21,14 +21,20 @@ export const PixQRCodeModal: React.FC<PixQRCodeModalProps> = ({
   merchantName,
   merchantCity,
   amount,
-  txid
+  txid,
 }) => {
   const [copied, setCopied] = useState(false);
   const [payload, setPayload] = useState('');
 
   useEffect(() => {
     if (isOpen && pixKey) {
-      const generated = generatePixPayload(pixKey, merchantName, merchantCity || 'SAO PAULO', amount, txid || '***');
+      const generated = generatePixPayload(
+        pixKey,
+        merchantName,
+        merchantCity || 'SAO PAULO',
+        amount,
+        txid || '***',
+      );
       setPayload(generated);
       setCopied(false);
     }
@@ -51,35 +57,36 @@ export const PixQRCodeModal: React.FC<PixQRCodeModalProps> = ({
           <button
             onClick={onClose}
             className="p-2 text-text-subtle hover:bg-bg-subtle rounded-full transition-colors"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        
+
         <div className="p-6 flex flex-col items-center gap-6">
           <div className="bg-white p-4 rounded-xl">
-            {payload && (
-              <QRCodeSVG value={payload} size={200} level="M" />
-            )}
+            {payload && <QRCodeSVG value={payload} size={200} level="M" />}
           </div>
-          
+
           <div className="text-center space-y-1">
             <p className="text-sm text-text-subtle">Valor a pagar</p>
             <p className="text-2xl font-bold text-emerald-500">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount)}
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                amount,
+              )}
             </p>
           </div>
-          
+
           <div className="w-full">
             <p className="text-sm font-semibold text-text-base mb-2">Pix Copia e Cola</p>
             <div className="flex gap-2">
-              <input 
-                type="text" 
-                readOnly 
+              <input
+                type="text"
+                readOnly
                 value={payload}
                 className="flex-1 bg-bg-subtle border border-border-default rounded-xl px-3 py-2 text-xs text-text-subtle font-mono truncate"
               />
-              <button 
+              <button
                 onClick={handleCopy}
                 className="flex items-center justify-center w-10 h-10 shrink-0 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500/20 transition-colors"
               >

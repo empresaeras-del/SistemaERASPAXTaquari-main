@@ -4,57 +4,69 @@ import { useFornecedores } from '../../hooks/useFornecedores';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { isValidCPFOrCNPJ, maskCPFOrCNPJ } from '../../utils/validators';
-import { 
-  X, 
-  Save, 
-  Building, 
-  User, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  CreditCard, 
-  FileText, 
+import {
+  X,
+  Save,
+  Building,
+  User,
+  MapPin,
+  Phone,
+  Mail,
+  CreditCard,
+  FileText,
   Search,
   Globe,
   Tag,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
-import { 
-  Fornecedor, 
-  FornecedorInsert, 
-  FornecedorUpdate, 
-  CategoriaFornecedor, 
-  TipoPessoa, 
+import {
+  Fornecedor,
+  FornecedorInsert,
+  FornecedorUpdate,
+  CategoriaFornecedor,
+  TipoPessoa,
   TipoFornecedor,
-  StatusFornecedor 
+  StatusFornecedor,
 } from '../../types/fornecedores';
 
-
 const maskPhone = (value: string) => {
-  let v = value.replace(/\D/g, "");
+  let v = value.replace(/\D/g, '');
   if (v.length > 11) v = v.slice(0, 11);
   if (v.length > 10) {
-    return v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+    return v.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
   } else if (v.length > 6) {
-    return v.replace(/^(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3");
+    return v.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
   } else if (v.length > 2) {
-    return v.replace(/^(\d{2})(\d{0,5})/, "($1) $2");
+    return v.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
   }
   return v;
 };
 
 const maskCEP = (value: string) => {
-  let v = value.replace(/\D/g, "");
+  let v = value.replace(/\D/g, '');
   if (v.length > 8) v = v.slice(0, 8);
-  return v.replace(/^(\d{5})(\d)/, "$1-$2");
+  return v.replace(/^(\d{5})(\d)/, '$1-$2');
 };
 
-
-const ListManageModal = ({ isOpen, onClose, title, items, onAdd, onRemove }: { isOpen: boolean, onClose: () => void, title: string, items: string[], onAdd: (item: string) => void, onRemove: (item: string) => void }) => {
+const ListManageModal = ({
+  isOpen,
+  onClose,
+  title,
+  items,
+  onAdd,
+  onRemove,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  items: string[];
+  onAdd: (item: string) => void;
+  onRemove: (item: string) => void;
+}) => {
   const [newItem, setNewItem] = useState('');
   if (!isOpen) return null;
 
@@ -63,20 +75,24 @@ const ListManageModal = ({ isOpen, onClose, title, items, onAdd, onRemove }: { i
       <div className="bg-bg-subtle rounded-3xl shadow-2xl w-full max-w-md flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between p-6 border-b border-border-default">
           <h3 className="text-xl font-bold text-text-base">{title}</h3>
-          <button onClick={onClose} className="p-2 text-text-muted hover:text-text-base hover:bg-bg-hover rounded-full transition-colors">
+          <button
+            onClick={onClose}
+            className="p-2 text-text-muted hover:text-text-base hover:bg-bg-hover rounded-full transition-colors"
+            aria-label="Fechar"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="p-6 flex-1 overflow-y-auto max-h-[400px]">
           <div className="flex gap-2 mb-4">
-            <input 
-              type="text" 
-              value={newItem} 
-              onChange={e => setNewItem(e.target.value)} 
+            <input
+              type="text"
+              value={newItem}
+              onChange={(e) => setNewItem(e.target.value)}
               placeholder="Adicionar nova opção..."
               className="flex-1 bg-bg-surface border border-border-default rounded-xl px-4 py-2 text-text-base focus:outline-none focus:border-[#3B82F6]"
             />
-            <button 
+            <button
               type="button"
               onClick={() => {
                 if (newItem.trim() && !items.includes(newItem.trim())) {
@@ -90,19 +106,27 @@ const ListManageModal = ({ isOpen, onClose, title, items, onAdd, onRemove }: { i
             </button>
           </div>
           <div className="space-y-2">
-            {items.map(item => (
-              <div key={item} className="flex justify-between items-center p-3 bg-bg-surface border border-border-default rounded-xl">
+            {items.map((item) => (
+              <div
+                key={item}
+                className="flex justify-between items-center p-3 bg-bg-surface border border-border-default rounded-xl"
+              >
                 <span className="text-sm font-medium text-text-base">{item}</span>
-                <button type="button" onClick={() => onRemove(item)} className="p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors">
+                <button
+                  type="button"
+                  onClick={() => onRemove(item)}
+                  className="p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             ))}
-            {items.length === 0 && <p className="text-sm text-text-muted text-center py-4">Nenhuma opção cadastrada.</p>}
+            {items.length === 0 && (
+              <p className="text-sm text-text-muted text-center py-4">Nenhuma opção cadastrada.</p>
+            )}
           </div>
         </div>
       </div>
-
     </div>
   );
 };
@@ -118,34 +142,32 @@ const defaultCategoriasList: CategoriaFornecedor[] = [
   'Gráfica e Impressões',
   'Manutenção e Conservação',
   'Tecnologia e Sistemas',
-  'Outros'
+  'Outros',
 ];
 
-
-const defaultTiposFornecimentoList = [
-  'produtos',
-  'servicos',
-  'ambos'
-];
+const defaultTiposFornecimentoList = ['produtos', 'servicos', 'ambos'];
 
 const schema = z.object({
   codigo: z.string().min(1, 'Código é obrigatório').toUpperCase(),
   razao_social: z.string().min(2, 'Razão Social / Nome Completo é obrigatório'),
   nome_fantasia: z.string().min(1, 'Nome Fantasia é obrigatório'),
-  cnpj_cpf: z.string().min(11, 'CPF ou CNPJ inválido').refine(val => isValidCPFOrCNPJ(val), { message: 'CPF ou CNPJ inválido' }),
+  cnpj_cpf: z
+    .string()
+    .min(11, 'CPF ou CNPJ inválido')
+    .refine((val) => isValidCPFOrCNPJ(val), { message: 'CPF ou CNPJ inválido' }),
   tipo_pessoa: z.enum(['PJ', 'PF']),
   inscricao_estadual: z.string().optional(),
   inscricao_municipal: z.string().optional(),
   tipo_fornecedor: z.string().min(1, 'Tipo de Fornecimento é obrigatório'),
   categoria: z.string().min(1, 'Selecione ou digite uma categoria'),
   status: z.enum(['ativo', 'inativo', 'bloqueado']),
-  
+
   contato_nome: z.string().optional(),
   telefone: z.string().optional(),
   celular_whatsapp: z.string().optional(),
   email: z.string().email('E-mail inválido').optional().or(z.literal('')),
   website: z.string().optional(),
-  
+
   cep: z.string().optional(),
   logradouro: z.string().optional(),
   numero: z.string().optional(),
@@ -153,13 +175,13 @@ const schema = z.object({
   bairro: z.string().optional(),
   cidade: z.string().optional(),
   uf: z.string().optional(),
-  
+
   banco: z.string().optional(),
   agencia: z.string().optional(),
   conta: z.string().optional(),
   tipo_conta: z.enum(['corrente', 'poupanca']).optional(),
   chave_pix: z.string().optional(),
-  
+
   observacoes: z.string().optional(),
 });
 
@@ -173,12 +195,12 @@ interface Props {
   proximoCodigo?: string;
 }
 
-export const FornecedorFormModal: React.FC<Props> = ({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  initialData, 
-  proximoCodigo = 'FORN0001' 
+export const FornecedorFormModal: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  onSave,
+  initialData,
+  proximoCodigo = 'FORN0001',
 }) => {
   const [activeTab, setActiveTab] = useState<'dados' | 'contato' | 'financeiro'>('dados');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -191,7 +213,7 @@ export const FornecedorFormModal: React.FC<Props> = ({
     const saved = localStorage.getItem('tipos_fornecimento');
     return saved ? JSON.parse(saved) : defaultTiposFornecimentoList;
   });
-  
+
   const [showCategoriasModal, setShowCategoriasModal] = useState(false);
   const [showTiposModal, setShowTiposModal] = useState(false);
 
@@ -207,7 +229,14 @@ export const FornecedorFormModal: React.FC<Props> = ({
 
   const isEditing = !!initialData;
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isDirty } } = useForm<FormData>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors, isDirty },
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       codigo: proximoCodigo,
@@ -218,8 +247,8 @@ export const FornecedorFormModal: React.FC<Props> = ({
       tipo_fornecedor: 'produtos',
       categoria: 'Urnas e Caixões',
       status: 'ativo',
-      tipo_conta: 'corrente'
-    }
+      tipo_conta: 'corrente',
+    },
   });
 
   const tipoPessoaWatch = watch('tipo_pessoa');
@@ -256,7 +285,7 @@ export const FornecedorFormModal: React.FC<Props> = ({
           conta: initialData.dados_bancarios?.conta || '',
           tipo_conta: initialData.dados_bancarios?.tipo_conta || 'corrente',
           chave_pix: initialData.dados_bancarios?.chave_pix || '',
-          observacoes: initialData.observacoes || ''
+          observacoes: initialData.observacoes || '',
         });
       } else {
         reset({
@@ -268,7 +297,7 @@ export const FornecedorFormModal: React.FC<Props> = ({
           tipo_fornecedor: 'produtos',
           categoria: 'Urnas e Caixões',
           status: 'ativo',
-          tipo_conta: 'corrente'
+          tipo_conta: 'corrente',
         });
       }
     }
@@ -329,14 +358,16 @@ export const FornecedorFormModal: React.FC<Props> = ({
         bairro: values.bairro || undefined,
         cidade: values.cidade || undefined,
         uf: values.uf || undefined,
-        dados_bancarios: values.banco ? {
-          banco: values.banco,
-          agencia: values.agencia || '',
-          conta: values.conta || '',
-          tipo_conta: (values.tipo_conta || 'corrente') as 'corrente' | 'poupanca',
-          chave_pix: values.chave_pix || undefined
-        } : undefined,
-        observacoes: values.observacoes || undefined
+        dados_bancarios: values.banco
+          ? {
+              banco: values.banco,
+              agencia: values.agencia || '',
+              conta: values.conta || '',
+              tipo_conta: (values.tipo_conta || 'corrente') as 'corrente' | 'poupanca',
+              chave_pix: values.chave_pix || undefined,
+            }
+          : undefined,
+        observacoes: values.observacoes || undefined,
       };
 
       await onSave(payload);
@@ -352,7 +383,6 @@ export const FornecedorFormModal: React.FC<Props> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-base/80 backdrop-blur-sm p-4">
       <div className="bg-bg-subtle rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in-95">
-        
         {/* MODAL HEADER */}
         <div className="flex items-center justify-between p-6 border-b border-border-default bg-bg-surface/30">
           <div className="flex items-center gap-3">
@@ -364,14 +394,17 @@ export const FornecedorFormModal: React.FC<Props> = ({
                 {isEditing ? 'Editar Fornecedor / Prestador' : 'Novo Fornecedor / Prestador'}
               </h2>
               <p className="text-xs text-text-subtle mt-0.5">
-                {isEditing ? `Código: ${initialData?.codigo}` : 'Cadastre um parceiro comercial de produtos ou serviços'}
+                {isEditing
+                  ? `Código: ${initialData?.codigo}`
+                  : 'Cadastre um parceiro comercial de produtos ou serviços'}
               </p>
             </div>
           </div>
-          <button 
-            type="button" 
-            onClick={onClose} 
+          <button
+            type="button"
+            onClick={onClose}
             className="text-text-subtle hover:text-text-base transition-colors p-2 rounded-xl hover:bg-bg-hover"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
@@ -420,7 +453,11 @@ export const FornecedorFormModal: React.FC<Props> = ({
         </div>
 
         {/* FORM CONTENT */}
-        <form id="fornecedor-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+        <form
+          id="fornecedor-form"
+          onSubmit={handleSubmit(onSubmit)}
+          className="flex flex-col flex-1 overflow-hidden"
+        >
           {isDirty && (
             <div className="px-6 pt-4 shrink-0">
               <AlertaAlteracoesPendentes
@@ -432,11 +469,10 @@ export const FornecedorFormModal: React.FC<Props> = ({
               />
             </div>
           )}
-          
+
           {/* TAB 1: DADOS PRINCIPAIS */}
           {activeTab === 'dados' && (
             <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
-              
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-text-muted mb-1.5 uppercase tracking-wider">
@@ -447,7 +483,9 @@ export const FornecedorFormModal: React.FC<Props> = ({
                     readOnly
                     className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-subtle focus:outline-none font-mono cursor-not-allowed"
                   />
-                  {errors.codigo && <p className="text-red-400 text-xs mt-1">{errors.codigo.message}</p>}
+                  {errors.codigo && (
+                    <p className="text-red-400 text-xs mt-1">{errors.codigo.message}</p>
+                  )}
                 </div>
 
                 <div>
@@ -476,7 +514,9 @@ export const FornecedorFormModal: React.FC<Props> = ({
                     placeholder={tipoPessoaWatch === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00'}
                     className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] font-mono"
                   />
-                  {errors.cnpj_cpf && <p className="text-red-400 text-xs mt-1">{errors.cnpj_cpf.message}</p>}
+                  {errors.cnpj_cpf && (
+                    <p className="text-red-400 text-xs mt-1">{errors.cnpj_cpf.message}</p>
+                  )}
                 </div>
               </div>
 
@@ -487,10 +527,16 @@ export const FornecedorFormModal: React.FC<Props> = ({
                   </label>
                   <input
                     {...register('razao_social')}
-                    placeholder={tipoPessoaWatch === 'PJ' ? 'Ex: Pax Brasil Indústria e Comércio Ltda' : 'Ex: João da Silva'}
+                    placeholder={
+                      tipoPessoaWatch === 'PJ'
+                        ? 'Ex: Pax Brasil Indústria e Comércio Ltda'
+                        : 'Ex: João da Silva'
+                    }
                     className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6]"
                   />
-                  {errors.razao_social && <p className="text-red-400 text-xs mt-1">{errors.razao_social.message}</p>}
+                  {errors.razao_social && (
+                    <p className="text-red-400 text-xs mt-1">{errors.razao_social.message}</p>
+                  )}
                 </div>
 
                 <div>
@@ -502,7 +548,9 @@ export const FornecedorFormModal: React.FC<Props> = ({
                     placeholder="Ex: Pax Brasil Urnas"
                     className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6]"
                   />
-                  {errors.nome_fantasia && <p className="text-red-400 text-xs mt-1">{errors.nome_fantasia.message}</p>}
+                  {errors.nome_fantasia && (
+                    <p className="text-red-400 text-xs mt-1">{errors.nome_fantasia.message}</p>
+                  )}
                 </div>
               </div>
 
@@ -512,15 +560,31 @@ export const FornecedorFormModal: React.FC<Props> = ({
                     <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider">
                       Tipo de Fornecimento *
                     </label>
-                    <button type="button" onClick={() => setShowTiposModal(true)} className="text-[10px] font-bold text-[#3B82F6] hover:underline">Gerenciar</button>
+                    <button
+                      type="button"
+                      onClick={() => setShowTiposModal(true)}
+                      className="text-[10px] font-bold text-[#3B82F6] hover:underline"
+                    >
+                      Gerenciar
+                    </button>
                   </div>
                   <select
                     {...register('tipo_fornecedor')}
                     className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] capitalize"
                   >
-                    <option value="" disabled>Selecione...</option>
-                    {tiposFornecimento.map(tipo => (
-                      <option key={tipo} value={tipo}>{tipo === 'produtos' ? 'Produtos / Insumos' : tipo === 'servicos' ? 'Prestador de Serviços' : tipo === 'ambos' ? 'Produtos e Serviços (Ambos)' : tipo}</option>
+                    <option value="" disabled>
+                      Selecione...
+                    </option>
+                    {tiposFornecimento.map((tipo) => (
+                      <option key={tipo} value={tipo}>
+                        {tipo === 'produtos'
+                          ? 'Produtos / Insumos'
+                          : tipo === 'servicos'
+                            ? 'Prestador de Serviços'
+                            : tipo === 'ambos'
+                              ? 'Produtos e Serviços (Ambos)'
+                              : tipo}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -530,15 +594,25 @@ export const FornecedorFormModal: React.FC<Props> = ({
                     <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider">
                       Categoria *
                     </label>
-                    <button type="button" onClick={() => setShowCategoriasModal(true)} className="text-[10px] font-bold text-[#3B82F6] hover:underline">Gerenciar</button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCategoriasModal(true)}
+                      className="text-[10px] font-bold text-[#3B82F6] hover:underline"
+                    >
+                      Gerenciar
+                    </button>
                   </div>
                   <select
                     {...register('categoria')}
                     className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6]"
                   >
-                    <option value="" disabled>Selecione...</option>
-                    {categorias.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
+                    <option value="" disabled>
+                      Selecione...
+                    </option>
+                    {categorias.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -588,7 +662,6 @@ export const FornecedorFormModal: React.FC<Props> = ({
           {/* TAB 2: CONTATO & ENDEREÇO */}
           {activeTab === 'contato' && (
             <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
-              
               <div className="space-y-4">
                 <h3 className="text-xs font-bold text-[#3B82F6] uppercase tracking-wider flex items-center gap-1.5">
                   <User className="w-4 h-4" />
@@ -617,7 +690,9 @@ export const FornecedorFormModal: React.FC<Props> = ({
                       placeholder="vendas@fornecedor.com.br"
                       className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6]"
                     />
-                    {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
+                    {errors.email && (
+                      <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>
+                    )}
                   </div>
                 </div>
 
@@ -760,7 +835,6 @@ export const FornecedorFormModal: React.FC<Props> = ({
           {/* TAB 3: DADOS BANCÁRIOS & EXTRAS */}
           {activeTab === 'financeiro' && (
             <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
-              
               <div className="space-y-4">
                 <h3 className="text-xs font-bold text-[#3B82F6] uppercase tracking-wider flex items-center gap-1.5">
                   <CreditCard className="w-4 h-4" />
@@ -891,21 +965,21 @@ export const FornecedorFormModal: React.FC<Props> = ({
           </div>
         </form>
       </div>
-      <ListManageModal 
-        isOpen={showCategoriasModal} 
-        onClose={() => setShowCategoriasModal(false)} 
-        title="Gerenciar Categorias" 
-        items={categorias} 
-        onAdd={cat => setCategorias([...categorias, cat])} 
-        onRemove={cat => setCategorias(categorias.filter(c => c !== cat))} 
+      <ListManageModal
+        isOpen={showCategoriasModal}
+        onClose={() => setShowCategoriasModal(false)}
+        title="Gerenciar Categorias"
+        items={categorias}
+        onAdd={(cat) => setCategorias([...categorias, cat])}
+        onRemove={(cat) => setCategorias(categorias.filter((c) => c !== cat))}
       />
-      <ListManageModal 
-        isOpen={showTiposModal} 
-        onClose={() => setShowTiposModal(false)} 
-        title="Gerenciar Tipos de Fornecimento" 
-        items={tiposFornecimento} 
-        onAdd={tipo => setTiposFornecimento([...tiposFornecimento, tipo])} 
-        onRemove={tipo => setTiposFornecimento(tiposFornecimento.filter(t => t !== tipo))} 
+      <ListManageModal
+        isOpen={showTiposModal}
+        onClose={() => setShowTiposModal(false)}
+        title="Gerenciar Tipos de Fornecimento"
+        items={tiposFornecimento}
+        onAdd={(tipo) => setTiposFornecimento([...tiposFornecimento, tipo])}
+        onRemove={(tipo) => setTiposFornecimento(tiposFornecimento.filter((t) => t !== tipo))}
       />
     </div>
   );

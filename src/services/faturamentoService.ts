@@ -8,9 +8,8 @@ import { salvarDespesa, cancelarDespesa, Despesa, ParcelaPagar, FormaPagamento }
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
-import jsPDF from 'jspdf';
 import { fetchImageAsBase64, fetchImageWithDimensions } from '../utils/imageUtils';
-import autoTable from 'jspdf-autotable';
+import { Empresa } from './empresasService';
 
 export const gerarCodigoRemessa = (indexNumber: number = 1): string => {
   const dataHoje = new Date();
@@ -272,8 +271,14 @@ export const gerarPDFRelatorioFaturamento = async (
   requisicoesInclusas: Requisicao[],
   logoUrl?: string,
   assinaturaUrl?: string,
-  empresa?: any
+  empresa?: Empresa | null
 ) => {
+  // Carregado sob demanda — ver a mesma nota em requisicoesService.ts::gerarPDFGuiaRequisicao.
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+
   const doc = new jsPDF();
   const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 

@@ -1,26 +1,23 @@
 import React from 'react';
-import { 
-  Fornecedor, 
-  StatusFornecedor 
-} from '../../types/fornecedores';
-import { 
-  X, 
-  Pencil, 
-  Building, 
-  User, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  CreditCard, 
-  FileText, 
-  Globe, 
-  Tag, 
-  ShieldCheck, 
-  ShieldAlert, 
-  CheckCircle2, 
-  XCircle, 
+import { Fornecedor, StatusFornecedor } from '../../types/fornecedores';
+import {
+  X,
+  Pencil,
+  Building,
+  User,
+  MapPin,
+  Phone,
+  Mail,
+  CreditCard,
+  FileText,
+  Globe,
+  Tag,
+  ShieldCheck,
+  ShieldAlert,
+  CheckCircle2,
+  XCircle,
   AlertOctagon,
-  Copy
+  Copy,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -31,11 +28,11 @@ interface Props {
   onStatusChange: (id: string, novoStatus: StatusFornecedor) => Promise<void>;
 }
 
-export const FornecedorDetailsModal: React.FC<Props> = ({ 
-  fornecedor, 
-  onClose, 
-  onEdit, 
-  onStatusChange 
+export const FornecedorDetailsModal: React.FC<Props> = ({
+  fornecedor,
+  onClose,
+  onEdit,
+  onStatusChange,
 }) => {
   const getStatusBadge = (status: StatusFornecedor) => {
     switch (status) {
@@ -66,11 +63,23 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
   const getTipoFornecedorBadge = (tipo: string) => {
     switch (tipo) {
       case 'produtos':
-        return <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">Produtos / Insumos</span>;
+        return (
+          <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            Produtos / Insumos
+          </span>
+        );
       case 'servicos':
-        return <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">Prestador de Serviços</span>;
+        return (
+          <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+            Prestador de Serviços
+          </span>
+        );
       case 'ambos':
-        return <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">Produtos & Serviços</span>;
+        return (
+          <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            Produtos & Serviços
+          </span>
+        );
       default:
         return null;
     }
@@ -84,7 +93,6 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-base/80 backdrop-blur-sm p-4">
       <div className="bg-bg-subtle rounded-3xl shadow-2xl w-full max-w-3xl max-h-[88vh] flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in-95">
-        
         {/* HEADER */}
         <div className="p-6 border-b border-border-default bg-bg-surface/30 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -93,7 +101,9 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-xs font-bold text-text-subtle">{fornecedor.codigo}</span>
+                <span className="font-mono text-xs font-bold text-text-subtle">
+                  {fornecedor.codigo}
+                </span>
                 {getStatusBadge(fornecedor.status)}
                 {getTipoFornecedorBadge(fornecedor.tipo_fornecedor)}
               </div>
@@ -110,7 +120,11 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
               <Pencil className="w-3.5 h-3.5" />
               Editar
             </button>
-            <button onClick={onClose} className="p-2 text-text-subtle hover:text-text-base rounded-xl transition-colors hover:bg-bg-hover">
+            <button
+              onClick={onClose}
+              className="p-2 text-text-subtle hover:text-text-base rounded-xl transition-colors hover:bg-bg-hover"
+              aria-label="Fechar"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -118,44 +132,52 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
 
         {/* BODY */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
-          
           {/* QUICK SUMMARY CARDS */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-bg-surface p-4 rounded-2xl border border-border-default/60">
-              <p className="text-[11px] font-semibold text-text-subtle uppercase tracking-wider">Identificação</p>
+              <p className="text-[11px] font-semibold text-text-subtle uppercase tracking-wider">
+                Identificação
+              </p>
               <p className="text-sm font-bold text-text-base font-mono mt-1 flex items-center justify-between">
                 <span>{fornecedor.cnpj_cpf}</span>
-                <button 
+                <button
                   onClick={() => copiarTexto(fornecedor.cnpj_cpf, 'Documento')}
-                  className="text-text-subtle hover:text-[#3B82F6] p-1" 
+                  className="text-text-subtle hover:text-[#3B82F6] p-1"
                   title="Copiar"
                 >
                   <Copy className="w-3.5 h-3.5" />
                 </button>
               </p>
-              <p className="text-xs text-text-subtle mt-0.5">Tipo: {fornecedor.tipo_pessoa || 'PJ'}</p>
+              <p className="text-xs text-text-subtle mt-0.5">
+                Tipo: {fornecedor.tipo_pessoa || 'PJ'}
+              </p>
             </div>
 
             <div className="bg-bg-surface p-4 rounded-2xl border border-border-default/60">
-              <p className="text-[11px] font-semibold text-text-subtle uppercase tracking-wider">Categoria</p>
+              <p className="text-[11px] font-semibold text-text-subtle uppercase tracking-wider">
+                Categoria
+              </p>
               <p className="text-sm font-bold text-text-base mt-1">{fornecedor.categoria}</p>
               <p className="text-xs text-text-subtle mt-0.5">Segmento de fornecimento</p>
             </div>
 
             <div className="bg-bg-surface p-4 rounded-2xl border border-border-default/60">
-              <p className="text-[11px] font-semibold text-text-subtle uppercase tracking-wider">Inscrições Fiscal</p>
+              <p className="text-[11px] font-semibold text-text-subtle uppercase tracking-wider">
+                Inscrições Fiscal
+              </p>
               <p className="text-xs text-text-base mt-1">
-                <strong className="text-text-subtle">IE:</strong> {fornecedor.inscricao_estadual || 'Isento/Não informado'}
+                <strong className="text-text-subtle">IE:</strong>{' '}
+                {fornecedor.inscricao_estadual || 'Isento/Não informado'}
               </p>
               <p className="text-xs text-text-base mt-0.5">
-                <strong className="text-text-subtle">IM:</strong> {fornecedor.inscricao_municipal || 'Não informada'}
+                <strong className="text-text-subtle">IM:</strong>{' '}
+                {fornecedor.inscricao_municipal || 'Não informada'}
               </p>
             </div>
           </div>
 
           {/* CONTATO & ENDEREÇO GRID */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            
             {/* CONTATOS */}
             <div className="bg-bg-surface p-5 rounded-2xl border border-border-default/60 space-y-3">
               <h3 className="text-xs font-bold text-[#3B82F6] uppercase tracking-wider flex items-center gap-1.5">
@@ -166,15 +188,18 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
               <div className="space-y-2 text-xs">
                 {fornecedor.contato_nome && (
                   <p className="text-text-base">
-                    <strong className="text-text-subtle">Responsável:</strong> {fornecedor.contato_nome}
+                    <strong className="text-text-subtle">Responsável:</strong>{' '}
+                    {fornecedor.contato_nome}
                   </p>
                 )}
                 {fornecedor.email && (
                   <p className="text-text-base flex items-center justify-between">
-                    <span><strong className="text-text-subtle">E-mail:</strong> {fornecedor.email}</span>
-                    <button 
+                    <span>
+                      <strong className="text-text-subtle">E-mail:</strong> {fornecedor.email}
+                    </span>
+                    <button
                       onClick={() => copiarTexto(fornecedor.email!, 'E-mail')}
-                      className="text-text-subtle hover:text-[#3B82F6] p-0.5" 
+                      className="text-text-subtle hover:text-[#3B82F6] p-0.5"
                       title="Copiar e-mail"
                     >
                       <Copy className="w-3 h-3" />
@@ -188,20 +213,29 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
                 )}
                 {fornecedor.celular_whatsapp && (
                   <p className="text-text-base">
-                    <strong className="text-text-subtle">Celular / WhatsApp:</strong> {fornecedor.celular_whatsapp}
+                    <strong className="text-text-subtle">Celular / WhatsApp:</strong>{' '}
+                    {fornecedor.celular_whatsapp}
                   </p>
                 )}
                 {fornecedor.website && (
                   <p className="text-text-base truncate">
                     <strong className="text-text-subtle">Website:</strong>{' '}
-                    <a href={fornecedor.website} target="_blank" rel="noopener noreferrer" className="text-[#3B82F6] hover:underline">
+                    <a
+                      href={fornecedor.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#3B82F6] hover:underline"
+                    >
                       {fornecedor.website}
                     </a>
                   </p>
                 )}
-                {!fornecedor.contato_nome && !fornecedor.email && !fornecedor.telefone && !fornecedor.celular_whatsapp && (
-                  <p className="text-text-subtle italic">Nenhum canal de contato informado.</p>
-                )}
+                {!fornecedor.contato_nome &&
+                  !fornecedor.email &&
+                  !fornecedor.telefone &&
+                  !fornecedor.celular_whatsapp && (
+                    <p className="text-text-subtle italic">Nenhum canal de contato informado.</p>
+                  )}
               </div>
             </div>
 
@@ -215,9 +249,17 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
               <div className="space-y-1.5 text-xs text-text-base">
                 {fornecedor.logradouro ? (
                   <>
-                    <p className="font-semibold">{fornecedor.logradouro}, {fornecedor.numero || 's/n'} {fornecedor.complemento ? `(${fornecedor.complemento})` : ''}</p>
-                    <p className="text-text-subtle">{fornecedor.bairro || 'Bairro não informado'} - {fornecedor.cidade}/{fornecedor.uf}</p>
-                    {fornecedor.cep && <p className="font-mono text-text-subtle">CEP: {fornecedor.cep}</p>}
+                    <p className="font-semibold">
+                      {fornecedor.logradouro}, {fornecedor.numero || 's/n'}{' '}
+                      {fornecedor.complemento ? `(${fornecedor.complemento})` : ''}
+                    </p>
+                    <p className="text-text-subtle">
+                      {fornecedor.bairro || 'Bairro não informado'} - {fornecedor.cidade}/
+                      {fornecedor.uf}
+                    </p>
+                    {fornecedor.cep && (
+                      <p className="font-mono text-text-subtle">CEP: {fornecedor.cep}</p>
+                    )}
                   </>
                 ) : (
                   <p className="text-text-subtle italic">Endereço não cadastrado.</p>
@@ -247,15 +289,21 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
                 </div>
                 <div>
                   <p className="text-[10px] text-text-subtle uppercase">Tipo de Conta</p>
-                  <p className="font-semibold text-text-base capitalize">{fornecedor.dados_bancarios.tipo_conta}</p>
+                  <p className="font-semibold text-text-base capitalize">
+                    {fornecedor.dados_bancarios.tipo_conta}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-text-subtle uppercase">Chave PIX</p>
                   <p className="font-mono text-text-base font-semibold flex items-center justify-between">
-                    <span className="truncate">{fornecedor.dados_bancarios.chave_pix || 'N/A'}</span>
+                    <span className="truncate">
+                      {fornecedor.dados_bancarios.chave_pix || 'N/A'}
+                    </span>
                     {fornecedor.dados_bancarios.chave_pix && (
-                      <button 
-                        onClick={() => copiarTexto(fornecedor.dados_bancarios!.chave_pix!, 'Chave PIX')}
+                      <button
+                        onClick={() =>
+                          copiarTexto(fornecedor.dados_bancarios!.chave_pix!, 'Chave PIX')
+                        }
                         className="text-text-subtle hover:text-[#3B82F6] p-0.5 ml-1"
                         title="Copiar PIX"
                       >

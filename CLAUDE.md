@@ -178,3 +178,36 @@ de uma vez.
 Ver `README.md`. Ao mexer num arquivo de `utils/` ou numa função pura de `services/`, adicione ou
 atualize o teste correspondente — é o único jeito de saber se uma mudança quebrou algo, já que não
 há suíte de testes de componente/UI ainda.
+
+## Performance: bibliotecas pesadas em `services/` usados pelo shell do app
+
+Achado real desta sessão: `requisicoesService.ts` e `faturamentoService.ts` são importados pelo
+hook de notificações (`hooks/useNotifications.ts`), usado no `Topbar` — ou seja, em toda página
+autenticada, desde o primeiro carregamento. Os dois arquivos tinham um `import jsPDF from 'jspdf'`
+no topo, usado por **uma única função de geração de PDF** cada — isso bastava para o bundle inicial
+carregar ~1,3&nbsp;MB de bibliotecas de PDF/editor mesmo antes do usuário navegar para qualquer
+lugar que realmente precisasse delas (confirmado via `dist/index.html`: apareciam como
+`modulepreload` já na primeira carga). A correção foi trocar o import estático por um dinâmico,
+escopado dentro da própria função:
+
+```ts
+export const gerarPDFAlgumaCoisa = async (...) => {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  // ...
+};
+```
+
+**Regra geral**: se um `service` mistura funções "sempre necessárias" (fetch/CRUD, usadas por hooks
+globais como notificações) com funções que usam uma biblioteca pesada só ocasionalmente (gerar PDF,
+processar imagem grande etc.), a biblioteca pesada deve ser importada dinamicamente dentro da função
+que a usa — nunca no topo do arquivo. Um `import` estático no topo entra no grafo de dependências de
+qualquer coisa que importe qualquer função do arquivo, mesmo que essa função nunca toque a
+biblioteca. Ao adicionar uma função nova que usa `jspdf`, `jodit` ou outra dependência grande a um
+service já usado por um hook "global", siga esse padrão desde o início.
+
+Depois de qualquer mudança de bundling, confirme o resultado real (não confie só no tamanho dos
+chunks) — rode `npm run build` e inspecione `dist/index.html`: só bibliotecas realmente necessárias
+no primeiro paint devem aparecer como `modulepreload`.

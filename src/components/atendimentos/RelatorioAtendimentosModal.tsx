@@ -1,22 +1,22 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { 
-  X, 
-  Printer, 
-  Download, 
-  ZoomIn, 
-  ZoomOut, 
-  RotateCw, 
-  FileText, 
-  Archive, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  DollarSign, 
-  Filter, 
-  MapPin, 
-  Calendar, 
-  User, 
-  TrendingUp 
+import {
+  X,
+  Printer,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  FileText,
+  Archive,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  DollarSign,
+  Filter,
+  MapPin,
+  Calendar,
+  User,
+  TrendingUp,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Atendimento } from '../../types/atendimentos';
@@ -47,7 +47,7 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
   empresaData,
   associados = [],
   currentFilters = {},
-  userName = 'Operador do Sistema'
+  userName = 'Operador do Sistema',
 }) => {
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [zoom, setZoom] = useState<number>(100);
@@ -57,7 +57,7 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
   // Map de associados por ID
   const associadosMap = useMemo(() => {
     const map = new Map<string, Associado>();
-    associados.forEach(a => {
+    associados.forEach((a) => {
       if (a.id) map.set(a.id, a);
     });
     return map;
@@ -67,7 +67,7 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
   const reportData = useMemo(() => {
     return atendimentos.map((at, idx) => {
       const assoc = at.associado_id ? associadosMap.get(at.associado_id) : undefined;
-      
+
       let statusLabel = 'Aberto';
       let statusColor = 'text-blue-700 bg-blue-50 border-blue-200';
       if (at.status === 'em_andamento') {
@@ -83,13 +83,17 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
 
       const locais = [
         at.local_velorio ? `Velório: ${at.local_velorio}` : '',
-        at.local_sepultamento ? `Sepultamento: ${at.local_sepultamento}` : ''
-      ].filter(Boolean).join(' | ');
+        at.local_sepultamento ? `Sepultamento: ${at.local_sepultamento}` : '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
 
       const datas = [
         at.data_obito ? `Óbito: ${formatLocalDate(at.data_obito)}` : '',
-        at.data_sepultamento ? `Sepult.: ${formatLocalDate(at.data_sepultamento)}` : ''
-      ].filter(Boolean).join(' | ');
+        at.data_sepultamento ? `Sepult.: ${formatLocalDate(at.data_sepultamento)}` : '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
 
       return {
         index: idx + 1,
@@ -98,17 +102,20 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
         falecidoNome: at.falecido_nome,
         falecidoCpf: at.falecido_cpf || 'Não informado',
         tipoCliente: at.tipo_cliente === 'associado' ? 'Associado' : 'Particular / Externo',
-        associadoNome: assoc ? assoc.nome : (at.tipo_cliente === 'associado' ? 'Associado' : '-'),
+        associadoNome: assoc ? assoc.nome : at.tipo_cliente === 'associado' ? 'Associado' : '-',
         planoNome: assoc?.plano_nome || '-',
         locais: locais || '-',
         datas: datas || '-',
         dataRegistro: at.created_at ? formatLocalDate(at.created_at) : '-',
         valorTotal: at.valor_total || 0,
-        valorFormatado: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(at.valor_total || 0),
+        valorFormatado: new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        }).format(at.valor_total || 0),
         status: at.status,
         statusLabel,
         statusColor,
-        qtdItens: at.itens?.length || 0
+        qtdItens: at.itens?.length || 0,
       };
     });
   }, [atendimentos, associadosMap]);
@@ -121,7 +128,7 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
     let concluidos = 0;
     let cancelados = 0;
 
-    reportData.forEach(item => {
+    reportData.forEach((item) => {
       valorGeral += item.valorTotal;
       if (item.status === 'aberto') abertos++;
       else if (item.status === 'em_andamento') emAndamento++;
@@ -138,14 +145,14 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
       emAndamento,
       concluidos,
       cancelados,
-      ticketMedio
+      ticketMedio,
     };
   }, [reportData]);
 
   if (!isOpen) return null;
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 10, 200));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 10, 40));
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 10, 200));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 10, 40));
   const handleZoomReset = () => setZoom(100);
 
   // Impressão limpa
@@ -157,11 +164,13 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
     }
 
     const dataHoraEmissao = format(new Date(), "dd/MM/yyyy 'às' HH:mm:ss");
-    const logoHtml = empresaData?.logo_url 
-      ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" />` 
+    const logoHtml = empresaData?.logo_url
+      ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" />`
       : `<h1 style="margin: 0; font-size: 18px; font-weight: 800; text-transform: uppercase; color: #0f172a;">${empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}</h1>`;
 
-    const rowsHtml = reportData.map(item => `
+    const rowsHtml = reportData
+      .map(
+        (item) => `
       <tr>
         <td style="text-align: center; font-weight: 600; color: #475569;">${item.index}</td>
         <td>
@@ -197,9 +206,12 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
           </span>
         </td>
       </tr>
-    `).join('');
+    `,
+      )
+      .join('');
 
-    const pageOrientationCss = orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
+    const pageOrientationCss =
+      orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
 
     const printHtml = `
       <!DOCTYPE html>
@@ -346,11 +358,12 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
       const doc = new jsPDF({
         orientation: orientation,
         unit: 'mm',
-        format: 'a4'
+        format: 'a4',
       });
 
       const dataHoraEmissao = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
-      const companyName = empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
+      const companyName =
+        empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
 
       // Header Background
       doc.setFillColor(15, 23, 42);
@@ -367,10 +380,20 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
       doc.text('RELATÓRIO OPERACIONAL DE ATENDIMENTOS FUNERÁRIOS', 14, 16);
 
       doc.setFontSize(8);
-      doc.text(`Emissão: ${dataHoraEmissao} | Operador: ${userName}`, doc.internal.pageSize.getWidth() - 14, 10, { align: 'right' });
-      doc.text(`Total: ${reportData.length} atendimentos | Orientação: ${orientation === 'landscape' ? 'Paisagem' : 'Retrato'}`, doc.internal.pageSize.getWidth() - 14, 16, { align: 'right' });
+      doc.text(
+        `Emissão: ${dataHoraEmissao} | Operador: ${userName}`,
+        doc.internal.pageSize.getWidth() - 14,
+        10,
+        { align: 'right' },
+      );
+      doc.text(
+        `Total: ${reportData.length} atendimentos | Orientação: ${orientation === 'landscape' ? 'Paisagem' : 'Retrato'}`,
+        doc.internal.pageSize.getWidth() - 14,
+        16,
+        { align: 'right' },
+      );
 
-      const tableData = reportData.map(item => [
+      const tableData = reportData.map((item) => [
         item.index.toString(),
         `${item.falecidoNome}\nCPF: ${item.falecidoCpf}\nProtocolo: ${item.codigo}`,
         `${item.tipoCliente}${item.associadoNome !== '-' ? '\n' + item.associadoNome + ' (' + item.planoNome + ')' : ''}`,
@@ -378,12 +401,23 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
         item.datas,
         item.dataRegistro,
         item.valorFormatado,
-        item.statusLabel
+        item.statusLabel,
       ]);
 
       autoTable(doc, {
         startY: 28,
-        head: [['#', 'Falecido / Protocolo', 'Origem / Associado', 'Locais (Velório / Sepultamento)', 'Datas', 'Registro', 'Valor', 'Status']],
+        head: [
+          [
+            '#',
+            'Falecido / Protocolo',
+            'Origem / Associado',
+            'Locais (Velório / Sepultamento)',
+            'Datas',
+            'Registro',
+            'Valor',
+            'Status',
+          ],
+        ],
         body: tableData,
         theme: 'grid',
         headStyles: {
@@ -391,12 +425,12 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
           textColor: [255, 255, 255],
           fontSize: 8,
           fontStyle: 'bold',
-          halign: 'left'
+          halign: 'left',
         },
         bodyStyles: {
           fontSize: 7.5,
           textColor: [15, 23, 42],
-          cellPadding: 2
+          cellPadding: 2,
         },
         columnStyles: {
           0: { cellWidth: 8, halign: 'center' },
@@ -406,14 +440,26 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
           4: { cellWidth: orientation === 'landscape' ? 35 : 25 },
           5: { cellWidth: 18, halign: 'center' },
           6: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
-          7: { cellWidth: 20, halign: 'center' }
+          7: { cellWidth: 20, halign: 'center' },
         },
-        foot: [[
-          { content: `TOTAL CONSOLIDADO (${reportData.length} atendimentos):`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
-          { content: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.valorGeral), styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
-          { content: '', styles: { fillColor: [241, 245, 249] } }
-        ]],
-        margin: { left: 14, right: 14 }
+        foot: [
+          [
+            {
+              content: `TOTAL CONSOLIDADO (${reportData.length} atendimentos):`,
+              colSpan: 6,
+              styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] },
+            },
+            {
+              content: new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+              }).format(totais.valorGeral),
+              styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] },
+            },
+            { content: '', styles: { fillColor: [241, 245, 249] } },
+          ],
+        ],
+        margin: { left: 14, right: 14 },
       });
 
       const filename = `Relatorio_Atendimentos_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
@@ -456,7 +502,9 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
             <button
               onClick={() => setOrientation('landscape')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'landscape' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                orientation === 'landscape'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <RotateCw className="w-3.5 h-3.5" />
@@ -465,7 +513,9 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
             <button
               onClick={() => setOrientation('portrait')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'portrait' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                orientation === 'portrait'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
@@ -474,13 +524,25 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
           </div>
 
           <div className="flex items-center gap-1">
-            <button onClick={handleZoomOut} className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]" title="Reduzir Zoom (-)">
+            <button
+              onClick={handleZoomOut}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
+              title="Reduzir Zoom (-)"
+            >
               <ZoomOut className="w-4 h-4" />
             </button>
-            <button onClick={handleZoomReset} className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center" title="Resetar para 100%">
+            <button
+              onClick={handleZoomReset}
+              className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center"
+              title="Resetar para 100%"
+            >
               {zoom}%
             </button>
-            <button onClick={handleZoomIn} className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]" title="Ampliar Zoom (+)">
+            <button
+              onClick={handleZoomIn}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
+              title="Ampliar Zoom (+)"
+            >
               <ZoomIn className="w-4 h-4" />
             </button>
           </div>
@@ -504,7 +566,11 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
             <span>Imprimir</span>
           </button>
           <div className="h-6 w-px bg-[#2d3544]" />
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]"
+            aria-label="Fechar"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -512,20 +578,20 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
 
       {/* CANVAS */}
       <main className="flex-1 overflow-auto p-8 flex justify-center items-start bg-[#1a1e27] custom-scrollbar">
-        <div 
-          style={{ 
-            transform: `scale(${zoom / 100})`, 
+        <div
+          style={{
+            transform: `scale(${zoom / 100})`,
             transformOrigin: 'top center',
-            transition: 'transform 0.15s ease-out'
+            transition: 'transform 0.15s ease-out',
           }}
           className="mb-12 shadow-2xl"
         >
-          <div 
+          <div
             ref={printAreaRef}
             style={{
               width: orientation === 'landscape' ? '297mm' : '210mm',
               minHeight: orientation === 'landscape' ? '210mm' : '297mm',
-              padding: '14mm 16mm'
+              padding: '14mm 16mm',
             }}
             className="bg-white text-slate-900 rounded-sm shadow-2xl relative font-sans leading-normal box-border selection:bg-blue-100"
           >
@@ -533,15 +599,26 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
             <div className="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-start gap-4">
               <div className="flex-1">
                 {empresaData?.logo_url ? (
-                  <img src={empresaData.logo_url} alt="Logo" className="max-h-14 max-w-[240px] object-contain mb-2" />
+                  <img
+                    src={empresaData.logo_url}
+                    alt="Logo"
+                    className="max-h-14 max-w-[240px] object-contain mb-2"
+                  />
                 ) : (
                   <h1 className="text-xl font-extrabold tracking-tight text-slate-900 uppercase mb-1">
                     {empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}
                   </h1>
                 )}
                 <div className="text-xs text-slate-600 leading-tight space-y-0.5">
-                  {empresaData?.cnpj && <p><span className="font-semibold text-slate-800">CNPJ:</span> {empresaData.cnpj} {empresaData.telefone ? ` | Tel: ${empresaData.telefone}` : ''}</p>}
-                  {empresaData?.endereco && <p className="text-slate-500">{empresaData.endereco}</p>}
+                  {empresaData?.cnpj && (
+                    <p>
+                      <span className="font-semibold text-slate-800">CNPJ:</span> {empresaData.cnpj}{' '}
+                      {empresaData.telefone ? ` | Tel: ${empresaData.telefone}` : ''}
+                    </p>
+                  )}
+                  {empresaData?.endereco && (
+                    <p className="text-slate-500">{empresaData.endereco}</p>
+                  )}
                 </div>
               </div>
 
@@ -553,9 +630,14 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
                   Atendimentos Funerários
                 </h2>
                 <div className="text-[11px] text-slate-500 mt-1">
-                  Emissão: <strong className="text-slate-800">{format(new Date(), "dd/MM/yyyy 'às' HH:mm")}</strong>
+                  Emissão:{' '}
+                  <strong className="text-slate-800">
+                    {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
+                  </strong>
                 </div>
-                <div className="text-[10px] text-slate-500">Emitido por: <span className="font-medium text-slate-700">{userName}</span></div>
+                <div className="text-[10px] text-slate-500">
+                  Emitido por: <span className="font-medium text-slate-700">{userName}</span>
+                </div>
               </div>
             </div>
 
@@ -579,14 +661,18 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
               <div className="p-2.5 rounded-lg border border-slate-300 bg-slate-50">
                 <div className="text-[10px] font-bold text-slate-700 uppercase">Montante Total</div>
                 <div className="text-sm font-black text-slate-900 mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.valorGeral)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    totais.valorGeral,
+                  )}
                 </div>
                 <div className="text-[9px] text-slate-600 mt-0.5">Soma dos contratos</div>
               </div>
               <div className="p-2.5 rounded-lg border border-purple-200 bg-purple-50/50">
                 <div className="text-[10px] font-bold text-purple-800 uppercase">Ticket Médio</div>
                 <div className="text-sm font-black text-purple-700 mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.ticketMedio)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    totais.ticketMedio,
+                  )}
                 </div>
                 <div className="text-[9px] text-purple-600 mt-0.5">Por atendimento</div>
               </div>
@@ -598,29 +684,46 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
                 <thead>
                   <tr className="bg-slate-900 text-white text-[10px] uppercase font-bold tracking-wider">
                     <th className="py-2 px-2 text-center w-[3%] border-r border-slate-700">#</th>
-                    <th className="py-2 px-3 w-[25%] border-r border-slate-700">Falecido / Protocolo</th>
-                    <th className="py-2 px-3 w-[18%] border-r border-slate-700">Origem / Associado</th>
-                    <th className="py-2 px-3 w-[22%] border-r border-slate-700">Locais (Velório / Sepultamento)</th>
-                    <th className="py-2 px-2 text-center w-[12%] border-r border-slate-700">Datas</th>
-                    <th className="py-2 px-2 text-center w-[8%] border-r border-slate-700">Registro</th>
+                    <th className="py-2 px-3 w-[25%] border-r border-slate-700">
+                      Falecido / Protocolo
+                    </th>
+                    <th className="py-2 px-3 w-[18%] border-r border-slate-700">
+                      Origem / Associado
+                    </th>
+                    <th className="py-2 px-3 w-[22%] border-r border-slate-700">
+                      Locais (Velório / Sepultamento)
+                    </th>
+                    <th className="py-2 px-2 text-center w-[12%] border-r border-slate-700">
+                      Datas
+                    </th>
+                    <th className="py-2 px-2 text-center w-[8%] border-r border-slate-700">
+                      Registro
+                    </th>
                     <th className="py-2 px-3 text-right w-[7%] border-r border-slate-700">Valor</th>
                     <th className="py-2 px-2 text-center w-[5%]">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-xs">
-                  {reportData.map(item => (
+                  {reportData.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-2 px-2 text-center font-bold text-slate-500 border-r border-slate-200 text-[10px]">{item.index}</td>
+                      <td className="py-2 px-2 text-center font-bold text-slate-500 border-r border-slate-200 text-[10px]">
+                        {item.index}
+                      </td>
                       <td className="py-2 px-3 border-r border-slate-200">
                         <div className="font-bold text-slate-900 text-xs">{item.falecidoNome}</div>
                         <div className="text-[10px] text-slate-500 flex gap-1 items-center mt-0.5">
-                          <span>CPF: {item.falecidoCpf}</span> | <span className="font-mono text-slate-700 font-bold">{item.codigo}</span>
+                          <span>CPF: {item.falecidoCpf}</span> |{' '}
+                          <span className="font-mono text-slate-700 font-bold">{item.codigo}</span>
                         </div>
                       </td>
                       <td className="py-2 px-3 border-r border-slate-200">
-                        <div className="font-semibold text-slate-800 text-[11px]">{item.tipoCliente}</div>
+                        <div className="font-semibold text-slate-800 text-[11px]">
+                          {item.tipoCliente}
+                        </div>
                         {item.associadoNome !== '-' && (
-                          <div className="text-[10px] text-emerald-700 font-medium">{item.associadoNome} ({item.planoNome})</div>
+                          <div className="text-[10px] text-emerald-700 font-medium">
+                            {item.associadoNome} ({item.planoNome})
+                          </div>
                         )}
                       </td>
                       <td className="py-2 px-3 border-r border-slate-200 text-[10.5px] text-slate-700 leading-snug">
@@ -636,7 +739,9 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
                         {item.valorFormatado}
                       </td>
                       <td className="py-2 px-2 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${item.statusColor}`}>
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${item.statusColor}`}
+                        >
                           {item.statusLabel}
                         </span>
                       </td>
@@ -645,11 +750,17 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100 font-extrabold text-slate-900 border-t-2 border-slate-400">
-                    <td colSpan={6} className="py-2.5 px-3 text-right text-xs uppercase tracking-wide">
+                    <td
+                      colSpan={6}
+                      className="py-2.5 px-3 text-right text-xs uppercase tracking-wide"
+                    >
                       Total Consolidado ({reportData.length} atendimentos):
                     </td>
                     <td className="py-2.5 px-3 text-right text-sm text-slate-900">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.valorGeral)}
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      }).format(totais.valorGeral)}
                     </td>
                     <td></td>
                   </tr>
@@ -659,8 +770,12 @@ export const RelatorioAtendimentosModal: React.FC<RelatorioAtendimentosModalProp
 
             {/* Footer */}
             <div className="mt-8 pt-4 border-t border-slate-300 flex justify-between items-center text-[10px] text-slate-500">
-              <div><strong>Sistema ERAS PAX Taquari</strong> - Gestão de Atendimentos Funerários</div>
-              <div>Documento emitido eletronicamente em {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}</div>
+              <div>
+                <strong>Sistema ERAS PAX Taquari</strong> - Gestão de Atendimentos Funerários
+              </div>
+              <div>
+                Documento emitido eletronicamente em {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
+              </div>
               <div>Página 1 de 1</div>
             </div>
           </div>

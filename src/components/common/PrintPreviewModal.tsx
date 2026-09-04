@@ -15,7 +15,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
   onClose,
   title = 'Pré-visualização de Impressão',
   children,
-  onPrint
+  onPrint,
 }) => {
   if (!isOpen) return null;
 
@@ -46,6 +46,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
             <button
               onClick={onClose}
               className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white transition-colors"
+              aria-label="Fechar"
             >
               <X className="w-5 h-5" />
             </button>

@@ -2,22 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { Atendimento } from '../../types/atendimentos';
 import { useAppContext } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
-import { 
-  verificarFinanceiroAtendimento, 
-  VerificacaoFinanceiraAtendimento 
+import {
+  verificarFinanceiroAtendimento,
+  VerificacaoFinanceiraAtendimento,
 } from '../../services/financeiroService';
 import { excluirAtendimento } from '../../services/atendimentosService';
-import { 
-  AlertTriangle, 
-  Trash2, 
-  X, 
-  ShieldAlert, 
-  Ban, 
-  DollarSign, 
-  FileText, 
-  CheckCircle2, 
-  Clock, 
-  Loader2 
+import {
+  AlertTriangle,
+  Trash2,
+  X,
+  ShieldAlert,
+  Ban,
+  DollarSign,
+  FileText,
+  CheckCircle2,
+  Clock,
+  Loader2,
 } from 'lucide-react';
 import { formatLocalDate } from '../../utils/dateUtils';
 
@@ -32,13 +32,15 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
   isOpen,
   onClose,
   atendimento,
-  onSuccess
+  onSuccess,
 }) => {
   const { state } = useAppContext();
   const toast = useToast();
 
   const [loadingVerificacao, setLoadingVerificacao] = useState(true);
-  const [financeiroInfo, setFinanceiroInfo] = useState<VerificacaoFinanceiraAtendimento | null>(null);
+  const [financeiroInfo, setFinanceiroInfo] = useState<VerificacaoFinanceiraAtendimento | null>(
+    null,
+  );
   const [excluindo, setExcluindo] = useState(false);
   const [justificativa, setJustificativa] = useState('');
 
@@ -98,7 +100,7 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
         usuario_nome: state.user?.nome,
         usuario_email: state.user?.email,
         usuario_nivel: state.user?.nivel,
-        justificativa: justificativa.trim() || 'Exclusão autorizada pelo administrador'
+        justificativa: justificativa.trim() || 'Exclusão autorizada pelo administrador',
       });
 
       toast.success('Atendimento e registros financeiros vinculados excluídos com sucesso!');
@@ -118,19 +120,26 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-bg-surface border border-border-default rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        
         {/* HEADER */}
-        <div className={`p-5 border-b border-border-default flex items-center justify-between ${temParcelaQuitada ? 'bg-rose-500/10' : 'bg-bg-subtle'}`}>
+        <div
+          className={`p-5 border-b border-border-default flex items-center justify-between ${temParcelaQuitada ? 'bg-rose-500/10' : 'bg-bg-subtle'}`}
+        >
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-2xl ${temParcelaQuitada ? 'bg-rose-500/20 text-rose-500' : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'}`}>
-              {temParcelaQuitada ? <ShieldAlert className="w-6 h-6" /> : <Trash2 className="w-6 h-6" />}
+            <div
+              className={`p-2.5 rounded-2xl ${temParcelaQuitada ? 'bg-rose-500/20 text-rose-500' : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'}`}
+            >
+              {temParcelaQuitada ? (
+                <ShieldAlert className="w-6 h-6" />
+              ) : (
+                <Trash2 className="w-6 h-6" />
+              )}
             </div>
             <div>
               <h3 className="text-lg font-bold text-text-base">
                 {temParcelaQuitada ? 'Exclusão Bloqueada' : 'Confirmar Exclusão de Atendimento'}
               </h3>
               <p className="text-xs text-text-subtle">
-                {temParcelaQuitada 
+                {temParcelaQuitada
                   ? 'Existem restrições financeiras para este atendimento'
                   : 'Esta ação removerá o atendimento do sistema'}
               </p>
@@ -141,6 +150,7 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
             disabled={excluindo}
             className="p-2 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors disabled:opacity-50"
             title="Fechar"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
@@ -148,30 +158,47 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
 
         {/* CORPO DO MODAL */}
         <div className="p-6 overflow-y-auto space-y-5 text-xs text-text-base">
-          
           {/* IDENTIFICAÇÃO DO ATENDIMENTO */}
           <div className="p-4 rounded-2xl bg-bg-subtle border border-border-default space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-text-subtle">Atendimento</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
-                atendimento.status === 'aberto' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-              }`}>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-subtle">
+                Atendimento
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                  atendimento.status === 'aberto'
+                    ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                    : 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                }`}
+              >
                 {atendimento.status.replace('_', ' ')}
               </span>
             </div>
-            <p className="text-base font-bold text-text-base line-clamp-1">{atendimento.falecido_nome}</p>
+            <p className="text-base font-bold text-text-base line-clamp-1">
+              {atendimento.falecido_nome}
+            </p>
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border-default/60 text-text-muted text-[11px]">
               <div>
-                <span className="text-text-subtle">Tipo:</span> <strong className="text-text-base capitalize">{atendimento.tipo_cliente}</strong>
+                <span className="text-text-subtle">Tipo:</span>{' '}
+                <strong className="text-text-base capitalize">{atendimento.tipo_cliente}</strong>
               </div>
               <div>
-                <span className="text-text-subtle">Data:</span> <strong className="text-text-base">{formatLocalDate(atendimento.created_at || '')}</strong>
+                <span className="text-text-subtle">Data:</span>{' '}
+                <strong className="text-text-base">
+                  {formatLocalDate(atendimento.created_at || '')}
+                </strong>
               </div>
               <div>
-                <span className="text-text-subtle">CPF:</span> <strong className="text-text-base">{atendimento.falecido_cpf || 'Não informado'}</strong>
+                <span className="text-text-subtle">CPF:</span>{' '}
+                <strong className="text-text-base">
+                  {atendimento.falecido_cpf || 'Não informado'}
+                </strong>
               </div>
               <div>
-                <span className="text-text-subtle">Valor Extras:</span> <strong className="text-emerald-500">R$ {(atendimento.valor_total || 0).toFixed(2)}</strong>
+                <span className="text-text-subtle">Valor Extras:</span>{' '}
+                <strong className="text-emerald-500">
+                  R$ {(atendimento.valor_total || 0).toFixed(2)}
+                </strong>
               </div>
             </div>
           </div>
@@ -180,7 +207,9 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
           {loadingVerificacao ? (
             <div className="p-6 rounded-2xl bg-bg-subtle/50 border border-border-default flex flex-col items-center justify-center gap-2 text-center">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              <p className="text-xs font-semibold text-text-subtle">Verificando receitas e parcelas vinculadas...</p>
+              <p className="text-xs font-semibold text-text-subtle">
+                Verificando receitas e parcelas vinculadas...
+              </p>
             </div>
           ) : temParcelaQuitada ? (
             /* CENÁRIO 1: BLOQUEIO IMPEDITIVO */
@@ -191,10 +220,21 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
                   <span>Não é permitido excluir este atendimento</span>
                 </div>
                 <p className="text-xs leading-relaxed text-text-muted">
-                  O sistema identificou <strong className="text-rose-500 font-bold">{financeiroInfo?.parcelasQuitadas.length} parcela(s) já quitada(s)/recebida(s)</strong> vinculada(s) a este atendimento, totalizando <strong className="text-rose-500 font-bold">R$ {financeiroInfo?.valorTotalQuitado.toFixed(2)}</strong>.
+                  O sistema identificou{' '}
+                  <strong className="text-rose-500 font-bold">
+                    {financeiroInfo?.parcelasQuitadas.length} parcela(s) já quitada(s)/recebida(s)
+                  </strong>{' '}
+                  vinculada(s) a este atendimento, totalizando{' '}
+                  <strong className="text-rose-500 font-bold">
+                    R$ {financeiroInfo?.valorTotalQuitado.toFixed(2)}
+                  </strong>
+                  .
                 </p>
                 <p className="text-[11px] text-text-subtle">
-                  Por regras fiscais e de integridade contábil, atendimentos com movimentações financeiras liquidadas não podem ser excluídos diretamente. Caso seja necessário, estorne ou cancele as baixas financeiras no módulo de Contas a Receber antes de prosseguir.
+                  Por regras fiscais e de integridade contábil, atendimentos com movimentações
+                  financeiras liquidadas não podem ser excluídos diretamente. Caso seja necessário,
+                  estorne ou cancele as baixas financeiras no módulo de Contas a Receber antes de
+                  prosseguir.
                 </p>
               </div>
 
@@ -202,17 +242,28 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
               <div className="border border-border-default rounded-2xl overflow-hidden">
                 <div className="p-3 bg-bg-subtle border-b border-border-default font-bold text-text-subtle text-[11px] uppercase tracking-wider flex items-center justify-between">
                   <span>Parcelas Quitadas / Recebidas</span>
-                  <span className="text-emerald-500 font-bold">Total: R$ {financeiroInfo?.valorTotalQuitado.toFixed(2)}</span>
+                  <span className="text-emerald-500 font-bold">
+                    Total: R$ {financeiroInfo?.valorTotalQuitado.toFixed(2)}
+                  </span>
                 </div>
                 <div className="divide-y divide-border-default/50 max-h-36 overflow-y-auto">
                   {financeiroInfo?.parcelasQuitadas.map((p) => (
-                    <div key={p.id} className="p-3 flex items-center justify-between text-xs hover:bg-bg-hover">
+                    <div
+                      key={p.id}
+                      className="p-3 flex items-center justify-between text-xs hover:bg-bg-hover"
+                    >
                       <div>
                         <div className="font-semibold text-text-base">
                           {p.descricao || `Parcela ${p.numero_parcela}`}
                         </div>
                         <div className="text-[10px] text-text-subtle">
-                          Pagamento: {p.data_pagamento ? formatLocalDate(p.data_pagamento) : p.data_recebimento ? formatLocalDate(p.data_recebimento) : '-'} • {p.forma_pagamento || p.forma_pagamento_efetivo || 'Dinheiro'}
+                          Pagamento:{' '}
+                          {p.data_pagamento
+                            ? formatLocalDate(p.data_pagamento)
+                            : p.data_recebimento
+                              ? formatLocalDate(p.data_recebimento)
+                              : '-'}{' '}
+                          • {p.forma_pagamento || p.forma_pagamento_efetivo || 'Dinheiro'}
                         </div>
                       </div>
                       <div className="text-right">
@@ -238,16 +289,31 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
                     <span>Receita Pai Vinculada Detectada</span>
                   </div>
                   <p className="text-xs text-text-muted leading-relaxed">
-                    Este atendimento possui <strong className="text-amber-500 font-bold">{financeiroInfo?.receitas.length} receita(s) vinculada(s)</strong> no Contas a Receber, com <strong className="text-amber-500 font-bold">{financeiroInfo?.parcelasPendentes.length} parcela(s) pendente(s)</strong> no valor de <strong className="text-amber-500 font-bold">R$ {financeiroInfo?.valorTotalPendente.toFixed(2)}</strong>.
+                    Este atendimento possui{' '}
+                    <strong className="text-amber-500 font-bold">
+                      {financeiroInfo?.receitas.length} receita(s) vinculada(s)
+                    </strong>{' '}
+                    no Contas a Receber, com{' '}
+                    <strong className="text-amber-500 font-bold">
+                      {financeiroInfo?.parcelasPendentes.length} parcela(s) pendente(s)
+                    </strong>{' '}
+                    no valor de{' '}
+                    <strong className="text-amber-500 font-bold">
+                      R$ {financeiroInfo?.valorTotalPendente.toFixed(2)}
+                    </strong>
+                    .
                   </p>
                   <p className="text-[11px] font-semibold text-amber-500">
-                    ⚠️ Ao confirmar a exclusão, o atendimento e todas as receitas/parcelas pendentes vinculadas serão excluídos em conjunto do sistema financeiro.
+                    ⚠️ Ao confirmar a exclusão, o atendimento e todas as receitas/parcelas pendentes
+                    vinculadas serão excluídos em conjunto do sistema financeiro.
                   </p>
                 </div>
               ) : (
                 <div className="p-4 rounded-2xl bg-bg-subtle border border-border-default text-text-muted text-xs flex items-center gap-3">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                  <span>Não foram encontradas pendências financeiras vinculadas a este atendimento.</span>
+                  <span>
+                    Não foram encontradas pendências financeiras vinculadas a este atendimento.
+                  </span>
                 </div>
               )}
 
@@ -265,11 +331,12 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
               </div>
 
               <div className="text-[11px] text-text-subtle bg-bg-subtle/50 p-3 rounded-xl border border-border-default/60">
-                ℹ️ Esta exclusão será devidamente registrada no <strong>Log de Auditoria</strong> com a data, o operador responsável ({state.user?.nome || 'Administrador'}) e os dados excluídos.
+                ℹ️ Esta exclusão será devidamente registrada no <strong>Log de Auditoria</strong>{' '}
+                com a data, o operador responsável ({state.user?.nome || 'Administrador'}) e os
+                dados excluídos.
               </div>
             </div>
           )}
-
         </div>
 
         {/* FOOTER ACTIONS */}
@@ -298,13 +365,14 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
               ) : (
                 <>
                   <Trash2 className="w-4 h-4" />
-                  <span>{temReceitaVinculada ? 'Excluir Atendimento e Receitas' : 'Confirmar Exclusão'}</span>
+                  <span>
+                    {temReceitaVinculada ? 'Excluir Atendimento e Receitas' : 'Confirmar Exclusão'}
+                  </span>
                 </>
               )}
             </button>
           )}
         </div>
-
       </div>
     </div>
   );

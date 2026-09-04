@@ -1,5 +1,24 @@
 import React, { useState } from 'react';
-import { X, User, MapPin, Phone, CreditCard, ShieldCheck, Heart, FileText, FolderOpen, Calendar, Edit2, Copy, CopyCheck, Printer, Eye, Download, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import {
+  X,
+  User,
+  MapPin,
+  Phone,
+  CreditCard,
+  ShieldCheck,
+  Heart,
+  FileText,
+  FolderOpen,
+  Calendar,
+  Edit2,
+  Copy,
+  CopyCheck,
+  Printer,
+  Eye,
+  Download,
+  AlertTriangle,
+  Image as ImageIcon,
+} from 'lucide-react';
 import { Associado, DocumentoAssociado } from '../../services/associadosService';
 import { getEmpresaById } from '../../services/empresasService';
 import { useAppContext } from '../../context/AppContext';
@@ -19,9 +38,13 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
   const toast = useToast();
   const { state } = useAppContext();
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [documentoVisualizando, setDocumentoVisualizando] = useState<DocumentoAssociado | null>(null);
+  const [documentoVisualizando, setDocumentoVisualizando] = useState<DocumentoAssociado | null>(
+    null,
+  );
   const [carteirinhaModalOpen, setCarteirinhaModalOpen] = useState(false);
-  const [selectedBeneficiarioId, setSelectedBeneficiarioId] = useState<string | undefined>(undefined);
+  const [selectedBeneficiarioId, setSelectedBeneficiarioId] = useState<string | undefined>(
+    undefined,
+  );
 
   const copiarTexto = async (texto: string, label: string, id: string) => {
     try {
@@ -34,7 +57,6 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
     }
   };
 
-  
   const handlePrint = async () => {
     let logoHtml = '';
     let assinaturaHtml = '';
@@ -144,7 +166,9 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
           </div>
 
           <h2>Dependentes (${associado.dependentes?.length || 0})</h2>
-          ${associado.dependentes && associado.dependentes.length > 0 ? `
+          ${
+            associado.dependentes && associado.dependentes.length > 0
+              ? `
             <table>
               <thead>
                 <tr>
@@ -155,17 +179,23 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                 </tr>
               </thead>
               <tbody>
-                ${associado.dependentes.map(dep => `
+                ${associado.dependentes
+                  .map(
+                    (dep) => `
                   <tr>
                     <td>${dep.nome}</td>
                     <td>${dep.parentesco || ''}</td>
                     <td>${dep.cpf || ''}</td>
                     <td>${formatLocalDate(dep.data_nascimento, 'dd/MM/yyyy', '')}</td>
                   </tr>
-                `).join('')}
+                `,
+                  )
+                  .join('')}
               </tbody>
             </table>
-          ` : '<p style="font-style: italic; color: #64748b; font-size: 12px;">Nenhum dependente cadastrado.</p>'}
+          `
+              : '<p style="font-style: italic; color: #64748b; font-size: 12px;">Nenhum dependente cadastrado.</p>'
+          }
           
           <div class="footer-signatures">
             <div style="text-align: center; width: 45%;">
@@ -194,11 +224,15 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'ativo': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+      case 'ativo':
+        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
       case 'inativo':
-      case 'encerrado': return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-      case 'inadimplente': return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
-      default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+      case 'encerrado':
+        return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+      case 'inadimplente':
+        return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+      default:
+        return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
     }
   };
 
@@ -206,19 +240,18 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
     if (!dateStr) return 'Não informado';
     const parts = dateStr.split('T')[0].split('-');
     if (parts.length === 3) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
     try {
-        return new Date(dateStr).toLocaleDateString('pt-BR');
-    } catch(e) {
-        return dateStr;
+      return new Date(dateStr).toLocaleDateString('pt-BR');
+    } catch (e) {
+      return dateStr;
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-bg-base border border-border-default rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        
         {/* HEADER */}
         <div className="flex items-center justify-between p-6 border-b border-border-default bg-bg-surface/50">
           <div className="flex items-center gap-4">
@@ -228,13 +261,13 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
             <div>
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-bold text-text-base">{associado.nome}</h2>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(associado.status)}`}>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(associado.status)}`}
+                >
                   {associado.status === 'inativo' ? 'encerrado' : associado.status}
                 </span>
               </div>
-              <p className="text-sm text-text-subtle mt-0.5">
-                CPF: {associado.cpf}
-              </p>
+              <p className="text-sm text-text-subtle mt-0.5">CPF: {associado.cpf}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -266,6 +299,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
             <button
               onClick={onClose}
               className="p-2 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors"
+              aria-label="Fechar"
             >
               <X className="w-5 h-5" />
             </button>
@@ -274,7 +308,6 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
 
         {/* BODY */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* INFORMAÇÕES PESSOAIS */}
             <div className="bg-bg-surface p-5 rounded-2xl border border-border-default/60 space-y-4">
@@ -282,7 +315,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                 <User className="w-4 h-4" />
                 <span>Dados Pessoais & Contato</span>
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-[10px] text-text-subtle uppercase">RG</p>
@@ -290,32 +323,56 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                 </div>
                 <div>
                   <p className="text-[10px] text-text-subtle uppercase">Data Nasc.</p>
-                  <p className="font-semibold text-text-base">{formatLocalDate(associado.data_nascimento)}</p>
+                  <p className="font-semibold text-text-base">
+                    {formatLocalDate(associado.data_nascimento)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-text-subtle uppercase">Sexo</p>
-                  <p className="font-semibold text-text-base capitalize">{associado.sexo || 'Não informado'}</p>
+                  <p className="font-semibold text-text-base capitalize">
+                    {associado.sexo || 'Não informado'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-text-subtle uppercase">Adesão</p>
-                  <p className="font-semibold text-text-base">{formatLocalDate(associado.data_adesao)}</p>
+                  <p className="font-semibold text-text-base">
+                    {formatLocalDate(associado.data_adesao)}
+                  </p>
                 </div>
               </div>
 
               <div className="space-y-2 pt-2 border-t border-border-default/50">
                 {associado.telefone && (
                   <p className="text-sm flex items-center justify-between">
-                    <span className="flex items-center gap-2"><Phone className="w-4 h-4 text-text-subtle" /> {associado.telefone}</span>
-                    <button onClick={() => copiarTexto(associado.telefone!, 'Telefone', 'tel')} className="text-text-subtle hover:text-[#3B82F6]">
-                      {copiedId === 'tel' ? <CopyCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-text-subtle" /> {associado.telefone}
+                    </span>
+                    <button
+                      onClick={() => copiarTexto(associado.telefone!, 'Telefone', 'tel')}
+                      className="text-text-subtle hover:text-[#3B82F6]"
+                    >
+                      {copiedId === 'tel' ? (
+                        <CopyCheck className="w-3.5 h-3.5" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
                     </button>
                   </p>
                 )}
                 {associado.email && (
                   <p className="text-sm flex items-center justify-between">
-                    <span className="flex items-center gap-2 truncate"><FileText className="w-4 h-4 text-text-subtle" /> {associado.email}</span>
-                    <button onClick={() => copiarTexto(associado.email!, 'E-mail', 'email')} className="text-text-subtle hover:text-[#3B82F6]">
-                      {copiedId === 'email' ? <CopyCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span className="flex items-center gap-2 truncate">
+                      <FileText className="w-4 h-4 text-text-subtle" /> {associado.email}
+                    </span>
+                    <button
+                      onClick={() => copiarTexto(associado.email!, 'E-mail', 'email')}
+                      className="text-text-subtle hover:text-[#3B82F6]"
+                    >
+                      {copiedId === 'email' ? (
+                        <CopyCheck className="w-3.5 h-3.5" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
                     </button>
                   </p>
                 )}
@@ -331,13 +388,20 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                 <MapPin className="w-4 h-4" />
                 <span>Endereço Residencial</span>
               </h3>
-              
+
               <div className="space-y-2 text-sm text-text-base">
                 {associado.endereco_logradouro ? (
                   <>
-                    <p className="font-semibold">{associado.endereco_logradouro}, {associado.endereco_numero || 's/n'}</p>
-                    <p className="text-text-subtle">{associado.endereco_bairro || 'Bairro não informado'} - {associado.endereco_cidade || 'Cidade não informada'}</p>
-                    {associado.endereco_cep && <p className="font-mono text-text-subtle">CEP: {associado.endereco_cep}</p>}
+                    <p className="font-semibold">
+                      {associado.endereco_logradouro}, {associado.endereco_numero || 's/n'}
+                    </p>
+                    <p className="text-text-subtle">
+                      {associado.endereco_bairro || 'Bairro não informado'} -{' '}
+                      {associado.endereco_cidade || 'Cidade não informada'}
+                    </p>
+                    {associado.endereco_cep && (
+                      <p className="font-mono text-text-subtle">CEP: {associado.endereco_cep}</p>
+                    )}
                   </>
                 ) : (
                   <p className="text-text-subtle italic">Endereço não cadastrado.</p>
@@ -347,8 +411,14 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
               <div className="pt-4 border-t border-border-default/50">
                 <h4 className="text-[10px] text-text-subtle uppercase mb-2">Filiação</h4>
                 <div className="space-y-1">
-                  <p className="text-sm"><span className="text-text-subtle">Mãe:</span> {associado.nome_mae || 'Não informado'}</p>
-                  <p className="text-sm"><span className="text-text-subtle">Pai:</span> {associado.nome_pai || 'Não informado'}</p>
+                  <p className="text-sm">
+                    <span className="text-text-subtle">Mãe:</span>{' '}
+                    {associado.nome_mae || 'Não informado'}
+                  </p>
+                  <p className="text-sm">
+                    <span className="text-text-subtle">Pai:</span>{' '}
+                    {associado.nome_pai || 'Não informado'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -374,16 +444,22 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                 <span>Emitir Carteirinha</span>
               </button>
             </div>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-bg-subtle p-3 rounded-xl border border-border-default">
                 <p className="text-[10px] text-text-subtle uppercase mb-1">Plano Atual</p>
-                <p className="font-semibold text-text-base">{associado.plano_nome || 'Sem plano vinculado'}</p>
+                <p className="font-semibold text-text-base">
+                  {associado.plano_nome || 'Sem plano vinculado'}
+                </p>
               </div>
               <div className="bg-bg-subtle p-3 rounded-xl border border-border-default">
                 <p className="text-[10px] text-text-subtle uppercase mb-1">Valor do Plano</p>
                 <p className="font-semibold text-text-base">
-                  {associado.valor_plano ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(associado.valor_plano) : 'R$ 0,00'}
+                  {associado.valor_plano
+                    ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                        associado.valor_plano,
+                      )
+                    : 'R$ 0,00'}
                 </p>
               </div>
               <div className="bg-bg-subtle p-3 rounded-xl border border-border-default">
@@ -415,20 +491,27 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                 </button>
               )}
             </div>
-            
+
             {associado.dependentes && associado.dependentes.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {associado.dependentes.map(dep => (
-                  <div key={dep.id} className="flex items-center justify-between p-3 bg-bg-subtle border border-border-default rounded-xl hover:border-indigo-500/40 transition-colors">
+                {associado.dependentes.map((dep) => (
+                  <div
+                    key={dep.id}
+                    className="flex items-center justify-between p-3 bg-bg-subtle border border-border-default rounded-xl hover:border-indigo-500/40 transition-colors"
+                  >
                     <div>
                       <p className="text-sm font-semibold text-text-base">{dep.nome}</p>
-                      <p className="text-xs text-text-subtle">{dep.parentesco} {dep.cpf ? `• CPF: ${dep.cpf}` : ''}</p>
+                      <p className="text-xs text-text-subtle">
+                        {dep.parentesco} {dep.cpf ? `• CPF: ${dep.cpf}` : ''}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       {dep.data_nascimento && (
                         <div className="text-right mr-1">
-                           <p className="text-[10px] text-text-subtle uppercase">Nascimento</p>
-                           <p className="text-xs font-medium text-text-base">{formatLocalDate(dep.data_nascimento)}</p>
+                          <p className="text-[10px] text-text-subtle uppercase">Nascimento</p>
+                          <p className="text-xs font-medium text-text-base">
+                            {formatLocalDate(dep.data_nascimento)}
+                          </p>
                         </div>
                       )}
                       <button
@@ -463,7 +546,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                 {associado.documentos.map((doc, idx) => {
                   const isPdf = isPdfDocument(doc);
                   const isImg = isImageDocument(doc);
-                  const isLegacyBlob = doc.url && doc.url.startsWith("blob:");
+                  const isLegacyBlob = doc.url && doc.url.startsWith('blob:');
 
                   return (
                     <div
@@ -474,34 +557,44 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                         onClick={() => setDocumentoVisualizando(doc)}
                         className="flex items-center gap-3 overflow-hidden cursor-pointer flex-1 mr-2"
                       >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs ${
-                          isPdf 
-                            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
-                            : isImg 
-                            ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' 
-                            : 'bg-bg-base text-text-subtle border border-border-default'
-                        }`}>
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs ${
+                            isPdf
+                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                              : isImg
+                                ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                : 'bg-bg-base text-text-subtle border border-border-default'
+                          }`}
+                        >
                           {isPdf ? (
                             <FileText className="w-4 h-4" />
                           ) : isImg ? (
                             <ImageIcon className="w-4 h-4" />
                           ) : (
-                            <span className="uppercase">{doc.nome.split(".").pop()?.substring(0, 3)}</span>
+                            <span className="uppercase">
+                              {doc.nome.split('.').pop()?.substring(0, 3)}
+                            </span>
                           )}
                         </div>
                         <div className="overflow-hidden">
-                          <p className="text-sm font-medium text-text-base truncate hover:text-[#3B82F6] transition-colors" title={doc.nome}>
+                          <p
+                            className="text-sm font-medium text-text-base truncate hover:text-[#3B82F6] transition-colors"
+                            title={doc.nome}
+                          >
                             {doc.nome}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <p className="text-xs text-text-subtle">
                               {doc.tamanho ? `${(doc.tamanho / 1024).toFixed(1)} KB` : 'Anexo'}
                               {doc.data_upload && (
-                                <> • {new Date(doc.data_upload).toLocaleDateString("pt-BR")}</>
+                                <> • {new Date(doc.data_upload).toLocaleDateString('pt-BR')}</>
                               )}
                             </p>
                             {isLegacyBlob && (
-                              <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20" title="Arquivo anexado em sessão anterior. Reenvie para visualização permanente.">
+                              <span
+                                className="inline-flex items-center gap-1 text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20"
+                                title="Arquivo anexado em sessão anterior. Reenvie para visualização permanente."
+                              >
                                 <AlertTriangle className="w-2.5 h-2.5" /> Reenvio sugerido
                               </span>
                             )}
@@ -522,8 +615,8 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                           type="button"
                           onClick={async () => {
                             const success = await downloadDocumento(doc);
-                            if (!success) toast.error("Não foi possível baixar este arquivo.");
-                            else toast.success("Download iniciado!");
+                            if (!success) toast.error('Não foi possível baixar este arquivo.');
+                            else toast.success('Download iniciado!');
                           }}
                           title="Baixar"
                           className="p-1.5 text-text-subtle hover:text-emerald-400 hover:bg-bg-hover rounded-lg transition-colors"
@@ -537,7 +630,6 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
               </div>
             </div>
           )}
-          
         </div>
 
         {/* FOOTER */}

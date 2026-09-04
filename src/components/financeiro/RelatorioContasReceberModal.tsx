@@ -1,24 +1,24 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { 
-  X, 
-  Printer, 
-  Download, 
-  ZoomIn, 
-  ZoomOut, 
-  RotateCw, 
-  Maximize2, 
-  FileText, 
-  Building2, 
-  User, 
-  MapPin, 
-  Phone, 
-  Calendar, 
-  DollarSign, 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  Filter, 
-  Layers
+import {
+  X,
+  Printer,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Maximize2,
+  FileText,
+  Building2,
+  User,
+  MapPin,
+  Phone,
+  Calendar,
+  DollarSign,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Filter,
+  Layers,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ParcelaReceber, Receita } from '../../services/financeiroService';
@@ -54,7 +54,7 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
   associados,
   receitas = [],
   currentFilters,
-  userName = 'Operador do Sistema'
+  userName = 'Operador do Sistema',
 }) => {
   // Configurações de visualização da página (Default: Paisagem / 100% zoom)
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
@@ -68,7 +68,7 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
     const byName = new Map<string, Associado>();
     const byId = new Map<string, Associado>();
 
-    associados.forEach(assoc => {
+    associados.forEach((assoc) => {
       if (assoc.id) byId.set(assoc.id, assoc);
       if (assoc.cpf) {
         const cleanCpf = assoc.cpf.replace(/\D/g, '');
@@ -85,7 +85,7 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
   // Map de receitas por ID
   const receitasMap = useMemo(() => {
     const map = new Map<string, Receita>();
-    receitas.forEach(r => {
+    receitas.forEach((r) => {
       if (r.id) map.set(r.id, r);
     });
     return map;
@@ -110,10 +110,12 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
       let enderecoFormatado = '-';
       if (assoc) {
         const parts = [
-          assoc.endereco_logradouro ? `${assoc.endereco_logradouro}${assoc.endereco_numero ? ', ' + assoc.endereco_numero : ''}` : '',
+          assoc.endereco_logradouro
+            ? `${assoc.endereco_logradouro}${assoc.endereco_numero ? ', ' + assoc.endereco_numero : ''}`
+            : '',
           assoc.endereco_bairro ? `Bairro: ${assoc.endereco_bairro}` : '',
           assoc.endereco_cidade ? `${assoc.endereco_cidade}` : '',
-          assoc.endereco_cep ? `CEP: ${assoc.endereco_cep}` : ''
+          assoc.endereco_cep ? `CEP: ${assoc.endereco_cep}` : '',
         ].filter(Boolean);
         if (parts.length > 0) enderecoFormatado = parts.join(' - ');
       }
@@ -123,13 +125,13 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
       if (assoc) {
         const contacts = [
           assoc.telefone ? `Tel: ${assoc.telefone}` : '',
-          assoc.email ? `Email: ${assoc.email}` : ''
+          assoc.email ? `Email: ${assoc.email}` : '',
         ].filter(Boolean);
         if (contacts.length > 0) contatoFormatado = contacts.join(' | ');
       } else if (rec) {
         const contacts = [
           rec.cliente_telefone ? `Tel: ${rec.cliente_telefone}` : '',
-          rec.cliente_email ? `Email: ${rec.cliente_email}` : ''
+          rec.cliente_email ? `Email: ${rec.cliente_email}` : '',
         ].filter(Boolean);
         if (contacts.length > 0) contatoFormatado = contacts.join(' | ');
       }
@@ -164,13 +166,19 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
         descricao: p.descricao || 'Mensalidade',
         numeroParcelaStr: `Parc. ${p.numero_parcela}/${p.total_parcelas || 1}`,
         vencimentoFormatado: formatLocalDate(p.data_vencimento),
-        valorFormatado: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor),
+        valorFormatado: new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        }).format(p.valor),
         valorNumerico: p.valor,
         valorRecebidoNumerico: p.valor_recebido || (p.status === 'recebido' ? p.valor : 0),
         statusLabel,
         statusColor,
         formaPagamento: (p.forma_pagamento_efetivo || p.forma_pagamento || 'PIX').toUpperCase(),
-        dataRecebimento: p.data_recebimento || p.recebido_em ? formatLocalDateTime(p.data_recebimento || p.recebido_em) : '-'
+        dataRecebimento:
+          p.data_recebimento || p.recebido_em
+            ? formatLocalDateTime(p.data_recebimento || p.recebido_em)
+            : '-',
       };
     });
   }, [parcelas, associadosMap, receitasMap]);
@@ -185,7 +193,7 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
     let qtdVencidas = 0;
     let qtdRecebidas = 0;
 
-    reportData.forEach(item => {
+    reportData.forEach((item) => {
       totalGeral += item.valorNumerico;
       if (item.parcela.status === 'recebido' || item.parcela.status === 'pago') {
         totalRecebido += item.valorRecebidoNumerico;
@@ -209,15 +217,15 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
       qtdPendentes,
       qtdVencidas,
       qtdRecebidas,
-      qtdTotal: reportData.length
+      qtdTotal: reportData.length,
     };
   }, [reportData]);
 
   if (!isOpen) return null;
 
   // Zoom handlers
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 10, 200));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 10, 40));
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 10, 200));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 10, 40));
   const handleZoomReset = () => setZoom(100);
 
   // Geração de Impressão Direta em Janela Dedicada (Garante Paisagem 100% fiel e limpa)
@@ -229,19 +237,26 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
     }
 
     const dataHoraEmissao = format(new Date(), "dd/MM/yyyy 'às' HH:mm:ss");
-    const logoHtml = empresaData?.logo_url 
-      ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" />` 
+    const logoHtml = empresaData?.logo_url
+      ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" />`
       : `<h1 style="margin: 0; font-size: 18px; font-weight: 800; text-transform: uppercase; color: #0f172a;">${empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}</h1>`;
 
-    const filtroPeriodo = (currentFilters.dataInicial || currentFilters.dataFinal)
-      ? `${currentFilters.dataInicial ? formatLocalDate(currentFilters.dataInicial) : 'Início'} até ${currentFilters.dataFinal ? formatLocalDate(currentFilters.dataFinal) : 'Atual'}`
-      : 'Todos os Períodos';
+    const filtroPeriodo =
+      currentFilters.dataInicial || currentFilters.dataFinal
+        ? `${currentFilters.dataInicial ? formatLocalDate(currentFilters.dataInicial) : 'Início'} até ${currentFilters.dataFinal ? formatLocalDate(currentFilters.dataFinal) : 'Atual'}`
+        : 'Todos os Períodos';
 
-    const filtroStatus = currentFilters.statusFilter ? currentFilters.statusFilter.toUpperCase() : 'TODOS';
-    const filtroForma = currentFilters.formaPagamentoFilter ? currentFilters.formaPagamentoFilter.toUpperCase() : 'TODAS';
+    const filtroStatus = currentFilters.statusFilter
+      ? currentFilters.statusFilter.toUpperCase()
+      : 'TODOS';
+    const filtroForma = currentFilters.formaPagamentoFilter
+      ? currentFilters.formaPagamentoFilter.toUpperCase()
+      : 'TODAS';
     const filtroBusca = currentFilters.searchTerm ? `"${currentFilters.searchTerm}"` : 'Nenhum';
 
-    const rowsHtml = reportData.map(item => `
+    const rowsHtml = reportData
+      .map(
+        (item) => `
       <tr>
         <td style="text-align: center; font-weight: 600; color: #475569;">${item.itemIndex}</td>
         <td>
@@ -280,9 +295,12 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
           ${item.dataRecebimento !== '-' ? `<div style="font-size: 8px; color: #15803d; margin-top: 2px;">Pago: ${item.dataRecebimento}</div>` : ''}
         </td>
       </tr>
-    `).join('');
+    `,
+      )
+      .join('');
 
-    const pageOrientationCss = orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
+    const pageOrientationCss =
+      orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
 
     const printHtml = `
       <!DOCTYPE html>
@@ -527,11 +545,12 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
       const doc = new jsPDF({
         orientation: orientation,
         unit: 'mm',
-        format: 'a4'
+        format: 'a4',
       });
 
       const dataHoraEmissao = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
-      const companyName = empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
+      const companyName =
+        empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
 
       // Header Background
       doc.setFillColor(15, 23, 42); // #0f172a
@@ -548,8 +567,18 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
       doc.text('RELATÓRIO GERENCIAL DE CONTAS A RECEBER E MENSALIDADES', 14, 16);
 
       doc.setFontSize(8);
-      doc.text(`Emissão: ${dataHoraEmissao} | Operador: ${userName}`, doc.internal.pageSize.getWidth() - 14, 10, { align: 'right' });
-      doc.text(`Total: ${reportData.length} registros | Orientação: ${orientation === 'landscape' ? 'Paisagem' : 'Retrato'}`, doc.internal.pageSize.getWidth() - 14, 16, { align: 'right' });
+      doc.text(
+        `Emissão: ${dataHoraEmissao} | Operador: ${userName}`,
+        doc.internal.pageSize.getWidth() - 14,
+        10,
+        { align: 'right' },
+      );
+      doc.text(
+        `Total: ${reportData.length} registros | Orientação: ${orientation === 'landscape' ? 'Paisagem' : 'Retrato'}`,
+        doc.internal.pageSize.getWidth() - 14,
+        16,
+        { align: 'right' },
+      );
 
       // KPI Box
       doc.setFillColor(248, 250, 252);
@@ -561,28 +590,52 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
       doc.setFont('helvetica', 'bold');
 
       const kpiWidth = (doc.internal.pageSize.getWidth() - 28) / 4;
-      
+
       doc.text('A RECEBER (PENDENTE):', 18, 31);
       doc.setTextColor(37, 99, 235);
-      doc.text(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalPendente), 18, 36);
+      doc.text(
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+          totalizadores.totalPendente,
+        ),
+        18,
+        36,
+      );
 
       doc.setTextColor(51, 65, 85);
       doc.text('VENCIDAS (EM ATRASO):', 18 + kpiWidth, 31);
       doc.setTextColor(225, 29, 72);
-      doc.text(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalVencido), 18 + kpiWidth, 36);
+      doc.text(
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+          totalizadores.totalVencido,
+        ),
+        18 + kpiWidth,
+        36,
+      );
 
       doc.setTextColor(51, 65, 85);
       doc.text('RECEBIDAS (QUITADAS):', 18 + kpiWidth * 2, 31);
       doc.setTextColor(22, 163, 74);
-      doc.text(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalRecebido), 18 + kpiWidth * 2, 36);
+      doc.text(
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+          totalizadores.totalRecebido,
+        ),
+        18 + kpiWidth * 2,
+        36,
+      );
 
       doc.setTextColor(51, 65, 85);
       doc.text('MONTANTE GERAL:', 18 + kpiWidth * 3, 31);
       doc.setTextColor(15, 23, 42);
-      doc.text(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalGeral), 18 + kpiWidth * 3, 36);
+      doc.text(
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+          totalizadores.totalGeral,
+        ),
+        18 + kpiWidth * 3,
+        36,
+      );
 
       // AutoTable
-      const tableData = reportData.map(item => [
+      const tableData = reportData.map((item) => [
         item.itemIndex,
         `${item.devedorNome}\nCPF/CNPJ: ${item.devedorCpfCnpj}${item.planoNome ? '\nPlano: ' + item.planoNome : ''}`,
         item.enderecoCompleto,
@@ -590,12 +643,23 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
         `${item.descricao}\n${item.numeroParcelaStr} (${item.formaPagamento})`,
         item.vencimentoFormatado,
         item.valorFormatado,
-        item.statusLabel
+        item.statusLabel,
       ]);
 
       autoTable(doc, {
         startY: 44,
-        head: [['#', 'Associado / Devedor', 'Endereço Completo', 'Contato', 'Mensalidade / Parcela', 'Vencimento', 'Valor', 'Situação']],
+        head: [
+          [
+            '#',
+            'Associado / Devedor',
+            'Endereço Completo',
+            'Contato',
+            'Mensalidade / Parcela',
+            'Vencimento',
+            'Valor',
+            'Situação',
+          ],
+        ],
         body: tableData,
         theme: 'grid',
         headStyles: {
@@ -603,12 +667,12 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
           textColor: [255, 255, 255],
           fontSize: 8,
           fontStyle: 'bold',
-          halign: 'left'
+          halign: 'left',
         },
         bodyStyles: {
           fontSize: 7.5,
           textColor: [15, 23, 42],
-          cellPadding: 2
+          cellPadding: 2,
         },
         columnStyles: {
           0: { cellWidth: 8, halign: 'center' },
@@ -618,23 +682,35 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
           4: { cellWidth: orientation === 'landscape' ? 40 : 28 },
           5: { cellWidth: 20, halign: 'center' },
           6: { cellWidth: 22, halign: 'right', fontStyle: 'bold' },
-          7: { cellWidth: 22, halign: 'center' }
+          7: { cellWidth: 22, halign: 'center' },
         },
         didDrawCell: (data) => {
           if (data.section === 'body' && data.column.index === 7) {
             // Status styling is handled cleanly
           }
         },
-        foot: [[
-          { content: `TOTAL CONSOLIDADO (${reportData.length} parcelas):`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
-          { content: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalGeral), styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
-          { content: '', styles: { fillColor: [241, 245, 249] } }
-        ]],
+        foot: [
+          [
+            {
+              content: `TOTAL CONSOLIDADO (${reportData.length} parcelas):`,
+              colSpan: 6,
+              styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] },
+            },
+            {
+              content: new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+              }).format(totalizadores.totalGeral),
+              styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] },
+            },
+            { content: '', styles: { fillColor: [241, 245, 249] } },
+          ],
+        ],
         footStyles: {
           fontSize: 8,
-          textColor: [15, 23, 42]
+          textColor: [15, 23, 42],
         },
-        margin: { left: 14, right: 14 }
+        margin: { left: 14, right: 14 },
       });
 
       // Salva arquivo com nome descritivo
@@ -651,10 +727,8 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#1e232a] text-slate-100 backdrop-blur-md overflow-hidden">
-      
       {/* TOOLBAR SUPERIOR DO VISUALIZADOR */}
       <header className="h-16 bg-[#13171f] border-b border-[#2d3544] px-6 flex items-center justify-between shadow-xl shrink-0 z-20">
-        
         {/* Lado Esquerdo: Título & Badges */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
@@ -677,14 +751,13 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
 
         {/* Centro: Controles de Orientação e Zoom */}
         <div className="flex items-center gap-2 bg-[#1c222e] p-1.5 rounded-xl border border-[#2d3544]">
-          
           {/* Botão de Orientação: Paisagem vs Retrato */}
           <div className="flex items-center bg-[#13171f] rounded-lg p-1 mr-2 border border-[#2d3544]">
             <button
               onClick={() => setOrientation('landscape')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'landscape' 
-                  ? 'bg-blue-600 text-white shadow-sm' 
+                orientation === 'landscape'
+                  ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
               title="Modo Paisagem (Horizontal)"
@@ -695,8 +768,8 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
             <button
               onClick={() => setOrientation('portrait')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'portrait' 
-                  ? 'bg-blue-600 text-white shadow-sm' 
+                orientation === 'portrait'
+                  ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
               title="Modo Retrato (Vertical)"
@@ -715,7 +788,7 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
             >
               <ZoomOut className="w-4 h-4" />
             </button>
-            
+
             <button
               onClick={handleZoomReset}
               className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg transition-colors min-w-[54px] text-center"
@@ -723,7 +796,7 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
             >
               {zoom}%
             </button>
-            
+
             <button
               onClick={handleZoomIn}
               className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544] transition-colors"
@@ -736,7 +809,6 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
 
         {/* Lado Direito: Ações (Salvar PDF, Imprimir, Fechar) */}
         <div className="flex items-center gap-3">
-          
           <button
             onClick={handleExportPDF}
             disabled={isExportingPDF}
@@ -762,6 +834,7 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
             onClick={onClose}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544] transition-colors"
             title="Fechar Visualizador (ESC)"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
@@ -770,45 +843,46 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
 
       {/* ÁREA DE RENDERIZAÇÃO DA PÁGINA (CANVAS COM ZOOM) */}
       <main className="flex-1 overflow-auto p-8 flex justify-center items-start bg-[#1a1e27] custom-scrollbar">
-        
         {/* Contêiner com Zoom Aplicado */}
-        <div 
-          style={{ 
-            transform: `scale(${zoom / 100})`, 
+        <div
+          style={{
+            transform: `scale(${zoom / 100})`,
             transformOrigin: 'top center',
-            transition: 'transform 0.15s ease-out'
+            transition: 'transform 0.15s ease-out',
           }}
           className="mb-12 shadow-2xl"
         >
           {/* FOLHA SIMULADA A4 (Paisagem: 297mm x 210mm / Retrato: 210mm x 297mm) */}
-          <div 
+          <div
             ref={printAreaRef}
             style={{
               width: orientation === 'landscape' ? '297mm' : '210mm',
               minHeight: orientation === 'landscape' ? '210mm' : '297mm',
-              padding: '14mm 16mm'
+              padding: '14mm 16mm',
             }}
             className="bg-white text-slate-900 rounded-sm shadow-2xl relative font-sans leading-normal box-border selection:bg-blue-100"
           >
-            
             {/* CABEÇALHO DA EMPRESA */}
             <div className="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-start gap-4">
               <div className="flex-1">
                 {empresaData?.logo_url ? (
-                  <img 
-                    src={empresaData.logo_url} 
-                    alt="Logo Empresa" 
-                    className="max-h-14 max-w-[240px] object-contain mb-2" 
+                  <img
+                    src={empresaData.logo_url}
+                    alt="Logo Empresa"
+                    className="max-h-14 max-w-[240px] object-contain mb-2"
                   />
                 ) : (
                   <h1 className="text-xl font-extrabold tracking-tight text-slate-900 uppercase mb-1">
                     {empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}
                   </h1>
                 )}
-                
+
                 <div className="text-xs text-slate-600 leading-tight space-y-0.5">
                   {empresaData?.cnpj && (
-                    <p><span className="font-semibold text-slate-800">CNPJ:</span> {empresaData.cnpj} {empresaData.telefone ? ` | Tel: ${empresaData.telefone}` : ''}</p>
+                    <p>
+                      <span className="font-semibold text-slate-800">CNPJ:</span> {empresaData.cnpj}{' '}
+                      {empresaData.telefone ? ` | Tel: ${empresaData.telefone}` : ''}
+                    </p>
                   )}
                   {empresaData?.endereco && (
                     <p className="text-slate-500">{empresaData.endereco}</p>
@@ -824,7 +898,10 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                   Contas a Receber
                 </h2>
                 <div className="text-[11px] text-slate-500 mt-1">
-                  Emissão: <strong className="text-slate-800">{format(new Date(), "dd/MM/yyyy 'às' HH:mm")}</strong>
+                  Emissão:{' '}
+                  <strong className="text-slate-800">
+                    {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
+                  </strong>
                 </div>
                 <div className="text-[10px] text-slate-500">
                   Emitido por: <span className="font-medium text-slate-700">{userName}</span>
@@ -838,7 +915,7 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                 <Filter className="w-3.5 h-3.5 text-blue-600" />
                 <span className="font-semibold text-slate-900">Período:</span>
                 <span>
-                  {(currentFilters.dataInicial || currentFilters.dataFinal)
+                  {currentFilters.dataInicial || currentFilters.dataFinal
                     ? `${currentFilters.dataInicial ? formatLocalDate(currentFilters.dataInicial) : 'Início'} até ${currentFilters.dataFinal ? formatLocalDate(currentFilters.dataFinal) : 'Atual'}`
                     : 'Todos os Períodos'}
                 </span>
@@ -861,7 +938,9 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
               {currentFilters.searchTerm && (
                 <div className="flex items-center gap-1.5">
                   <span className="font-semibold text-slate-900">Filtro Texto:</span>
-                  <span className="italic text-slate-800">&quot;{currentFilters.searchTerm}&quot;</span>
+                  <span className="italic text-slate-800">
+                    &quot;{currentFilters.searchTerm}&quot;
+                  </span>
                 </div>
               )}
 
@@ -879,9 +958,13 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                   <Clock className="w-3.5 h-3.5 text-blue-600" />
                 </div>
                 <div className="text-sm font-black text-blue-700 mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalPendente)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    totalizadores.totalPendente,
+                  )}
                 </div>
-                <div className="text-[9px] text-blue-600 mt-0.5">{totalizadores.qtdPendentes} mensalidade(s)</div>
+                <div className="text-[9px] text-blue-600 mt-0.5">
+                  {totalizadores.qtdPendentes} mensalidade(s)
+                </div>
               </div>
 
               <div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50/50">
@@ -890,9 +973,13 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                   <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
                 </div>
                 <div className="text-sm font-black text-rose-700 mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalVencido)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    totalizadores.totalVencido,
+                  )}
                 </div>
-                <div className="text-[9px] text-rose-600 mt-0.5">{totalizadores.qtdVencidas} mensalidade(s)</div>
+                <div className="text-[9px] text-rose-600 mt-0.5">
+                  {totalizadores.qtdVencidas} mensalidade(s)
+                </div>
               </div>
 
               <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/50">
@@ -901,9 +988,13 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 </div>
                 <div className="text-sm font-black text-emerald-700 mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalRecebido)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    totalizadores.totalRecebido,
+                  )}
                 </div>
-                <div className="text-[9px] text-emerald-600 mt-0.5">{totalizadores.qtdRecebidas} mensalidade(s)</div>
+                <div className="text-[9px] text-emerald-600 mt-0.5">
+                  {totalizadores.qtdRecebidas} mensalidade(s)
+                </div>
               </div>
 
               <div className="p-2.5 rounded-lg border border-slate-300 bg-slate-50">
@@ -912,9 +1003,13 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                   <DollarSign className="w-3.5 h-3.5 text-slate-700" />
                 </div>
                 <div className="text-sm font-black text-slate-900 mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalGeral)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    totalizadores.totalGeral,
+                  )}
                 </div>
-                <div className="text-[9px] text-slate-600 mt-0.5">{totalizadores.qtdTotal} registros</div>
+                <div className="text-[9px] text-slate-600 mt-0.5">
+                  {totalizadores.qtdTotal} registros
+                </div>
               </div>
 
               <div className="p-2.5 rounded-lg border border-purple-200 bg-purple-50/50">
@@ -923,7 +1018,10 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                   <Layers className="w-3.5 h-3.5 text-purple-600" />
                 </div>
                 <div className="text-sm font-black text-purple-700 mt-1">
-                  {totalizadores.totalGeral > 0 ? ((totalizadores.totalRecebido / totalizadores.totalGeral) * 100).toFixed(1) : '0'}%
+                  {totalizadores.totalGeral > 0
+                    ? ((totalizadores.totalRecebido / totalizadores.totalGeral) * 100).toFixed(1)
+                    : '0'}
+                  %
                 </div>
                 <div className="text-[9px] text-purple-600 mt-0.5">Taxa de Liquidação</div>
               </div>
@@ -935,11 +1033,19 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                 <thead>
                   <tr className="bg-slate-900 text-white text-[10px] uppercase font-bold tracking-wider">
                     <th className="py-2 px-2 text-center w-[3%] border-r border-slate-700">#</th>
-                    <th className="py-2 px-3 w-[22%] border-r border-slate-700">Associado / Devedor</th>
-                    <th className="py-2 px-3 w-[23%] border-r border-slate-700">Endereço Completo</th>
+                    <th className="py-2 px-3 w-[22%] border-r border-slate-700">
+                      Associado / Devedor
+                    </th>
+                    <th className="py-2 px-3 w-[23%] border-r border-slate-700">
+                      Endereço Completo
+                    </th>
                     <th className="py-2 px-3 w-[15%] border-r border-slate-700">Contato</th>
-                    <th className="py-2 px-3 w-[15%] border-r border-slate-700">Mensalidade / Parcela</th>
-                    <th className="py-2 px-2 text-center w-[8%] border-r border-slate-700">Vencimento</th>
+                    <th className="py-2 px-3 w-[15%] border-r border-slate-700">
+                      Mensalidade / Parcela
+                    </th>
+                    <th className="py-2 px-2 text-center w-[8%] border-r border-slate-700">
+                      Vencimento
+                    </th>
                     <th className="py-2 px-3 text-right w-[8%] border-r border-slate-700">Valor</th>
                     <th className="py-2 px-2 text-center w-[6%]">Situação</th>
                   </tr>
@@ -954,7 +1060,6 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                   ) : (
                     reportData.map((item) => (
                       <tr key={item.parcela.id} className="hover:bg-slate-50 transition-colors">
-                        
                         {/* 1. Índice */}
                         <td className="py-2 px-2 text-center font-bold text-slate-500 border-r border-slate-200 text-[10px]">
                           {item.itemIndex}
@@ -964,9 +1069,13 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                         <td className="py-2 px-3 border-r border-slate-200">
                           <div className="font-bold text-slate-900 text-xs">{item.devedorNome}</div>
                           <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-1.5 items-center mt-0.5">
-                            <span><strong>CPF/CNPJ:</strong> {item.devedorCpfCnpj}</span>
+                            <span>
+                              <strong>CPF/CNPJ:</strong> {item.devedorCpfCnpj}
+                            </span>
                             {item.planoNome && (
-                              <span className="text-emerald-700 font-semibold">• {item.planoNome}</span>
+                              <span className="text-emerald-700 font-semibold">
+                                • {item.planoNome}
+                              </span>
                             )}
                             {item.numeroContrato && item.numeroContrato !== '-' && (
                               <span className="text-slate-600">({item.numeroContrato})</span>
@@ -986,9 +1095,14 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
 
                         {/* 5. Descrição / Parcela */}
                         <td className="py-2 px-3 border-r border-slate-200">
-                          <div className="font-semibold text-slate-900 text-[11px]">{item.descricao}</div>
+                          <div className="font-semibold text-slate-900 text-[11px]">
+                            {item.descricao}
+                          </div>
                           <div className="text-[10px] text-slate-500">
-                            {item.numeroParcelaStr} <span className="uppercase text-blue-600 font-medium">({item.formaPagamento})</span>
+                            {item.numeroParcelaStr}{' '}
+                            <span className="uppercase text-blue-600 font-medium">
+                              ({item.formaPagamento})
+                            </span>
                           </div>
                         </td>
 
@@ -1004,7 +1118,9 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
 
                         {/* 8. Situação / Status */}
                         <td className="py-2 px-2 text-center">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${item.statusColor}`}>
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${item.statusColor}`}
+                          >
                             {item.statusLabel}
                           </span>
                           {item.dataRecebimento !== '-' && (
@@ -1019,15 +1135,19 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100 font-extrabold text-slate-900 border-t-2 border-slate-400">
-                    <td colSpan={6} className="py-2.5 px-3 text-right text-xs uppercase tracking-wide">
+                    <td
+                      colSpan={6}
+                      className="py-2.5 px-3 text-right text-xs uppercase tracking-wide"
+                    >
                       Total Consolidado do Relatório ({reportData.length} registros):
                     </td>
                     <td className="py-2.5 px-3 text-right text-sm text-slate-900">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalGeral)}
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      }).format(totalizadores.totalGeral)}
                     </td>
-                    <td className="py-2.5 px-2 text-center text-xs text-slate-500">
-                      -
-                    </td>
+                    <td className="py-2.5 px-2 text-center text-xs text-slate-500">-</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1041,15 +1161,11 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
               <div className="text-center">
                 Documento emitido eletronicamente em {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
               </div>
-              <div className="text-right">
-                Página 1 de 1
-              </div>
+              <div className="text-right">Página 1 de 1</div>
             </div>
-
           </div>
         </div>
       </main>
-
     </div>
   );
 };

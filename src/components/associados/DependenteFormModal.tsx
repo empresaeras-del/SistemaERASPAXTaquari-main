@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  User, 
-  Users, 
-  Calendar, 
-  CreditCard, 
-  CheckCircle2, 
-  AlertCircle, 
+import {
+  X,
+  User,
+  Users,
+  Calendar,
+  CreditCard,
+  CheckCircle2,
+  AlertCircle,
   HeartHandshake,
   Sparkles,
   ShieldAlert,
-  Trash2
+  Trash2,
 } from 'lucide-react';
 import { Dependente } from '../../services/associadosService';
 import { isValidCPFOrCNPJ, maskCPFOrCNPJ } from '../../utils/validators';
@@ -42,7 +42,7 @@ const OPCOES_PARENTESCO = [
   'TIO(A)',
   'SOBRINHO(A)',
   'GENRO / NORA',
-  'OUTRO'
+  'OUTRO',
 ];
 
 export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
@@ -52,7 +52,7 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
   onSave,
   onDelete,
   titularNome,
-  existingCpfs = []
+  existingCpfs = [],
 }) => {
   const [nome, setNome] = useState('');
   const [dataNascimento, setDataNascimento] = useState('');
@@ -116,7 +116,7 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
     if (!isValidCPFOrCNPJ(cpf, false)) return 'invalid';
 
     // Checa duplicidade com outros dependentes
-    const isDuplicate = existingCpfs.some(existing => {
+    const isDuplicate = existingCpfs.some((existing) => {
       const cleanExisting = existing.replace(/\D/g, '');
       const isSelf = dependente?.cpf && dependente.cpf.replace(/\D/g, '') === cleanExisting;
       return !isSelf && cleanExisting === cleanCpf;
@@ -187,14 +187,16 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
       nome: nome.trim().toUpperCase(),
       data_nascimento: dataNascimento.trim(),
       parentesco: parentesco.trim() ? parentesco.trim().toUpperCase() : 'OUTRO',
-      cpf: cpf.trim() || undefined
+      cpf: cpf.trim() || undefined,
     };
 
     setTimeout(() => {
       setIsSaving(false);
       setIsSaved(true);
       onSave(depData);
-      toast.success(dependente ? 'Dependente atualizado com sucesso!' : 'Dependente adicionado com sucesso!');
+      toast.success(
+        dependente ? 'Dependente atualizado com sucesso!' : 'Dependente adicionado com sucesso!',
+      );
       setTimeout(() => {
         onClose();
       }, 350);
@@ -206,7 +208,6 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-[#181d27] border border-[#2d3544] w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-        
         <div className="p-5 sm:p-6 border-b border-[#2d3544] flex items-center justify-between bg-[#13171f]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
@@ -217,7 +218,9 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
                 {dependente ? 'Editar Dados do Dependente' : 'Cadastrar Novo Dependente'}
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                {titularNome ? `Associado Titular: ${titularNome}` : 'Gerenciamento individual de dependente'}
+                {titularNome
+                  ? `Associado Titular: ${titularNome}`
+                  : 'Gerenciamento individual de dependente'}
               </p>
             </div>
           </div>
@@ -225,12 +228,16 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
             type="button"
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-white hover:bg-[#232936] rounded-xl transition-colors"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSalvar} className="p-5 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar text-white flex-1">
+        <form
+          onSubmit={handleSalvar}
+          className="p-5 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar text-white flex-1"
+        >
           {isDirty && (
             <AlertaAlteracoesPendentes
               visivel={isDirty}
@@ -241,7 +248,6 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
             <div className="md:col-span-2 space-y-1.5">
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
                 Nome Completo do Dependente <span className="text-rose-500">*</span>
@@ -253,15 +259,19 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
                   value={nome}
                   onChange={(e) => {
                     setNome(e.target.value);
-                    if (errors.nome) setErrors(prev => ({ ...prev, nome: '' }));
+                    if (errors.nome) setErrors((prev) => ({ ...prev, nome: '' }));
                   }}
                   placeholder="Ex: MARIA SILVA SANTOS"
                   className={`w-full bg-[#13171f] border rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors ${
-                    errors.nome ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' : 'border-[#2d3544] focus:border-blue-500'
+                    errors.nome
+                      ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50'
+                      : 'border-[#2d3544] focus:border-blue-500'
                   }`}
                 />
               </div>
-              {errors.nome && <p className="text-[11px] text-rose-400 font-medium">{errors.nome}</p>}
+              {errors.nome && (
+                <p className="text-[11px] text-rose-400 font-medium">{errors.nome}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -281,13 +291,17 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
                 value={dataNascimento}
                 onChange={(e) => {
                   setDataNascimento(e.target.value);
-                  if (errors.dataNascimento) setErrors(prev => ({ ...prev, dataNascimento: '' }));
+                  if (errors.dataNascimento) setErrors((prev) => ({ ...prev, dataNascimento: '' }));
                 }}
                 className={`w-full bg-[#13171f] border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none transition-colors ${
-                  errors.dataNascimento ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' : 'border-[#2d3544] focus:border-blue-500'
+                  errors.dataNascimento
+                    ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50'
+                    : 'border-[#2d3544] focus:border-blue-500'
                 }`}
               />
-              {errors.dataNascimento && <p className="text-[11px] text-rose-400 font-medium">{errors.dataNascimento}</p>}
+              {errors.dataNascimento && (
+                <p className="text-[11px] text-rose-400 font-medium">{errors.dataNascimento}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -304,7 +318,7 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
                   className="w-full bg-[#13171f] border border-[#2d3544] focus:border-blue-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors"
                 />
                 <datalist id="parentesco-opcoes">
-                  {OPCOES_PARENTESCO.map(op => (
+                  {OPCOES_PARENTESCO.map((op) => (
                     <option key={op} value={op} />
                   ))}
                 </datalist>
@@ -314,7 +328,10 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
             <div className="md:col-span-2 space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  CPF <span className="text-[10px] text-slate-400 lowercase font-normal">(opcional)</span>
+                  CPF{' '}
+                  <span className="text-[10px] text-slate-400 lowercase font-normal">
+                    (opcional)
+                  </span>
                 </label>
                 {cpfValidationState === 'valid' && (
                   <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
@@ -338,16 +355,17 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
                 onChange={(e) => {
                   const masked = maskCPFOrCNPJ(e.target.value, false);
                   setCpf(masked);
-                  if (errors.cpf) setErrors(prev => ({ ...prev, cpf: '' }));
+                  if (errors.cpf) setErrors((prev) => ({ ...prev, cpf: '' }));
                 }}
                 placeholder="000.000.000-00"
                 className={`w-full bg-[#13171f] border rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors ${
-                  errors.cpf ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50' : 'border-[#2d3544] focus:border-blue-500'
+                  errors.cpf
+                    ? 'border-rose-500 focus:border-rose-500 ring-1 ring-rose-500/50'
+                    : 'border-[#2d3544] focus:border-blue-500'
                 }`}
               />
               {errors.cpf && <p className="text-[11px] text-rose-400 font-medium">{errors.cpf}</p>}
             </div>
-
           </div>
 
           <div className="pt-4 border-t border-[#2d3544] flex items-center justify-between gap-3">
@@ -386,7 +404,6 @@ export const DependenteFormModal: React.FC<DependenteFormModalProps> = ({
             </div>
           </div>
         </form>
-
       </div>
     </div>
   );

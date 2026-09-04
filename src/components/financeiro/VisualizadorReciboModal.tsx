@@ -1,18 +1,18 @@
 import React, { useState, useRef } from 'react';
-import { 
-  X, 
-  Printer, 
-  Download, 
-  ZoomIn, 
-  ZoomOut, 
-  RotateCw, 
-  FileText, 
-  CheckCircle2, 
-  DollarSign, 
-  Building2, 
-  User, 
-  Calendar, 
-  CreditCard 
+import {
+  X,
+  Printer,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  FileText,
+  CheckCircle2,
+  DollarSign,
+  Building2,
+  User,
+  Calendar,
+  CreditCard,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Empresa } from '../../services/empresasService';
@@ -53,7 +53,7 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
   isOpen,
   onClose,
   dados,
-  empresaData
+  empresaData,
 }) => {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [zoom, setZoom] = useState<number>(100);
@@ -62,11 +62,14 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
 
   if (!isOpen || !dados) return null;
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 10, 200));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 10, 40));
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 10, 200));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 10, 40));
   const handleZoomReset = () => setZoom(100);
 
-  const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dados.valor);
+  const valorFormatado = new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(dados.valor);
   const dataEmissao = format(new Date(), 'dd/MM/yyyy');
 
   const handleImprimir = () => {
@@ -76,15 +79,16 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
       return;
     }
 
-    const logoHtml = empresaData?.logo_url 
-      ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height: 60px; max-width: 220px; object-fit: contain; margin-bottom: 6px;" />` 
+    const logoHtml = empresaData?.logo_url
+      ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height: 60px; max-width: 220px; object-fit: contain; margin-bottom: 6px;" />`
       : `<h2 style="margin: 0 0 4px 0; font-size: 18px; text-transform: uppercase; color: #0f172a; font-weight: 800;">${empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}</h2>`;
 
     const assinaturaHtml = empresaData?.assinatura_url
       ? `<img src="${empresaData.assinatura_url}" alt="Assinatura" style="max-height: 55px; max-width: 200px; object-fit: contain; margin-bottom: 4px;" />`
       : `<div style="height: 45px;"></div>`;
 
-    const pageOrientationCss = orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
+    const pageOrientationCss =
+      orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
 
     const printHtml = `
       <!DOCTYPE html>
@@ -179,12 +183,16 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
                   <span class="label">CPF / CNPJ:</span>
                   <span class="val">${dados.pagadorDoc || 'Não informado'}</span>
                 </div>
-                ${dados.planoInfo ? `
+                ${
+                  dados.planoInfo
+                    ? `
                   <div class="grid-item" style="grid-column: span 2;">
                     <span class="label">Plano Vinculado:</span>
                     <span class="val" style="color: #047857;">${dados.planoInfo}</span>
                   </div>
-                ` : ''}
+                `
+                    : ''
+                }
               </div>
             </div>
 
@@ -195,24 +203,36 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
                   <span class="label">Descrição:</span>
                   <span class="val">${dados.descricao}</span>
                 </div>
-                ${dados.parcelaInfo ? `
+                ${
+                  dados.parcelaInfo
+                    ? `
                   <div class="grid-item">
                     <span class="label">Parcela:</span>
                     <span class="val">${dados.parcelaInfo}</span>
                   </div>
-                ` : ''}
-                ${dados.categoria ? `
+                `
+                    : ''
+                }
+                ${
+                  dados.categoria
+                    ? `
                   <div class="grid-item">
                     <span class="label">Categoria:</span>
                     <span class="val">${dados.categoria}</span>
                   </div>
-                ` : ''}
-                ${dados.vencimentoOriginal ? `
+                `
+                    : ''
+                }
+                ${
+                  dados.vencimentoOriginal
+                    ? `
                   <div class="grid-item">
                     <span class="label">Vencimento Original:</span>
                     <span class="val">${dados.vencimentoOriginal}</span>
                   </div>
-                ` : ''}
+                `
+                    : ''
+                }
               </div>
             </div>
 
@@ -236,17 +256,22 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
                   <span class="val" style="color: #15803d; font-weight: bold;">QUITADO / LIQUIDADO</span>
                 </div>
               </div>
-              ${dados.observacoes ? `
+              ${
+                dados.observacoes
+                  ? `
                 <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #475569;">
                   <strong>Observações:</strong> ${dados.observacoes}
                 </div>
-              ` : ''}
+              `
+                  : ''
+              }
             </div>
 
             <div class="declaracao-box">
-              ${dados.tipo === 'recebimento'
-                ? `Recebemos de <strong>${dados.pagadorNome}</strong> a quantia de <strong>${valorFormatado}</strong> referente à quitação de <strong>${dados.descricao}</strong> (${dados.parcelaInfo || 'Parcela Única'}), dando plena e geral quitação do valor discriminado.`
-                : `Declaramos para os devidos fins que foi pago a <strong>${dados.pagadorNome}</strong> a quantia de <strong>${valorFormatado}</strong> referente a <strong>${dados.descricao}</strong> (${dados.parcelaInfo || 'Parcela Única'}), estando o presente título devidamente liquidado.`
+              ${
+                dados.tipo === 'recebimento'
+                  ? `Recebemos de <strong>${dados.pagadorNome}</strong> a quantia de <strong>${valorFormatado}</strong> referente à quitação de <strong>${dados.descricao}</strong> (${dados.parcelaInfo || 'Parcela Única'}), dando plena e geral quitação do valor discriminado.`
+                  : `Declaramos para os devidos fins que foi pago a <strong>${dados.pagadorNome}</strong> a quantia de <strong>${valorFormatado}</strong> referente a <strong>${dados.descricao}</strong> (${dados.parcelaInfo || 'Parcela Única'}), estando o presente título devidamente liquidado.`
               }
             </div>
 
@@ -294,10 +319,11 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
       const doc = new jsPDF({
         orientation: orientation,
         unit: 'mm',
-        format: 'a4'
+        format: 'a4',
       });
 
-      const companyName = empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
+      const companyName =
+        empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
 
       // Header
       doc.setFillColor(15, 23, 42);
@@ -313,7 +339,12 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
       doc.text((dados.titulo || 'RECIBO DE PAGAMENTO').toUpperCase(), 14, 16);
 
       doc.setFontSize(8);
-      doc.text(`Nº ${dados.numRecibo} | Emissão: ${dataEmissao}`, doc.internal.pageSize.getWidth() - 14, 10, { align: 'right' });
+      doc.text(
+        `Nº ${dados.numRecibo} | Emissão: ${dataEmissao}`,
+        doc.internal.pageSize.getWidth() - 14,
+        10,
+        { align: 'right' },
+      );
 
       // Valor Box
       doc.setFillColor(240, 253, 244);
@@ -330,14 +361,20 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
 
       // Dados Table
       const tableData = [
-        ['PAGADOR / DEVEDOR:', `${dados.pagadorNome} (CPF/CNPJ: ${dados.pagadorDoc || 'Não informado'})`],
+        [
+          'PAGADOR / DEVEDOR:',
+          `${dados.pagadorNome} (CPF/CNPJ: ${dados.pagadorDoc || 'Não informado'})`,
+        ],
         ['PLANO:', dados.planoInfo || 'Individual / Avulso'],
-        ['DESCRIÇÃO:', `${dados.descricao} ${dados.parcelaInfo ? '(' + dados.parcelaInfo + ')' : ''}`],
+        [
+          'DESCRIÇÃO:',
+          `${dados.descricao} ${dados.parcelaInfo ? '(' + dados.parcelaInfo + ')' : ''}`,
+        ],
         ['CATEGORIA:', dados.categoria || 'Geral'],
         ['VENCIMENTO ORIGINAL:', dados.vencimentoOriginal || '-'],
         ['DATA DA LIQUIDAÇÃO:', dados.dataLiquidacao],
         ['FORMA DE PAGAMENTO:', dados.formaPagamento],
-        ['OPERADOR RESPONSÁVEL:', dados.operadorNome || 'Sistema']
+        ['OPERADOR RESPONSÁVEL:', dados.operadorNome || 'Sistema'],
       ];
 
       autoTable(doc, {
@@ -347,13 +384,13 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
         bodyStyles: {
           fontSize: 8.5,
           cellPadding: 3,
-          textColor: [15, 23, 42]
+          textColor: [15, 23, 42],
         },
         columnStyles: {
           0: { cellWidth: 50, fontStyle: 'bold', fillColor: [248, 250, 252] },
-          1: { cellWidth: doc.internal.pageSize.getWidth() - 78 }
+          1: { cellWidth: doc.internal.pageSize.getWidth() - 78 },
         },
-        margin: { left: 14, right: 14 }
+        margin: { left: 14, right: 14 },
       });
 
       const filename = `Recibo_${dados.numRecibo}_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
@@ -396,7 +433,9 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
             <button
               onClick={() => setOrientation('portrait')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'portrait' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                orientation === 'portrait'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
@@ -405,7 +444,9 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
             <button
               onClick={() => setOrientation('landscape')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'landscape' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                orientation === 'landscape'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <RotateCw className="w-3.5 h-3.5" />
@@ -414,13 +455,25 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
           </div>
 
           <div className="flex items-center gap-1">
-            <button onClick={handleZoomOut} className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]" title="Reduzir Zoom (-)">
+            <button
+              onClick={handleZoomOut}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
+              title="Reduzir Zoom (-)"
+            >
               <ZoomOut className="w-4 h-4" />
             </button>
-            <button onClick={handleZoomReset} className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center" title="Resetar para 100%">
+            <button
+              onClick={handleZoomReset}
+              className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center"
+              title="Resetar para 100%"
+            >
               {zoom}%
             </button>
-            <button onClick={handleZoomIn} className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]" title="Ampliar Zoom (+)">
+            <button
+              onClick={handleZoomIn}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
+              title="Ampliar Zoom (+)"
+            >
               <ZoomIn className="w-4 h-4" />
             </button>
           </div>
@@ -444,7 +497,11 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
             <span>Imprimir</span>
           </button>
           <div className="h-6 w-px bg-[#2d3544]" />
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]"
+            aria-label="Fechar"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -452,42 +509,61 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
 
       {/* CANVAS */}
       <main className="flex-1 overflow-auto p-8 flex justify-center items-start bg-[#1a1e27] custom-scrollbar">
-        <div 
-          style={{ 
-            transform: `scale(${zoom / 100})`, 
+        <div
+          style={{
+            transform: `scale(${zoom / 100})`,
             transformOrigin: 'top center',
-            transition: 'transform 0.15s ease-out'
+            transition: 'transform 0.15s ease-out',
           }}
           className="mb-12 shadow-2xl"
         >
-          <div 
+          <div
             ref={printAreaRef}
             style={{
               width: orientation === 'portrait' ? '210mm' : '297mm',
               minHeight: orientation === 'portrait' ? '297mm' : '210mm',
-              padding: '16mm 18mm'
+              padding: '16mm 18mm',
             }}
             className="bg-white text-slate-900 rounded-sm shadow-2xl relative font-sans leading-normal box-border selection:bg-blue-100"
           >
             <div className="border-2 border-slate-900 rounded-2xl p-6">
-              
               {/* Header */}
               <div className="border-b-2 border-slate-900 pb-4 mb-4 flex justify-between items-start">
                 <div>
                   {empresaData?.logo_url ? (
-                    <img src={empresaData.logo_url} alt="Logo" className="max-h-12 max-w-[200px] object-contain mb-1.5" />
+                    <img
+                      src={empresaData.logo_url}
+                      alt="Logo"
+                      className="max-h-12 max-w-[200px] object-contain mb-1.5"
+                    />
                   ) : (
-                    <h2 className="text-lg font-black uppercase text-slate-900">{empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}</h2>
+                    <h2 className="text-lg font-black uppercase text-slate-900">
+                      {empresaData?.nome_fantasia ||
+                        empresaData?.razao_social ||
+                        'SISTEMA ERAS PAX'}
+                    </h2>
                   )}
                   <div className="text-[11px] text-slate-600 leading-tight space-y-0.5">
-                    {empresaData?.cnpj && <p><strong>CNPJ:</strong> {empresaData.cnpj}</p>}
-                    {empresaData?.endereco && <p className="text-slate-500">{empresaData.endereco}</p>}
-                    {empresaData?.telefone && <p><strong>Tel:</strong> {empresaData.telefone}</p>}
+                    {empresaData?.cnpj && (
+                      <p>
+                        <strong>CNPJ:</strong> {empresaData.cnpj}
+                      </p>
+                    )}
+                    {empresaData?.endereco && (
+                      <p className="text-slate-500">{empresaData.endereco}</p>
+                    )}
+                    {empresaData?.telefone && (
+                      <p>
+                        <strong>Tel:</strong> {empresaData.telefone}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <h3 className="text-xl font-black uppercase text-slate-900 tracking-wide">{dados.titulo || 'Recibo de Pagamento'}</h3>
+                  <h3 className="text-xl font-black uppercase text-slate-900 tracking-wide">
+                    {dados.titulo || 'Recibo de Pagamento'}
+                  </h3>
                   <div className="inline-block px-3 py-1 bg-slate-100 border border-slate-300 rounded font-bold text-xs text-slate-800 mt-1">
                     Nº {dados.numRecibo}
                   </div>
@@ -500,7 +576,9 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
               {/* Valor Destaque */}
               <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl p-4 mb-4 flex justify-between items-center">
                 <div>
-                  <div className="text-[11px] font-bold text-emerald-800 uppercase">Valor Liquidado / Quitado</div>
+                  <div className="text-[11px] font-bold text-emerald-800 uppercase">
+                    Valor Liquidado / Quitado
+                  </div>
                   <div className="text-xs text-emerald-700">Pagamento confirmado e compensado</div>
                 </div>
                 <div className="text-2xl font-black text-emerald-800">{valorFormatado}</div>
@@ -509,20 +587,28 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
               {/* Pagador / Devedor */}
               <div className="border border-slate-300 rounded-xl p-4 mb-3 bg-slate-50">
                 <div className="text-[10px] font-bold text-slate-500 uppercase pb-1 mb-2 border-b border-slate-200">
-                  {dados.tipo === 'recebimento' ? 'Identificação do Pagador (Devedor)' : 'Identificação do Beneficiário (Credor)'}
+                  {dados.tipo === 'recebimento'
+                    ? 'Identificação do Pagador (Devedor)'
+                    : 'Identificação do Beneficiário (Credor)'}
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div>
-                    <span className="text-slate-500 block text-[10px] uppercase">Nome / Razão Social:</span>
+                    <span className="text-slate-500 block text-[10px] uppercase">
+                      Nome / Razão Social:
+                    </span>
                     <strong className="text-slate-900">{dados.pagadorNome}</strong>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[10px] uppercase">CPF / CNPJ:</span>
-                    <strong className="text-slate-900">{dados.pagadorDoc || 'Não informado'}</strong>
+                    <strong className="text-slate-900">
+                      {dados.pagadorDoc || 'Não informado'}
+                    </strong>
                   </div>
                   {dados.planoInfo && (
                     <div className="col-span-2">
-                      <span className="text-slate-500 block text-[10px] uppercase">Plano Vinculado:</span>
+                      <span className="text-slate-500 block text-[10px] uppercase">
+                        Plano Vinculado:
+                      </span>
                       <strong className="text-emerald-700 font-bold">{dados.planoInfo}</strong>
                     </div>
                   )}
@@ -553,7 +639,9 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
                   )}
                   {dados.vencimentoOriginal && (
                     <div>
-                      <span className="text-slate-500 block text-[10px] uppercase">Vencimento Original:</span>
+                      <span className="text-slate-500 block text-[10px] uppercase">
+                        Vencimento Original:
+                      </span>
                       <strong className="text-slate-900">{dados.vencimentoOriginal}</strong>
                     </div>
                   )}
@@ -567,20 +655,28 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div>
-                    <span className="text-slate-500 block text-[10px] uppercase">Data da Liquidação:</span>
+                    <span className="text-slate-500 block text-[10px] uppercase">
+                      Data da Liquidação:
+                    </span>
                     <strong className="text-slate-900">{dados.dataLiquidacao}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px] uppercase">Forma de Pagamento:</span>
+                    <span className="text-slate-500 block text-[10px] uppercase">
+                      Forma de Pagamento:
+                    </span>
                     <strong className="text-blue-700 uppercase">{dados.formaPagamento}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px] uppercase">Operador Responsável:</span>
+                    <span className="text-slate-500 block text-[10px] uppercase">
+                      Operador Responsável:
+                    </span>
                     <strong className="text-slate-900">{dados.operadorNome || 'Sistema'}</strong>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[10px] uppercase">Situação:</span>
-                    <strong className="text-emerald-700 uppercase font-black">Quitado / Liquidado</strong>
+                    <strong className="text-emerald-700 uppercase font-black">
+                      Quitado / Liquidado
+                    </strong>
                   </div>
                 </div>
                 {dados.observacoes && (
@@ -594,8 +690,7 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
               <div className="bg-white border border-dashed border-slate-400 rounded-xl p-3.5 mb-6 text-xs text-slate-700 leading-relaxed text-justify">
                 {dados.tipo === 'recebimento'
                   ? `Recebemos de <strong>${dados.pagadorNome}</strong> a quantia de <strong>${valorFormatado}</strong> referente à quitação de <strong>${dados.descricao}</strong> (${dados.parcelaInfo || 'Parcela Única'}), dando plena, rasa e geral quitação do valor discriminado.`
-                  : `Declaramos para os devidos fins que foi pago a <strong>${dados.pagadorNome}</strong> a quantia de <strong>${valorFormatado}</strong> referente a <strong>${dados.descricao}</strong> (${dados.parcelaInfo || 'Parcela Única'}), estando o presente título devidamente quitado.`
-                }
+                  : `Declaramos para os devidos fins que foi pago a <strong>${dados.pagadorNome}</strong> a quantia de <strong>${valorFormatado}</strong> referente a <strong>${dados.descricao}</strong> (${dados.parcelaInfo || 'Parcela Única'}), estando o presente título devidamente quitado.`}
               </div>
 
               {/* Assinaturas */}
@@ -604,23 +699,30 @@ export const VisualizadorReciboModal: React.FC<VisualizadorReciboModalProps> = (
                   <div className="h-10"></div>
                   <div className="border-t border-slate-900 pt-1 text-xs font-bold text-slate-900">
                     {dados.pagadorNome}
-                    <div className="text-[10px] font-normal text-slate-500">Assinatura do Pagador</div>
+                    <div className="text-[10px] font-normal text-slate-500">
+                      Assinatura do Pagador
+                    </div>
                   </div>
                 </div>
 
                 <div className="text-center">
                   {empresaData?.assinatura_url ? (
-                    <img src={empresaData.assinatura_url} alt="Assinatura" className="max-h-10 mx-auto mb-1 object-contain" />
+                    <img
+                      src={empresaData.assinatura_url}
+                      alt="Assinatura"
+                      className="max-h-10 mx-auto mb-1 object-contain"
+                    />
                   ) : (
                     <div className="h-10"></div>
                   )}
                   <div className="border-t border-slate-900 pt-1 text-xs font-bold text-slate-900">
                     {empresaData?.nome_fantasia || empresaData?.razao_social || 'EMPRESA EMISSORA'}
-                    <div className="text-[10px] font-normal text-slate-500">Recebedor Autorizado / Carimbo</div>
+                    <div className="text-[10px] font-normal text-slate-500">
+                      Recebedor Autorizado / Carimbo
+                    </div>
                   </div>
                 </div>
               </div>
-
             </div>
           </div>
         </div>

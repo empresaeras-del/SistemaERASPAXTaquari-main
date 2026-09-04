@@ -1,40 +1,58 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useAppContext } from "../context/AppContext";
-import { getAssociados, Associado } from "../services/associadosService";
-import { getEmpresas, Empresa } from "../services/empresasService";
-import { getEmpresaById } from "../services/empresasService";
-import { supabase } from "../lib/supabase";
-import { 
-  Search, Filter, FileText, Download, LayoutGrid, List,
-  Users, CheckCircle2, AlertCircle, XCircle, CreditCard,
-  Calendar, Eye, ChevronRight, GitFork, Network,
-  Printer, Plus, X, ZoomIn, ZoomOut, RotateCw
-} from "lucide-react";
-import { usePlanosPax } from "../hooks/usePlanosPax";
-import { formatLocalDate } from "../utils/dateUtils";
-import { canEditContratos, alertPermissionRestriction } from "../utils/permissions";
-import { format } from "date-fns";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import toast from "react-hot-toast";
+import React, { useState, useEffect, useMemo } from 'react';
+import { useAppContext } from '../context/AppContext';
+import { getAssociados, Associado } from '../services/associadosService';
+import { getEmpresas, Empresa } from '../services/empresasService';
+import { getEmpresaById } from '../services/empresasService';
+import { supabase } from '../lib/supabase';
+import {
+  Search,
+  Filter,
+  FileText,
+  Download,
+  LayoutGrid,
+  List,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
+  CreditCard,
+  Calendar,
+  Eye,
+  ChevronRight,
+  GitFork,
+  Network,
+  Printer,
+  Plus,
+  X,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+} from 'lucide-react';
+import { usePlanosPax } from '../hooks/usePlanosPax';
+import { formatLocalDate } from '../utils/dateUtils';
+import { canEditContratos, alertPermissionRestriction } from '../utils/permissions';
+import { format } from 'date-fns';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import toast from 'react-hot-toast';
 
-import { NovoContratoWizard } from "../components/contratos/NovoContratoWizard";
-import { OrganogramaContratosCanvas } from "../components/contratos/OrganogramaContratosCanvas";
-import { AssociadoDetailsModal } from "../components/associados/AssociadoDetailsModal";
+import { NovoContratoWizard } from '../components/contratos/NovoContratoWizard';
+import { OrganogramaContratosCanvas } from '../components/contratos/OrganogramaContratosCanvas';
+import { AssociadoDetailsModal } from '../components/associados/AssociadoDetailsModal';
 
 export const ContratosPage: React.FC = () => {
   const { state } = useAppContext();
   const { planosAtivos: planos, calcularValor, planos: planosCompletos } = usePlanosPax();
-  
+
   const [associados, setAssociados] = useState<Associado[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("todos");
-  const [planoFilter, setPlanoFilter] = useState("todos");
-  const [viewMode, setViewMode] = useState<"organograma" | "table" | "grid">("organograma");
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [planoFilter, setPlanoFilter] = useState('todos');
+  const [viewMode, setViewMode] = useState<'organograma' | 'table' | 'grid'>('organograma');
   const [showNovoContrato, setShowNovoContrato] = useState(false);
   const [selectedAssociadoDetails, setSelectedAssociadoDetails] = useState<Associado | null>(null);
   const [showRelatorioContratos, setShowRelatorioContratos] = useState(false);
@@ -44,7 +62,7 @@ export const ContratosPage: React.FC = () => {
     try {
       const [data, empresasList] = await Promise.all([
         getAssociados(state.isOnline, state.empresaSelecionada),
-        getEmpresas(state.isOnline)
+        getEmpresas(state.isOnline),
       ]);
       setEmpresas(empresasList || []);
 
@@ -57,7 +75,7 @@ export const ContratosPage: React.FC = () => {
       }
 
       // Associados vinculados a um plano
-      const comContrato = data.filter(a => a.plano_pax_id);
+      const comContrato = data.filter((a) => a.plano_pax_id);
       setAssociados(comContrato);
 
       // Sincroniza em segundo plano com a tabela contratos do Supabase
@@ -71,22 +89,26 @@ export const ContratosPage: React.FC = () => {
               .maybeSingle();
 
             const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            const cTenantId = (assoc.tenant_id && assoc.tenant_id !== 'all') ? assoc.tenant_id : 'default_tenant';
-            const cPlanoId = assoc.plano_pax_id && UUID_REGEX.test(assoc.plano_pax_id) ? assoc.plano_pax_id : null;
-            const cDataInicio = (assoc.data_adesao && String(assoc.data_adesao).trim() !== '') 
-              ? String(assoc.data_adesao).split('T')[0] 
-              : new Date().toISOString().split('T')[0];
+            const cTenantId =
+              assoc.tenant_id && assoc.tenant_id !== 'all' ? assoc.tenant_id : 'default_tenant';
+            const cPlanoId =
+              assoc.plano_pax_id && UUID_REGEX.test(assoc.plano_pax_id) ? assoc.plano_pax_id : null;
+            const cDataInicio =
+              assoc.data_adesao && String(assoc.data_adesao).trim() !== ''
+                ? String(assoc.data_adesao).split('T')[0]
+                : new Date().toISOString().split('T')[0];
 
             const contratoData = {
               tenant_id: cTenantId,
               empresa_id: (assoc as any).empresa_id || cTenantId,
               associado_id: assoc.id,
               plano_pax_id: cPlanoId,
-              numero_contrato: assoc.numero_contrato || `CTR-${assoc.id.substring(0, 8).toUpperCase()}`,
+              numero_contrato:
+                assoc.numero_contrato || `CTR-${assoc.id.substring(0, 8).toUpperCase()}`,
               data_inicio: cDataInicio,
               valor_mensalidade: Number(assoc.valor_plano) || 0,
               status: assoc.status || 'ativo',
-              observacoes: (assoc as any).observacoes || null
+              observacoes: (assoc as any).observacoes || null,
             };
 
             if (!existing) {
@@ -113,11 +135,10 @@ export const ContratosPage: React.FC = () => {
   const filtered = useMemo(() => {
     return associados.filter((a) => {
       const matchesSearch =
-        a.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.cpf.includes(searchTerm);
+        a.nome.toLowerCase().includes(searchTerm.toLowerCase()) || a.cpf.includes(searchTerm);
       const matchesStatus = statusFilter !== 'todos' ? a.status === statusFilter : true;
       const matchesPlano = planoFilter !== 'todos' ? a.plano_pax_id === planoFilter : true;
-      
+
       return matchesSearch && matchesStatus && matchesPlano;
     });
   }, [associados, searchTerm, statusFilter, planoFilter]);
@@ -125,37 +146,46 @@ export const ContratosPage: React.FC = () => {
   const stats = useMemo(() => {
     return {
       total: associados.length,
-      ativos: associados.filter(a => a.status === 'ativo').length,
-      inadimplentes: associados.filter(a => a.status === 'inadimplente').length,
-      inativos: associados.filter(a => a.status === 'inativo').length,
+      ativos: associados.filter((a) => a.status === 'ativo').length,
+      inadimplentes: associados.filter((a) => a.status === 'inadimplente').length,
+      inativos: associados.filter((a) => a.status === 'inativo').length,
     };
   }, [associados]);
 
   const exportarCSV = () => {
     if (filtered.length === 0) return;
-    
-    const headers = ["Contrato", "Nome", "CPF", "Plano", "Vidas", "Status", "Data Adesão", "Valor (R$)"];
-    const rows = filtered.map(a => {
-      const planoNome = planos.find(p => p.id === a.plano_pax_id)?.nome || "Desconhecido";
-      const valor = a.valor_plano ? a.valor_plano.toFixed(2).replace(".", ",") : "0,00";
+
+    const headers = [
+      'Contrato',
+      'Nome',
+      'CPF',
+      'Plano',
+      'Vidas',
+      'Status',
+      'Data Adesão',
+      'Valor (R$)',
+    ];
+    const rows = filtered.map((a) => {
+      const planoNome = planos.find((p) => p.id === a.plano_pax_id)?.nome || 'Desconhecido';
+      const valor = a.valor_plano ? a.valor_plano.toFixed(2).replace('.', ',') : '0,00';
       return [
         a.numero_contrato || '' || a.id.substring(0, 8),
         a.nome,
         a.cpf,
         planoNome,
-        a.n_vidas?.toString() || "1",
+        a.n_vidas?.toString() || '1',
         a.status,
-        a.data_adesao ? formatLocalDate(a.data_adesao) : "",
-        valor
-      ].join(";");
+        a.data_adesao ? formatLocalDate(a.data_adesao) : '',
+        valor,
+      ].join(';');
     });
-    
-    const csvContent = [headers.join(";"), ...rows].join("\n");
+
+    const csvContent = [headers.join(';'), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `contratos_${new Date().toISOString().split('T')[0]}.csv`);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `contratos_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -290,7 +320,6 @@ export const ContratosPage: React.FC = () => {
 
       {/* SEARCH AND FILTERS TOOLBAR */}
       <div className="bg-bg-surface p-4 rounded-2xl border border-border-default shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        
         {/* SEARCH BAR */}
         <div className="relative flex-1 min-w-[240px]">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-subtle" />
@@ -309,7 +338,7 @@ export const ContratosPage: React.FC = () => {
             <Filter className="w-3.5 h-3.5" />
             <span className="font-semibold">Filtros:</span>
           </div>
-          
+
           <select
             value={planoFilter}
             onChange={(e) => setPlanoFilter(e.target.value)}
@@ -339,8 +368,8 @@ export const ContratosPage: React.FC = () => {
             <button
               onClick={() => setViewMode('organograma')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'organograma' 
-                  ? 'bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white shadow-md shadow-blue-500/25' 
+                viewMode === 'organograma'
+                  ? 'bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white shadow-md shadow-blue-500/25'
                   : 'text-text-subtle hover:text-text-base hover:bg-bg-hover'
               }`}
               title="Visualização em Organograma Interativo tipo Canvas"
@@ -388,8 +417,8 @@ export const ContratosPage: React.FC = () => {
           empresaNome={
             state.empresaSelecionada === 'all'
               ? 'Todas as Unidades (Visão Global)'
-              : empresas.find(e => e.id === state.empresaSelecionada)?.nome_fantasia ||
-                empresas.find(e => e.id === state.empresaSelecionada)?.razao_social ||
+              : empresas.find((e) => e.id === state.empresaSelecionada)?.nome_fantasia ||
+                empresas.find((e) => e.id === state.empresaSelecionada)?.razao_social ||
                 'PAX & Funerária Taquari'
           }
           statusFilter={statusFilter}
@@ -399,7 +428,7 @@ export const ContratosPage: React.FC = () => {
       ) : viewMode === 'grid' ? (
         /* GRID VIEW */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map(a => (
+          {filtered.map((a) => (
             <div
               key={a.id}
               className="bg-bg-surface border border-border-default rounded-2xl p-5 hover:border-[#3B82F6]/50 transition-all shadow-sm hover:shadow-md flex flex-col justify-between group"
@@ -414,7 +443,10 @@ export const ContratosPage: React.FC = () => {
                       </span>
                       {getStatusBadge(a.status)}
                     </div>
-                    <h3 className="text-base font-bold text-text-base group-hover:text-[#3B82F6] transition-colors line-clamp-1" title={a.nome}>
+                    <h3
+                      className="text-base font-bold text-text-base group-hover:text-[#3B82F6] transition-colors line-clamp-1"
+                      title={a.nome}
+                    >
                       {a.nome}
                     </h3>
                   </div>
@@ -422,8 +454,11 @@ export const ContratosPage: React.FC = () => {
 
                 {/* BADGES */}
                 <div className="flex items-center gap-2 my-3 flex-wrap text-xs">
-                  <span className="px-2.5 py-1 rounded-lg bg-[#3B82F6]/10 text-[#3B82F6] font-semibold border border-[#3B82F6]/20 truncate max-w-[150px]" title={planos.find(p => p.id === a.plano_pax_id)?.nome || "Desconhecido"}>
-                    {planos.find(p => p.id === a.plano_pax_id)?.nome || "Desconhecido"}
+                  <span
+                    className="px-2.5 py-1 rounded-lg bg-[#3B82F6]/10 text-[#3B82F6] font-semibold border border-[#3B82F6]/20 truncate max-w-[150px]"
+                    title={planos.find((p) => p.id === a.plano_pax_id)?.nome || 'Desconhecido'}
+                  >
+                    {planos.find((p) => p.id === a.plano_pax_id)?.nome || 'Desconhecido'}
                   </span>
                   <span className="px-2.5 py-1 rounded-lg bg-bg-subtle text-text-subtle font-medium border border-border-default flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5" />
@@ -440,7 +475,7 @@ export const ContratosPage: React.FC = () => {
                     </span>
                     <span className="font-mono text-text-base">{a.cpf}</span>
                   </p>
-                  
+
                   <p className="flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <Calendar className="w-3.5 h-3.5 text-text-subtle shrink-0" />
@@ -452,7 +487,7 @@ export const ContratosPage: React.FC = () => {
                   <p className="flex items-center justify-between bg-bg-subtle p-2 rounded-lg mt-2">
                     <strong className="text-text-subtle font-semibold">Mensalidade:</strong>
                     <span className="font-bold text-[#3B82F6]">
-                      R$ {a.valor_plano ? a.valor_plano.toFixed(2).replace('.', ',') : "0,00"}
+                      R$ {a.valor_plano ? a.valor_plano.toFixed(2).replace('.', ',') : '0,00'}
                     </span>
                   </p>
                 </div>
@@ -489,23 +524,24 @@ export const ContratosPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-default/50">
-                {filtered.map(a => (
-                  <tr
-                    key={a.id}
-                    className="hover:bg-bg-subtle/50 transition-colors group"
-                  >
+                {filtered.map((a) => (
+                  <tr key={a.id} className="hover:bg-bg-subtle/50 transition-colors group">
                     <td className="px-5 py-3">
                       <div className="flex flex-col">
-                        <span className="text-sm font-semibold text-text-base group-hover:text-[#3B82F6] transition-colors">{a.nome}</span>
+                        <span className="text-sm font-semibold text-text-base group-hover:text-[#3B82F6] transition-colors">
+                          {a.nome}
+                        </span>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[11px] text-text-muted font-mono bg-bg-subtle px-1.5 py-0.5 rounded border border-border-default">{a.numero_contrato || '' || 'S/C'}</span>
+                          <span className="text-[11px] text-text-muted font-mono bg-bg-subtle px-1.5 py-0.5 rounded border border-border-default">
+                            {a.numero_contrato || '' || 'S/C'}
+                          </span>
                           <span className="text-xs text-text-subtle">{a.cpf}</span>
                         </div>
                       </div>
                     </td>
                     <td className="px-5 py-3">
                       <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20 truncate max-w-[150px]">
-                        {planos.find(p => p.id === a.plano_pax_id)?.nome || "Desconhecido"}
+                        {planos.find((p) => p.id === a.plano_pax_id)?.nome || 'Desconhecido'}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-center">
@@ -521,13 +557,11 @@ export const ContratosPage: React.FC = () => {
                     </td>
                     <td className="px-5 py-3 text-right">
                       <span className="text-sm font-semibold text-[#3B82F6]">
-                        R$ {a.valor_plano ? a.valor_plano.toFixed(2).replace('.', ',') : "0,00"}
+                        R$ {a.valor_plano ? a.valor_plano.toFixed(2).replace('.', ',') : '0,00'}
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex justify-center">
-                        {getStatusBadge(a.status)}
-                      </div>
+                      <div className="flex justify-center">{getStatusBadge(a.status)}</div>
                     </td>
                     <td className="px-5 py-3 text-center">
                       <button
@@ -555,7 +589,7 @@ export const ContratosPage: React.FC = () => {
       )}
 
       {showNovoContrato && (
-        <NovoContratoWizard 
+        <NovoContratoWizard
           onClose={() => setShowNovoContrato(false)}
           onSuccess={() => {
             setShowNovoContrato(false);
@@ -600,7 +634,7 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
   planos,
   empresaData,
   userName = 'Operador do Sistema',
-  currentFilters = {}
+  currentFilters = {},
 }) => {
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [zoom, setZoom] = useState(100);
@@ -615,21 +649,22 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
 
   const stats = {
     total: associados.length,
-    ativos: associados.filter(a => a.status === 'ativo').length,
-    inadimplentes: associados.filter(a => a.status === 'inadimplente').length,
-    encerrados: associados.filter(a => a.status === 'inativo' || a.status === 'encerrado').length,
-    totalMensalidades: associados.reduce((acc, a) => acc + (a.valor_plano || 0), 0)
+    ativos: associados.filter((a) => a.status === 'ativo').length,
+    inadimplentes: associados.filter((a) => a.status === 'inadimplente').length,
+    encerrados: associados.filter((a) => a.status === 'inativo' || a.status === 'encerrado').length,
+    totalMensalidades: associados.reduce((acc, a) => acc + (a.valor_plano || 0), 0),
   };
 
   const dataHoraEmissao = format(new Date(), "dd/MM/yyyy 'às' HH:mm:ss");
   const companyName = empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
 
   const getPlanoNome = (planoId?: string) =>
-    planos.find(p => p.id === planoId)?.nome || 'Desconhecido';
+    planos.find((p) => p.id === planoId)?.nome || 'Desconhecido';
 
   const getStatusStyle = (status: string) => {
     if (status === 'ativo') return 'background:#dcfce7;color:#166534;border:1px solid #bbf7d0;';
-    if (status === 'inadimplente') return 'background:#ffe4e6;color:#9f1239;border:1px solid #fecdd3;';
+    if (status === 'inadimplente')
+      return 'background:#ffe4e6;color:#9f1239;border:1px solid #fecdd3;';
     return 'background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;';
   };
 
@@ -644,7 +679,9 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
       ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height:55px;max-width:220px;object-fit:contain;"/>`
       : `<h1 style="margin:0;font-size:18px;font-weight:800;text-transform:uppercase;color:#0f172a;">${companyName}</h1>`;
 
-    const tableRows = associados.map((a, idx) => `
+    const tableRows = associados
+      .map(
+        (a, idx) => `
       <tr>
         <td style="text-align:center;font-weight:600;color:#475569;">${idx + 1}</td>
         <td>
@@ -663,7 +700,9 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
           </span>
         </td>
       </tr>
-    `).join('');
+    `,
+      )
+      .join('');
 
     const printHtml = `
       <!DOCTYPE html>
@@ -756,7 +795,10 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
     printWindow.document.write(printHtml);
     printWindow.document.close();
     printWindow.focus();
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 400);
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 400);
   };
 
   const handleExportPDF = async () => {
@@ -777,12 +819,21 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
       doc.setFont('helvetica', 'normal');
       doc.text('RELATÓRIO DE CONTRATOS', 14, 16);
       doc.setFontSize(8);
-      doc.text(`Emissão: ${dataHoraEmissao} | Operador: ${userName}`, pageW - 14, 10, { align: 'right' });
-      doc.text(`Total: ${associados.length} contratos | ${formatCurrency(stats.totalMensalidades)}/mês`, pageW - 14, 16, { align: 'right' });
+      doc.text(`Emissão: ${dataHoraEmissao} | Operador: ${userName}`, pageW - 14, 10, {
+        align: 'right',
+      });
+      doc.text(
+        `Total: ${associados.length} contratos | ${formatCurrency(stats.totalMensalidades)}/mês`,
+        pageW - 14,
+        16,
+        { align: 'right' },
+      );
 
       autoTable(doc, {
         startY: 28,
-        head: [['#', 'Associado / Contrato', 'Plano PAX', 'Vidas', 'Adesão', 'Mensalidade', 'Status']],
+        head: [
+          ['#', 'Associado / Contrato', 'Plano PAX', 'Vidas', 'Adesão', 'Mensalidade', 'Status'],
+        ],
         body: associados.map((a, idx) => [
           (idx + 1).toString(),
           `${a.nome}\nContrato: ${a.numero_contrato || 'S/N'}`,
@@ -790,10 +841,15 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
           (a.n_vidas || 1).toString(),
           a.data_adesao ? formatLocalDate(a.data_adesao) : '-',
           formatCurrency(a.valor_plano),
-          a.status.toUpperCase()
+          a.status.toUpperCase(),
         ]),
         theme: 'grid',
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+        headStyles: {
+          fillColor: [15, 23, 42],
+          textColor: [255, 255, 255],
+          fontSize: 8,
+          fontStyle: 'bold',
+        },
         bodyStyles: { fontSize: 7.5, textColor: [15, 23, 42], cellPadding: 2 },
         columnStyles: {
           0: { cellWidth: 8, halign: 'center' },
@@ -802,12 +858,18 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
           3: { cellWidth: 14, halign: 'center' },
           4: { cellWidth: 20, halign: 'center' },
           5: { cellWidth: 28, halign: 'right' },
-          6: { cellWidth: 22, halign: 'center' }
+          6: { cellWidth: 22, halign: 'center' },
         },
-        foot: [[
-          { content: `TOTAL: ${associados.length} contratos | Mensalidades: ${formatCurrency(stats.totalMensalidades)}/mês`, colSpan: 7, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } }
-        ]],
-        margin: { left: 14, right: 14 }
+        foot: [
+          [
+            {
+              content: `TOTAL: ${associados.length} contratos | Mensalidades: ${formatCurrency(stats.totalMensalidades)}/mês`,
+              colSpan: 7,
+              styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] },
+            },
+          ],
+        ],
+        margin: { left: 14, right: 14 },
       });
 
       doc.save(`Relatorio_Contratos_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`);
@@ -830,12 +892,16 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-white tracking-wide">Relatório de Contratos</h2>
+              <h2 className="text-base font-bold text-white tracking-wide">
+                Relatório de Contratos
+              </h2>
               <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
                 {associados.length} contratos
               </span>
             </div>
-            <p className="text-xs text-slate-400">Documento profissional — Gestão de Contratos PAX</p>
+            <p className="text-xs text-slate-400">
+              Documento profissional — Gestão de Contratos PAX
+            </p>
           </div>
         </div>
 
@@ -845,7 +911,9 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
             <button
               onClick={() => setOrientation('landscape')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'landscape' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                orientation === 'landscape'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
               title="Modo Paisagem"
             >
@@ -855,7 +923,9 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
             <button
               onClick={() => setOrientation('portrait')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'portrait' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                orientation === 'portrait'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
               title="Modo Retrato"
             >
@@ -864,9 +934,26 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
             </button>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setZoom(z => Math.max(z - 10, 40))} className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]" title="Reduzir Zoom"><ZoomOut className="w-4 h-4" /></button>
-            <button onClick={() => setZoom(100)} className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center">{zoom}%</button>
-            <button onClick={() => setZoom(z => Math.min(z + 10, 200))} className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]" title="Ampliar Zoom"><ZoomIn className="w-4 h-4" /></button>
+            <button
+              onClick={() => setZoom((z) => Math.max(z - 10, 40))}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
+              title="Reduzir Zoom"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setZoom(100)}
+              className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center"
+            >
+              {zoom}%
+            </button>
+            <button
+              onClick={() => setZoom((z) => Math.min(z + 10, 200))}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
+              title="Ampliar Zoom"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -887,7 +974,11 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
             <span>Imprimir</span>
           </button>
           <div className="h-6 w-px bg-[#2d3544]" />
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]"
+            aria-label="Fechar"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -896,14 +987,18 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
       {/* CANVAS */}
       <main className="flex-1 overflow-auto p-8 flex justify-center items-start bg-[#1a1e27] custom-scrollbar">
         <div
-          style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center', transition: 'transform 0.15s ease-out' }}
+          style={{
+            transform: `scale(${zoom / 100})`,
+            transformOrigin: 'top center',
+            transition: 'transform 0.15s ease-out',
+          }}
           className="mb-12 shadow-2xl"
         >
           <div
             style={{
               width: orientation === 'landscape' ? '297mm' : '210mm',
               minHeight: orientation === 'landscape' ? '210mm' : '297mm',
-              padding: '14mm 16mm'
+              padding: '14mm 16mm',
             }}
             className="bg-white text-slate-900 rounded-sm shadow-2xl relative font-sans leading-normal box-border"
           >
@@ -911,26 +1006,51 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
             <div className="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-start gap-4">
               <div className="flex-1">
                 {empresaData?.logo_url ? (
-                  <img src={empresaData.logo_url} alt="Logo" className="max-h-14 max-w-[240px] object-contain mb-2" />
+                  <img
+                    src={empresaData.logo_url}
+                    alt="Logo"
+                    className="max-h-14 max-w-[240px] object-contain mb-2"
+                  />
                 ) : (
-                  <h1 className="text-xl font-extrabold tracking-tight text-slate-900 uppercase mb-1">{companyName}</h1>
+                  <h1 className="text-xl font-extrabold tracking-tight text-slate-900 uppercase mb-1">
+                    {companyName}
+                  </h1>
                 )}
                 <div className="text-xs text-slate-600 leading-tight space-y-0.5">
-                  {empresaData?.cnpj && <p><span className="font-semibold text-slate-800">CNPJ:</span> {empresaData.cnpj}{empresaData.telefone ? ` | Tel: ${empresaData.telefone}` : ''}</p>}
-                  {empresaData?.endereco && <p className="text-slate-500">{empresaData.endereco}</p>}
+                  {empresaData?.cnpj && (
+                    <p>
+                      <span className="font-semibold text-slate-800">CNPJ:</span> {empresaData.cnpj}
+                      {empresaData.telefone ? ` | Tel: ${empresaData.telefone}` : ''}
+                    </p>
+                  )}
+                  {empresaData?.endereco && (
+                    <p className="text-slate-500">{empresaData.endereco}</p>
+                  )}
                 </div>
               </div>
               <div className="text-right">
-                <div className="inline-block px-2.5 py-1 bg-slate-100 border border-slate-300 rounded text-[11px] font-extrabold uppercase tracking-wide text-slate-800 mb-1">Relatório Cadastral</div>
-                <h2 className="text-base font-black uppercase text-slate-900 tracking-wide">Contratos PAX</h2>
-                <div className="text-[11px] text-slate-500 mt-1">Emissão: <strong className="text-slate-800">{format(new Date(), "dd/MM/yyyy 'às' HH:mm")}</strong></div>
-                <div className="text-[10px] text-slate-500">Emitido por: <span className="font-medium text-slate-700">{userName}</span></div>
+                <div className="inline-block px-2.5 py-1 bg-slate-100 border border-slate-300 rounded text-[11px] font-extrabold uppercase tracking-wide text-slate-800 mb-1">
+                  Relatório Cadastral
+                </div>
+                <h2 className="text-base font-black uppercase text-slate-900 tracking-wide">
+                  Contratos PAX
+                </h2>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Emissão:{' '}
+                  <strong className="text-slate-800">
+                    {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
+                  </strong>
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Emitido por: <span className="font-medium text-slate-700">{userName}</span>
+                </div>
               </div>
             </div>
 
             {/* Aviso LGPD */}
             <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[9px] text-amber-800 font-medium">
-              ⚠️ Documento protegido — dados pessoais omitidos conforme LGPD (Lei 13.709/2018). Uso restrito à instituição emissora.
+              ⚠️ Documento protegido — dados pessoais omitidos conforme LGPD (Lei 13.709/2018). Uso
+              restrito à instituição emissora.
             </div>
 
             {/* KPI Cards */}
@@ -957,7 +1077,9 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
               </div>
               <div className="p-2.5 rounded-lg border border-purple-200 bg-purple-50/50">
                 <div className="text-[10px] font-bold text-purple-800 uppercase">Mensalidades</div>
-                <div className="text-xs font-black text-purple-700 mt-1">{formatCurrency(stats.totalMensalidades)}</div>
+                <div className="text-xs font-black text-purple-700 mt-1">
+                  {formatCurrency(stats.totalMensalidades)}
+                </div>
                 <div className="text-[9px] text-purple-600 mt-0.5">Total/mês</div>
               </div>
             </div>
@@ -968,34 +1090,51 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
                 <thead>
                   <tr className="bg-slate-900 text-white text-[10px] uppercase font-bold tracking-wider">
                     <th className="py-2 px-2 text-center w-[3%] border-r border-slate-700">#</th>
-                    <th className="py-2 px-3 w-[30%] border-r border-slate-700">Associado / Contrato</th>
+                    <th className="py-2 px-3 w-[30%] border-r border-slate-700">
+                      Associado / Contrato
+                    </th>
                     <th className="py-2 px-3 w-[20%] border-r border-slate-700">Plano PAX</th>
-                    <th className="py-2 px-2 text-center w-[6%] border-r border-slate-700">Vidas</th>
-                    <th className="py-2 px-2 text-center w-[11%] border-r border-slate-700">Adesão</th>
-                    <th className="py-2 px-3 text-right w-[14%] border-r border-slate-700">Mensalidade</th>
+                    <th className="py-2 px-2 text-center w-[6%] border-r border-slate-700">
+                      Vidas
+                    </th>
+                    <th className="py-2 px-2 text-center w-[11%] border-r border-slate-700">
+                      Adesão
+                    </th>
+                    <th className="py-2 px-3 text-right w-[14%] border-r border-slate-700">
+                      Mensalidade
+                    </th>
                     <th className="py-2 px-2 text-center w-[10%]">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-xs">
                   {associados.map((a, idx) => {
-                    const statusColor = a.status === 'ativo'
-                      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                      : a.status === 'inadimplente'
-                        ? 'text-rose-700 bg-rose-50 border-rose-200'
-                        : 'text-slate-600 bg-slate-100 border-slate-300';
+                    const statusColor =
+                      a.status === 'ativo'
+                        ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                        : a.status === 'inadimplente'
+                          ? 'text-rose-700 bg-rose-50 border-rose-200'
+                          : 'text-slate-600 bg-slate-100 border-slate-300';
                     return (
                       <tr key={a.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-2 px-2 text-center font-bold text-slate-500 border-r border-slate-200 text-[10px]">{idx + 1}</td>
+                        <td className="py-2 px-2 text-center font-bold text-slate-500 border-r border-slate-200 text-[10px]">
+                          {idx + 1}
+                        </td>
                         <td className="py-2 px-3 border-r border-slate-200">
                           <div className="font-bold text-slate-900 text-xs">{a.nome}</div>
                           <div className="text-[10px] text-slate-500 mt-0.5">
-                            <span className="font-mono bg-slate-100 px-1 rounded">{a.numero_contrato || 'S/N'}</span>
+                            <span className="font-mono bg-slate-100 px-1 rounded">
+                              {a.numero_contrato || 'S/N'}
+                            </span>
                           </div>
                         </td>
                         <td className="py-2 px-3 border-r border-slate-200">
-                          <span className="font-semibold text-emerald-800 text-[11px]">{getPlanoNome(a.plano_pax_id)}</span>
+                          <span className="font-semibold text-emerald-800 text-[11px]">
+                            {getPlanoNome(a.plano_pax_id)}
+                          </span>
                         </td>
-                        <td className="py-2 px-2 text-center font-bold text-purple-700 border-r border-slate-200 text-[11px]">{a.n_vidas || 1}</td>
+                        <td className="py-2 px-2 text-center font-bold text-purple-700 border-r border-slate-200 text-[11px]">
+                          {a.n_vidas || 1}
+                        </td>
                         <td className="py-2 px-2 text-center font-medium text-slate-900 border-r border-slate-200 text-[11px]">
                           {a.data_adesao ? formatLocalDate(a.data_adesao) : '-'}
                         </td>
@@ -1003,7 +1142,9 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
                           {formatCurrency(a.valor_plano)}
                         </td>
                         <td className="py-2 px-2 text-center">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${statusColor}`}>
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${statusColor}`}
+                          >
                             {a.status}
                           </span>
                         </td>
@@ -1013,8 +1154,15 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100 font-extrabold text-slate-900 border-t-2 border-slate-400">
-                    <td colSpan={5} className="py-2.5 px-3 text-right text-xs uppercase tracking-wide">Total de Contratos: {associados.length} registros</td>
-                    <td className="py-2.5 px-3 text-right text-xs font-black text-blue-700">{formatCurrency(stats.totalMensalidades)}/mês</td>
+                    <td
+                      colSpan={5}
+                      className="py-2.5 px-3 text-right text-xs uppercase tracking-wide"
+                    >
+                      Total de Contratos: {associados.length} registros
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-xs font-black text-blue-700">
+                      {formatCurrency(stats.totalMensalidades)}/mês
+                    </td>
                     <td />
                   </tr>
                 </tfoot>
@@ -1023,8 +1171,12 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
 
             {/* Footer */}
             <div className="mt-8 pt-4 border-t border-slate-300 flex justify-between items-center text-[10px] text-slate-500">
-              <div><strong>Sistema ERAS PAX Taquari</strong> — Gestão de Contratos e Planos</div>
-              <div>Documento emitido eletronicamente em {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}</div>
+              <div>
+                <strong>Sistema ERAS PAX Taquari</strong> — Gestão de Contratos e Planos
+              </div>
+              <div>
+                Documento emitido eletronicamente em {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
+              </div>
               <div>Página 1 de 1</div>
             </div>
           </div>

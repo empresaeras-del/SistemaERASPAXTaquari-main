@@ -1,7 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { X, Download, ExternalLink, Printer, FileText, AlertTriangle, Image as ImageIcon, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
+import {
+  X,
+  Download,
+  ExternalLink,
+  Printer,
+  FileText,
+  AlertTriangle,
+  Image as ImageIcon,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+} from 'lucide-react';
 import { DocumentoAssociado } from '../../services/associadosService';
-import { isPdfDocument, isImageDocument, getSafeDocumentUrl, downloadDocumento, openDocumentoInNewTab } from '../../utils/documentUtils';
+import {
+  isPdfDocument,
+  isImageDocument,
+  getSafeDocumentUrl,
+  downloadDocumento,
+  openDocumentoInNewTab,
+} from '../../utils/documentUtils';
 import { useToast } from '../../context/ToastContext';
 
 interface Props {
@@ -36,11 +53,11 @@ export const VisualizadorDocumentoModal: React.FC<Props> = ({ documento, onClose
     if (documento.url.startsWith('blob:')) {
       setIsLegacyBlob(true);
       fetch(documento.url)
-        .then(res => {
+        .then((res) => {
           if (!res.ok) throw new Error('Blob indisponível');
           return res.blob();
         })
-        .then(blob => {
+        .then((blob) => {
           const fresh = URL.createObjectURL(blob);
           setSafeUrl(fresh);
           setIsLegacyBlob(false);
@@ -126,15 +143,23 @@ export const VisualizadorDocumentoModal: React.FC<Props> = ({ documento, onClose
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-bg-base border border-border-default rounded-2xl w-full max-w-5xl h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        
         {/* HEADER */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-default bg-bg-surface shrink-0">
           <div className="flex items-center gap-3 overflow-hidden pr-4">
             <div className="w-10 h-10 rounded-xl bg-[#3B82F6]/10 flex items-center justify-center shrink-0 text-[#3B82F6]">
-              {isPdf ? <FileText className="w-5 h-5 text-rose-400" /> : isImg ? <ImageIcon className="w-5 h-5 text-indigo-400" /> : <FileText className="w-5 h-5" />}
+              {isPdf ? (
+                <FileText className="w-5 h-5 text-rose-400" />
+              ) : isImg ? (
+                <ImageIcon className="w-5 h-5 text-indigo-400" />
+              ) : (
+                <FileText className="w-5 h-5" />
+              )}
             </div>
             <div className="overflow-hidden">
-              <h3 className="font-semibold text-text-base text-sm sm:text-base truncate" title={documento.nome}>
+              <h3
+                className="font-semibold text-text-base text-sm sm:text-base truncate"
+                title={documento.nome}
+              >
                 {documento.nome}
               </h3>
               <p className="text-xs text-text-subtle flex items-center gap-2">
@@ -142,7 +167,9 @@ export const VisualizadorDocumentoModal: React.FC<Props> = ({ documento, onClose
                 {documento.data_upload && (
                   <>
                     <span>•</span>
-                    <span>Anexado em {new Date(documento.data_upload).toLocaleDateString('pt-BR')}</span>
+                    <span>
+                      Anexado em {new Date(documento.data_upload).toLocaleDateString('pt-BR')}
+                    </span>
                   </>
                 )}
               </p>
@@ -154,7 +181,7 @@ export const VisualizadorDocumentoModal: React.FC<Props> = ({ documento, onClose
               <div className="hidden sm:flex items-center bg-bg-subtle rounded-xl p-1 border border-border-default mr-2">
                 <button
                   type="button"
-                  onClick={() => setZoom(prev => Math.max(prev - 25, 25))}
+                  onClick={() => setZoom((prev) => Math.max(prev - 25, 25))}
                   title="Diminuir zoom"
                   className="p-1.5 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-lg transition-colors"
                 >
@@ -165,7 +192,7 @@ export const VisualizadorDocumentoModal: React.FC<Props> = ({ documento, onClose
                 </span>
                 <button
                   type="button"
-                  onClick={() => setZoom(prev => Math.min(prev + 25, 300))}
+                  onClick={() => setZoom((prev) => Math.min(prev + 25, 300))}
                   title="Aumentar zoom"
                   className="p-1.5 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-lg transition-colors"
                 >
@@ -173,7 +200,7 @@ export const VisualizadorDocumentoModal: React.FC<Props> = ({ documento, onClose
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRotation(prev => (prev + 90) % 360)}
+                  onClick={() => setRotation((prev) => (prev + 90) % 360)}
                   title="Girar 90°"
                   className="p-1.5 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-lg transition-colors ml-1 border-l border-border-default"
                 >
@@ -216,6 +243,7 @@ export const VisualizadorDocumentoModal: React.FC<Props> = ({ documento, onClose
               type="button"
               onClick={onClose}
               className="p-2 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors ml-1"
+              aria-label="Fechar"
             >
               <X className="w-5 h-5" />
             </button>

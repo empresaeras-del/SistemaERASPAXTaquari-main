@@ -1,22 +1,22 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { 
-  X, 
-  Printer, 
-  Download, 
-  ZoomIn, 
-  ZoomOut, 
-  RotateCw, 
-  FileText, 
-  Building2, 
-  CheckCircle2, 
-  AlertCircle, 
-  HeartPulse, 
-  Stethoscope, 
-  Filter, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  User 
+import {
+  X,
+  Printer,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  FileText,
+  Building2,
+  CheckCircle2,
+  AlertCircle,
+  HeartPulse,
+  Stethoscope,
+  Filter,
+  MapPin,
+  Phone,
+  Mail,
+  User,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Credenciado } from '../../types/credenciados';
@@ -45,7 +45,7 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
   credenciados,
   empresaData,
   currentFilters = {},
-  userName = 'Operador do Sistema'
+  userName = 'Operador do Sistema',
 }) => {
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [zoom, setZoom] = useState<number>(100);
@@ -59,18 +59,23 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
         c.endereco ? `${c.endereco}${c.numero ? ', ' + c.numero : ''}` : '',
         c.bairro ? `Bairro: ${c.bairro}` : '',
         c.cidade ? `${c.cidade}${c.estado ? '/' + c.estado : ''}` : '',
-        c.cep ? `CEP: ${c.cep}` : ''
-      ].filter(Boolean).join(' - ');
+        c.cep ? `CEP: ${c.cep}` : '',
+      ]
+        .filter(Boolean)
+        .join(' - ');
 
       const contato = [
         c.telefone ? `Tel: ${c.telefone}` : '',
         c.email ? `Email: ${c.email}` : '',
-        c.responsavel_nome ? `Resp: ${c.responsavel_nome}` : ''
-      ].filter(Boolean).join(' | ');
+        c.responsavel_nome ? `Resp: ${c.responsavel_nome}` : '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
 
       let statusColor = 'text-emerald-700 bg-emerald-50 border-emerald-200';
       if (c.status === 'bloqueado') statusColor = 'text-amber-700 bg-amber-50 border-amber-200';
-      else if (c.status === 'descredenciado') statusColor = 'text-slate-600 bg-slate-100 border-slate-300';
+      else if (c.status === 'descredenciado')
+        statusColor = 'text-slate-600 bg-slate-100 border-slate-300';
 
       return {
         index: idx + 1,
@@ -83,7 +88,7 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
         enderecoCompleto: endereco || 'Endereço não informado',
         contatoCompleto: contato || 'Contato não informado',
         status: c.status,
-        statusColor
+        statusColor,
       };
     });
   }, [credenciados]);
@@ -91,24 +96,31 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
   // KPIs
   const totais = useMemo(() => {
     const total = reportData.length;
-    const ativos = credenciados.filter(c => c.status === 'ativo').length;
-    const bloqueados = credenciados.filter(c => c.status === 'bloqueado').length;
-    const clinicas = credenciados.filter(c => c.ramo_atividade.includes('clinica') || c.ramo_atividade.includes('hospital')).length;
-    const profissionais = credenciados.filter(c => c.ramo_atividade.includes('medico') || c.ramo_atividade.includes('dentista') || c.ramo_atividade.includes('psicologo')).length;
+    const ativos = credenciados.filter((c) => c.status === 'ativo').length;
+    const bloqueados = credenciados.filter((c) => c.status === 'bloqueado').length;
+    const clinicas = credenciados.filter(
+      (c) => c.ramo_atividade.includes('clinica') || c.ramo_atividade.includes('hospital'),
+    ).length;
+    const profissionais = credenciados.filter(
+      (c) =>
+        c.ramo_atividade.includes('medico') ||
+        c.ramo_atividade.includes('dentista') ||
+        c.ramo_atividade.includes('psicologo'),
+    ).length;
 
     return {
       total,
       ativos,
       bloqueados,
       clinicas,
-      profissionais
+      profissionais,
     };
   }, [reportData, credenciados]);
 
   if (!isOpen) return null;
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 10, 200));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 10, 40));
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 10, 200));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 10, 40));
   const handleZoomReset = () => setZoom(100);
 
   // Impressão limpa
@@ -120,11 +132,13 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
     }
 
     const dataHoraEmissao = format(new Date(), "dd/MM/yyyy 'às' HH:mm:ss");
-    const logoHtml = empresaData?.logo_url 
-      ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" />` 
+    const logoHtml = empresaData?.logo_url
+      ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" />`
       : `<h1 style="margin: 0; font-size: 18px; font-weight: 800; text-transform: uppercase; color: #0f172a;">${empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}</h1>`;
 
-    const rowsHtml = reportData.map(item => `
+    const rowsHtml = reportData
+      .map(
+        (item) => `
       <tr>
         <td style="text-align: center; font-weight: 600; color: #475569;">${item.index}</td>
         <td>
@@ -153,9 +167,12 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
           </span>
         </td>
       </tr>
-    `).join('');
+    `,
+      )
+      .join('');
 
-    const pageOrientationCss = orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
+    const pageOrientationCss =
+      orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
 
     const printHtml = `
       <!DOCTYPE html>
@@ -297,11 +314,12 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
       const doc = new jsPDF({
         orientation: orientation,
         unit: 'mm',
-        format: 'a4'
+        format: 'a4',
       });
 
       const dataHoraEmissao = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
-      const companyName = empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
+      const companyName =
+        empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
 
       doc.setFillColor(15, 23, 42);
       doc.rect(0, 0, doc.internal.pageSize.getWidth(), 22, 'F');
@@ -316,21 +334,40 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
       doc.text('RELATÓRIO GERENCIAL DA REDE CREDENCIADA', 14, 16);
 
       doc.setFontSize(8);
-      doc.text(`Emissão: ${dataHoraEmissao} | Operador: ${userName}`, doc.internal.pageSize.getWidth() - 14, 10, { align: 'right' });
-      doc.text(`Total: ${reportData.length} parceiros | Orientação: ${orientation === 'landscape' ? 'Paisagem' : 'Retrato'}`, doc.internal.pageSize.getWidth() - 14, 16, { align: 'right' });
+      doc.text(
+        `Emissão: ${dataHoraEmissao} | Operador: ${userName}`,
+        doc.internal.pageSize.getWidth() - 14,
+        10,
+        { align: 'right' },
+      );
+      doc.text(
+        `Total: ${reportData.length} parceiros | Orientação: ${orientation === 'landscape' ? 'Paisagem' : 'Retrato'}`,
+        doc.internal.pageSize.getWidth() - 14,
+        16,
+        { align: 'right' },
+      );
 
-      const tableData = reportData.map(item => [
+      const tableData = reportData.map((item) => [
         item.index.toString(),
         `${item.razaoSocial}\nFantasia: ${item.nomeFantasia}\nCNPJ/CPF: ${item.cnpjCpf}`,
         `${item.ramoFormatado}${item.registroProfissional !== '-' ? '\nReg: ' + item.registroProfissional : ''}`,
         item.enderecoCompleto,
         item.contatoCompleto,
-        item.status
+        item.status,
       ]);
 
       autoTable(doc, {
         startY: 28,
-        head: [['#', 'Credenciado / Razão Social', 'Ramo de Atividade', 'Endereço Completo', 'Contatos / Responsável', 'Status']],
+        head: [
+          [
+            '#',
+            'Credenciado / Razão Social',
+            'Ramo de Atividade',
+            'Endereço Completo',
+            'Contatos / Responsável',
+            'Status',
+          ],
+        ],
         body: tableData,
         theme: 'grid',
         headStyles: {
@@ -338,12 +375,12 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
           textColor: [255, 255, 255],
           fontSize: 8,
           fontStyle: 'bold',
-          halign: 'left'
+          halign: 'left',
         },
         bodyStyles: {
           fontSize: 7.5,
           textColor: [15, 23, 42],
-          cellPadding: 2
+          cellPadding: 2,
         },
         columnStyles: {
           0: { cellWidth: 8, halign: 'center' },
@@ -351,12 +388,18 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
           2: { cellWidth: orientation === 'landscape' ? 45 : 30 },
           3: { cellWidth: orientation === 'landscape' ? 75 : 55 },
           4: { cellWidth: orientation === 'landscape' ? 50 : 35 },
-          5: { cellWidth: 20, halign: 'center' }
+          5: { cellWidth: 20, halign: 'center' },
         },
-        foot: [[
-          { content: `TOTAL CONSOLIDADO: ${reportData.length} credenciados`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } }
-        ]],
-        margin: { left: 14, right: 14 }
+        foot: [
+          [
+            {
+              content: `TOTAL CONSOLIDADO: ${reportData.length} credenciados`,
+              colSpan: 6,
+              styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] },
+            },
+          ],
+        ],
+        margin: { left: 14, right: 14 },
       });
 
       const filename = `Relatorio_Credenciados_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
@@ -399,7 +442,9 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
             <button
               onClick={() => setOrientation('landscape')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'landscape' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                orientation === 'landscape'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <RotateCw className="w-3.5 h-3.5" />
@@ -408,7 +453,9 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
             <button
               onClick={() => setOrientation('portrait')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'portrait' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                orientation === 'portrait'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
@@ -417,13 +464,25 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
           </div>
 
           <div className="flex items-center gap-1">
-            <button onClick={handleZoomOut} className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]" title="Reduzir Zoom (-)">
+            <button
+              onClick={handleZoomOut}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
+              title="Reduzir Zoom (-)"
+            >
               <ZoomOut className="w-4 h-4" />
             </button>
-            <button onClick={handleZoomReset} className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center" title="Resetar para 100%">
+            <button
+              onClick={handleZoomReset}
+              className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center"
+              title="Resetar para 100%"
+            >
               {zoom}%
             </button>
-            <button onClick={handleZoomIn} className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]" title="Ampliar Zoom (+)">
+            <button
+              onClick={handleZoomIn}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
+              title="Ampliar Zoom (+)"
+            >
               <ZoomIn className="w-4 h-4" />
             </button>
           </div>
@@ -447,7 +506,11 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
             <span>Imprimir</span>
           </button>
           <div className="h-6 w-px bg-[#2d3544]" />
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]"
+            aria-label="Fechar"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -455,20 +518,20 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
 
       {/* CANVAS */}
       <main className="flex-1 overflow-auto p-8 flex justify-center items-start bg-[#1a1e27] custom-scrollbar">
-        <div 
-          style={{ 
-            transform: `scale(${zoom / 100})`, 
+        <div
+          style={{
+            transform: `scale(${zoom / 100})`,
             transformOrigin: 'top center',
-            transition: 'transform 0.15s ease-out'
+            transition: 'transform 0.15s ease-out',
           }}
           className="mb-12 shadow-2xl"
         >
-          <div 
+          <div
             ref={printAreaRef}
             style={{
               width: orientation === 'landscape' ? '297mm' : '210mm',
               minHeight: orientation === 'landscape' ? '210mm' : '297mm',
-              padding: '14mm 16mm'
+              padding: '14mm 16mm',
             }}
             className="bg-white text-slate-900 rounded-sm shadow-2xl relative font-sans leading-normal box-border selection:bg-blue-100"
           >
@@ -476,15 +539,26 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
             <div className="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-start gap-4">
               <div className="flex-1">
                 {empresaData?.logo_url ? (
-                  <img src={empresaData.logo_url} alt="Logo" className="max-h-14 max-w-[240px] object-contain mb-2" />
+                  <img
+                    src={empresaData.logo_url}
+                    alt="Logo"
+                    className="max-h-14 max-w-[240px] object-contain mb-2"
+                  />
                 ) : (
                   <h1 className="text-xl font-extrabold tracking-tight text-slate-900 uppercase mb-1">
                     {empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}
                   </h1>
                 )}
                 <div className="text-xs text-slate-600 leading-tight space-y-0.5">
-                  {empresaData?.cnpj && <p><span className="font-semibold text-slate-800">CNPJ:</span> {empresaData.cnpj} {empresaData.telefone ? ` | Tel: ${empresaData.telefone}` : ''}</p>}
-                  {empresaData?.endereco && <p className="text-slate-500">{empresaData.endereco}</p>}
+                  {empresaData?.cnpj && (
+                    <p>
+                      <span className="font-semibold text-slate-800">CNPJ:</span> {empresaData.cnpj}{' '}
+                      {empresaData.telefone ? ` | Tel: ${empresaData.telefone}` : ''}
+                    </p>
+                  )}
+                  {empresaData?.endereco && (
+                    <p className="text-slate-500">{empresaData.endereco}</p>
+                  )}
                 </div>
               </div>
 
@@ -496,9 +570,14 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
                   Parceiros & Saúde
                 </h2>
                 <div className="text-[11px] text-slate-500 mt-1">
-                  Emissão: <strong className="text-slate-800">{format(new Date(), "dd/MM/yyyy 'às' HH:mm")}</strong>
+                  Emissão:{' '}
+                  <strong className="text-slate-800">
+                    {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
+                  </strong>
                 </div>
-                <div className="text-[10px] text-slate-500">Emitido por: <span className="font-medium text-slate-700">{userName}</span></div>
+                <div className="text-[10px] text-slate-500">
+                  Emitido por: <span className="font-medium text-slate-700">{userName}</span>
+                </div>
               </div>
             </div>
 
@@ -515,17 +594,25 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
                 <div className="text-[9px] text-emerald-600 mt-0.5">Parceiros ativos</div>
               </div>
               <div className="p-2.5 rounded-lg border border-sky-200 bg-sky-50/50">
-                <div className="text-[10px] font-bold text-sky-800 uppercase">Clínicas/Hospitais</div>
+                <div className="text-[10px] font-bold text-sky-800 uppercase">
+                  Clínicas/Hospitais
+                </div>
                 <div className="text-sm font-black text-sky-700 mt-1">{totais.clinicas}</div>
                 <div className="text-[9px] text-sky-600 mt-0.5">Unidades médicas</div>
               </div>
               <div className="p-2.5 rounded-lg border border-purple-200 bg-purple-50/50">
-                <div className="text-[10px] font-bold text-purple-800 uppercase">Profissionais Saúde</div>
-                <div className="text-sm font-black text-purple-700 mt-1">{totais.profissionais}</div>
+                <div className="text-[10px] font-bold text-purple-800 uppercase">
+                  Profissionais Saúde
+                </div>
+                <div className="text-sm font-black text-purple-700 mt-1">
+                  {totais.profissionais}
+                </div>
                 <div className="text-[9px] text-purple-600 mt-0.5">Médicos/Dentistas</div>
               </div>
               <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50/50">
-                <div className="text-[10px] font-bold text-amber-800 uppercase">Bloqueados/Outros</div>
+                <div className="text-[10px] font-bold text-amber-800 uppercase">
+                  Bloqueados/Outros
+                </div>
                 <div className="text-sm font-black text-amber-700 mt-1">{totais.bloqueados}</div>
                 <div className="text-[9px] text-amber-600 mt-0.5">Suspensos</div>
               </div>
@@ -537,28 +624,44 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
                 <thead>
                   <tr className="bg-slate-900 text-white text-[10px] uppercase font-bold tracking-wider">
                     <th className="py-2 px-2 text-center w-[3%] border-r border-slate-700">#</th>
-                    <th className="py-2 px-3 w-[27%] border-r border-slate-700">Credenciado / Razão Social</th>
-                    <th className="py-2 px-3 w-[17%] border-r border-slate-700">Ramo de Atividade</th>
-                    <th className="py-2 px-3 w-[25%] border-r border-slate-700">Endereço Completo</th>
-                    <th className="py-2 px-3 w-[20%] border-r border-slate-700">Contatos / Responsável</th>
+                    <th className="py-2 px-3 w-[27%] border-r border-slate-700">
+                      Credenciado / Razão Social
+                    </th>
+                    <th className="py-2 px-3 w-[17%] border-r border-slate-700">
+                      Ramo de Atividade
+                    </th>
+                    <th className="py-2 px-3 w-[25%] border-r border-slate-700">
+                      Endereço Completo
+                    </th>
+                    <th className="py-2 px-3 w-[20%] border-r border-slate-700">
+                      Contatos / Responsável
+                    </th>
                     <th className="py-2 px-2 text-center w-[8%]">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-xs">
-                  {reportData.map(item => (
+                  {reportData.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-2 px-2 text-center font-bold text-slate-500 border-r border-slate-200 text-[10px]">{item.index}</td>
+                      <td className="py-2 px-2 text-center font-bold text-slate-500 border-r border-slate-200 text-[10px]">
+                        {item.index}
+                      </td>
                       <td className="py-2 px-3 border-r border-slate-200">
                         <div className="font-bold text-slate-900 text-xs">{item.razaoSocial}</div>
                         <div className="text-[10px] text-slate-500 flex gap-1 items-center mt-0.5">
-                          {item.nomeFantasia !== '-' && <span>Fantasia: {item.nomeFantasia} | </span>}
+                          {item.nomeFantasia !== '-' && (
+                            <span>Fantasia: {item.nomeFantasia} | </span>
+                          )}
                           <span>CPF/CNPJ: {item.cnpjCpf}</span>
                         </div>
                       </td>
                       <td className="py-2 px-3 border-r border-slate-200">
-                        <div className="font-bold text-blue-700 text-[10.5px]">{item.ramoFormatado}</div>
+                        <div className="font-bold text-blue-700 text-[10.5px]">
+                          {item.ramoFormatado}
+                        </div>
                         {item.registroProfissional !== '-' && (
-                          <div className="text-[9.5px] text-slate-500">Reg: {item.registroProfissional}</div>
+                          <div className="text-[9.5px] text-slate-500">
+                            Reg: {item.registroProfissional}
+                          </div>
                         )}
                       </td>
                       <td className="py-2 px-3 border-r border-slate-200 text-[10.5px] text-slate-700 leading-snug">
@@ -568,7 +671,9 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
                         {item.contatoCompleto}
                       </td>
                       <td className="py-2 px-2 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${item.statusColor}`}>
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${item.statusColor}`}
+                        >
                           {item.status}
                         </span>
                       </td>
@@ -577,7 +682,10 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100 font-extrabold text-slate-900 border-t-2 border-slate-400">
-                    <td colSpan={6} className="py-2.5 px-3 text-right text-xs uppercase tracking-wide">
+                    <td
+                      colSpan={6}
+                      className="py-2.5 px-3 text-right text-xs uppercase tracking-wide"
+                    >
                       Total de Credenciados: {reportData.length} parceiros listados
                     </td>
                   </tr>
@@ -587,8 +695,12 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
 
             {/* Footer */}
             <div className="mt-8 pt-4 border-t border-slate-300 flex justify-between items-center text-[10px] text-slate-500">
-              <div><strong>Sistema ERAS PAX Taquari</strong> - Gestão da Rede Credenciada</div>
-              <div>Documento emitido eletronicamente em {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}</div>
+              <div>
+                <strong>Sistema ERAS PAX Taquari</strong> - Gestão da Rede Credenciada
+              </div>
+              <div>
+                Documento emitido eletronicamente em {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
+              </div>
               <div>Página 1 de 1</div>
             </div>
           </div>

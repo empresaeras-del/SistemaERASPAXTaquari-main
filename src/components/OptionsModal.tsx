@@ -11,7 +11,14 @@ interface OptionsModalProps {
   onClose: () => void;
 }
 
-export const OptionsModal: React.FC<OptionsModalProps> = ({ title, options, onAdd, onEdit, onRemove, onClose }) => {
+export const OptionsModal: React.FC<OptionsModalProps> = ({
+  title,
+  options,
+  onAdd,
+  onEdit,
+  onRemove,
+  onClose,
+}) => {
   const [newOption, setNewOption] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -19,16 +26,16 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({ title, options, onAd
   const handleAdd = () => {
     const trimmed = newOption.trim();
     if (!trimmed) {
-      toast.error("O nome da opção não pode ser vazio");
+      toast.error('O nome da opção não pode ser vazio');
       return;
     }
     if (options.includes(trimmed)) {
-      toast.error("Essa opção já existe");
+      toast.error('Essa opção já existe');
       return;
     }
     onAdd(trimmed);
     setNewOption('');
-    toast.success("Opção adicionada!");
+    toast.success('Opção adicionada!');
   };
 
   const startEdit = (index: number, opt: string) => {
@@ -39,16 +46,16 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({ title, options, onAd
   const saveEdit = (oldOpt: string) => {
     const trimmed = editingValue.trim();
     if (!trimmed) {
-      toast.error("O nome da opção não pode ser vazio");
+      toast.error('O nome da opção não pode ser vazio');
       return;
     }
     if (trimmed !== oldOpt && options.includes(trimmed)) {
-      toast.error("Já existe outra opção com este nome");
+      toast.error('Já existe outra opção com este nome');
       return;
     }
     if (onEdit) {
       onEdit(oldOpt, trimmed);
-      toast.success("Opção atualizada!");
+      toast.success('Opção atualizada!');
     }
     setEditingIndex(null);
     setEditingValue('');
@@ -61,7 +68,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({ title, options, onAd
 
   const handleRemove = (opt: string) => {
     onRemove(opt);
-    toast.success("Opção removida!");
+    toast.success('Opção removida!');
   };
 
   return (
@@ -69,7 +76,11 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({ title, options, onAd
       <div className="bg-bg-surface rounded-3xl shadow-2xl w-full max-w-md flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in duration-300">
         <div className="flex items-center justify-between p-6 border-b border-border-default">
           <h2 className="text-xl font-bold text-text-base">{title}</h2>
-          <button onClick={onClose} className="p-2 text-text-subtle hover:bg-bg-subtle hover:text-text-base rounded-full transition-colors">
+          <button
+            onClick={onClose}
+            className="p-2 text-text-subtle hover:bg-bg-subtle hover:text-text-base rounded-full transition-colors"
+            aria-label="Fechar"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -93,7 +104,10 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({ title, options, onAd
           </div>
           <div className="space-y-2">
             {options.map((opt, index) => (
-              <div key={`${opt}-${index}`} className="flex justify-between items-center p-3 bg-bg-subtle rounded-xl border border-border-default gap-2">
+              <div
+                key={`${opt}-${index}`}
+                className="flex justify-between items-center p-3 bg-bg-subtle rounded-xl border border-border-default gap-2"
+              >
                 {editingIndex === index ? (
                   <div className="flex items-center gap-2 flex-1">
                     <input
@@ -124,7 +138,9 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({ title, options, onAd
                   </div>
                 ) : (
                   <>
-                    <span className="text-text-base font-medium text-sm flex-1 break-words">{opt}</span>
+                    <span className="text-text-base font-medium text-sm flex-1 break-words">
+                      {opt}
+                    </span>
                     <div className="flex items-center gap-1 shrink-0">
                       {onEdit && (
                         <button

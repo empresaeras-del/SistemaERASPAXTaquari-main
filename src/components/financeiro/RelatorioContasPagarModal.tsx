@@ -1,20 +1,20 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { 
-  X, 
-  Printer, 
-  Download, 
-  ZoomIn, 
-  ZoomOut, 
-  RotateCw, 
-  FileText, 
-  DollarSign, 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  Filter, 
+import {
+  X,
+  Printer,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  FileText,
+  DollarSign,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Filter,
   Layers,
   Building2,
-  Calendar
+  Calendar,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ParcelaPagar, Despesa } from '../../services/financeiroService';
@@ -47,7 +47,7 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
   empresaData,
   despesas = [],
   currentFilters = {},
-  userName = 'Operador do Sistema'
+  userName = 'Operador do Sistema',
 }) => {
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [zoom, setZoom] = useState<number>(100);
@@ -56,7 +56,7 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
 
   const despesasMap = useMemo(() => {
     const map = new Map<string, Despesa>();
-    despesas.forEach(d => {
+    despesas.forEach((d) => {
       if (d.id) map.set(d.id, d);
     });
     return map;
@@ -65,7 +65,7 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
   const reportData = useMemo(() => {
     return parcelas.map((p, idx) => {
       const desp = p.despesa_id ? despesasMap.get(p.despesa_id) : undefined;
-      
+
       let statusLabel = 'Pendente';
       let statusColor = 'text-amber-700 bg-amber-50 border-amber-200';
       if (p.status === 'pago' || p.status === 'recebido') {
@@ -83,20 +83,34 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
         index: idx + 1,
         parcela: p,
         despesa: desp,
-        credorNome: p.credor_nome || desp?.fornecedor_nome || desp?.funcionario_nome || desp?.credor_nome || 'Não informado',
-        credorDoc: p.credor_cpf_cnpj || desp?.fornecedor_cnpj_cpf || desp?.funcionario_cpf || desp?.credor_cpf_cnpj || '-',
+        credorNome:
+          p.credor_nome ||
+          desp?.fornecedor_nome ||
+          desp?.funcionario_nome ||
+          desp?.credor_nome ||
+          'Não informado',
+        credorDoc:
+          p.credor_cpf_cnpj ||
+          desp?.fornecedor_cnpj_cpf ||
+          desp?.funcionario_cpf ||
+          desp?.credor_cpf_cnpj ||
+          '-',
         categoria: desp?.categoria || 'Geral',
         centroCusto: desp?.centro_custo || '-',
         descricao: p.descricao || desp?.descricao || 'Despesa',
         numeroParcelaStr: `Parc. ${p.numero_parcela}/${p.total_parcelas || 1}`,
         vencimentoFormatado: formatLocalDate(p.data_vencimento),
-        valorFormatado: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor),
+        valorFormatado: new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL',
+        }).format(p.valor),
         valorNumerico: p.valor,
         valorPagoNumerico: p.valor_pago || (p.status === 'pago' ? p.valor : 0),
         statusLabel,
         statusColor,
         formaPagamento: (p.forma_pagamento_efetivo || p.forma_pagamento || 'PIX').toUpperCase(),
-        dataPagamento: p.data_pagamento || p.pago_em ? formatLocalDateTime(p.data_pagamento || p.pago_em) : '-'
+        dataPagamento:
+          p.data_pagamento || p.pago_em ? formatLocalDateTime(p.data_pagamento || p.pago_em) : '-',
       };
     });
   }, [parcelas, despesasMap]);
@@ -110,7 +124,7 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
     let qtdVencidas = 0;
     let qtdPagas = 0;
 
-    reportData.forEach(item => {
+    reportData.forEach((item) => {
       totalGeral += item.valorNumerico;
       if (item.parcela.status === 'pago' || item.parcela.status === 'recebido') {
         totalPago += item.valorPagoNumerico;
@@ -134,14 +148,14 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
       qtdPendentes,
       qtdVencidas,
       qtdPagas,
-      qtdTotal: reportData.length
+      qtdTotal: reportData.length,
     };
   }, [reportData]);
 
   if (!isOpen) return null;
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 10, 200));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 10, 40));
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 10, 200));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 10, 40));
   const handleZoomReset = () => setZoom(100);
 
   const handleImprimir = () => {
@@ -152,15 +166,18 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
     }
 
     const dataHoraEmissao = format(new Date(), "dd/MM/yyyy 'às' HH:mm:ss");
-    const logoHtml = empresaData?.logo_url 
-      ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" />` 
+    const logoHtml = empresaData?.logo_url
+      ? `<img src="${empresaData.logo_url}" alt="Logo" style="max-height: 55px; max-width: 220px; object-fit: contain;" />`
       : `<h1 style="margin: 0; font-size: 18px; font-weight: 800; text-transform: uppercase; color: #0f172a;">${empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}</h1>`;
 
-    const filtroPeriodo = (currentFilters.dataInicial || currentFilters.dataFinal)
-      ? `${currentFilters.dataInicial ? formatLocalDate(currentFilters.dataInicial) : 'Início'} até ${currentFilters.dataFinal ? formatLocalDate(currentFilters.dataFinal) : 'Atual'}`
-      : 'Todos os Períodos';
+    const filtroPeriodo =
+      currentFilters.dataInicial || currentFilters.dataFinal
+        ? `${currentFilters.dataInicial ? formatLocalDate(currentFilters.dataInicial) : 'Início'} até ${currentFilters.dataFinal ? formatLocalDate(currentFilters.dataFinal) : 'Atual'}`
+        : 'Todos os Períodos';
 
-    const rowsHtml = reportData.map(item => `
+    const rowsHtml = reportData
+      .map(
+        (item) => `
       <tr>
         <td style="text-align: center; font-weight: 600; color: #475569;">${item.index}</td>
         <td>
@@ -195,9 +212,12 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
           ${item.dataPagamento !== '-' ? `<div style="font-size: 8px; color: #15803d; margin-top: 2px;">Pago: ${item.dataPagamento}</div>` : ''}
         </td>
       </tr>
-    `).join('');
+    `,
+      )
+      .join('');
 
-    const pageOrientationCss = orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
+    const pageOrientationCss =
+      orientation === 'landscape' ? 'size: A4 landscape;' : 'size: A4 portrait;';
 
     const printHtml = `
       <!DOCTYPE html>
@@ -354,11 +374,12 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
       const doc = new jsPDF({
         orientation: orientation,
         unit: 'mm',
-        format: 'a4'
+        format: 'a4',
       });
 
       const dataHoraEmissao = format(new Date(), "dd/MM/yyyy 'às' HH:mm");
-      const companyName = empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
+      const companyName =
+        empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX';
 
       doc.setFillColor(15, 23, 42);
       doc.rect(0, 0, doc.internal.pageSize.getWidth(), 22, 'F');
@@ -373,22 +394,42 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
       doc.text('RELATÓRIO GERENCIAL DE CONTAS A PAGAR / DESPESAS', 14, 16);
 
       doc.setFontSize(8);
-      doc.text(`Emissão: ${dataHoraEmissao} | Operador: ${userName}`, doc.internal.pageSize.getWidth() - 14, 10, { align: 'right' });
-      doc.text(`Total: ${reportData.length} parcelas | Orientação: ${orientation === 'landscape' ? 'Paisagem' : 'Retrato'}`, doc.internal.pageSize.getWidth() - 14, 16, { align: 'right' });
+      doc.text(
+        `Emissão: ${dataHoraEmissao} | Operador: ${userName}`,
+        doc.internal.pageSize.getWidth() - 14,
+        10,
+        { align: 'right' },
+      );
+      doc.text(
+        `Total: ${reportData.length} parcelas | Orientação: ${orientation === 'landscape' ? 'Paisagem' : 'Retrato'}`,
+        doc.internal.pageSize.getWidth() - 14,
+        16,
+        { align: 'right' },
+      );
 
-      const tableData = reportData.map(item => [
+      const tableData = reportData.map((item) => [
         item.index.toString(),
         `${item.credorNome}\nCPF/CNPJ: ${item.credorDoc}`,
         `${item.categoria}${item.centroCusto !== '-' ? '\nCC: ' + item.centroCusto : ''}`,
         `${item.descricao}\n${item.numeroParcelaStr} (${item.formaPagamento})`,
         item.vencimentoFormatado,
         item.valorFormatado,
-        item.statusLabel
+        item.statusLabel,
       ]);
 
       autoTable(doc, {
         startY: 28,
-        head: [['#', 'Fornecedor / Credor', 'Categoria / Centro Custo', 'Descrição / Parcela', 'Vencimento', 'Valor', 'Situação']],
+        head: [
+          [
+            '#',
+            'Fornecedor / Credor',
+            'Categoria / Centro Custo',
+            'Descrição / Parcela',
+            'Vencimento',
+            'Valor',
+            'Situação',
+          ],
+        ],
         body: tableData,
         theme: 'grid',
         headStyles: {
@@ -396,12 +437,12 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
           textColor: [255, 255, 255],
           fontSize: 8,
           fontStyle: 'bold',
-          halign: 'left'
+          halign: 'left',
         },
         bodyStyles: {
           fontSize: 7.5,
           textColor: [15, 23, 42],
-          cellPadding: 2
+          cellPadding: 2,
         },
         columnStyles: {
           0: { cellWidth: 8, halign: 'center' },
@@ -410,14 +451,26 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
           3: { cellWidth: orientation === 'landscape' ? 70 : 50 },
           4: { cellWidth: 20, halign: 'center' },
           5: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
-          6: { cellWidth: 22, halign: 'center' }
+          6: { cellWidth: 22, halign: 'center' },
         },
-        foot: [[
-          { content: `TOTAL CONSOLIDADO:`, colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
-          { content: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalGeral), styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] } },
-          { content: '', styles: { fillColor: [241, 245, 249] } }
-        ]],
-        margin: { left: 14, right: 14 }
+        foot: [
+          [
+            {
+              content: `TOTAL CONSOLIDADO:`,
+              colSpan: 5,
+              styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] },
+            },
+            {
+              content: new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+              }).format(totalizadores.totalGeral),
+              styles: { halign: 'right', fontStyle: 'bold', fillColor: [241, 245, 249] },
+            },
+            { content: '', styles: { fillColor: [241, 245, 249] } },
+          ],
+        ],
+        margin: { left: 14, right: 14 },
       });
 
       const filename = `Relatorio_Contas_a_Pagar_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
@@ -460,7 +513,9 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
             <button
               onClick={() => setOrientation('landscape')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'landscape' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                orientation === 'landscape'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <RotateCw className="w-3.5 h-3.5" />
@@ -469,7 +524,9 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
             <button
               onClick={() => setOrientation('portrait')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                orientation === 'portrait' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                orientation === 'portrait'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
@@ -478,13 +535,25 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
           </div>
 
           <div className="flex items-center gap-1">
-            <button onClick={handleZoomOut} className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]" title="Reduzir Zoom (-)">
+            <button
+              onClick={handleZoomOut}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
+              title="Reduzir Zoom (-)"
+            >
               <ZoomOut className="w-4 h-4" />
             </button>
-            <button onClick={handleZoomReset} className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center" title="Resetar para 100%">
+            <button
+              onClick={handleZoomReset}
+              className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center"
+              title="Resetar para 100%"
+            >
               {zoom}%
             </button>
-            <button onClick={handleZoomIn} className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]" title="Ampliar Zoom (+)">
+            <button
+              onClick={handleZoomIn}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
+              title="Ampliar Zoom (+)"
+            >
               <ZoomIn className="w-4 h-4" />
             </button>
           </div>
@@ -508,7 +577,11 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
             <span>Imprimir</span>
           </button>
           <div className="h-6 w-px bg-[#2d3544]" />
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]"
+            aria-label="Fechar"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -516,20 +589,20 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
 
       {/* CANVAS */}
       <main className="flex-1 overflow-auto p-8 flex justify-center items-start bg-[#1a1e27] custom-scrollbar">
-        <div 
-          style={{ 
-            transform: `scale(${zoom / 100})`, 
+        <div
+          style={{
+            transform: `scale(${zoom / 100})`,
             transformOrigin: 'top center',
-            transition: 'transform 0.15s ease-out'
+            transition: 'transform 0.15s ease-out',
           }}
           className="mb-12 shadow-2xl"
         >
-          <div 
+          <div
             ref={printAreaRef}
             style={{
               width: orientation === 'landscape' ? '297mm' : '210mm',
               minHeight: orientation === 'landscape' ? '210mm' : '297mm',
-              padding: '14mm 16mm'
+              padding: '14mm 16mm',
             }}
             className="bg-white text-slate-900 rounded-sm shadow-2xl relative font-sans leading-normal box-border selection:bg-blue-100"
           >
@@ -537,15 +610,26 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
             <div className="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-start gap-4">
               <div className="flex-1">
                 {empresaData?.logo_url ? (
-                  <img src={empresaData.logo_url} alt="Logo" className="max-h-14 max-w-[240px] object-contain mb-2" />
+                  <img
+                    src={empresaData.logo_url}
+                    alt="Logo"
+                    className="max-h-14 max-w-[240px] object-contain mb-2"
+                  />
                 ) : (
                   <h1 className="text-xl font-extrabold tracking-tight text-slate-900 uppercase mb-1">
                     {empresaData?.nome_fantasia || empresaData?.razao_social || 'SISTEMA ERAS PAX'}
                   </h1>
                 )}
                 <div className="text-xs text-slate-600 leading-tight space-y-0.5">
-                  {empresaData?.cnpj && <p><span className="font-semibold text-slate-800">CNPJ:</span> {empresaData.cnpj} {empresaData.telefone ? ` | Tel: ${empresaData.telefone}` : ''}</p>}
-                  {empresaData?.endereco && <p className="text-slate-500">{empresaData.endereco}</p>}
+                  {empresaData?.cnpj && (
+                    <p>
+                      <span className="font-semibold text-slate-800">CNPJ:</span> {empresaData.cnpj}{' '}
+                      {empresaData.telefone ? ` | Tel: ${empresaData.telefone}` : ''}
+                    </p>
+                  )}
+                  {empresaData?.endereco && (
+                    <p className="text-slate-500">{empresaData.endereco}</p>
+                  )}
                 </div>
               </div>
 
@@ -557,41 +641,66 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
                   Contas a Pagar
                 </h2>
                 <div className="text-[11px] text-slate-500 mt-1">
-                  Emissão: <strong className="text-slate-800">{format(new Date(), "dd/MM/yyyy 'às' HH:mm")}</strong>
+                  Emissão:{' '}
+                  <strong className="text-slate-800">
+                    {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
+                  </strong>
                 </div>
-                <div className="text-[10px] text-slate-500">Emitido por: <span className="font-medium text-slate-700">{userName}</span></div>
+                <div className="text-[10px] text-slate-500">
+                  Emitido por: <span className="font-medium text-slate-700">{userName}</span>
+                </div>
               </div>
             </div>
 
             {/* KPI Cards */}
             <div className="grid grid-cols-4 gap-2.5 mb-4">
               <div className="p-2.5 rounded-lg border border-blue-200 bg-blue-50/50">
-                <div className="text-[10px] font-bold text-blue-800 uppercase">A Pagar (Pendente)</div>
-                <div className="text-sm font-black text-blue-700 mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalPendente)}
+                <div className="text-[10px] font-bold text-blue-800 uppercase">
+                  A Pagar (Pendente)
                 </div>
-                <div className="text-[9px] text-blue-600 mt-0.5">{totalizadores.qtdPendentes} despesa(s)</div>
+                <div className="text-sm font-black text-blue-700 mt-1">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    totalizadores.totalPendente,
+                  )}
+                </div>
+                <div className="text-[9px] text-blue-600 mt-0.5">
+                  {totalizadores.qtdPendentes} despesa(s)
+                </div>
               </div>
               <div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50/50">
                 <div className="text-[10px] font-bold text-rose-800 uppercase">Vencidas</div>
                 <div className="text-sm font-black text-rose-700 mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalVencido)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    totalizadores.totalVencido,
+                  )}
                 </div>
-                <div className="text-[9px] text-rose-600 mt-0.5">{totalizadores.qtdVencidas} despesa(s)</div>
+                <div className="text-[9px] text-rose-600 mt-0.5">
+                  {totalizadores.qtdVencidas} despesa(s)
+                </div>
               </div>
               <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/50">
-                <div className="text-[10px] font-bold text-emerald-800 uppercase">Pagas / Liquidadas</div>
-                <div className="text-sm font-black text-emerald-700 mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalPago)}
+                <div className="text-[10px] font-bold text-emerald-800 uppercase">
+                  Pagas / Liquidadas
                 </div>
-                <div className="text-[9px] text-emerald-600 mt-0.5">{totalizadores.qtdPagas} despesa(s)</div>
+                <div className="text-sm font-black text-emerald-700 mt-1">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    totalizadores.totalPago,
+                  )}
+                </div>
+                <div className="text-[9px] text-emerald-600 mt-0.5">
+                  {totalizadores.qtdPagas} despesa(s)
+                </div>
               </div>
               <div className="p-2.5 rounded-lg border border-slate-300 bg-slate-50">
                 <div className="text-[10px] font-bold text-slate-700 uppercase">Montante Geral</div>
                 <div className="text-sm font-black text-slate-900 mt-1">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalGeral)}
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    totalizadores.totalGeral,
+                  )}
                 </div>
-                <div className="text-[9px] text-slate-600 mt-0.5">{totalizadores.qtdTotal} registros</div>
+                <div className="text-[9px] text-slate-600 mt-0.5">
+                  {totalizadores.qtdTotal} registros
+                </div>
               </div>
             </div>
 
@@ -601,18 +710,30 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
                 <thead>
                   <tr className="bg-slate-900 text-white text-[10px] uppercase font-bold tracking-wider">
                     <th className="py-2 px-2 text-center w-[3%] border-r border-slate-700">#</th>
-                    <th className="py-2 px-3 w-[26%] border-r border-slate-700">Fornecedor / Credor</th>
-                    <th className="py-2 px-3 w-[16%] border-r border-slate-700">Categoria / Centro Custo</th>
-                    <th className="py-2 px-3 w-[25%] border-r border-slate-700">Descrição / Parcela</th>
-                    <th className="py-2 px-2 text-center w-[10%] border-r border-slate-700">Vencimento</th>
-                    <th className="py-2 px-3 text-right w-[10%] border-r border-slate-700">Valor</th>
+                    <th className="py-2 px-3 w-[26%] border-r border-slate-700">
+                      Fornecedor / Credor
+                    </th>
+                    <th className="py-2 px-3 w-[16%] border-r border-slate-700">
+                      Categoria / Centro Custo
+                    </th>
+                    <th className="py-2 px-3 w-[25%] border-r border-slate-700">
+                      Descrição / Parcela
+                    </th>
+                    <th className="py-2 px-2 text-center w-[10%] border-r border-slate-700">
+                      Vencimento
+                    </th>
+                    <th className="py-2 px-3 text-right w-[10%] border-r border-slate-700">
+                      Valor
+                    </th>
                     <th className="py-2 px-2 text-center w-[10%]">Situação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-xs">
-                  {reportData.map(item => (
+                  {reportData.map((item) => (
                     <tr key={item.parcela.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-2 px-2 text-center font-bold text-slate-500 border-r border-slate-200 text-[10px]">{item.index}</td>
+                      <td className="py-2 px-2 text-center font-bold text-slate-500 border-r border-slate-200 text-[10px]">
+                        {item.index}
+                      </td>
                       <td className="py-2 px-3 border-r border-slate-200">
                         <div className="font-bold text-slate-900 text-xs">{item.credorNome}</div>
                         <div className="text-[10px] text-slate-500 flex gap-1 items-center mt-0.5">
@@ -626,9 +747,14 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
                         )}
                       </td>
                       <td className="py-2 px-3 border-r border-slate-200">
-                        <div className="font-semibold text-slate-900 text-[11px]">{item.descricao}</div>
+                        <div className="font-semibold text-slate-900 text-[11px]">
+                          {item.descricao}
+                        </div>
                         <div className="text-[10px] text-slate-500">
-                          {item.numeroParcelaStr} <span className="uppercase text-blue-600 font-medium">({item.formaPagamento})</span>
+                          {item.numeroParcelaStr}{' '}
+                          <span className="uppercase text-blue-600 font-medium">
+                            ({item.formaPagamento})
+                          </span>
                         </div>
                       </td>
                       <td className="py-2 px-2 text-center font-semibold text-slate-900 border-r border-slate-200 text-[11px]">
@@ -638,7 +764,9 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
                         {item.valorFormatado}
                       </td>
                       <td className="py-2 px-2 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${item.statusColor}`}>
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${item.statusColor}`}
+                        >
                           {item.statusLabel}
                         </span>
                         {item.dataPagamento !== '-' && (
@@ -652,11 +780,17 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100 font-extrabold text-slate-900 border-t-2 border-slate-400">
-                    <td colSpan={5} className="py-2.5 px-3 text-right text-xs uppercase tracking-wide">
+                    <td
+                      colSpan={5}
+                      className="py-2.5 px-3 text-right text-xs uppercase tracking-wide"
+                    >
                       Total Consolidado ({reportData.length} despesas):
                     </td>
                     <td className="py-2.5 px-3 text-right text-sm text-slate-900">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalizadores.totalGeral)}
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      }).format(totalizadores.totalGeral)}
                     </td>
                     <td></td>
                   </tr>
@@ -666,8 +800,12 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
 
             {/* Footer */}
             <div className="mt-8 pt-4 border-t border-slate-300 flex justify-between items-center text-[10px] text-slate-500">
-              <div><strong>Sistema ERAS PAX Taquari</strong> - Gestão Financeira de Contas a Pagar</div>
-              <div>Documento emitido eletronicamente em {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}</div>
+              <div>
+                <strong>Sistema ERAS PAX Taquari</strong> - Gestão Financeira de Contas a Pagar
+              </div>
+              <div>
+                Documento emitido eletronicamente em {format(new Date(), "dd/MM/yyyy 'às' HH:mm")}
+              </div>
               <div>Página 1 de 1</div>
             </div>
           </div>

@@ -2,9 +2,26 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { X, Save, Package, Layers, Search, ShieldCheck, ShieldAlert, CheckSquare, Square, Info } from 'lucide-react';
+import {
+  X,
+  Save,
+  Package,
+  Layers,
+  Search,
+  ShieldCheck,
+  ShieldAlert,
+  CheckSquare,
+  Square,
+  Info,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ItemFunerario, ItemFunerarioInsert, ItemFunerarioUpdate, CategoriaItemFunerario, PlanoVinculadoItem } from '../../types/itensFunerarios';
+import {
+  ItemFunerario,
+  ItemFunerarioInsert,
+  ItemFunerarioUpdate,
+  CategoriaItemFunerario,
+  PlanoVinculadoItem,
+} from '../../types/itensFunerarios';
 import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { getCoberturasDoItem } from '../../hooks/useItensFunerarios';
 import { useAppContext } from '../../context/AppContext';
@@ -12,11 +29,23 @@ import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 
 const schema = z.object({
-  codigo: z.string().min(1, 'Código é obrigatório').max(50, 'Máximo 50 caracteres').transform(v => v.toUpperCase()),
+  codigo: z
+    .string()
+    .min(1, 'Código é obrigatório')
+    .max(50, 'Máximo 50 caracteres')
+    .transform((v) => v.toUpperCase()),
   nome: z.string().min(1, 'Nome é obrigatório').max(120, 'Máximo 120 caracteres'),
   categoria: z.enum([
-    'translado', 'preparacao', 'urna', 'velorio', 'cortejo',
-    'sepultamento', 'documentacao', 'flores', 'apoio_familia', 'outros'
+    'translado',
+    'preparacao',
+    'urna',
+    'velorio',
+    'cortejo',
+    'sepultamento',
+    'documentacao',
+    'flores',
+    'apoio_familia',
+    'outros',
   ]),
   descricao: z.string().max(500, 'Máximo 500 caracteres').optional().nullable(),
   unidade: z.string().min(1, 'Unidade é obrigatória'),
@@ -30,7 +59,9 @@ type FormData = z.infer<typeof schema>;
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: (ItemFunerarioInsert | ItemFunerarioUpdate) & { planosVinculados?: PlanoVinculadoItem[] }) => Promise<void>;
+  onSave: (
+    data: (ItemFunerarioInsert | ItemFunerarioUpdate) & { planosVinculados?: PlanoVinculadoItem[] },
+  ) => Promise<void>;
   initialData?: ItemFunerario | null;
   ultimoOrdem?: number;
 }
@@ -48,20 +79,33 @@ const categorias: { value: CategoriaItemFunerario; label: string }[] = [
   { value: 'outros', label: 'Outros' },
 ];
 
-export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, initialData, ultimoOrdem = 0 }) => {
+export const ItemFunerarioForm: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  onSave,
+  initialData,
+  ultimoOrdem = 0,
+}) => {
   const [activeTab, setActiveTab] = useState<'dados' | 'planos'>('dados');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [buscaPlano, setBuscaPlano] = useState('');
   const [loadingCoberturas, setLoadingCoberturas] = useState(false);
-  
+
   // State to hold linked plans: key = plano_id
   const [planosVinculados, setPlanosVinculados] = useState<Record<string, PlanoVinculadoItem>>({});
 
   const { planos: todosPlanos, loading: loadingPlanos } = usePlanosPax();
-  const { state: { isOnline } } = useAppContext();
+  const {
+    state: { isOnline },
+  } = useAppContext();
   const isEditing = !!initialData;
 
-  const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm<FormData>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isDirty },
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       codigo: '',
@@ -72,14 +116,14 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
       valor_referencia: null,
       ordem_exibicao: ultimoOrdem + 10,
       ativo: true,
-    }
+    },
   });
 
   useEffect(() => {
     if (isOpen) {
       setActiveTab('dados');
       setBuscaPlano('');
-      
+
       if (initialData) {
         reset({
           codigo: initialData.codigo,
@@ -95,18 +139,18 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
         // Carregar coberturas atuais do item
         setLoadingCoberturas(true);
         getCoberturasDoItem(initialData.id, isOnline)
-          .then(cobs => {
+          .then((cobs) => {
             const map: Record<string, PlanoVinculadoItem> = {};
-            cobs.forEach(c => {
+            cobs.forEach((c) => {
               map[c.plano_id] = {
                 plano_id: c.plano_id,
                 tipo_cobertura: c.tipo_cobertura || 'coberto',
-                observacao: c.observacao || ''
+                observacao: c.observacao || '',
               };
             });
             setPlanosVinculados(map);
           })
-          .catch(err => {
+          .catch((err) => {
             console.warn('Erro ao carregar coberturas:', err);
           })
           .finally(() => {
@@ -114,7 +158,11 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
           });
       } else {
         reset({
-          codigo: 'ITM' + Math.floor(Math.random() * 100000).toString().padStart(5, '0'),
+          codigo:
+            'ITM' +
+            Math.floor(Math.random() * 100000)
+              .toString()
+              .padStart(5, '0'),
           nome: '',
           categoria: 'outros',
           descricao: '',
@@ -132,7 +180,7 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
 
   // Toggle selection for a plan
   const togglePlanoSelection = (planoId: string) => {
-    setPlanosVinculados(prev => {
+    setPlanosVinculados((prev) => {
       const next = { ...prev };
       if (next[planoId]) {
         delete next[planoId];
@@ -140,7 +188,7 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
         next[planoId] = {
           plano_id: planoId,
           tipo_cobertura: 'coberto',
-          observacao: ''
+          observacao: '',
         };
       }
       return next;
@@ -149,41 +197,41 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
 
   // Change coverage type (coberto / excluido)
   const setTipoCobertura = (planoId: string, tipo: 'coberto' | 'excluido') => {
-    setPlanosVinculados(prev => ({
+    setPlanosVinculados((prev) => ({
       ...prev,
       [planoId]: {
         ...prev[planoId],
-        tipo_cobertura: tipo
-      }
+        tipo_cobertura: tipo,
+      },
     }));
   };
 
   // Change observation note
   const setObservacaoPlano = (planoId: string, obs: string) => {
-    setPlanosVinculados(prev => ({
+    setPlanosVinculados((prev) => ({
       ...prev,
       [planoId]: {
         ...prev[planoId],
-        observacao: obs
-      }
+        observacao: obs,
+      },
     }));
   };
 
   // Quick actions
-  const planosFiltrados = todosPlanos.filter(p => {
+  const planosFiltrados = todosPlanos.filter((p) => {
     if (!buscaPlano.trim()) return true;
     const b = buscaPlano.toLowerCase();
     return p.nome.toLowerCase().includes(b) || p.codigo.toLowerCase().includes(b);
   });
 
   const selecionarTodos = (tipo: 'coberto' | 'excluido') => {
-    setPlanosVinculados(prev => {
+    setPlanosVinculados((prev) => {
       const next = { ...prev };
-      planosFiltrados.forEach(plano => {
+      planosFiltrados.forEach((plano) => {
         next[plano.id] = {
           plano_id: plano.id,
           tipo_cobertura: tipo,
-          observacao: prev[plano.id]?.observacao || ''
+          observacao: prev[plano.id]?.observacao || '',
         };
       });
       return next;
@@ -191,9 +239,9 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
   };
 
   const desmarcarTodos = () => {
-    setPlanosVinculados(prev => {
+    setPlanosVinculados((prev) => {
       const next = { ...prev };
-      planosFiltrados.forEach(plano => {
+      planosFiltrados.forEach((plano) => {
         delete next[plano.id];
       });
       return next;
@@ -208,7 +256,7 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
       const listVinculados = Object.values(planosVinculados);
       await onSave({
         ...data,
-        planosVinculados: listVinculados
+        planosVinculados: listVinculados,
       } as any);
       toast.success(isEditing ? 'Item e vínculos atualizados!' : 'Item e vínculos criados!');
       onClose();
@@ -222,7 +270,6 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-base/80 backdrop-blur-sm p-4">
       <div className="bg-bg-subtle rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in-95">
-        
         {/* HEADER */}
         <div className="flex items-center justify-between p-6 border-b border-border-default bg-bg-surface/30">
           <div>
@@ -233,7 +280,11 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
               Cadastre os detalhes do item e vincule a cobertura nos Planos PAX
             </p>
           </div>
-          <button onClick={onClose} className="text-text-subtle hover:text-text-base transition-colors p-1 rounded-lg hover:bg-bg-hover">
+          <button
+            onClick={onClose}
+            className="text-text-subtle hover:text-text-base transition-colors p-1 rounded-lg hover:bg-bg-hover"
+            aria-label="Fechar"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -264,17 +315,21 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
           >
             <Layers className="w-4 h-4" />
             <span>Planos & Coberturas</span>
-            <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${
-              qtdPlanosVinculados > 0 
-                ? 'bg-[#3B82F6] text-white' 
-                : 'bg-bg-hover text-text-subtle'
-            }`}>
+            <span
+              className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                qtdPlanosVinculados > 0 ? 'bg-[#3B82F6] text-white' : 'bg-bg-hover text-text-subtle'
+              }`}
+            >
               {qtdPlanosVinculados}
             </span>
           </button>
         </div>
 
-        <form id="item-funerario-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+        <form
+          id="item-funerario-form"
+          onSubmit={handleSubmit(onSubmit)}
+          className="flex flex-col flex-1 overflow-hidden"
+        >
           {isDirty && (
             <div className="px-6 pt-4 shrink-0">
               <AlertaAlteracoesPendentes
@@ -286,7 +341,7 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
               />
             </div>
           )}
-          
+
           {/* TAB 1: DADOS GERAIS */}
           {activeTab === 'dados' && (
             <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
@@ -299,36 +354,50 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
                     className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-subtle focus:outline-none cursor-not-allowed uppercase font-mono"
                     placeholder="Gerado Automaticamente"
                   />
-                  {errors.codigo && <p className="text-red-400 text-xs mt-1">{errors.codigo.message}</p>}
+                  {errors.codigo && (
+                    <p className="text-red-400 text-xs mt-1">{errors.codigo.message}</p>
+                  )}
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium text-text-muted mb-2">Nome do Item *</label>
+                  <label className="block text-sm font-medium text-text-muted mb-2">
+                    Nome do Item *
+                  </label>
                   <input
                     {...register('nome')}
                     className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6]"
                     placeholder="Ex: Urna Padrão Luxo"
                   />
-                  {errors.nome && <p className="text-red-400 text-xs mt-1">{errors.nome.message}</p>}
+                  {errors.nome && (
+                    <p className="text-red-400 text-xs mt-1">{errors.nome.message}</p>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-text-muted mb-2">Categoria *</label>
+                  <label className="block text-sm font-medium text-text-muted mb-2">
+                    Categoria *
+                  </label>
                   <select
                     {...register('categoria')}
                     className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6]"
                   >
-                    {categorias.map(c => (
-                      <option key={c.value} value={c.value}>{c.label}</option>
+                    {categorias.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
                     ))}
                   </select>
-                  {errors.categoria && <p className="text-red-400 text-xs mt-1">{errors.categoria.message}</p>}
+                  {errors.categoria && (
+                    <p className="text-red-400 text-xs mt-1">{errors.categoria.message}</p>
+                  )}
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium text-text-muted mb-2">Valor de Referência (R$)</label>
+                  <label className="block text-sm font-medium text-text-muted mb-2">
+                    Valor de Referência (R$)
+                  </label>
                   <input
                     type="number"
                     step="0.01"
@@ -340,7 +409,9 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-text-muted mb-2">Descrição (opcional)</label>
+                <label className="block text-sm font-medium text-text-muted mb-2">
+                  Descrição (opcional)
+                </label>
                 <textarea
                   {...register('descricao')}
                   className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] h-24 resize-none"
@@ -357,9 +428,11 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
                     placeholder="Ex: unidade, km, hora"
                   />
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium text-text-muted mb-2">Ordem de Exibição</label>
+                  <label className="block text-sm font-medium text-text-muted mb-2">
+                    Ordem de Exibição
+                  </label>
                   <input
                     type="number"
                     {...register('ordem_exibicao', { valueAsNumber: true })}
@@ -376,7 +449,10 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
                     {...register('ativo')}
                     className="w-5 h-5 rounded border-border-default bg-bg-surface text-[#3B82F6] focus:ring-[#3B82F6]"
                   />
-                  <label htmlFor="ativo" className="text-sm font-medium text-text-muted cursor-pointer">
+                  <label
+                    htmlFor="ativo"
+                    className="text-sm font-medium text-text-muted cursor-pointer"
+                  >
                     Item Ativo
                   </label>
                 </div>
@@ -387,13 +463,17 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
           {/* TAB 2: PLANOS & COBERTURAS */}
           {activeTab === 'planos' && (
             <div className="p-6 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
-              
               {/* INFO BANNER */}
               <div className="p-3.5 rounded-2xl bg-[#3B82F6]/10 border border-[#3B82F6]/20 flex items-start gap-3">
                 <Info className="w-5 h-5 text-[#3B82F6] shrink-0 mt-0.5" />
                 <div className="text-xs text-text-base">
-                  <span className="font-bold block mb-0.5">Vincule este item a múltiplos planos PAX</span>
-                  Marque os planos nos quais este item estará disponível. Defina se o item é <strong className="text-emerald-400">Coberto</strong> integralmente ou <strong className="text-rose-400">Excluído</strong> (para opcional/adicional) e adicione observações do item para o plano.
+                  <span className="font-bold block mb-0.5">
+                    Vincule este item a múltiplos planos PAX
+                  </span>
+                  Marque os planos nos quais este item estará disponível. Defina se o item é{' '}
+                  <strong className="text-emerald-400">Coberto</strong> integralmente ou{' '}
+                  <strong className="text-rose-400">Excluído</strong> (para opcional/adicional) e
+                  adicione observações do item para o plano.
                 </div>
               </div>
 
@@ -447,16 +527,16 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {planosFiltrados.map(plano => {
+                  {planosFiltrados.map((plano) => {
                     const isSelected = !!planosVinculados[plano.id];
                     const currentVinculo = planosVinculados[plano.id];
 
                     return (
-                      <div 
+                      <div
                         key={plano.id}
                         className={`p-4 rounded-2xl border transition-all ${
-                          isSelected 
-                            ? 'border-[#3B82F6] bg-[#3B82F6]/5 shadow-sm' 
+                          isSelected
+                            ? 'border-[#3B82F6] bg-[#3B82F6]/5 shadow-sm'
                             : 'border-border-default bg-bg-surface hover:border-border-default/80'
                         }`}
                       >
@@ -470,18 +550,25 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
                             />
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-text-base text-sm truncate">{plano.nome}</span>
-                                <span className="text-xs font-mono text-text-subtle">({plano.codigo})</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                                  plano.tipo_plano === 'individual' 
-                                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
-                                    : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                                }`}>
+                                <span className="font-bold text-text-base text-sm truncate">
+                                  {plano.nome}
+                                </span>
+                                <span className="text-xs font-mono text-text-subtle">
+                                  ({plano.codigo})
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                                    plano.tipo_plano === 'individual'
+                                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                      : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                  }`}
+                                >
                                   {plano.tipo_plano}
                                 </span>
                               </div>
                               <p className="text-xs text-text-subtle mt-0.5">
-                                Mensalidade: R$ {plano.valor_mensalidade?.toFixed(2)} | Limite Vidas: {plano.limite_vidas || 'Sem limite'}
+                                Mensalidade: R$ {plano.valor_mensalidade?.toFixed(2)} | Limite
+                                Vidas: {plano.limite_vidas || 'Sem limite'}
                               </p>
                             </div>
                           </label>
@@ -521,7 +608,8 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
                         {isSelected && (
                           <div className="mt-3 pt-3 border-t border-border-default/50 pl-8">
                             <label className="block text-[11px] font-medium text-text-subtle mb-1">
-                              Observação / Limitações específicas para o plano {plano.nome} (opcional)
+                              Observação / Limitações específicas para o plano {plano.nome}{' '}
+                              (opcional)
                             </label>
                             <input
                               type="text"
@@ -575,4 +663,3 @@ export const ItemFunerarioForm: React.FC<Props> = ({ isOpen, onClose, onSave, in
     </div>
   );
 };
-

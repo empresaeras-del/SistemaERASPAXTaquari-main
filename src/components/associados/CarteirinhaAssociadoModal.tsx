@@ -1,26 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  X, 
-  Printer, 
-  Download, 
-  RotateCw, 
-  CreditCard, 
-  ShieldCheck, 
-  User, 
-  Users, 
-  Phone, 
-  Building2, 
-  Calendar, 
-  Sparkles, 
-  Eye, 
-  CheckCircle2, 
-  Share2, 
+import {
+  X,
+  Printer,
+  Download,
+  RotateCw,
+  CreditCard,
+  ShieldCheck,
+  User,
+  Users,
+  Phone,
+  Building2,
+  Calendar,
+  Sparkles,
+  Eye,
+  CheckCircle2,
+  Share2,
   QrCode as QrCodeIcon,
   Palette,
   Layers,
   FileText,
   Radio,
-  Wifi
+  Wifi,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
@@ -57,14 +57,21 @@ interface CarteirinhaAssociadoModalProps {
   initialBeneficiarioId?: string;
 }
 
-const THEMES: { id: CardTheme; label: string; bgGradient: string; textClass: string; accentColor: string; borderClass: string }[] = [
+const THEMES: {
+  id: CardTheme;
+  label: string;
+  bgGradient: string;
+  textClass: string;
+  accentColor: string;
+  borderClass: string;
+}[] = [
   {
     id: 'navy',
     label: 'PAX Nobre (Navy & Ouro)',
     bgGradient: 'from-slate-900 via-slate-800 to-indigo-950',
     textClass: 'text-white',
     accentColor: '#f59e0b',
-    borderClass: 'border-amber-500/40 shadow-amber-500/10'
+    borderClass: 'border-amber-500/40 shadow-amber-500/10',
   },
   {
     id: 'royal',
@@ -72,7 +79,7 @@ const THEMES: { id: CardTheme; label: string; bgGradient: string; textClass: str
     bgGradient: 'from-blue-950 via-blue-900 to-sky-900',
     textClass: 'text-white',
     accentColor: '#38bdf8',
-    borderClass: 'border-sky-400/40 shadow-sky-500/10'
+    borderClass: 'border-sky-400/40 shadow-sky-500/10',
   },
   {
     id: 'emerald',
@@ -80,7 +87,7 @@ const THEMES: { id: CardTheme; label: string; bgGradient: string; textClass: str
     bgGradient: 'from-emerald-950 via-teal-900 to-emerald-900',
     textClass: 'text-white',
     accentColor: '#34d399',
-    borderClass: 'border-emerald-400/40 shadow-emerald-500/10'
+    borderClass: 'border-emerald-400/40 shadow-emerald-500/10',
   },
   {
     id: 'bordeaux',
@@ -88,7 +95,7 @@ const THEMES: { id: CardTheme; label: string; bgGradient: string; textClass: str
     bgGradient: 'from-rose-950 via-red-950 to-stone-900',
     textClass: 'text-white',
     accentColor: '#fb7185',
-    borderClass: 'border-rose-400/40 shadow-rose-500/10'
+    borderClass: 'border-rose-400/40 shadow-rose-500/10',
   },
   {
     id: 'clean',
@@ -96,21 +103,23 @@ const THEMES: { id: CardTheme; label: string; bgGradient: string; textClass: str
     bgGradient: 'from-slate-50 via-white to-slate-100',
     textClass: 'text-slate-900',
     accentColor: '#2563eb',
-    borderClass: 'border-slate-300 shadow-slate-300/40'
-  }
+    borderClass: 'border-slate-300 shadow-slate-300/40',
+  },
 ];
 
 export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps> = ({
   isOpen,
   onClose,
   associado,
-  initialBeneficiarioId
+  initialBeneficiarioId,
 }) => {
   const toast = useToast();
   const { state } = useAppContext();
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [loadingEmpresa, setLoadingEmpresa] = useState(true);
-  const [selectedBeneficiario, setSelectedBeneficiario] = useState<string>(initialBeneficiarioId || 'titular');
+  const [selectedBeneficiario, setSelectedBeneficiario] = useState<string>(
+    initialBeneficiarioId || 'titular',
+  );
   const [selectedTheme, setSelectedTheme] = useState<CardTheme>('navy');
   const [viewMode, setViewMode] = useState<'both' | 'flip' | 'all'>('both');
   const [isFlipped, setIsFlipped] = useState(false);
@@ -125,7 +134,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
         let emp = await getEmpresaById(tenantId, state.isOnline);
         if (!emp) {
           const emps = await getEmpresas(state.isOnline);
-          emp = emps.find(e => e.id === tenantId) || emps[0] || null;
+          emp = emps.find((e) => e.id === tenantId) || emps[0] || null;
         }
         setEmpresa(emp);
       } catch (err) {
@@ -148,9 +157,14 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
   if (!isOpen) return null;
 
   // Montar lista com Titular + Dependentes
-  const numeroContrato = associado.numero_contrato || (associado as any).numero_contrato_fisico || associado.id.substring(0, 8).toUpperCase();
+  const numeroContrato =
+    associado.numero_contrato ||
+    (associado as any).numero_contrato_fisico ||
+    associado.id.substring(0, 8).toUpperCase();
   const planoNome = associado.plano_nome || 'PLANO PAX FAMILIAR';
-  const dataAdesao = associado.data_adesao ? formatLocalDate(associado.data_adesao, 'dd/MM/yyyy', 'Não informada') : 'Não informada';
+  const dataAdesao = associado.data_adesao
+    ? formatLocalDate(associado.data_adesao, 'dd/MM/yyyy', 'Não informada')
+    : 'Não informada';
 
   const titularCardData: BeneficiarioCardData = {
     id: 'titular',
@@ -158,21 +172,25 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
     nome: associado.nome,
     cpf: associado.cpf,
     rg: associado.rg,
-    dataNascimento: associado.data_nascimento ? formatLocalDate(associado.data_nascimento, 'dd/MM/yyyy', '-') : undefined,
+    dataNascimento: associado.data_nascimento
+      ? formatLocalDate(associado.data_nascimento, 'dd/MM/yyyy', '-')
+      : undefined,
     sexo: associado.sexo,
     numeroContrato,
     planoNome,
     dataAdesao,
     status: associado.status || 'ativo',
-    via: 1
+    via: 1,
   };
 
-  const dependentesCardsData: BeneficiarioCardData[] = (associado.dependentes || []).map(dep => ({
+  const dependentesCardsData: BeneficiarioCardData[] = (associado.dependentes || []).map((dep) => ({
     id: dep.id,
     tipo: 'dependente',
     nome: dep.nome,
     cpf: dep.cpf || 'Não informado',
-    dataNascimento: dep.data_nascimento ? formatLocalDate(dep.data_nascimento, 'dd/MM/yyyy', '-') : undefined,
+    dataNascimento: dep.data_nascimento
+      ? formatLocalDate(dep.data_nascimento, 'dd/MM/yyyy', '-')
+      : undefined,
     parentesco: dep.parentesco || 'Dependente',
     titularNome: associado.nome,
     titularCpf: associado.cpf,
@@ -180,12 +198,13 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
     planoNome,
     dataAdesao,
     status: associado.status || 'ativo',
-    via: 1
+    via: 1,
   }));
 
   const allCards: BeneficiarioCardData[] = [titularCardData, ...dependentesCardsData];
-  const activeCard: BeneficiarioCardData = allCards.find(c => c.id === selectedBeneficiario) || titularCardData;
-  const currentThemeObj = THEMES.find(t => t.id === selectedTheme) || THEMES[0];
+  const activeCard: BeneficiarioCardData =
+    allCards.find((c) => c.id === selectedBeneficiario) || titularCardData;
+  const currentThemeObj = THEMES.find((t) => t.id === selectedTheme) || THEMES[0];
 
   // Gera payload para QR code
   const getQrValue = (card: BeneficiarioCardData) => {
@@ -201,7 +220,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
       empresa: empresa?.nome_fantasia || empresa?.razao_social || 'PAX',
       cnpj: empresa?.cnpj,
       status: card.status.toUpperCase(),
-      emissao: new Date().toISOString().split('T')[0]
+      emissao: new Date().toISOString().split('T')[0],
     });
   };
 
@@ -214,15 +233,20 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
       return;
     }
 
-    const companyLogo = empresa?.logo_url ? `<img src="${empresa.logo_url}" class="card-logo" alt="Logo" />` : `<div class="card-company-name">${empresa?.nome_fantasia || empresa?.razao_social || 'SISTEMA ERAS PAX'}</div>`;
-    const companySig = empresa?.assinatura_url ? `<img src="${empresa.assinatura_url}" class="card-sig-img" alt="Assinatura" />` : `<div class="sig-line"></div>`;
+    const companyLogo = empresa?.logo_url
+      ? `<img src="${empresa.logo_url}" class="card-logo" alt="Logo" />`
+      : `<div class="card-company-name">${empresa?.nome_fantasia || empresa?.razao_social || 'SISTEMA ERAS PAX'}</div>`;
+    const companySig = empresa?.assinatura_url
+      ? `<img src="${empresa.assinatura_url}" class="card-sig-img" alt="Assinatura" />`
+      : `<div class="sig-line"></div>`;
 
-    const htmlCards = cardsToPrint.map((card, idx) => {
-      const isDep = card.tipo === 'dependente';
-      const qrData = encodeURIComponent(getQrValue(card));
-      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrData}`;
+    const htmlCards = cardsToPrint
+      .map((card, idx) => {
+        const isDep = card.tipo === 'dependente';
+        const qrData = encodeURIComponent(getQrValue(card));
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrData}`;
 
-      return `
+        return `
         <div class="card-pair ${idx > 0 && idx % 3 === 0 ? 'page-break' : ''}">
           <!-- FRENTE -->
           <div class="card card-front theme-${selectedTheme}">
@@ -255,16 +279,24 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                   <span class="label">CPF</span>
                   <span class="val">${card.cpf}</span>
                 </div>
-                ${card.rg ? `
+                ${
+                  card.rg
+                    ? `
                 <div class="info-item">
                   <span class="label">RG</span>
                   <span class="val">${card.rg}</span>
-                </div>` : ''}
-                ${card.dataNascimento ? `
+                </div>`
+                    : ''
+                }
+                ${
+                  card.dataNascimento
+                    ? `
                 <div class="info-item">
                   <span class="label">Nascimento</span>
                   <span class="val">${card.dataNascimento}</span>
-                </div>` : ''}
+                </div>`
+                    : ''
+                }
                 <div class="info-item">
                   <span class="label">Contrato / Matrícula</span>
                   <span class="val contract-val">#${card.numeroContrato}</span>
@@ -275,12 +307,16 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                 </div>
               </div>
 
-              ${isDep ? `
+              ${
+                isDep
+                  ? `
                 <div class="dep-box">
                   <span class="dep-label">Titular:</span> <strong>${card.titularNome}</strong> 
                   ${card.parentesco ? `(${card.parentesco})` : ''}
                 </div>
-              ` : ''}
+              `
+                  : ''
+              }
             </div>
 
             <div class="card-footer">
@@ -316,18 +352,19 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
           </div>
         </div>
       `;
-    }).join('');
+      })
+      .join('');
 
     const isClean = selectedTheme === 'clean';
-    const bgCss = isClean 
-      ? 'background: #ffffff; color: #0f172a; border: 1.5px solid #0f172a;' 
-      : selectedTheme === 'royal' 
-      ? 'background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); color: #ffffff; border: 1.5px solid #60a5fa;'
-      : selectedTheme === 'emerald'
-      ? 'background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); color: #ffffff; border: 1.5px solid #34d399;'
-      : selectedTheme === 'bordeaux'
-      ? 'background: linear-gradient(135deg, #4c0519 0%, #881337 100%); color: #ffffff; border: 1.5px solid #fb7185;'
-      : 'background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; border: 1.5px solid #f59e0b;';
+    const bgCss = isClean
+      ? 'background: #ffffff; color: #0f172a; border: 1.5px solid #0f172a;'
+      : selectedTheme === 'royal'
+        ? 'background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); color: #ffffff; border: 1.5px solid #60a5fa;'
+        : selectedTheme === 'emerald'
+          ? 'background: linear-gradient(135deg, #064e3b 0%, #065f46 100%); color: #ffffff; border: 1.5px solid #34d399;'
+          : selectedTheme === 'bordeaux'
+            ? 'background: linear-gradient(135deg, #4c0519 0%, #881337 100%); color: #ffffff; border: 1.5px solid #fb7185;'
+            : 'background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; border: 1.5px solid #f59e0b;';
 
     const printHtml = `
       <!DOCTYPE html>
@@ -644,7 +681,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: 'a4'
+        format: 'a4',
       });
 
       const cardWidth = 85.6;
@@ -658,14 +695,20 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${(empresa?.nome_fantasia || 'SISTEMA ERAS PAX').toUpperCase()} - CARTEIRINHAS DE BENEFICIÁRIOS`, 14, 10);
+      doc.text(
+        `${(empresa?.nome_fantasia || 'SISTEMA ERAS PAX').toUpperCase()} - CARTEIRINHAS DE BENEFICIÁRIOS`,
+        14,
+        10,
+      );
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Contrato: #${numeroContrato} | Titular: ${associado.nome}`, 196, 10, { align: 'right' });
+      doc.text(`Contrato: #${numeroContrato} | Titular: ${associado.nome}`, 196, 10, {
+        align: 'right',
+      });
 
       for (let i = 0; i < cardsToExport.length; i++) {
         const card = cardsToExport[i];
-        
+
         // Verifica se precisa de nova página
         if (startY + cardHeight > 280) {
           doc.addPage();
@@ -675,12 +718,12 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
         // Guia de corte tracejada ao redor da dupla
         doc.setDrawColor(203, 213, 225);
         doc.setLineDashPattern([2, 2], 0);
-        doc.rect(marginX - 2, startY - 2, (cardWidth * 2) + 12, cardHeight + 4);
+        doc.rect(marginX - 2, startY - 2, cardWidth * 2 + 12, cardHeight + 4);
         doc.setLineDashPattern([], 0); // reset
 
         // 1. FRENTE DO CARTÃO (Esquerda)
         const frontX = marginX;
-        
+
         // Fundo do cartão
         if (selectedTheme === 'clean') {
           doc.setFillColor(255, 255, 255);
@@ -699,14 +742,22 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
           doc.setFillColor(15, 23, 42);
           doc.setDrawColor(245, 158, 11);
         }
-        
+
         doc.roundedRect(frontX, startY, cardWidth, cardHeight, 3.5, 3.5, 'FD');
 
         // Header da Frente
-        doc.setTextColor(selectedTheme === 'clean' ? 15 : 255, selectedTheme === 'clean' ? 23 : 255, selectedTheme === 'clean' ? 42 : 255);
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 15 : 255,
+          selectedTheme === 'clean' ? 23 : 255,
+          selectedTheme === 'clean' ? 42 : 255,
+        );
         doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
-        doc.text((empresa?.nome_fantasia || 'ERAS PAX').toUpperCase().substring(0, 24), frontX + 4, startY + 7);
+        doc.text(
+          (empresa?.nome_fantasia || 'ERAS PAX').toUpperCase().substring(0, 24),
+          frontX + 4,
+          startY + 7,
+        );
 
         // Badge Tipo
         const badgeColor = card.tipo === 'titular' ? [59, 130, 246] : [139, 92, 246];
@@ -715,14 +766,23 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(6.5);
         doc.setFont('helvetica', 'bold');
-        doc.text(card.tipo === 'titular' ? 'TITULAR' : 'DEPENDENTE', frontX + cardWidth - 16, startY + 6.7, { align: 'center' });
+        doc.text(
+          card.tipo === 'titular' ? 'TITULAR' : 'DEPENDENTE',
+          frontX + cardWidth - 16,
+          startY + 6.7,
+          { align: 'center' },
+        );
 
         // Chip Inteligente
         doc.setFillColor(245, 158, 11);
         doc.roundedRect(frontX + 4, startY + 11, 8, 6, 1, 1, 'F');
 
         // Nome do Beneficiário
-        doc.setTextColor(selectedTheme === 'clean' ? 15 : 255, selectedTheme === 'clean' ? 23 : 255, selectedTheme === 'clean' ? 42 : 255);
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 15 : 255,
+          selectedTheme === 'clean' ? 23 : 255,
+          selectedTheme === 'clean' ? 42 : 255,
+        );
         doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
         doc.text(card.nome.toUpperCase().substring(0, 32), frontX + 4, startY + 22);
@@ -730,42 +790,74 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
         // Grid de Dados
         doc.setFontSize(6);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(selectedTheme === 'clean' ? 100 : 203, selectedTheme === 'clean' ? 116 : 213, selectedTheme === 'clean' ? 139 : 225);
-        
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 100 : 203,
+          selectedTheme === 'clean' ? 116 : 213,
+          selectedTheme === 'clean' ? 139 : 225,
+        );
+
         doc.text('CPF', frontX + 4, startY + 26);
         doc.text('CONTRATO', frontX + 44, startY + 26);
 
         doc.setFontSize(7.5);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(selectedTheme === 'clean' ? 15 : 255, selectedTheme === 'clean' ? 23 : 255, selectedTheme === 'clean' ? 42 : 255);
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 15 : 255,
+          selectedTheme === 'clean' ? 23 : 255,
+          selectedTheme === 'clean' ? 42 : 255,
+        );
         doc.text(card.cpf, frontX + 4, startY + 29.5);
-        
-        doc.setTextColor(selectedTheme === 'clean' ? 37 : 245, selectedTheme === 'clean' ? 99 : 158, selectedTheme === 'clean' ? 235 : 11);
+
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 37 : 245,
+          selectedTheme === 'clean' ? 99 : 158,
+          selectedTheme === 'clean' ? 235 : 11,
+        );
         doc.text(`#${card.numeroContrato}`, frontX + 44, startY + 29.5);
 
         // Plano & Nasc
         doc.setFontSize(6);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(selectedTheme === 'clean' ? 100 : 203, selectedTheme === 'clean' ? 116 : 213, selectedTheme === 'clean' ? 139 : 225);
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 100 : 203,
+          selectedTheme === 'clean' ? 116 : 213,
+          selectedTheme === 'clean' ? 139 : 225,
+        );
         doc.text('PLANO', frontX + 4, startY + 34);
         if (card.dataNascimento) doc.text('NASCIMENTO', frontX + 44, startY + 34);
 
         doc.setFontSize(7);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(selectedTheme === 'clean' ? 15 : 255, selectedTheme === 'clean' ? 23 : 255, selectedTheme === 'clean' ? 42 : 255);
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 15 : 255,
+          selectedTheme === 'clean' ? 23 : 255,
+          selectedTheme === 'clean' ? 42 : 255,
+        );
         doc.text(card.planoNome.substring(0, 24), frontX + 4, startY + 37.5);
         if (card.dataNascimento) doc.text(card.dataNascimento, frontX + 44, startY + 37.5);
 
         // Se dependente, mostrar titular
         if (card.tipo === 'dependente') {
           doc.setFontSize(6);
-          doc.setTextColor(selectedTheme === 'clean' ? 100 : 203, selectedTheme === 'clean' ? 116 : 213, selectedTheme === 'clean' ? 139 : 225);
-          doc.text(`Titular: ${card.titularNome?.substring(0, 25)} (${card.parentesco})`, frontX + 4, startY + 43);
+          doc.setTextColor(
+            selectedTheme === 'clean' ? 100 : 203,
+            selectedTheme === 'clean' ? 116 : 213,
+            selectedTheme === 'clean' ? 139 : 225,
+          );
+          doc.text(
+            `Titular: ${card.titularNome?.substring(0, 25)} (${card.parentesco})`,
+            frontX + 4,
+            startY + 43,
+          );
         }
 
         // Rodapé da Frente
         doc.setFontSize(6);
-        doc.setTextColor(selectedTheme === 'clean' ? 100 : 203, selectedTheme === 'clean' ? 116 : 213, selectedTheme === 'clean' ? 139 : 225);
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 100 : 203,
+          selectedTheme === 'clean' ? 116 : 213,
+          selectedTheme === 'clean' ? 139 : 225,
+        );
         doc.text(`Adesão: ${card.dataAdesao}`, frontX + 4, startY + 49.5);
 
         doc.setTextColor(74, 222, 128);
@@ -774,7 +866,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
 
         // 2. VERSO DO CARTÃO (Direita)
         const backX = frontX + cardWidth + 8;
-        
+
         doc.roundedRect(backX, startY, cardWidth, cardHeight, 3.5, 3.5, 'FD');
 
         // Tarja Magnética
@@ -793,12 +885,20 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
         doc.text('VALIDAÇÃO', backX + 14, startY + 28, { align: 'center' });
 
         // Informações de emergência do Verso
-        doc.setTextColor(selectedTheme === 'clean' ? 220 : 248, selectedTheme === 'clean' ? 38 : 113, selectedTheme === 'clean' ? 38 : 113);
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 220 : 248,
+          selectedTheme === 'clean' ? 38 : 113,
+          selectedTheme === 'clean' ? 38 : 113,
+        );
         doc.setFontSize(7);
         doc.setFont('helvetica', 'bold');
         doc.text('CENTRAL 24 HORAS', backX + 28, startY + 18);
 
-        doc.setTextColor(selectedTheme === 'clean' ? 15 : 255, selectedTheme === 'clean' ? 23 : 255, selectedTheme === 'clean' ? 42 : 255);
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 15 : 255,
+          selectedTheme === 'clean' ? 23 : 255,
+          selectedTheme === 'clean' ? 42 : 255,
+        );
         doc.setFontSize(6);
         doc.setFont('helvetica', 'normal');
         if (empresa?.telefone) {
@@ -812,13 +912,21 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
         }
 
         doc.setFontSize(5);
-        doc.setTextColor(selectedTheme === 'clean' ? 100 : 203, selectedTheme === 'clean' ? 116 : 213, selectedTheme === 'clean' ? 139 : 225);
+        doc.setTextColor(
+          selectedTheme === 'clean' ? 100 : 203,
+          selectedTheme === 'clean' ? 116 : 213,
+          selectedTheme === 'clean' ? 139 : 225,
+        );
         doc.text('Uso pessoal e intransferível com documento oficial.', backX + 4, startY + 41);
         doc.text('Validade sujeita à regularidade das mensalidades.', backX + 4, startY + 44);
 
         doc.setFontSize(6);
         doc.setFont('helvetica', 'bold');
-        doc.text(`${(empresa?.nome_fantasia || 'ERAS PAX').toUpperCase()}`, backX + 4, startY + 49.5);
+        doc.text(
+          `${(empresa?.nome_fantasia || 'ERAS PAX').toUpperCase()}`,
+          backX + 4,
+          startY + 49.5,
+        );
 
         // Próximo par
         startY += cardHeight + 12;
@@ -837,7 +945,6 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-bg-base border border-border-default rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        
         {/* HEADER */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-bg-surface/70">
           <div className="flex items-center gap-3">
@@ -852,7 +959,8 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                 </span>
               </div>
               <p className="text-xs text-text-subtle">
-                {associado.nome} • Contrato #{numeroContrato} • {allCards.length} cartão(ões) disponíveis
+                {associado.nome} • Contrato #{numeroContrato} • {allCards.length} cartão(ões)
+                disponíveis
               </p>
             </div>
           </div>
@@ -880,6 +988,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
             <button
               onClick={onClose}
               className="p-1.5 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors ml-1"
+              aria-label="Fechar"
             >
               <X className="w-5 h-5" />
             </button>
@@ -888,7 +997,6 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
 
         {/* CONTROLS BAR */}
         <div className="px-6 py-3 border-b border-border-default/60 bg-bg-surface/40 flex flex-wrap items-center justify-between gap-3 text-xs">
-          
           {/* SELETOR DE BENEFICIÁRIOS */}
           <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1 max-w-full">
             <button
@@ -906,7 +1014,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
               <span>Titular ({associado.nome.split(' ')[0]})</span>
             </button>
 
-            {dependentesCardsData.map(dep => (
+            {dependentesCardsData.map((dep) => (
               <button
                 key={dep.id}
                 onClick={() => {
@@ -920,7 +1028,9 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                 }`}
               >
                 <Users className="w-3.5 h-3.5" />
-                <span>{dep.nome.split(' ')[0]} ({dep.parentesco || 'Dep'})</span>
+                <span>
+                  {dep.nome.split(' ')[0]} ({dep.parentesco || 'Dep'})
+                </span>
               </button>
             ))}
 
@@ -941,20 +1051,30 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
 
           {/* VISUALIZAÇÃO & TEMAS */}
           <div className="flex items-center gap-2 shrink-0">
-            
             {/* Seletor de Tema */}
             <div className="flex items-center gap-1 bg-bg-subtle p-1 rounded-xl border border-border-default">
               <Palette className="w-3.5 h-3.5 text-text-subtle ml-1.5" />
-              {THEMES.map(theme => (
+              {THEMES.map((theme) => (
                 <button
                   key={theme.id}
                   onClick={() => setSelectedTheme(theme.id)}
                   title={theme.label}
                   className={`w-6 h-6 rounded-lg transition-transform ${
-                    selectedTheme === theme.id ? 'ring-2 ring-blue-500 scale-110' : 'opacity-70 hover:opacity-100'
+                    selectedTheme === theme.id
+                      ? 'ring-2 ring-blue-500 scale-110'
+                      : 'opacity-70 hover:opacity-100'
                   }`}
                   style={{
-                    background: theme.id === 'clean' ? '#e2e8f0' : theme.id === 'royal' ? '#2563eb' : theme.id === 'emerald' ? '#059669' : theme.id === 'bordeaux' ? '#9f1239' : '#0f172a'
+                    background:
+                      theme.id === 'clean'
+                        ? '#e2e8f0'
+                        : theme.id === 'royal'
+                          ? '#2563eb'
+                          : theme.id === 'emerald'
+                            ? '#059669'
+                            : theme.id === 'bordeaux'
+                              ? '#9f1239'
+                              : '#0f172a',
                   }}
                 />
               ))}
@@ -966,7 +1086,9 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                 <button
                   onClick={() => setViewMode('both')}
                   className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                    viewMode === 'both' ? 'bg-bg-base text-text-base shadow-xs' : 'text-text-subtle hover:text-text-base'
+                    viewMode === 'both'
+                      ? 'bg-bg-base text-text-base shadow-xs'
+                      : 'text-text-subtle hover:text-text-base'
                   }`}
                 >
                   Lado a Lado
@@ -974,7 +1096,9 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                 <button
                   onClick={() => setViewMode('flip')}
                   className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
-                    viewMode === 'flip' ? 'bg-bg-base text-text-base shadow-xs' : 'text-text-subtle hover:text-text-base'
+                    viewMode === 'flip'
+                      ? 'bg-bg-base text-text-base shadow-xs'
+                      : 'text-text-subtle hover:text-text-base'
                   }`}
                 >
                   <RotateCw className="w-3 h-3" />
@@ -987,7 +1111,6 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
 
         {/* BODY / CARDS DISPLAY AREA */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-bg-surface/30">
-          
           {/* MODO: FAMÍLIA COMPLETA (TODOS OS CARTÕES) */}
           {viewMode === 'all' ? (
             <div className="space-y-8">
@@ -997,7 +1120,9 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                     <Layers className="w-4 h-4 text-amber-500" />
                     <span>Grade de Carteirinhas da Família ({allCards.length} Beneficiários)</span>
                   </h3>
-                  <p className="text-xs text-text-subtle">Visualização completa pronta para impressão simultânea em folha A4.</p>
+                  <p className="text-xs text-text-subtle">
+                    Visualização completa pronta para impressão simultânea em folha A4.
+                  </p>
                 </div>
                 <button
                   onClick={() => handlePrint('all')}
@@ -1010,15 +1135,26 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 justify-items-center">
                 {allCards.map((card, idx) => (
-                  <div key={card.id || idx} className="space-y-3 p-4 bg-bg-surface rounded-2xl border border-border-default/80 shadow-md w-full max-w-[420px]">
+                  <div
+                    key={card.id || idx}
+                    className="space-y-3 p-4 bg-bg-surface rounded-2xl border border-border-default/80 shadow-md w-full max-w-[420px]"
+                  >
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-bold text-text-base flex items-center gap-1.5">
-                        {card.tipo === 'titular' ? <User className="w-3.5 h-3.5 text-blue-500" /> : <Users className="w-3.5 h-3.5 text-indigo-500" />}
+                        {card.tipo === 'titular' ? (
+                          <User className="w-3.5 h-3.5 text-blue-500" />
+                        ) : (
+                          <Users className="w-3.5 h-3.5 text-indigo-500" />
+                        )}
                         {card.nome}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                        card.tipo === 'titular' ? 'bg-blue-500/10 text-blue-400' : 'bg-indigo-500/10 text-indigo-400'
-                      }`}>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          card.tipo === 'titular'
+                            ? 'bg-blue-500/10 text-blue-400'
+                            : 'bg-indigo-500/10 text-indigo-400'
+                        }`}
+                      >
                         {card.tipo}
                       </span>
                     </div>
@@ -1033,12 +1169,12 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
           ) : viewMode === 'flip' ? (
             /* MODO 3D FLIP */
             <div className="flex flex-col items-center justify-center py-6 space-y-4">
-              <div 
+              <div
                 className="cursor-pointer transition-transform duration-700 [perspective:1000px]"
                 onClick={() => setIsFlipped(!isFlipped)}
                 title="Clique para virar o cartão"
               >
-                <div 
+                <div
                   className={`relative transition-all duration-700 [transform-style:preserve-3d] ${
                     isFlipped ? '[transform:rotateY(180deg)]' : ''
                   }`}
@@ -1049,7 +1185,12 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                   </div>
                   {/* VERSO */}
                   <div className="absolute inset-0 [transform:rotateY(180deg)] [backface-visibility:hidden]">
-                    <CardBack card={activeCard} empresa={empresa} theme={currentThemeObj} qrValue={getQrValue(activeCard)} />
+                    <CardBack
+                      card={activeCard}
+                      empresa={empresa}
+                      theme={currentThemeObj}
+                      qrValue={getQrValue(activeCard)}
+                    />
                   </div>
                 </div>
               </div>
@@ -1067,7 +1208,6 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
           ) : (
             /* MODO LADO A LADO (DEFAULT) */
             <div className="flex flex-col items-center justify-center py-2 space-y-6">
-              
               <div className="flex flex-col lg:flex-row items-center justify-center gap-8 w-full max-w-4xl">
                 {/* Frente */}
                 <div className="space-y-2 flex flex-col items-center">
@@ -1084,7 +1224,12 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                     <QrCodeIcon className="w-3.5 h-3.5 text-amber-500" />
                     Verso com QR Code
                   </span>
-                  <CardBack card={activeCard} empresa={empresa} theme={currentThemeObj} qrValue={getQrValue(activeCard)} />
+                  <CardBack
+                    card={activeCard}
+                    empresa={empresa}
+                    theme={currentThemeObj}
+                    qrValue={getQrValue(activeCard)}
+                  />
                 </div>
               </div>
 
@@ -1096,7 +1241,9 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                   </div>
                   <div>
                     <p className="font-bold text-text-base">Carteirinha Pronta para Emissão</p>
-                    <p className="text-text-subtle">Padrão CR-80 (85.6 × 53.98 mm) com proporções exatas para PVC e papel moeda.</p>
+                    <p className="text-text-subtle">
+                      Padrão CR-80 (85.6 × 53.98 mm) com proporções exatas para PVC e papel moeda.
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1116,17 +1263,21 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                   </button>
                 </div>
               </div>
-
             </div>
           )}
-
         </div>
 
         {/* FOOTER */}
         <div className="px-6 py-4 border-t border-border-default bg-bg-surface/70 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-text-subtle">
             <Building2 className="w-4 h-4 text-text-subtle" />
-            <span>Empresa Emissora: <strong>{empresa?.nome_fantasia || empresa?.razao_social || 'SISTEMA ERAS PAX'}</strong> {empresa?.cnpj ? `(CNPJ: ${empresa.cnpj})` : ''}</span>
+            <span>
+              Empresa Emissora:{' '}
+              <strong>
+                {empresa?.nome_fantasia || empresa?.razao_social || 'SISTEMA ERAS PAX'}
+              </strong>{' '}
+              {empresa?.cnpj ? `(CNPJ: ${empresa.cnpj})` : ''}
+            </span>
           </div>
           <button
             onClick={onClose}
@@ -1135,7 +1286,6 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
             Fechar
           </button>
         </div>
-
       </div>
     </div>
   );
@@ -1147,7 +1297,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
 interface CardFrontProps {
   card: BeneficiarioCardData;
   empresa: Empresa | null;
-  theme: typeof THEMES[0];
+  theme: (typeof THEMES)[0];
 }
 
 const CardFront: React.FC<CardFrontProps> = ({ card, empresa, theme }) => {
@@ -1155,10 +1305,12 @@ const CardFront: React.FC<CardFrontProps> = ({ card, empresa, theme }) => {
   const isDep = card.tipo === 'dependente';
 
   return (
-    <div 
+    <div
       className={`w-[360px] h-[226px] sm:w-[380px] sm:h-[238px] rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-xl border bg-gradient-to-br ${theme.bgGradient} ${theme.borderClass} ${theme.textClass} select-none transition-all duration-300`}
       style={{
-        boxShadow: isClean ? '0 10px 25px -5px rgba(0, 0, 0, 0.1)' : '0 15px 30px -5px rgba(0, 0, 0, 0.4)'
+        boxShadow: isClean
+          ? '0 10px 25px -5px rgba(0, 0, 0, 0.1)'
+          : '0 15px 30px -5px rgba(0, 0, 0, 0.4)',
       }}
     >
       {/* Background Decorative Pattern / Watermark */}
@@ -1169,10 +1321,10 @@ const CardFront: React.FC<CardFrontProps> = ({ card, empresa, theme }) => {
       <div className="flex items-center justify-between relative z-10">
         <div className="flex items-center gap-2 max-w-[200px]">
           {empresa?.logo_url ? (
-            <img 
-              src={empresa.logo_url} 
-              alt={empresa.nome_fantasia || 'Logo Empresa'} 
-              className="max-h-9 max-w-[140px] object-contain drop-shadow-sm" 
+            <img
+              src={empresa.logo_url}
+              alt={empresa.nome_fantasia || 'Logo Empresa'}
+              className="max-h-9 max-w-[140px] object-contain drop-shadow-sm"
             />
           ) : (
             <div className="flex items-center gap-1.5">
@@ -1185,11 +1337,13 @@ const CardFront: React.FC<CardFrontProps> = ({ card, empresa, theme }) => {
         </div>
 
         <div className="flex flex-col items-end">
-          <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold tracking-wider uppercase shadow-xs ${
-            isDep 
-              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white' 
-              : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white'
-          }`}>
+          <span
+            className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold tracking-wider uppercase shadow-xs ${
+              isDep
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white'
+                : 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white'
+            }`}
+          >
             {isDep ? 'DEPENDENTE' : 'TITULAR'}
           </span>
           <span className="text-[8px] font-bold opacity-75 uppercase tracking-widest mt-0.5">
@@ -1200,7 +1354,6 @@ const CardFront: React.FC<CardFrontProps> = ({ card, empresa, theme }) => {
 
       {/* BODY */}
       <div className="relative z-10 space-y-2 my-auto">
-        
         {/* Chip & NFC row */}
         <div className="flex items-center justify-between">
           <div className="w-9 h-7 rounded-md bg-gradient-to-tr from-amber-400 via-yellow-200 to-amber-500 border border-amber-600/60 shadow-xs flex items-center justify-center relative overflow-hidden">
@@ -1220,20 +1373,30 @@ const CardFront: React.FC<CardFrontProps> = ({ card, empresa, theme }) => {
         {/* Grid de Informações */}
         <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
           <div>
-            <span className="block text-[8px] opacity-70 uppercase tracking-wider font-semibold">CPF</span>
+            <span className="block text-[8px] opacity-70 uppercase tracking-wider font-semibold">
+              CPF
+            </span>
             <span className="font-bold tracking-wider">{card.cpf}</span>
           </div>
           <div>
-            <span className="block text-[8px] opacity-70 uppercase tracking-wider font-semibold">Contrato</span>
-            <span className="font-extrabold font-mono text-amber-400 drop-shadow-xs">#{card.numeroContrato}</span>
+            <span className="block text-[8px] opacity-70 uppercase tracking-wider font-semibold">
+              Contrato
+            </span>
+            <span className="font-extrabold font-mono text-amber-400 drop-shadow-xs">
+              #{card.numeroContrato}
+            </span>
           </div>
           <div>
-            <span className="block text-[8px] opacity-70 uppercase tracking-wider font-semibold">Plano</span>
+            <span className="block text-[8px] opacity-70 uppercase tracking-wider font-semibold">
+              Plano
+            </span>
             <span className="font-bold truncate block">{card.planoNome}</span>
           </div>
           {card.dataNascimento && (
             <div>
-              <span className="block text-[8px] opacity-70 uppercase tracking-wider font-semibold">Nascimento</span>
+              <span className="block text-[8px] opacity-70 uppercase tracking-wider font-semibold">
+                Nascimento
+              </span>
               <span className="font-bold">{card.dataNascimento}</span>
             </div>
           )}
@@ -1247,7 +1410,6 @@ const CardFront: React.FC<CardFrontProps> = ({ card, empresa, theme }) => {
             {card.parentesco && <span className="opacity-80"> • {card.parentesco}</span>}
           </div>
         )}
-
       </div>
 
       {/* FOOTER */}
@@ -1271,7 +1433,7 @@ const CardFront: React.FC<CardFrontProps> = ({ card, empresa, theme }) => {
 interface CardBackProps {
   card: BeneficiarioCardData;
   empresa: Empresa | null;
-  theme: typeof THEMES[0];
+  theme: (typeof THEMES)[0];
   qrValue: string;
 }
 
@@ -1279,15 +1441,19 @@ const CardBack: React.FC<CardBackProps> = ({ card, empresa, theme, qrValue }) =>
   const isClean = theme.id === 'clean';
 
   return (
-    <div 
+    <div
       className={`w-[360px] h-[226px] sm:w-[380px] sm:h-[238px] rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-xl border bg-gradient-to-br ${theme.bgGradient} ${theme.borderClass} ${theme.textClass} select-none transition-all duration-300`}
       style={{
-        boxShadow: isClean ? '0 10px 25px -5px rgba(0, 0, 0, 0.1)' : '0 15px 30px -5px rgba(0, 0, 0, 0.4)'
+        boxShadow: isClean
+          ? '0 10px 25px -5px rgba(0, 0, 0, 0.1)'
+          : '0 15px 30px -5px rgba(0, 0, 0, 0.4)',
       }}
     >
       {/* Tarja Magnética Decorativa */}
       <div className="absolute top-3 left-0 right-0 h-8 bg-slate-950 border-y border-slate-800 flex items-center justify-end px-4">
-        <span className="text-[7px] font-mono tracking-widest text-slate-500">PAX-SECURITY-MAGNETIC-BAND</span>
+        <span className="text-[7px] font-mono tracking-widest text-slate-500">
+          PAX-SECURITY-MAGNETIC-BAND
+        </span>
       </div>
 
       {/* Espaçador superior para a tarja */}
@@ -1297,13 +1463,7 @@ const CardBack: React.FC<CardBackProps> = ({ card, empresa, theme, qrValue }) =>
       <div className="flex gap-3 items-center my-auto">
         {/* QR Code */}
         <div className="flex flex-col items-center justify-center p-1.5 bg-white rounded-xl shadow-md shrink-0">
-          <QRCodeSVG 
-            value={qrValue} 
-            size={74} 
-            level="M" 
-            bgColor="#ffffff" 
-            fgColor="#0f172a" 
-          />
+          <QRCodeSVG value={qrValue} size={74} level="M" bgColor="#ffffff" fgColor="#0f172a" />
           <span className="text-[7px] font-extrabold text-slate-800 uppercase mt-0.5 tracking-tighter">
             Validação PAX
           </span>
@@ -1316,26 +1476,17 @@ const CardBack: React.FC<CardBackProps> = ({ card, empresa, theme, qrValue }) =>
             <span>Plantão 24h & Emergência</span>
           </div>
 
-          {empresa?.telefone && (
-            <p className="font-bold text-text-base">
-              📞 {empresa.telefone}
-            </p>
-          )}
+          {empresa?.telefone && <p className="font-bold text-text-base">📞 {empresa.telefone}</p>}
 
           {empresa?.endereco && (
-            <p className="opacity-80 line-clamp-2 leading-tight">
-              📍 {empresa.endereco}
-            </p>
+            <p className="opacity-80 line-clamp-2 leading-tight">📍 {empresa.endereco}</p>
           )}
 
-          {empresa?.cnpj && (
-            <p className="opacity-70 text-[8px] font-mono">
-              CNPJ: {empresa.cnpj}
-            </p>
-          )}
+          {empresa?.cnpj && <p className="opacity-70 text-[8px] font-mono">CNPJ: {empresa.cnpj}</p>}
 
           <p className="text-[7.5px] opacity-60 leading-tight pt-0.5">
-            Cartão de identificação. Uso pessoal e intransferível mediante documento oficial com foto.
+            Cartão de identificação. Uso pessoal e intransferível mediante documento oficial com
+            foto.
           </p>
         </div>
       </div>

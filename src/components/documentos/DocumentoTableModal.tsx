@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { X, Table, Eye, EyeOff, Plus, Check, Sparkles, Sliders } from 'lucide-react';
 
-export type EstiloTabela = 'grade-visivel' | 'grade-oculta' | 'grade-zebrada' | 'cabecalho-destacado';
+export type EstiloTabela =
+  'grade-visivel' | 'grade-oculta' | 'grade-zebrada' | 'cabecalho-destacado';
 
 export interface DocumentoTableModalProps {
   isOpen: boolean;
@@ -12,7 +13,7 @@ export interface DocumentoTableModalProps {
 export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
   isOpen,
   onClose,
-  onInsertTable
+  onInsertTable,
 }) => {
   const [rows, setRows] = useState(3);
   const [cols, setCols] = useState(2);
@@ -105,8 +106,8 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
     const tableClass = isGradeOculta
       ? 'tabela-sem-grade'
       : isZebrada
-      ? 'tabela-zebrada'
-      : 'tabela-padrao';
+        ? 'tabela-zebrada'
+        : 'tabela-padrao';
 
     const tableStyle = isGradeOculta
       ? `width: ${largura100 ? '100%' : 'auto'}; border-collapse: collapse; border: none; margin: 15px 0;`
@@ -149,7 +150,6 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-[#181d27] border border-[#2d3544] w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        
         {/* Header */}
         <div className="p-5 border-b border-[#2d3544] flex items-center justify-between bg-[#13171f]">
           <div className="flex items-center gap-3">
@@ -157,14 +157,19 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
               <Table className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white leading-tight">Controle Profissional de Tabelas</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Insira tabelas com controle total de grades e estilos</p>
+              <h3 className="text-base font-bold text-white leading-tight">
+                Controle Profissional de Tabelas
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Insira tabelas com controle total de grades e estilos
+              </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-white hover:bg-[#232936] rounded-xl transition-colors"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
@@ -172,7 +177,6 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
 
         {/* Content */}
         <div className="p-5 overflow-y-auto space-y-5 custom-scrollbar text-white flex-1">
-          
           {/* Presets Rápidos */}
           <div>
             <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
@@ -228,7 +232,9 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
             {/* Linhas e Colunas */}
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-400">Linhas (registros)</label>
+                <label className="block text-xs font-semibold text-slate-400">
+                  Linhas (registros)
+                </label>
                 <input
                   type="number"
                   min={1}
@@ -270,7 +276,9 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
                   <Eye className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
                   <div>
                     <span className="text-xs font-bold text-white block">Grades Visíveis</span>
-                    <span className="text-[10px] text-slate-400">Linhas divisórias sutis padrão</span>
+                    <span className="text-[10px] text-slate-400">
+                      Linhas divisórias sutis padrão
+                    </span>
                   </div>
                 </button>
 
@@ -285,8 +293,12 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
                 >
                   <EyeOff className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-xs font-bold text-white block">Grades Ocultas (Sem Bordas)</span>
-                    <span className="text-[10px] text-slate-400">Invisível, perfeita para layout e alinhamento</span>
+                    <span className="text-xs font-bold text-white block">
+                      Grades Ocultas (Sem Bordas)
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Invisível, perfeita para layout e alinhamento
+                    </span>
                   </div>
                 </button>
 
@@ -302,7 +314,9 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
                   <Sliders className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
                   <div>
                     <span className="text-xs font-bold text-white block">Linhas Zebradas</span>
-                    <span className="text-[10px] text-slate-400">Alternância suave de cores nas linhas</span>
+                    <span className="text-[10px] text-slate-400">
+                      Alternância suave de cores nas linhas
+                    </span>
                   </div>
                 </button>
 
@@ -318,7 +332,9 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
                   <Sparkles className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
                   <div>
                     <span className="text-xs font-bold text-white block">Cabeçalho Destacado</span>
-                    <span className="text-[10px] text-slate-400">Linha superior com alto contraste</span>
+                    <span className="text-[10px] text-slate-400">
+                      Linha superior com alto contraste
+                    </span>
                   </div>
                 </button>
               </div>

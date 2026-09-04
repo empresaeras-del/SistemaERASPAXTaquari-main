@@ -1,5 +1,16 @@
 import React, { useState, useRef } from 'react';
-import { X, Image as ImageIcon, Upload, Link, Building2, Check, AlignLeft, AlignCenter, AlignRight, PenTool } from 'lucide-react';
+import {
+  X,
+  Image as ImageIcon,
+  Upload,
+  Link,
+  Building2,
+  Check,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  PenTool,
+} from 'lucide-react';
 import { Empresa } from '../../services/empresasService';
 import toast from 'react-hot-toast';
 
@@ -16,12 +27,14 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
   onClose,
   onInsertImage,
   empresaData,
-  empresas = []
+  empresas = [],
 }) => {
   const [tab, setTab] = useState<'upload' | 'url' | 'empresa' | 'assinatura'>('upload');
   const [imageUrl, setImageUrl] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageWidth, setImageWidth] = useState<'80px' | '150px' | '280px' | '480px' | '100%'>('280px');
+  const [imageWidth, setImageWidth] = useState<'80px' | '150px' | '280px' | '480px' | '100%'>(
+    '280px',
+  );
   const [maxHeightHeader, setMaxHeightHeader] = useState(false);
   const [alignment, setAlignment] = useState<'left' | 'center' | 'right'>('center');
   const [altText, setAltText] = useState('Imagem do documento');
@@ -109,7 +122,6 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-[#181d27] border border-[#2d3544] w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        
         {/* Header */}
         <div className="p-5 border-b border-[#2d3544] flex items-center justify-between bg-[#13171f]">
           <div className="flex items-center gap-3">
@@ -117,14 +129,19 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
               <ImageIcon className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white leading-tight">Inserir Imagem no Documento</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Faça upload, use link ou selecione logomarcas da empresa</p>
+              <h3 className="text-base font-bold text-white leading-tight">
+                Inserir Imagem no Documento
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Faça upload, use link ou selecione logomarcas da empresa
+              </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-white hover:bg-[#232936] rounded-xl transition-colors"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
@@ -187,7 +204,6 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
 
         {/* Content */}
         <div className="p-5 overflow-y-auto space-y-5 custom-scrollbar text-white flex-1">
-          
           {/* Tab 1: Upload */}
           {tab === 'upload' && (
             <div className="space-y-4">
@@ -205,8 +221,12 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
                 <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
                   <Upload className="w-6 h-6" />
                 </div>
-                <p className="text-sm font-semibold text-white">Clique para selecionar uma imagem do computador</p>
-                <p className="text-xs text-slate-400">Suporta PNG, JPG, JPEG, WebP e SVG (máx. 5MB)</p>
+                <p className="text-sm font-semibold text-white">
+                  Clique para selecionar uma imagem do computador
+                </p>
+                <p className="text-xs text-slate-400">
+                  Suporta PNG, JPG, JPEG, WebP e SVG (máx. 5MB)
+                </p>
               </div>
             </div>
           )}
@@ -227,14 +247,22 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
                   >
                     <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
                       {emp.logo_url ? (
-                        <img src={emp.logo_url} alt={emp.nome_fantasia} className="max-w-full max-h-full object-contain" />
+                        <img
+                          src={emp.logo_url}
+                          alt={emp.nome_fantasia}
+                          className="max-w-full max-h-full object-contain"
+                        />
                       ) : (
                         <Building2 className="w-5 h-5 text-slate-500" />
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-white truncate">{emp.nome_fantasia || emp.razao_social}</p>
-                      <p className="text-[10px] text-slate-400">{emp.logo_url ? 'Logomarca disponível' : 'Sem logo cadastrada'}</p>
+                      <p className="text-xs font-bold text-white truncate">
+                        {emp.nome_fantasia || emp.razao_social}
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        {emp.logo_url ? 'Logomarca disponível' : 'Sem logo cadastrada'}
+                      </p>
                     </div>
                   </button>
                 ))}
@@ -246,8 +274,9 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
           {tab === 'assinatura' && (
             <div className="space-y-3">
               <p className="text-xs text-slate-400">
-                Insira a assinatura da empresa como uma imagem fixa em um ponto específico do texto. Para posicionar a
-                assinatura livremente sobre a folha (arrastar e redimensionar), use o botão &quot;Posicionar Assinatura&quot; na barra de visualização do documento.
+                Insira a assinatura da empresa como uma imagem fixa em um ponto específico do texto.
+                Para posicionar a assinatura livremente sobre a folha (arrastar e redimensionar),
+                use o botão &quot;Posicionar Assinatura&quot; na barra de visualização do documento.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {empresas.map((emp) => (
@@ -259,14 +288,22 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
                   >
                     <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
                       {emp.assinatura_url ? (
-                        <img src={emp.assinatura_url} alt={emp.nome_fantasia} className="max-w-full max-h-full object-contain" />
+                        <img
+                          src={emp.assinatura_url}
+                          alt={emp.nome_fantasia}
+                          className="max-w-full max-h-full object-contain"
+                        />
                       ) : (
                         <PenTool className="w-5 h-5 text-slate-500" />
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-white truncate">{emp.nome_fantasia || emp.razao_social}</p>
-                      <p className="text-[10px] text-slate-400">{emp.assinatura_url ? 'Assinatura disponível' : 'Sem assinatura cadastrada'}</p>
+                      <p className="text-xs font-bold text-white truncate">
+                        {emp.nome_fantasia || emp.razao_social}
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        {emp.assinatura_url ? 'Assinatura disponível' : 'Sem assinatura cadastrada'}
+                      </p>
                     </div>
                   </button>
                 ))}
@@ -277,7 +314,9 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
           {/* Tab 3: URL */}
           {tab === 'url' && (
             <div className="space-y-3">
-              <label className="block text-xs font-semibold text-slate-300">URL Direta da Imagem</label>
+              <label className="block text-xs font-semibold text-slate-300">
+                URL Direta da Imagem
+              </label>
               <input
                 type="url"
                 value={imageUrl}
@@ -299,12 +338,18 @@ export const DocumentoImageModal: React.FC<DocumentoImageModalProps> = ({
               </span>
 
               <div className="max-h-40 bg-white/5 rounded-xl border border-white/10 p-3 flex items-center justify-center overflow-hidden">
-                <img src={imagePreview} alt="Preview" className="max-h-36 max-w-full object-contain rounded" />
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="max-h-36 max-w-full object-contain rounded"
+                />
               </div>
 
               {/* Tamanho */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-300">Largura da Imagem</label>
+                <label className="block text-xs font-semibold text-slate-300">
+                  Largura da Imagem
+                </label>
                 <div className="grid grid-cols-5 gap-2">
                   {[
                     { id: '80px', label: 'Ícone (80px)' },

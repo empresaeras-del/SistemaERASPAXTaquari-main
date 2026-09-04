@@ -79,9 +79,7 @@ export default defineConfig(() => {
           manualChunks: {
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
             'vendor-supabase': ['@supabase/supabase-js'],
-            'vendor-pdf': ['jspdf', 'jspdf-autotable'],
             'vendor-charts': ['recharts'],
-            'vendor-editor': ['jodit', 'jodit-react'],
             'vendor-icons': ['lucide-react'],
             'vendor-motion': ['motion'],
           },
