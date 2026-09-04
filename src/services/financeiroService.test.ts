@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeReceitaForSupabase, Receita } from './financeiroService';
+import {
+  sanitizeReceitaForSupabase,
+  sanitizeParcelaReceberForSupabase,
+  sanitizeParcelaPagarForSupabase,
+  sanitizeDespesaForSupabase,
+  Receita,
+  ParcelaReceber,
+  ParcelaPagar,
+  Despesa,
+} from './financeiroService';
 
 const baseReceita: Receita = {
   id: 'nao-e-um-uuid',
@@ -54,5 +63,149 @@ describe('sanitizeReceitaForSupabase', () => {
     const out = sanitizeReceitaForSupabase({ ...baseReceita, valor_total: NaN, qtd_parcelas: 0 });
     expect(out.valor_total).toBe(0);
     expect(out.qtd_parcelas).toBe(1);
+  });
+});
+
+const baseParcelaReceber: ParcelaReceber = {
+  id: 'nao-e-um-uuid',
+  tenant_id: 'emp-1',
+  receita_id: 'nao-e-um-uuid',
+  numero_parcela: 1,
+  valor: 89.9,
+  data_vencimento: '2026-09-10',
+  status: 'pendente',
+};
+
+describe('sanitizeParcelaReceberForSupabase', () => {
+  it('gera um novo UUID quando o id informado não é válido', () => {
+    const out = sanitizeParcelaReceberForSupabase(baseParcelaReceber);
+    expect(out.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  });
+
+  it('usa o receita_id de fallback quando o informado não é um UUID válido', () => {
+    const out = sanitizeParcelaReceberForSupabase(baseParcelaReceber, '123e4567-e89b-12d3-a456-426614174000');
+    expect(out.receita_id).toBe('123e4567-e89b-12d3-a456-426614174000');
+  });
+
+  it('anula receita_id quando nem o informado nem o fallback são válidos', () => {
+    const out = sanitizeParcelaReceberForSupabase(baseParcelaReceber);
+    expect(out.receita_id).toBeNull();
+  });
+
+  it('parcela pendente: não marca data/valor de pagamento', () => {
+    const out = sanitizeParcelaReceberForSupabase(baseParcelaReceber);
+    expect(out.data_pagamento).toBeNull();
+    expect(out.valor_recebido).toBeNull();
+    expect(out.recebido_em).toBeNull();
+  });
+
+  it('parcela já paga sem data/valor explícitos: preenche com o valor da parcela e a data atual', () => {
+    const out = sanitizeParcelaReceberForSupabase({ ...baseParcelaReceber, status: 'pago' });
+    expect(out.valor_recebido).toBe(89.9);
+    expect(out.data_pagamento).toBe(new Date().toISOString().split('T')[0]);
+    expect(out.recebido_em).not.toBeNull();
+  });
+
+  it('prioriza valor_recebido sobre valor_pago quando ambos vêm preenchidos', () => {
+    const out = sanitizeParcelaReceberForSupabase({ ...baseParcelaReceber, status: 'recebido', valor_recebido: 100, valor_pago: 50 });
+    expect(out.valor_recebido).toBe(100);
+  });
+
+  it('usa valor_pago como fallback quando valor_recebido está ausente', () => {
+    const out = sanitizeParcelaReceberForSupabase({ ...baseParcelaReceber, status: 'recebido', valor_pago: 75 });
+    expect(out.valor_recebido).toBe(75);
+  });
+
+  it('trunca a data de vencimento para a parte de data', () => {
+    const out = sanitizeParcelaReceberForSupabase({ ...baseParcelaReceber, data_vencimento: '2026-09-10T00:00:00.000Z' });
+    expect(out.data_vencimento).toBe('2026-09-10');
+  });
+});
+
+const baseParcelaPagar: ParcelaPagar = {
+  id: 'nao-e-um-uuid',
+  tenant_id: 'emp-1',
+  despesa_id: 'nao-e-um-uuid',
+  numero_parcela: 1,
+  valor: 500,
+  data_vencimento: '2026-09-10',
+  status: 'pendente',
+};
+
+describe('sanitizeParcelaPagarForSupabase', () => {
+  it('gera um novo UUID quando o id informado não é válido', () => {
+    const out = sanitizeParcelaPagarForSupabase(baseParcelaPagar);
+    expect(out.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  });
+
+  it('usa o despesa_id de fallback quando o informado não é válido', () => {
+    const out = sanitizeParcelaPagarForSupabase(baseParcelaPagar, '123e4567-e89b-12d3-a456-426614174000');
+    expect(out.despesa_id).toBe('123e4567-e89b-12d3-a456-426614174000');
+  });
+
+  it('cai para "default_tenant" quando não há tenant nem fallback', () => {
+    const out = sanitizeParcelaPagarForSupabase({ ...baseParcelaPagar, tenant_id: '' });
+    expect(out.tenant_id).toBe('default_tenant');
+  });
+
+  it('trunca data_vencimento e data_pagamento para a parte de data', () => {
+    const out = sanitizeParcelaPagarForSupabase({
+      ...baseParcelaPagar,
+      data_vencimento: '2026-09-10T00:00:00.000Z',
+      data_pagamento: '2026-09-15T00:00:00.000Z',
+    });
+    expect(out.data_vencimento).toBe('2026-09-10');
+    expect(out.data_pagamento).toBe('2026-09-15');
+  });
+
+  it('mantém valor_pago null quando não informado', () => {
+    const out = sanitizeParcelaPagarForSupabase(baseParcelaPagar);
+    expect(out.valor_pago).toBeNull();
+  });
+});
+
+const baseDespesa: Despesa = {
+  id: 'nao-e-um-uuid',
+  tenant_id: 'emp-1',
+  tipo_credor: 'fornecedor',
+  descricao: 'Compra de material',
+  categoria: 'Insumos',
+  data_emissao: '2026-09-04',
+  data_inicio_pagamento: '2026-09-10',
+  valor_total: 1200,
+  qtd_parcelas: 1,
+  forma_pagamento_padrao: 'boleto',
+  status: 'ativo',
+};
+
+describe('sanitizeDespesaForSupabase', () => {
+  it('gera um novo UUID quando o id informado não é válido', () => {
+    const out = sanitizeDespesaForSupabase(baseDespesa);
+    expect(out.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  });
+
+  it('usa fornecedor_nome como fallback de credor_nome quando credor_nome não é informado', () => {
+    const out = sanitizeDespesaForSupabase({ ...baseDespesa, fornecedor_nome: 'Fornecedor X' });
+    expect(out.credor_nome).toBe('Fornecedor X');
+  });
+
+  it('cai para "Credor" quando nem credor_nome nem fornecedor_nome existem', () => {
+    const out = sanitizeDespesaForSupabase(baseDespesa);
+    expect(out.credor_nome).toBe('Credor');
+  });
+
+  it('anula fornecedor_id quando não é um UUID válido, em vez de enviar lixo ao Postgres', () => {
+    const out = sanitizeDespesaForSupabase({ ...baseDespesa, fornecedor_id: 'id-invalido' });
+    expect(out.fornecedor_id).toBeNull();
+  });
+
+  it('trunca as datas para a parte de data', () => {
+    const out = sanitizeDespesaForSupabase({
+      ...baseDespesa,
+      data_emissao: '2026-09-04T12:00:00.000Z',
+      data_inicio_pagamento: '2026-09-10T12:00:00.000Z',
+    });
+    expect(out.data_emissao).toBe('2026-09-04');
+    expect(out.data_inicio_pagamento).toBe('2026-09-10');
   });
 });

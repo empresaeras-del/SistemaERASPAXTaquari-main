@@ -27,10 +27,17 @@ import {
   Sparkles, RefreshCw, Calendar, FileText
 } from 'lucide-react';
 import { registrarAuditoria } from '../../lib/supabase';
-
-// Helper de formatação de moeda
-const formatCurrency = (val: number = 0) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+import { formatCurrency } from '../../utils/formatters';
+import {
+  ultrapassaLimiteColetivo,
+  calcularValorMensalidadeBase,
+  descricaoCalculoMensalidade,
+  gerarProjecaoParcelas,
+  filtrarReceitasDoAssociado,
+  filtrarParcelasDoAssociado,
+  agruparParcelasPorStatusComTotais,
+  filtrarParcelasTabela,
+} from '../../utils/mensalidadesAssociadoHelpers';
 
 // Wizard de Geração de Mensalidades
 const MensalidadesGeracaoSubView = ({
@@ -64,60 +71,38 @@ const MensalidadesGeracaoSubView = ({
 
   const vidasCadastradas = associado.n_vidas || 1;
 
-  const ultrapassouLimiteColetivo = useMemo(() => {
-    if (!planoSelecionado) return false;
-    if (planoSelecionado.tipo_plano === 'coletivo') {
-      const limite = planoSelecionado.limite_vidas || 999;
-      return vidasCadastradas > limite;
-    }
-    return false;
-  }, [planoSelecionado, vidasCadastradas]);
+  const ultrapassouLimiteColetivo = useMemo(
+    () => ultrapassaLimiteColetivo(planoSelecionado, vidasCadastradas),
+    [planoSelecionado, vidasCadastradas]
+  );
 
-  const valorMensalidadeBase = useMemo(() => {
-    if (!planoSelecionado) return 0;
-    if (planoSelecionado.tipo_plano === 'individual') {
-      const minVidas = planoSelecionado.minimo_vidas_calculo || 1;
-      const vidasParaCalculo = vidasCadastradas <= minVidas ? minVidas : vidasCadastradas;
-      return planoSelecionado.valor_mensalidade * vidasParaCalculo;
-    }
-    return planoSelecionado.valor_mensalidade + (Number(valorExtra) || 0);
-  }, [planoSelecionado, vidasCadastradas, valorExtra]);
+  const valorMensalidadeBase = useMemo(
+    () => calcularValorMensalidadeBase(planoSelecionado, vidasCadastradas, valorExtra),
+    [planoSelecionado, vidasCadastradas, valorExtra]
+  );
 
-  const descricaoCalculo = useMemo(() => {
-    if (!planoSelecionado) return '';
-    if (planoSelecionado.tipo_plano === 'individual') {
-      const minVidas = planoSelecionado.minimo_vidas_calculo || 1;
-      if (vidasCadastradas <= minVidas) {
-        return `Valor Base x ${minVidas} (Mínimo de vidas exigido)`;
-      }
-      return `Valor Base x ${vidasCadastradas} vidas`;
-    }
-    return 'Valor Base Coletivo' + (Number(valorExtra) > 0 ? ' + Valor Extra' : '');
-  }, [planoSelecionado, vidasCadastradas, valorExtra]);
+  const descricaoCalculo = useMemo(
+    () => descricaoCalculoMensalidade(planoSelecionado, vidasCadastradas, valorExtra),
+    [planoSelecionado, vidasCadastradas, valorExtra]
+  );
 
   const gerarProjecao = useCallback(() => {
     if (!planoSelecionado) return;
 
-    const dt = new Date(dataInicio + "T12:00:00");
-    const arr = [];
     const adesao = planoSelecionado.taxa_adesao || 0;
     const baseParcela = (isAdminOrSuperAdmin && valorParcelaManual !== '' && !isNaN(Number(valorParcelaManual)) && Number(valorParcelaManual) >= 0)
       ? Number(valorParcelaManual)
       : valorMensalidadeBase;
 
-    for (let i = 1; i <= qtdParcelas; i++) {
-      const vencimento = new Date(dt.getFullYear(), dt.getMonth() + (i - 1), diaVencimento);
-      const valorParcela = i === 1 ? (baseParcela + adesao) : baseParcela;
-      const descAdesao = i === 1 && adesao > 0 ? " (Inc. Adesão)" : "";
-
-      arr.push({
-        numero_parcela: i,
-        descricao: `Mensalidade ${i}/${qtdParcelas} - ${planoSelecionado.nome}${descAdesao}`,
-        data_vencimento: format(vencimento, 'yyyy-MM-dd'),
-        valor: valorParcela
-      });
-    }
-    setParcelas(arr);
+    setParcelas(gerarProjecaoParcelas({
+      dataInicioISO: dataInicio,
+      qtdParcelas,
+      diaVencimento,
+      baseParcela,
+      taxaAdesao: adesao,
+      planoNome: planoSelecionado.nome,
+      formatarData: (d) => format(d, 'yyyy-MM-dd'),
+    }));
   }, [planoSelecionado, dataInicio, qtdParcelas, diaVencimento, valorMensalidadeBase, valorParcelaManual, isAdminOrSuperAdmin]);
 
   useEffect(() => {
@@ -492,28 +477,9 @@ export const AssociadoMensalidadesTab: React.FC<{
         getParcelasReceber(state.isOnline, state.empresaSelecionada || 'all')
       ]);
 
-      const assocCpf = associado.cpf?.replace(/\D/g, '');
-      const assocNome = associado.nome?.toLowerCase().trim();
-
-      // Filtrar receitas pertencentes a este associado
-      const receitasFiltradas = todasReceitas.filter(r => {
-        if (r.associado_id && r.associado_id === associado.id) return true;
-        const rCpf = (r.associado_cpf || r.cliente_cpf_cnpj)?.replace(/\D/g, '');
-        if (assocCpf && rCpf && rCpf === assocCpf) return true;
-        if (assocNome && (r.associado_nome?.toLowerCase().trim() === assocNome || r.cliente_nome?.toLowerCase().trim() === assocNome)) return true;
-        return false;
-      });
-
-      const idsReceitasAssociado = new Set(receitasFiltradas.map(r => r.id));
-
-      // Filtrar parcelas pertencentes a este associado
-      const parcelasFiltradas = todasParcelas.filter(p => {
-        if (p.receita_id && idsReceitasAssociado.has(p.receita_id)) return true;
-        const pCpf = p.devedor_cpf_cnpj?.replace(/\D/g, '');
-        if (assocCpf && pCpf && pCpf === assocCpf) return true;
-        if (assocNome && p.devedor_nome?.toLowerCase().trim() === assocNome) return true;
-        return false;
-      });
+      // Filtrar receitas e parcelas pertencentes a este associado
+      const receitasFiltradas = filtrarReceitasDoAssociado(todasReceitas, associado);
+      const parcelasFiltradas = filtrarParcelasDoAssociado(todasParcelas, receitasFiltradas, associado);
 
       setReceitas(receitasFiltradas);
       setParcelas(parcelasFiltradas);
@@ -844,26 +810,11 @@ export const AssociadoMensalidadesTab: React.FC<{
   }
 
   // Cálculos de KPI de topo
-  const pagas = parcelas.filter(p => p.status === 'recebido' || p.status === 'pago');
-  const emAberto = parcelas.filter(p => p.status === 'pendente');
-  const atrasadas = parcelas.filter(p => p.status === 'vencido' || p.status === 'atrasado');
-
-  const valorPagas = pagas.reduce((acc, p) => acc + (p.valor_recebido || p.valor || 0), 0);
-  const valorAberto = emAberto.reduce((acc, p) => acc + (p.valor || 0), 0);
-  const valorAtrasadas = atrasadas.reduce((acc, p) => acc + (p.valor || 0), 0);
+  const { pagas, emAberto, atrasadas, valorPagas, valorAberto, valorAtrasadas } =
+    agruparParcelasPorStatusComTotais(parcelas);
 
   // Filtragem para tabela
-  const filtradasTabela = parcelas.filter(p => {
-    const matchStatus = filtroStatus === 'all' || p.status === filtroStatus;
-    let matchPeriodo = true;
-    if (filtroPeriodoInicio) {
-      matchPeriodo = matchPeriodo && new Date(p.data_vencimento) >= new Date(filtroPeriodoInicio);
-    }
-    if (filtroPeriodoFim) {
-      matchPeriodo = matchPeriodo && new Date(p.data_vencimento) <= new Date(filtroPeriodoFim);
-    }
-    return matchStatus && matchPeriodo;
-  });
+  const filtradasTabela = filtrarParcelasTabela(parcelas, { filtroStatus, filtroPeriodoInicio, filtroPeriodoFim });
 
   return (
     <div

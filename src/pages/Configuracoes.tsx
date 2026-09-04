@@ -56,6 +56,12 @@ import {
   CheckSquare,
   Square } from "lucide-react";
 
+import {
+  filtrarUsuarios,
+  formatAgenciaOuConta,
+  normalizeModulos,
+  normalizarModulosParaSalvar,
+} from '../utils/configuracoesHelpers';
 import { SistemaBackupPanel } from '../components/configuracoes/SistemaBackupPanel';
 import { MensagensConfigTab } from '../components/configuracoes/MensagensConfigTab';
 import { SessaoSegurancaCard } from '../components/configuracoes/SessaoSegurancaCard';
@@ -161,26 +167,14 @@ export const ConfiguracoesPage: React.FC = () => {
     loadData();
   }, [state.isOnline, state.empresaSelecionada]);
 
-  const filteredUsuarios = usuarios.filter((u) => {
-    if (!u) return false;
-    const matchName =
-      (u.nome || "").toLowerCase().includes(usuarioSearchTerm.toLowerCase()) ||
-      (u.email || "").toLowerCase().includes(usuarioSearchTerm.toLowerCase());
-    const matchStatus =
-      usuarioStatusFilter === "todos" || u.status === usuarioStatusFilter;
-    const matchTenant =
-      usuarioTenantFilter === "all" || u.tenant_id === usuarioTenantFilter;
-    return matchName && matchStatus && matchTenant;
+  const filteredUsuarios = filtrarUsuarios(usuarios, {
+    searchTerm: usuarioSearchTerm,
+    statusFilter: usuarioStatusFilter,
+    tenantFilter: usuarioTenantFilter,
   });
 
-  
-  const formatAgencia = (value: string) => {
-    return value.replace(/[^0-9-Xx]/g, '').toUpperCase();
-  };
-
-  const formatConta = (value: string) => {
-    return value.replace(/[^0-9-Xx]/g, '').toUpperCase();
-  };
+  const formatAgencia = formatAgenciaOuConta;
+  const formatConta = formatAgenciaOuConta;
 
   const handleOpenModal = async (empresa?: Empresa) => {
     if (empresa) {
@@ -310,13 +304,6 @@ export const ConfiguracoesPage: React.FC = () => {
   const [senhaUsuario, setSenhaUsuario] = useState('');
   const [showSenhaUsuario, setShowSenhaUsuario] = useState(false);
 
-  const normalizeModulos = (mods?: string[]): string[] => {
-    if (!mods || mods.length === 0 || mods.includes('*')) {
-      return getAllModuleAndSubmoduleIds();
-    }
-    return mods;
-  };
-
   const handleOpenUsuarioModal = (usuario?: UsuarioCadastro) => {
     setSenhaUsuario('');
     setShowSenhaUsuario(false);
@@ -394,17 +381,11 @@ export const ConfiguracoesPage: React.FC = () => {
     }
 
     try {
-      const permitidos = editingUsuario.modulos_permitidos || [];
-      const allSubmoduleIds = getAllModuleAndSubmoduleIds();
-      const isAllSelected = permitidos.includes('*') || (permitidos.length >= allSubmoduleIds.length);
-
       const novoUsuario: UsuarioCadastro = {
         ...(editingUsuario as UsuarioCadastro),
         nome: (editingUsuario.nome || '').trim().toUpperCase(),
         email: (editingUsuario.email || '').trim().toLowerCase(),
-        modulos_permitidos: (isAllSelected || editingUsuario.nivel === 'super_admin')
-          ? ['*']
-          : permitidos
+        modulos_permitidos: normalizarModulosParaSalvar(editingUsuario.nivel, editingUsuario.modulos_permitidos)
       };
       const senhaLimpa = senhaUsuario ? senhaUsuario.trim() : undefined;
       await saveUsuario(novoUsuario, state.isOnline, senhaLimpa, state.user || undefined);
