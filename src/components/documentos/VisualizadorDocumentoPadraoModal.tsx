@@ -63,6 +63,7 @@ import {
   resolverVariaveisSistema,
 } from '../../utils/documentoVariaveis';
 import { montarHtmlImpressaoDocumento } from '../../utils/documentoPrintStyles';
+import { sanitizeDocumentoHtml } from '../../utils/sanitizeHtml';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
 
@@ -1440,7 +1441,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                     lineHeight: '1.6', 
                     fontFamily: 'Arial, Helvetica, sans-serif' 
                   }}
-                  dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeDocumentoHtml(renderedHtml) }}
                 />
               </div>
 

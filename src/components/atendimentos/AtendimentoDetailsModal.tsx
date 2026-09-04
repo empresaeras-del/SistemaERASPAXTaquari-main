@@ -392,6 +392,106 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
             </div>
           </div>
 
+          {/* DADOS MÉDICOS / DECLARAÇÃO DE ÓBITO */}
+          <div className="bg-bg-surface rounded-xl border border-border-default p-5 shadow-sm">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-text-base mb-4 uppercase tracking-wider border-b border-border-default pb-2">
+              <FileText className="w-4 h-4 text-primary" /> Dados Médicos e Declaração de Óbito
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-text-subtle mb-1">Sexo</label>
+                {isEditing ? (
+                  <select name="sexo_falecido" value={formData.sexo_falecido || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm">
+                    <option value="">Não informado</option>
+                    <option value="Masculino">Masculino</option>
+                    <option value="Feminino">Feminino</option>
+                  </select>
+                ) : (
+                  <p className="text-sm text-text-base font-medium">{formData.sexo_falecido || '-'}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-subtle mb-1">Cor / Raça</label>
+                {isEditing ? (
+                  <input name="cor_falecido" value={formData.cor_falecido || ''} onChange={handleChange} placeholder="Ex: Parda" className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50" />
+                ) : (
+                  <p className="text-sm text-text-base font-medium">{formData.cor_falecido || '-'}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-subtle mb-1">Local do Óbito</label>
+                {isEditing ? (
+                  <input name="local_obito" value={formData.local_obito || ''} onChange={handleChange} placeholder="Ex: Hospital Municipal" className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50" />
+                ) : (
+                  <p className="text-sm text-text-base font-medium">{formData.local_obito || '-'}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-text-subtle mb-1">Hora do Óbito</label>
+                {isEditing ? (
+                  <input type="time" name="hora_obito" value={formData.hora_obito || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm" />
+                ) : (
+                  <p className="text-sm text-text-base font-medium">{formData.hora_obito || '-'}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-subtle mb-1">Nº Declaração de Óbito</label>
+                {isEditing ? (
+                  <input name="declaracao_obito" value={formData.declaracao_obito || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50" />
+                ) : (
+                  <p className="text-sm text-text-base font-medium">{formData.declaracao_obito || '-'}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-subtle mb-1">Médico Responsável</label>
+                {isEditing ? (
+                  <input name="medico_responsavel" value={formData.medico_responsavel || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50" />
+                ) : (
+                  <p className="text-sm text-text-base font-medium">{formData.medico_responsavel || '-'}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-text-subtle mb-1">CRM</label>
+                {isEditing ? (
+                  <input name="crm_medico" value={formData.crm_medico || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50" />
+                ) : (
+                  <p className="text-sm text-text-base font-medium">{formData.crm_medico || '-'}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-subtle mb-1">RQE</label>
+                {isEditing ? (
+                  <input name="rqe_medico" value={formData.rqe_medico || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50" />
+                ) : (
+                  <p className="text-sm text-text-base font-medium">{formData.rqe_medico || '-'}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-subtle mb-1">Início Tanatopraxia</label>
+                {isEditing ? (
+                  <input type="time" name="inicio_tanato" value={formData.inicio_tanato || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm" />
+                ) : (
+                  <p className="text-sm text-text-base font-medium">{formData.inicio_tanato || '-'}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-subtle mb-1">Término Tanatopraxia</label>
+                {isEditing ? (
+                  <input type="time" name="termino_tanato" value={formData.termino_tanato || ''} onChange={handleChange} className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm" />
+                ) : (
+                  <p className="text-sm text-text-base font-medium">{formData.termino_tanato || '-'}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* ITENS FUNERARIOS */}
           <div className="bg-bg-surface rounded-xl border border-border-default overflow-hidden shadow-sm">
             <div className="p-4 border-b border-border-default flex items-center justify-between bg-bg-subtle">

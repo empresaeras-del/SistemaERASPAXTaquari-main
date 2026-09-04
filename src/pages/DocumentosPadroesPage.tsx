@@ -17,6 +17,7 @@ import { DocumentoImageModal } from '../components/documentos/DocumentoImageModa
 import { DocumentoMiniaturasPreview } from '../components/documentos/DocumentoMiniaturasPreview';
 import { resolverVariaveisAssociado, resolverVariaveisContrato, resolverVariaveisEmpresa } from '../utils/documentoVariaveis';
 import { montarHtmlImpressaoDocumento } from '../utils/documentoPrintStyles';
+import { sanitizeDocumentoHtml } from '../utils/sanitizeHtml';
 import { MODULOS_VARIAVEIS as MODULOS, VariavelInfo, ModuloInfo } from '../config/documentoVariaveis.config';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
@@ -1260,11 +1261,11 @@ export const DocumentosPadroesPage = () => {
                       <div 
                         className="document-preview-content prose max-w-none h-full"
                         style={{ fontSize: '11pt', lineHeight: '1.5', fontFamily: 'Arial, sans-serif', color: '#1a1a1a' }}
-                        dangerouslySetInnerHTML={{ 
-                          __html: editingDoc?.conteudo 
-                            ? editingDoc.conteudo 
+                        dangerouslySetInnerHTML={{
+                          __html: editingDoc?.conteudo
+                            ? sanitizeDocumentoHtml(editingDoc.conteudo)
                             : '<p class="text-text-subtle italic text-center mt-20">Comece a digitar para ver a pré-visualização...</p>'
-                        }} 
+                        }}
                       />
                     </div>
                   </div>

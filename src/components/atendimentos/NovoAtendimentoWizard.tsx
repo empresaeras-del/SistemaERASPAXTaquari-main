@@ -61,6 +61,18 @@ export const NovoAtendimentoWizard: React.FC<{
   const [dataObito, setDataObito] = useState(format(new Date(), 'yyyy-MM-dd\'T\'HH:mm'));
   const [dataVelorio, setDataVelorio] = useState('');
   const [dataSepultamento, setDataSepultamento] = useState('');
+
+  // Dados médicos / declaração de óbito (opcionais nesta etapa — podem ser completados depois)
+  const [sexoFalecido, setSexoFalecido] = useState('');
+  const [corFalecido, setCorFalecido] = useState('');
+  const [localObito, setLocalObito] = useState('');
+  const [horaObito, setHoraObito] = useState('');
+  const [declaracaoObito, setDeclaracaoObito] = useState('');
+  const [medicoResponsavel, setMedicoResponsavel] = useState('');
+  const [crmMedico, setCrmMedico] = useState('');
+  const [rqeMedico, setRqeMedico] = useState('');
+  const [inicioTanato, setInicioTanato] = useState('');
+  const [terminoTanato, setTerminoTanato] = useState('');
   
   // Itens Funerários
   const [selectedItens, setSelectedItens] = useState<{ id: string, quantidade: number }[]>([]);
@@ -180,6 +192,16 @@ export const NovoAtendimentoWizard: React.FC<{
         data_obito: dataObito,
         data_velorio: dataVelorio,
         data_sepultamento: dataSepultamento,
+        sexo_falecido: sexoFalecido || undefined,
+        cor_falecido: corFalecido || undefined,
+        local_obito: localObito || undefined,
+        hora_obito: horaObito || undefined,
+        declaracao_obito: declaracaoObito || undefined,
+        medico_responsavel: medicoResponsavel || undefined,
+        crm_medico: crmMedico || undefined,
+        rqe_medico: rqeMedico || undefined,
+        inicio_tanato: inicioTanato || undefined,
+        termino_tanato: terminoTanato || undefined,
         status: 'aberto',
         valor_total: financeiro.totalUncovered,
         created_at: new Date().toISOString(),
@@ -522,13 +544,61 @@ export const NovoAtendimentoWizard: React.FC<{
                </div>
                <div className="space-y-1">
                  <label className="block text-sm font-semibold text-text-subtle mb-1">Local do Sepultamento</label>
-                 <input 
-                   type="text" 
-                   value={localSepultamento} 
-                   onChange={(e) => setLocalSepultamento(e.target.value.toUpperCase())} 
+                 <input
+                   type="text"
+                   value={localSepultamento}
+                   onChange={(e) => setLocalSepultamento(e.target.value.toUpperCase())}
                    placeholder="Ex: Cemitério Municipal"
-                   className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base uppercase focus:ring-2 focus:ring-primary/50" 
+                   className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base uppercase focus:ring-2 focus:ring-primary/50"
                  />
+               </div>
+
+               <div className="md:col-span-2 pt-4 mt-2 border-t border-border-default">
+                 <p className="text-sm font-semibold text-text-base mb-3">Dados Médicos e Declaração de Óbito <span className="text-text-muted font-normal">(opcional, pode ser completado depois)</span></p>
+               </div>
+               <div className="space-y-1">
+                 <label className="block text-sm font-semibold text-text-subtle mb-1">Sexo</label>
+                 <select value={sexoFalecido} onChange={(e) => setSexoFalecido(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50">
+                   <option value="">Não informado</option>
+                   <option value="Masculino">Masculino</option>
+                   <option value="Feminino">Feminino</option>
+                 </select>
+               </div>
+               <div className="space-y-1">
+                 <label className="block text-sm font-semibold text-text-subtle mb-1">Cor / Raça</label>
+                 <input type="text" value={corFalecido} onChange={(e) => setCorFalecido(e.target.value)} placeholder="Ex: Parda" className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+               </div>
+               <div className="space-y-1">
+                 <label className="block text-sm font-semibold text-text-subtle mb-1">Local do Óbito</label>
+                 <input type="text" value={localObito} onChange={(e) => setLocalObito(e.target.value)} placeholder="Ex: Hospital Municipal" className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+               </div>
+               <div className="space-y-1">
+                 <label className="block text-sm font-semibold text-text-subtle mb-1">Hora do Óbito</label>
+                 <input type="time" value={horaObito} onChange={(e) => setHoraObito(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+               </div>
+               <div className="space-y-1">
+                 <label className="block text-sm font-semibold text-text-subtle mb-1">Nº Declaração de Óbito</label>
+                 <input type="text" value={declaracaoObito} onChange={(e) => setDeclaracaoObito(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+               </div>
+               <div className="space-y-1">
+                 <label className="block text-sm font-semibold text-text-subtle mb-1">Médico Responsável</label>
+                 <input type="text" value={medicoResponsavel} onChange={(e) => setMedicoResponsavel(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+               </div>
+               <div className="space-y-1">
+                 <label className="block text-sm font-semibold text-text-subtle mb-1">CRM</label>
+                 <input type="text" value={crmMedico} onChange={(e) => setCrmMedico(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+               </div>
+               <div className="space-y-1">
+                 <label className="block text-sm font-semibold text-text-subtle mb-1">RQE</label>
+                 <input type="text" value={rqeMedico} onChange={(e) => setRqeMedico(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+               </div>
+               <div className="space-y-1">
+                 <label className="block text-sm font-semibold text-text-subtle mb-1">Início Tanatopraxia</label>
+                 <input type="time" value={inicioTanato} onChange={(e) => setInicioTanato(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
+               </div>
+               <div className="space-y-1">
+                 <label className="block text-sm font-semibold text-text-subtle mb-1">Término Tanatopraxia</label>
+                 <input type="time" value={terminoTanato} onChange={(e) => setTerminoTanato(e.target.value)} className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50" />
                </div>
             </div>
           )}
