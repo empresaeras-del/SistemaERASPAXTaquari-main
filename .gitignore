@@ -8,3 +8,4 @@ coverage/
 *.bak
 .env*
 !.env.example
+supabase/.temp/
