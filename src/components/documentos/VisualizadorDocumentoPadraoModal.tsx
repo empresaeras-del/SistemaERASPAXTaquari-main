@@ -1479,12 +1479,12 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                     width: (assinaturaConfig.largura / 100) * (printAreaRef.current?.clientWidth || 1),
                     height: (assinaturaConfig.altura / 100) * (printAreaRef.current?.clientHeight || 1),
                   }}
-                  onDragStop={(_e, d) => handleAssinaturaDragResizeStop(
+                  onDragStop={(_e: any, d: any) => handleAssinaturaDragResizeStop(
                     d.x, d.y,
                     (assinaturaConfig.largura / 100) * (printAreaRef.current?.clientWidth || 1),
                     (assinaturaConfig.altura / 100) * (printAreaRef.current?.clientHeight || 1)
                   )}
-                  onResizeStop={(_e, _dir, ref, _delta, pos) => handleAssinaturaDragResizeStop(
+                  onResizeStop={(_e: any, _dir: any, ref: any, _delta: any, pos: any) => handleAssinaturaDragResizeStop(
                     pos.x, pos.y, ref.offsetWidth, ref.offsetHeight
                   )}
                   className="border-2 border-dashed border-fuchsia-500 bg-fuchsia-500/5 flex flex-col items-center justify-center text-center cursor-move z-10"

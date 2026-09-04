@@ -56,7 +56,9 @@ export const registrarAuditoria = async (acao: string, detalhes: any) => {
       if (parsed.nivel) userNivel = parsed.nivel;
       if (parsed.tenant_id && parsed.tenant_id !== 'all') tenantId = parsed.tenant_id;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Erro ao ler perfil em cache:', e);
+  }
 
   // 2. Se não encontrou nome real, tenta obter do Supabase Auth
   try {
@@ -80,12 +82,15 @@ export const registrarAuditoria = async (acao: string, detalhes: any) => {
     }
   } catch (e) {
     // Ignore Supabase errors for offline
+    console.warn('Erro ao obter usuário no Supabase Auth:', e);
   }
 
   try {
     const storedTenant = await get('tenant_id');
     if (storedTenant && storedTenant !== 'all') tenantId = storedTenant;
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Erro ao ler tenant do IDB:', e);
+  }
 
   const payloadDetalhes = {
     ...(typeof detalhes === 'object' && detalhes !== null ? detalhes : { info: detalhes }),
