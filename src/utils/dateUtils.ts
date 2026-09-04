@@ -89,11 +89,27 @@ export const isDateBeforeToday = (dateVal: string | Date | null | undefined): bo
 export const isDateToday = (dateVal: string | Date | null | undefined): boolean => {
   const d = parseLocalDate(dateVal);
   if (!d) return false;
-  
+
   const today = new Date();
   return (
     d.getDate() === today.getDate() &&
     d.getMonth() === today.getMonth() &&
     d.getFullYear() === today.getFullYear()
   );
+};
+
+/**
+ * Formata uma data 'YYYY-MM-DD...' para 'DD/MM/YYYY' sem passar pelo
+ * construtor de Date (evita a regressão de fuso horário). Diferente de
+ * formatLocalDate, retorna string vazia (não '-') quando a data está ausente
+ * — extraída de pages/Associados.tsx preservando esse comportamento exato,
+ * já usado em outras telas que dependem do fallback vazio.
+ */
+export const formatDateSafe = (dateStr: string | undefined): string => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return new Date(dateStr).toLocaleDateString('pt-BR');
 };

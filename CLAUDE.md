@@ -153,14 +153,51 @@ cegas num arquivo sem cobertura de teste.
 ## "God components" conhecidos
 
 Alguns arquivos concentram dados + validação + UI num único componente grande demais para revisar
-ou testar com conforto: `pages/Associados.tsx` (~3100 linhas),
-`components/associados/AssociadoMensalidadesTab.tsx` (~1800), `services/financeiroService.ts`
-(~1650), `pages/Configuracoes.tsx` (~1650), `pages/Auditoria.tsx` (~1550). Decompor esses arquivos é
-trabalho de médio/longo prazo — não foi feito ainda porque exige cobertura de teste e navegação
-manual pela UI real (login) antes de mexer, para não introduzir regressão silenciosa num arquivo
-sem rede de segurança. Se for tocar em um desses arquivos por outro motivo, é uma boa oportunidade
-para extrair a parte que você já está mexendo para um hook ou subcomponente — não precisa ser tudo
-de uma vez.
+ou testar com conforto: `pages/Associados.tsx`, `components/associados/AssociadoMensalidadesTab.tsx`,
+`services/financeiroService.ts`, `pages/Configuracoes.tsx`, `pages/Auditoria.tsx`.
+
+Uma rodada de decomposição **parcial** foi feita sem acesso a UI logada (este ambiente não tem
+`.env` com credenciais reais de Supabase, então não dá para clicar na tela e confirmar visualmente
+que nada quebrou). Por isso, o escopo dessa rodada foi deliberadamente limitado ao que dá para
+validar sem navegador: extrair a **lógica pura** (validação, filtro/ordenação, cálculo, formatação)
+de dentro de cada componente para funções isoladas em `utils/`, com testes Vitest cobrindo cada uma,
+**sem tocar no JSX/estrutura visual**. O comportamento é preservado byte-a-byte — cada função foi
+relocada, não reescrita — e onde uma mesma lógica estava duplicada em dois lugares (ex: cálculo de
+diff de auditoria em texto vs. em tela, `formatCurrency` copiado em ~60 arquivos, `formatAgencia`/
+`formatConta` idênticas), a duplicação foi consolidada numa única fonte.
+
+Resultado (linhas antes → depois, só com essa extração):
+
+| Arquivo | Antes | Depois | Utils extraídos |
+|---|---|---|---|
+| `pages/Associados.tsx` | 3110 | 2855 | `utils/associadoValidation.ts`, `utils/associadoHelpers.ts` |
+| `components/associados/AssociadoMensalidadesTab.tsx` | 1843 | 1794 | `utils/mensalidadesAssociadoHelpers.ts`, `formatCurrency` em `utils/formatters.ts` |
+| `services/financeiroService.ts` | 1661 | 1661* | *não decomposto (ver nota abaixo) — só ganhou testes para os 3 `sanitize*ForSupabase` que ainda não tinham |
+| `pages/Configuracoes.tsx` | 1641 | 1622 | `utils/configuracoesHelpers.ts` |
+| `pages/Auditoria.tsx` | 1564 | 1266 | `utils/auditoriaHelpers.ts` |
+
+**Por que `financeiroService.ts` não foi decomposto**: ao contrário dos outros quatro, é um service
+de acesso a dados (async, Supabase + IndexedDB + fila de sync), não um componente com lógica pura
+misturada — quase todo o arquivo já segue o padrão offline-first documentado acima, então não havia
+lógica pura relevante para extrair além das 4 funções `sanitize*ForSupabase` (uma já tinha teste, as
+outras três ganharam agora). Fisicamente dividir o arquivo em módulos menores (`receitasService.ts`,
+`despesasService.ts`...) é uma mudança estrutural de risco bem maior — o arquivo é importado por
+~15 outros — e foi deixada de fora desta rodada por não caber no critério "validável sem UI".
+
+**Achado incidental**: a extração de `getActionConfig` em `Auditoria.tsx` revelou dois quirks
+pré-existentes de classificação (não introduzidos por esta extração, confirmados contra
+`origin/main` antes de mexer, e preservados de propósito): a checagem de "criação" vem antes da de
+"atualização" no código original, então uma ação como "Reabertura de Caixa" cai em `create` (por
+conter "abertura") em vez de `update`; e "Fechamento de Caixa" cai em `finance` (por conter "caixa")
+em vez de `update`. Documentado nos testes (`auditoriaHelpers.test.ts`) em vez de corrigido às cegas
+— mudar a ordem das checagens é uma decisão de produto (qual categoria deveria "vencer"), não uma
+limpeza de código.
+
+**Ainda não decomposto nesta rodada** (fica para quando houver acesso a UI logada para verificar
+visualmente): a estrutura JSX/renderização dos 4 componentes continua nos arquivos originais — a
+extração acima reduziu o tamanho e a superfície de lógica não testada, mas não quebrou os
+componentes em subcomponentes menores. Isso é o próximo passo, quando um ambiente com credenciais
+reais de Supabase estiver disponível para navegar as telas depois da mudança.
 
 ## Segurança
 

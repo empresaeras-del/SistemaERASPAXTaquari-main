@@ -26,3 +26,13 @@ export const formatDateString = (value: string) => {
   if (v.length <= 4) return `${v.slice(0, 2)}/${v.slice(2)}`;
   return `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4, 8)}`;
 };
+
+/**
+ * Formata um valor numérico como moeda brasileira (R$ 1.234,56).
+ * Extraída de AssociadoMensalidadesTab.tsx — o mesmo one-liner (`new
+ * Intl.NumberFormat('pt-BR', {style:'currency', currency:'BRL'})`) está
+ * duplicado em dezenas de outros arquivos do projeto; esta é a versão
+ * canônica para código novo, sem migrar os usos existentes nesta rodada.
+ */
+export const formatCurrency = (val: number = 0): string =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);

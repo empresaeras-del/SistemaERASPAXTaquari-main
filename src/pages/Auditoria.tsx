@@ -5,31 +5,24 @@ import { getLogsAuditoria, LogAuditoria } from '../services/auditoriaService';
 import { getEmpresaById, getEmpresas, Empresa } from '../services/empresasService';
 import { getUsuarios, UsuarioCadastro } from '../services/usuariosService';
 import { fetchImageWithDimensions } from '../utils/imageUtils';
-import { 
-  ShieldAlert, 
-  Search, 
-  Clock, 
-  User, 
-  Activity, 
-  Calendar, 
-  ArrowRight, 
-  FileText, 
-  Users, 
-  Printer, 
-  Download, 
-  RefreshCw, 
-  Trash2, 
-  Edit3, 
-  PlusCircle, 
-  Database, 
-  Copy, 
-  Check, 
-  ChevronDown, 
-  ChevronUp, 
-  DollarSign, 
-  AlertTriangle, 
-  X, 
-  RotateCcw, 
+import {
+  ShieldAlert,
+  Search,
+  Clock,
+  User,
+  Calendar,
+  ArrowRight,
+  FileText,
+  Users,
+  Printer,
+  Download,
+  RefreshCw,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle,
+  X,
   FileCode,
   Tag,
   Sparkles,
@@ -38,243 +31,20 @@ import {
   Filter,
   Building2
 } from 'lucide-react';
-import { format, isToday, isWithinInterval, subDays, formatDistanceToNow } from 'date-fns';
+import { format, subDays, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import toast from 'react-hot-toast';
-
-// Helper to determine metadata, icons and colors for actions
-interface ActionConfig {
-  type: 'create' | 'update' | 'delete' | 'backup' | 'finance' | 'general';
-  categoryLabel: string;
-  badgeLabel: string;
-  badgeBg: string;
-  badgeText: string;
-  badgeBorder: string;
-  iconBg: string;
-  iconColor: string;
-  dotColor: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-const getActionConfig = (acao: string): ActionConfig => {
-  const lower = acao.toLowerCase();
-
-  // Backup & System
-  if (lower.includes('backup') || lower.includes('restaurar') || lower.includes('sistema')) {
-    return {
-      type: 'backup',
-      categoryLabel: 'Sistema & Dados',
-      badgeLabel: 'BACKUP / SISTEMA',
-      badgeBg: 'bg-indigo-500/10',
-      badgeText: 'text-indigo-600 dark:text-indigo-400',
-      badgeBorder: 'border-indigo-500/20',
-      iconBg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
-      iconColor: 'text-indigo-600 dark:text-indigo-400',
-      dotColor: 'border-indigo-500 ring-indigo-500/20',
-      icon: Database
-    };
-  }
-
-  // Deletions / Estornos / Cancellations
-  if (
-    lower.includes('excluir') || 
-    lower.includes('soft delete') || 
-    lower.includes('cancelamento') || 
-    lower.includes('estorno') || 
-    lower.includes('desativar')
-  ) {
-    return {
-      type: 'delete',
-      categoryLabel: 'Exclusão & Estorno',
-      badgeLabel: lower.includes('estorno') ? 'ESTORNO' : 'EXCLUSÃO',
-      badgeBg: 'bg-rose-500/10',
-      badgeText: 'text-rose-600 dark:text-rose-400',
-      badgeBorder: 'border-rose-500/20',
-      iconBg: 'bg-rose-500/10 dark:bg-rose-500/20',
-      iconColor: 'text-rose-600 dark:text-rose-400',
-      dotColor: 'border-rose-500 ring-rose-500/20',
-      icon: lower.includes('estorno') ? RotateCcw : Trash2
-    };
-  }
-
-  // Creations / Openings / Additions
-  if (
-    lower.includes('criar') || 
-    lower.includes('novo') || 
-    lower.includes('abertura') || 
-    lower.includes('emissão') || 
-    (lower.includes('salvar') && !lower.includes('editar'))
-  ) {
-    return {
-      type: 'create',
-      categoryLabel: 'Criação / Cadastro',
-      badgeLabel: 'NOVO REGISTRO',
-      badgeBg: 'bg-emerald-500/10',
-      badgeText: 'text-emerald-600 dark:text-emerald-400',
-      badgeBorder: 'border-emerald-500/20',
-      iconBg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
-      iconColor: 'text-emerald-600 dark:text-emerald-400',
-      dotColor: 'border-emerald-500 ring-emerald-500/20',
-      icon: PlusCircle
-    };
-  }
-
-  // Finance / Cash Desk / Payments
-  if (
-    lower.includes('receita') || 
-    lower.includes('despesa') || 
-    lower.includes('pagamento') || 
-    lower.includes('recebimento') || 
-    lower.includes('caixa') || 
-    lower.includes('lote') ||
-    lower.includes('remessa')
-  ) {
-    return {
-      type: 'finance',
-      categoryLabel: 'Financeiro & Caixa',
-      badgeLabel: 'FINANCEIRO',
-      badgeBg: 'bg-amber-500/10',
-      badgeText: 'text-amber-600 dark:text-amber-400',
-      badgeBorder: 'border-amber-500/20',
-      iconBg: 'bg-amber-500/10 dark:bg-amber-500/20',
-      iconColor: 'text-amber-600 dark:text-amber-400',
-      dotColor: 'border-amber-500 ring-amber-500/20',
-      icon: DollarSign
-    };
-  }
-
-  // Updates / Modifications
-  if (
-    lower.includes('editar') || 
-    lower.includes('atualização') || 
-    lower.includes('alteração') || 
-    lower.includes('reabertura') || 
-    lower.includes('fechamento')
-  ) {
-    return {
-      type: 'update',
-      categoryLabel: 'Modificação',
-      badgeLabel: lower.includes('reabertura') ? 'REABERTURA' : 'ALTERAÇÃO',
-      badgeBg: 'bg-blue-500/10',
-      badgeText: 'text-blue-600 dark:text-blue-400',
-      badgeBorder: 'border-blue-500/20',
-      iconBg: 'bg-blue-500/10 dark:bg-blue-500/20',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-      dotColor: 'border-blue-500 ring-blue-500/20',
-      icon: Edit3
-    };
-  }
-
-  // General fallback
-  return {
-    type: 'general',
-    categoryLabel: 'Operação Geral',
-    badgeLabel: 'OPERAÇÃO',
-    badgeBg: 'bg-slate-500/10',
-    badgeText: 'text-slate-600 dark:text-slate-400',
-    badgeBorder: 'border-slate-500/20',
-    iconBg: 'bg-slate-500/10 dark:bg-slate-500/20',
-    iconColor: 'text-slate-600 dark:text-slate-400',
-    dotColor: 'border-[#3B82F6] ring-[#3B82F6]/20',
-    icon: Activity
-  };
-};
-
-const getUserRoleBadge = (nivel?: string) => {
-  switch (nivel) {
-    case 'super_admin':
-      return { label: 'Super Admin', bg: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30' };
-    case 'admin':
-      return { label: 'Administrador', bg: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30' };
-    case 'gerente':
-      return { label: 'Gerente', bg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' };
-    case 'funcionario':
-      return { label: 'Funcionário', bg: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30' };
-    case 'sistema':
-      return { label: 'Sistema', bg: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30' };
-    default:
-      return { label: 'Operador', bg: 'bg-gray-500/15 text-gray-600 dark:text-gray-400 border-gray-500/30' };
-  }
-};
-
-// Format key names for human display
-const formatKeyName = (key: string): string => {
-  const map: Record<string, string> = {
-    id: 'ID do Registro',
-    file: 'Arquivo de Backup',
-    tabelas_incluidas: 'Tabelas Processadas',
-    registros_total: 'Total de Registros',
-    nome: 'Nome',
-    nome_fantasia: 'Nome Fantasia',
-    razao_social: 'Razão Social',
-    descricao: 'Descrição',
-    valor: 'Valor',
-    valor_pago: 'Valor Pago',
-    valor_recebido: 'Valor Recebido',
-    codigo: 'Código do Lote',
-    lote_id: 'ID do Lote',
-    justificativa: 'Justificativa',
-    usuario: 'Responsável',
-    email: 'E-mail',
-    status: 'Status',
-    novoStatus: 'Novo Status',
-    motivo: 'Motivo',
-    tipo: 'Tipo',
-    atendimento_id: 'ID do Atendimento',
-    qtd_receitas: 'Quantidade de Receitas',
-    despesa_id: 'ID da Despesa'
-  };
-
-  if (map[key]) return map[key];
-  return key
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase());
-};
-
-// Format details object into readable text for PDF and reports
-const formatDetalhesParaTexto = (detalhes: any): string => {
-  if (!detalhes) return '-';
-  if (typeof detalhes === 'string') return detalhes;
-
-  if (detalhes.dados_anteriores || detalhes.dados_novos) {
-    const oldData = detalhes.dados_anteriores || {};
-    const newData = detalhes.dados_novos || {};
-    const allKeys = Array.from(new Set([...Object.keys(oldData), ...Object.keys(newData)]));
-    const changes = allKeys
-      .map(k => {
-        const o = oldData[k];
-        const n = newData[k];
-        if (JSON.stringify(o) !== JSON.stringify(n)) {
-          const oldStr = o !== undefined && o !== null ? JSON.stringify(o) : 'Vazio';
-          const newStr = n !== undefined && n !== null ? JSON.stringify(n) : 'Vazio';
-          return `${formatKeyName(k)}: ${oldStr} -> ${newStr}`;
-        }
-        return null;
-      })
-      .filter(Boolean);
-    return changes.length > 0 ? changes.join(' | ') : 'Sem alterações diretas em campos.';
-  }
-
-  const parts: string[] = [];
-  if (detalhes.justificativa) parts.push(`Justificativa: ${detalhes.justificativa}`);
-  if (detalhes.motivo) parts.push(`Motivo: ${detalhes.motivo}`);
-  if (detalhes.observacao) parts.push(`Obs: ${detalhes.observacao}`);
-
-  Object.entries(detalhes).forEach(([k, v]) => {
-    if (['justificativa', 'motivo', 'observacao', 'dados_anteriores', 'dados_novos', 'usuario', 'usuario_email'].includes(k)) return;
-    if (v !== undefined && v !== null) {
-      if (typeof v === 'number' && k.toLowerCase().includes('valor')) {
-        parts.push(`${formatKeyName(k)}: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)}`);
-      } else {
-        parts.push(`${formatKeyName(k)}: ${typeof v === 'object' ? JSON.stringify(v) : v}`);
-      }
-    }
-  });
-
-  return parts.join(' | ') || '-';
-};
+import {
+  getActionConfig,
+  getUserRoleBadge,
+  formatKeyName,
+  formatDetalhesParaTexto,
+  calcularCamposAlterados,
+  filtrarLogsAuditoria,
+  calcularEstatisticasAuditoria,
+} from '../utils/auditoriaHelpers';
 
 // Format value nicely in UI
 const formatValueDisplay = (key: string, val: any): React.ReactNode => {
@@ -313,16 +83,7 @@ const formatValueDisplay = (key: string, val: any): React.ReactNode => {
 const DiffViewer: React.FC<{ oldData: any; newData: any }> = ({ oldData, newData }) => {
   if (!oldData && !newData) return null;
   
-  const allKeys = Array.from(new Set([...Object.keys(oldData || {}), ...Object.keys(newData || {})]));
-  
-  const changes = allKeys.map(key => {
-    const oldVal = oldData?.[key];
-    const newVal = newData?.[key];
-    if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-      return { key, oldVal, newVal };
-    }
-    return null;
-  }).filter(Boolean);
+  const changes = calcularCamposAlterados(oldData, newData);
 
   if (changes.length === 0) {
     return (
@@ -520,64 +281,10 @@ export const AuditoriaPage: React.FC = () => {
   }, [state.isOnline, state.empresaSelecionada]);
 
   // Filter logic
-  const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      const term = searchTerm.toLowerCase();
-      const matchSearch = 
-        !searchTerm ||
-        log.acao.toLowerCase().includes(term) || 
-        (log.usuarios?.nome && log.usuarios.nome.toLowerCase().includes(term)) ||
-        (log.usuarios?.email && log.usuarios.email.toLowerCase().includes(term)) ||
-        (log.detalhes && JSON.stringify(log.detalhes).toLowerCase().includes(term));
-        
-      let matchDate = true;
-      if (dataInicio && dataFim) {
-        const logDate = new Date(log.created_at).getTime();
-        matchDate = logDate >= new Date(dataInicio).getTime() && logDate <= new Date(dataFim + 'T23:59:59').getTime();
-      } else if (dataInicio) {
-        const logDate = new Date(log.created_at).getTime();
-        matchDate = logDate >= new Date(dataInicio).getTime();
-      } else if (dataFim) {
-        const logDate = new Date(log.created_at).getTime();
-        matchDate = logDate <= new Date(dataFim + 'T23:59:59').getTime();
-      }
-      
-      let matchModulo = true;
-      if (moduloFiltro !== 'todos') {
-        const acaoLower = log.acao.toLowerCase();
-        if (moduloFiltro === 'financeiro') {
-          matchModulo = acaoLower.includes('receita') || acaoLower.includes('despesa') || acaoLower.includes('parcela') || acaoLower.includes('pagamento') || acaoLower.includes('recebimento');
-        } else if (moduloFiltro === 'contrato') {
-          matchModulo = acaoLower.includes('contrato') || acaoLower.includes('associado') || acaoLower.includes('dependente');
-        } else if (moduloFiltro === 'caixa') {
-          matchModulo = acaoLower.includes('caixa') || acaoLower.includes('lote');
-        } else if (moduloFiltro === 'backup') {
-          matchModulo = acaoLower.includes('backup') || acaoLower.includes('restaurar');
-        } else {
-          matchModulo = acaoLower.includes(moduloFiltro.toLowerCase());
-        }
-      }
-
-      let matchTipo = true;
-      if (tipoAcaoFiltro !== 'todos') {
-        const config = getActionConfig(log.acao);
-        matchTipo = config.type === tipoAcaoFiltro;
-      }
-
-      let matchUsuario = true;
-      if (usuarioFiltro !== 'todos') {
-        if (usuarioFiltro === 'sistema') {
-          matchUsuario = log.usuario_id === 'system' || !log.usuario_id || (Boolean(log.usuarios?.nome) && log.usuarios!.nome.toLowerCase().includes('sistema'));
-        } else {
-          matchUsuario = log.usuario_id === usuarioFiltro || 
-            (Boolean(log.usuarios?.email) && log.usuarios!.email.toLowerCase() === usuarioFiltro.toLowerCase()) ||
-            (Boolean(log.usuarios?.nome) && log.usuarios!.nome.toLowerCase() === usuarioFiltro.toLowerCase());
-        }
-      }
-
-      return matchSearch && matchDate && matchModulo && matchTipo && matchUsuario;
-    });
-  }, [logs, searchTerm, dataInicio, dataFim, moduloFiltro, tipoAcaoFiltro, usuarioFiltro]);
+  const filteredLogs = useMemo(
+    () => filtrarLogsAuditoria(logs, { searchTerm, dataInicio, dataFim, moduloFiltro, tipoAcaoFiltro, usuarioFiltro }),
+    [logs, searchTerm, dataInicio, dataFim, moduloFiltro, tipoAcaoFiltro, usuarioFiltro]
+  );
 
   // Quick period helpers
   const handleSetQuickPeriod = (days: number | 'hoje' | 'limpar') => {
@@ -854,12 +561,7 @@ export const AuditoriaPage: React.FC = () => {
     }
   };
 
-  const totalLogs = logs.length;
-  const logsHoje = logs.filter(log => isToday(new Date(log.created_at))).length;
-  const logsUltimos7Dias = logs.filter(log => 
-    isWithinInterval(new Date(log.created_at), { start: subDays(new Date(), 7), end: new Date() })
-  ).length;
-  const usuariosUnicos = new Set(logs.map(log => log.usuario_id || log.usuarios?.email || 'anon')).size;
+  const { totalLogs, logsHoje, logsUltimos7Dias, usuariosUnicos } = calcularEstatisticasAuditoria(logs);
 
   const hasActiveFilters = Boolean(
     searchTerm || dataInicio || dataFim || moduloFiltro !== 'todos' || tipoAcaoFiltro !== 'todos' || usuarioFiltro !== 'todos'

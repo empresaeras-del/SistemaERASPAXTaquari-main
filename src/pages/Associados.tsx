@@ -46,21 +46,24 @@ import { getEmpresaById, Empresa } from '../services/empresasService';
 import { getContasBancariasAtivas } from '../services/contasBancariasService';
 import { ContaBancaria } from '../types/contasBancarias';
 import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
-import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
+import { formatLocalDate, formatLocalDateTime, formatDateSafe } from '../utils/dateUtils';
+import {
+  filtrarEOrdenarAssociados,
+  extrairTodosDependentes,
+  filtrarDependentes,
+  calcularEstatisticasAssociados,
+  encontrarAssociadoComCpfDuplicado,
+  calcularNVidasEIdades,
+  construirEntradaHistoricoContrato,
+  aplicarEnderecoViaCep,
+  aplicarMudancaCampoAssociado,
+} from '../utils/associadoHelpers';
+import { validarDadosAssociado } from '../utils/associadoValidation';
 import { RelatorioAssociadosModal } from '../components/associados/RelatorioAssociadosModal';
 import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { fetchImageWithDimensions } from '../utils/imageUtils';
-
-const formatDateSafe = (dateStr: string | undefined) => {
-  if (!dateStr) return "";
-  const parts = dateStr.split("T")[0].split("-");
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  }
-  return new Date(dateStr).toLocaleDateString("pt-BR");
-};
 
 export const MensalidadesTab = AssociadoMensalidadesTab;
 export const AssociadosPage: React.FC = () => {
@@ -92,40 +95,10 @@ export const AssociadosPage: React.FC = () => {
   const [sortBy, setSortBy] = useState("nome_asc");
   const [showFilters, setShowFilters] = useState(false);
 
-  const filtered = React.useMemo(() => {
-    const result = associados.filter((a) => {
-      if (!a) return false;
-      const s = (searchTerm || '').trim().toLowerCase();
-      const sDigits = s.replace(/\D/g, '');
-      const nome = (a.nome || '').toLowerCase();
-      const cpf = a.cpf || '';
-      const cpfDigits = cpf.replace(/\D/g, '');
-
-      const matchesSearch = !s || 
-        nome.includes(s) || 
-        (sDigits.length > 0 && cpfDigits.includes(sDigits)) || 
-        cpf.includes(s);
-      const matchesStatus = statusFilter ? a.status === statusFilter : true;
-      const matchesPlano = planoFilter ? a.plano_pax_id === planoFilter : true;
-      return matchesSearch && matchesStatus && matchesPlano;
-    });
-
-    switch (sortBy) {
-      case 'nome_asc':
-        result.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-        break;
-      case 'nome_desc':
-        result.sort((a, b) => (b.nome || '').localeCompare(a.nome || ''));
-        break;
-      case 'adesao_asc':
-        result.sort((a, b) => new Date(a.data_adesao || 0).getTime() - new Date(b.data_adesao || 0).getTime());
-        break;
-      case 'adesao_desc':
-        result.sort((a, b) => new Date(b.data_adesao || 0).getTime() - new Date(a.data_adesao || 0).getTime());
-        break;
-    }
-    return result;
-  }, [associados, searchTerm, statusFilter, planoFilter, sortBy]);
+  const filtered = React.useMemo(
+    () => filtrarEOrdenarAssociados(associados, { searchTerm, statusFilter, planoFilter, sortBy }),
+    [associados, searchTerm, statusFilter, planoFilter, sortBy]
+  );
 
   const [activeTab, setActiveTab] = useState<
     "resumo" | "principal" | "dependentes" | "contratos" | "mensalidades" | "documentos" | "requisicoes" | "atendimentos"
@@ -192,42 +165,15 @@ export const AssociadosPage: React.FC = () => {
     const planoCompleto = planosCompletos.find(p => p.id === editingAssociado.plano_pax_id);
     if (!planoCompleto) return editingAssociado?.valor_plano || 0;
     
-    const nVidas = 1 + (editingAssociado.dependentes?.length || 0);
-    const dependentesIds = (editingAssociado.dependentes || []).map(d => {
-      if (d.data_nascimento) {
-        const bdate = new Date(d.data_nascimento);
-        return new Date().getFullYear() - bdate.getFullYear();
-      }
-      return 0;
-    });
-    
-    const result = calcularValor(planoCompleto, nVidas, dependentesIds);
+    const { nVidas, idadesDependentes } = calcularNVidasEIdades(editingAssociado.dependentes);
+
+    const result = calcularValor(planoCompleto, nVidas, idadesDependentes);
     return result.total;
   }, [editingAssociado, planosCompletos, calcularValor]);
 
-  const todosDependentes = React.useMemo(() => {
-    const deps: any[] = [];
-    associados.forEach(a => {
-      if (a && a.dependentes && Array.isArray(a.dependentes)) {
-        a.dependentes.forEach(d => {
-          deps.push({
-            ...d,
-            titular_nome: a.nome,
-            titular_status: a.status
-          });
-        });
-      }
-    });
-    return deps;
-  }, [associados]);
+  const todosDependentes = React.useMemo(() => extrairTodosDependentes(associados), [associados]);
 
-  const dependentesFiltrados = todosDependentes.filter(d => {
-    if (!d) return false;
-    const q = (buscaDependentes || '').toLowerCase();
-    const nome = (d.nome || '').toLowerCase();
-    const titular = (d.titular_nome || '').toLowerCase();
-    return !q || nome.includes(q) || titular.includes(q);
-  });
+  const dependentesFiltrados = filtrarDependentes(todosDependentes, buscaDependentes);
   
   const loadData = async () => {
     setLoading(true);
@@ -293,27 +239,9 @@ export const AssociadosPage: React.FC = () => {
       } else {
         setEditingAssociado(prev => {
           if (!prev) return prev;
-          const logr = (data.logradouro || '').toUpperCase().trim();
-          const bai = (data.bairro || '').toUpperCase().trim();
-          const cid = (data.localidade ? `${data.localidade}${data.uf ? ' - ' + data.uf : ''}` : '').toUpperCase().trim();
-          const est = (data.uf || '').toUpperCase().trim();
           const cepFormatado = cepLimpo.replace(/^(\d{5})(\d{3})/, '$1-$2');
-
-          return {
-            ...prev,
-            endereco_cep: cepFormatado,
-            cep: cepFormatado,
-            // SÓ substitui logradouro e bairro se o ViaCEP retornou valor preenchido
-            endereco_logradouro: logr || prev.endereco_logradouro || prev.logradouro || '',
-            logradouro: logr || prev.endereco_logradouro || prev.logradouro || '',
-            endereco_bairro: bai || prev.endereco_bairro || prev.bairro || '',
-            bairro: bai || prev.endereco_bairro || prev.bairro || '',
-            endereco_cidade: cid || prev.endereco_cidade || prev.cidade || '',
-            cidade: cid || prev.endereco_cidade || prev.cidade || '',
-            municipio: data.localidade?.toUpperCase().trim() || prev.cidade || prev.endereco_cidade || '',
-            endereco_estado: est || prev.endereco_estado || prev.uf || '',
-            uf: est || prev.endereco_estado || prev.uf || ''
-          };
+          // SÓ substitui logradouro e bairro se o ViaCEP retornou valor preenchido
+          return aplicarEnderecoViaCep(prev, data, cepFormatado);
         });
 
         // Limpa mensagens de erro dos campos preenchidos
@@ -346,134 +274,6 @@ export const AssociadosPage: React.FC = () => {
     }
   };
 
-  const validarDadosAssociado = (assoc: Associado | null): { valido: boolean; erros: Array<{ campo: string; label: string; subTab: "basicas" | "filiacao" | "contato" | "endereco" | "sistema"; mensagem: string }> } => {
-    if (!assoc) return { valido: false, erros: [] };
-
-    const erros: Array<{ campo: string; label: string; subTab: "basicas" | "filiacao" | "contato" | "endereco" | "sistema"; mensagem: string }> = [];
-
-    // Informações Básicas
-    if (!assoc.nome || !assoc.nome.trim()) {
-      erros.push({
-        campo: 'nome',
-        label: 'Nome Completo',
-        subTab: 'basicas',
-        mensagem: 'Nome completo é obrigatório.'
-      });
-    }
-
-    const cpfLimpo = (assoc.cpf || '').replace(/\D/g, '');
-    if (!assoc.cpf || !assoc.cpf.trim() || cpfLimpo.length === 0) {
-      erros.push({
-        campo: 'cpf',
-        label: 'CPF',
-        subTab: 'basicas',
-        mensagem: 'CPF é obrigatório.'
-      });
-    } else if (!isValidCPFOrCNPJ(assoc.cpf, false)) {
-      erros.push({
-        campo: 'cpf',
-        label: 'CPF',
-        subTab: 'basicas',
-        mensagem: 'CPF inválido.'
-      });
-    }
-
-    if (!assoc.data_nascimento || !assoc.data_nascimento.trim()) {
-      erros.push({
-        campo: 'data_nascimento',
-        label: 'Data de Nascimento',
-        subTab: 'basicas',
-        mensagem: 'Data de nascimento é obrigatória.'
-      });
-    }
-
-    if (!assoc.sexo || !assoc.sexo.trim()) {
-      erros.push({
-        campo: 'sexo',
-        label: 'Sexo',
-        subTab: 'basicas',
-        mensagem: 'Selecione o sexo.'
-      });
-    }
-
-    // Contato
-    const telLimpo = (assoc.telefone || '').replace(/\D/g, '');
-    if (!assoc.telefone || !assoc.telefone.trim() || telLimpo.length < 10) {
-      erros.push({
-        campo: 'telefone',
-        label: 'Telefone',
-        subTab: 'contato',
-        mensagem: 'Telefone com DDD é obrigatório.'
-      });
-    }
-
-    // Endereço
-    const cep = ((assoc.endereco_cep || assoc.cep || '') + '').trim();
-    if (!cep) {
-      erros.push({
-        campo: 'endereco_cep',
-        label: 'CEP',
-        subTab: 'endereco',
-        mensagem: 'CEP é obrigatório.'
-      });
-    }
-
-    const logradouro = ((assoc.endereco_logradouro || assoc.logradouro || '') + '').trim();
-    if (!logradouro) {
-      erros.push({
-        campo: 'endereco_logradouro',
-        label: 'Logradouro',
-        subTab: 'endereco',
-        mensagem: 'Logradouro é obrigatório.'
-      });
-    }
-
-    const numero = ((assoc.endereco_numero || assoc.numero || '') + '').trim();
-    if (!numero) {
-      erros.push({
-        campo: 'endereco_numero',
-        label: 'Número',
-        subTab: 'endereco',
-        mensagem: 'Número é obrigatório.'
-      });
-    }
-
-    const bairro = ((assoc.endereco_bairro || assoc.bairro || '') + '').trim();
-    if (!bairro) {
-      erros.push({
-        campo: 'endereco_bairro',
-        label: 'Bairro',
-        subTab: 'endereco',
-        mensagem: 'Bairro é obrigatório.'
-      });
-    }
-
-    const cidade = ((assoc.endereco_cidade || assoc.cidade || assoc.municipio || '') + '').trim();
-    if (!cidade) {
-      erros.push({
-        campo: 'endereco_cidade',
-        label: 'Município / UF',
-        subTab: 'endereco',
-        mensagem: 'Município / UF é obrigatório.'
-      });
-    }
-
-    // Sistema
-    if (!assoc.data_adesao || !assoc.data_adesao.trim()) {
-      erros.push({
-        campo: 'data_adesao',
-        label: 'Data de Adesão',
-        subTab: 'sistema',
-        mensagem: 'Data de adesão é obrigatória.'
-      });
-    }
-
-    return {
-      valido: erros.length === 0,
-      erros
-    };
-  };
-
   const executarValidacaoOuAlertar = (): boolean => {
     const { valido, erros } = validarDadosAssociado(editingAssociado);
     if (!valido) {
@@ -497,39 +297,8 @@ export const AssociadosPage: React.FC = () => {
 
   const handleFieldChange = (field: keyof Associado, value: any) => {
     if (editingAssociado) {
-      let finalValue = (typeof value === 'string' && (field as string) !== 'email' && (field as string) !== 'senha' && (field as string) !== 'status') ? value.toUpperCase() : value;
-      
-      if (field === 'endereco_cep' || field === 'cep') {
-        const rawCep = (value || '').replace(/\D/g, '');
-        finalValue = rawCep.replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9);
-      }
-
-      const updated: any = {
-        ...editingAssociado,
-        [field]: finalValue
-      };
-
-      // Sincronização dos aliases de endereço
-      if (field === 'endereco_logradouro' || field === 'logradouro') {
-        updated.endereco_logradouro = finalValue;
-        updated.logradouro = finalValue;
-      } else if (field === 'endereco_numero' || field === 'numero') {
-        updated.endereco_numero = finalValue;
-        updated.numero = finalValue;
-      } else if (field === 'endereco_bairro' || field === 'bairro') {
-        updated.endereco_bairro = finalValue;
-        updated.bairro = finalValue;
-      } else if (field === 'endereco_cidade' || field === 'cidade' || (field as string) === 'municipio') {
-        updated.endereco_cidade = finalValue;
-        updated.cidade = finalValue;
-        updated.municipio = finalValue;
-      } else if (field === 'endereco_cep' || field === 'cep') {
-        updated.endereco_cep = finalValue;
-        updated.cep = finalValue;
-      } else if (field === 'endereco_estado' || field === 'uf') {
-        updated.endereco_estado = finalValue;
-        updated.uf = finalValue;
-      }
+      const updated = aplicarMudancaCampoAssociado(editingAssociado, field, value);
+      const finalValue = (updated as any)[field];
 
       setEditingAssociado(updated);
 
@@ -619,19 +388,11 @@ export const AssociadosPage: React.FC = () => {
           setIsSavingAssociado(false);
           return;
         }
-        const cpfLimpo = editingAssociado.cpf.replace(/\D/g, '');
-        if (cpfLimpo.length > 0) {
-          const duplicateUser = associados.find(a => 
-            a &&
-            a.status === 'ativo' && 
-            a.cpf?.replace(/\D/g, '') === cpfLimpo && 
-            a.id !== editingAssociado.id
-          );
-          if (duplicateUser) {
-            toast.error(`Não é possível registrar. Este CPF já está sendo usado pelo associado ativo: ${duplicateUser.nome}`);
-            setIsSavingAssociado(false);
-            return;
-          }
+        const duplicateUser = encontrarAssociadoComCpfDuplicado(associados, editingAssociado.cpf, editingAssociado.id);
+        if (duplicateUser) {
+          toast.error(`Não é possível registrar. Este CPF já está sendo usado pelo associado ativo: ${duplicateUser.nome}`);
+          setIsSavingAssociado(false);
+          return;
         }
       }
       
@@ -645,8 +406,8 @@ export const AssociadosPage: React.FC = () => {
         }
       }
       
-      const nVidasCalculadas = 1 + (editingAssociado.dependentes?.length || 0);
-      
+      const { nVidas: nVidasCalculadas } = calcularNVidasEIdades(editingAssociado.dependentes);
+
       // Validação do contrato se o plano foi selecionado
       if (editingAssociado.plano_pax_id) {
         const contratoResult = contratoSchema.safeParse({
@@ -682,15 +443,8 @@ export const AssociadosPage: React.FC = () => {
         
         const planoCompleto = planosCompletos.find(p => p.id === novoAssociado.plano_pax_id);
         if (planoCompleto) {
-          const dependentesIds = (novoAssociado.dependentes || []).map(d => {
-            if (d && d.data_nascimento) {
-              const bdate = new Date(d.data_nascimento);
-              const age = new Date().getFullYear() - bdate.getFullYear();
-              return age;
-            }
-            return 0;
-          });
-          const resultado = calcularValor(planoCompleto, nVidasCalculadas, dependentesIds);
+          const { idadesDependentes } = calcularNVidasEIdades(novoAssociado.dependentes);
+          const resultado = calcularValor(planoCompleto, nVidasCalculadas, idadesDependentes);
           novoAssociado.valor_plano = resultado.total;
         }
       }
@@ -700,13 +454,7 @@ export const AssociadosPage: React.FC = () => {
         
         if (original && original.plano_pax_id && original.plano_pax_id !== novoAssociado.plano_pax_id) {
             const hist = novoAssociado.historico_contratos ? [...novoAssociado.historico_contratos] : [];
-            hist.push({
-                id: uuidv4(),
-                plano: original.plano_nome || "Anterior",
-                valor: original.valor_plano || 0,
-                data_inicio: original.data_adesao,
-                data_fim: format(new Date(), "yyyy-MM-dd")
-            });
+            hist.push(construirEntradaHistoricoContrato(original, uuidv4(), format(new Date(), "yyyy-MM-dd")));
             novoAssociado.historico_contratos = hist;
             novoAssociado.data_adesao = format(new Date(), "yyyy-MM-dd");
         }
@@ -816,11 +564,8 @@ export const AssociadosPage: React.FC = () => {
     setShowRelatorioModal(true);
   };
 
-  const totalTitulares = associados.length;
-  const totalDependentes = associados.reduce((acc, a) => acc + (a.dependentes?.length || 0), 0);
-  const vidasProtegidas = totalTitulares + totalDependentes;
-  const inadimplentes = associados.filter((a) => a.status === "inadimplente").length;
-  const qtdAssociadosAtivosSemParcelas = associados.filter((a) => a.status === 'ativo' && (parcelasAbertasMap[a.id] || 0) === 0).length;
+  const { totalTitulares, totalDependentes, vidasProtegidas, inadimplentes, qtdAssociadosAtivosSemParcelas } =
+    calcularEstatisticasAssociados(associados, parcelasAbertasMap);
 
   return (
     <div className="space-y-6">
