@@ -164,8 +164,9 @@ cegas num arquivo sem cobertura de teste.
 ## "God components" conhecidos
 
 Alguns arquivos concentram dados + validação + UI num único componente grande demais para revisar
-ou testar com conforto: `pages/Associados.tsx`, `components/associados/AssociadoMensalidadesTab.tsx`,
+ou testar com conforto: `components/associados/AssociadoMensalidadesTab.tsx`,
 `services/financeiroService.ts`, `pages/Configuracoes.tsx`, `pages/Auditoria.tsx`.
+`pages/Associados.tsx` saiu dessa lista — ver "Associados.tsx: decomposição concluída" abaixo.
 
 Uma rodada de decomposição **parcial** foi feita sem acesso a UI logada (este ambiente não tem
 `.env` com credenciais reais de Supabase, então não dá para clicar na tela e confirmar visualmente
@@ -181,7 +182,7 @@ Resultado (linhas antes → depois, só com essa extração):
 
 | Arquivo | Antes | Depois | Utils extraídos |
 |---|---|---|---|
-| `pages/Associados.tsx` | 3110 | 2855 | `utils/associadoValidation.ts`, `utils/associadoHelpers.ts` |
+| `pages/Associados.tsx` | 3110 | 2855 (nesta rodada) | `utils/associadoValidation.ts`, `utils/associadoHelpers.ts` |
 | `components/associados/AssociadoMensalidadesTab.tsx` | 1843 | 1794 | `utils/mensalidadesAssociadoHelpers.ts`, `formatCurrency` em `utils/formatters.ts` |
 | `services/financeiroService.ts` | 1661 | 1661* | *não decomposto (ver nota abaixo) — só ganhou testes para os 3 `sanitize*ForSupabase` que ainda não tinham |
 | `pages/Configuracoes.tsx` | 1641 | 1622 | `utils/configuracoesHelpers.ts` |
@@ -205,10 +206,37 @@ em vez de `update`. Documentado nos testes (`auditoriaHelpers.test.ts`) em vez d
 limpeza de código.
 
 **Ainda não decomposto nesta rodada** (fica para quando houver acesso a UI logada para verificar
-visualmente): a estrutura JSX/renderização dos 4 componentes continua nos arquivos originais — a
-extração acima reduziu o tamanho e a superfície de lógica não testada, mas não quebrou os
-componentes em subcomponentes menores. Isso é o próximo passo, quando um ambiente com credenciais
-reais de Supabase estiver disponível para navegar as telas depois da mudança.
+visualmente): a estrutura JSX/renderização de `AssociadoMensalidadesTab.tsx`, `Configuracoes.tsx` e
+`Auditoria.tsx` continua nos arquivos originais — a extração acima reduziu o tamanho e a superfície
+de lógica não testada, mas não quebrou esses três em subcomponentes menores. Isso segue sendo o
+próximo passo para eles, quando um ambiente com credenciais reais de Supabase estiver disponível
+para navegar as telas depois da mudança. `Associados.tsx` já não se enquadra mais aqui — ver abaixo.
+
+### Associados.tsx: decomposição concluída
+
+Numa rodada posterior à extração de lógica pura acima, `pages/Associados.tsx` recebeu a
+decomposição de JSX/estrutura visual que a rodada anterior tinha deixado pendente — não é mais
+"ainda não decomposto". Estado atual:
+
+- `pages/Associados.tsx`: 271 linhas — só monta o layout a partir do hook de estado e dos
+  componentes abaixo, sem lógica própria.
+- `hooks/useAssociadosState.ts`: 640 linhas — concentra o estado (filtros, ordenação, seleção,
+  modais) e as chamadas a `usePlanosPax`/serviços que antes viviam dentro da página.
+- `components/associados/`: 19 componentes dedicados (~9.990 linhas somadas) — tabelas
+  (`AssociadosListTable.tsx`, `AssociadosListGrid.tsx`), modais (`AssociadoFormModal.tsx`,
+  `AssociadoDetailsModal.tsx`, `DependenteFormModal.tsx`, `ParcelaRecebimentoModal.tsx`,
+  `CarteirinhaAssociadoModal.tsx`...), abas (`AssociadoAtendimentosTab.tsx`,
+  `AssociadoRequisicoesTab.tsx`, `AssociadoResumoFinanceiroTab.tsx`,
+  `AssociadoMensalidadesTab.tsx`) e utilitários de tela (`AssociadosToolbar.tsx`,
+  `RegrasCalculoInfo.tsx`, `RelatorioAssociadosModal.tsx`).
+
+Ao mexer em telas de associados, a lógica de estado agora mora em `useAssociadosState.ts`, e cada
+pedaço de UI no componente correspondente acima — não espere mais encontrar isso dentro de
+`Associados.tsx`. Um efeito colateral dessa divisão: props que atravessam vários componentes
+precisam ter o tipo alinhado em cada um deles (ex.: `planos` é `PlanoPaxResumo[]`, não `PlanoPax[]`,
+tanto em `AssociadosListTable.tsx` quanto em `AssociadosListGrid.tsx`, porque é isso que
+`useAssociadosState.ts` de fato expõe) — um mismatch aqui só aparece no `tsc`, não no lint nem em
+runtime.
 
 ## Segurança
 
