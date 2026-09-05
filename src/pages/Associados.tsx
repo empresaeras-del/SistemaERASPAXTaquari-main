@@ -3,6 +3,7 @@ import { useAssociadosState } from '../hooks/useAssociadosState';
 import { AssociadosToolbar } from '../components/associados/AssociadosToolbar';
 import { AssociadosListTable } from '../components/associados/AssociadosListTable';
 import { AssociadosListGrid } from '../components/associados/AssociadosListGrid';
+import { AssociadoDetailsModal } from '../components/associados/AssociadoDetailsModal';
 import { AssociadoFormModal } from '../components/associados/AssociadoFormModal';
 import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
 import { PlanoPaxSelect } from '../components/planos-pax/PlanoPaxSelect';
@@ -253,6 +254,15 @@ export const AssociadosPage: React.FC = () => {
       </div>
 
       <AssociadoFormModal {...associadosState} />
+
+      {previewAssociado && (
+        <AssociadoDetailsModal
+          associado={previewAssociado}
+          onClose={() => setPreviewAssociado(null)}
+          onEdit={handleOpenModal}
+        />
+      )}
+
     </div>
   );
 };
