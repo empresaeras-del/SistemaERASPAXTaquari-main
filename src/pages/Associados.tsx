@@ -25,6 +25,7 @@ export const AssociadosPage: React.FC = () => {
     filtered,
     planos,
     parcelasAbertasMap,
+    previewAssociado,
     setPreviewAssociado,
     handleWhatsAppMenu,
     handleOpenModal,
