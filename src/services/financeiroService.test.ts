@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../lib/idb', () => ({
   getFromIDB: vi.fn(),
@@ -7,7 +7,17 @@ vi.mock('../lib/idb', () => ({
   deleteFromIDB: vi.fn(),
 }));
 
-import { getAllFromIDB } from '../lib/idb';
+vi.mock('../lib/syncService', () => ({
+  addToSyncQueue: vi.fn(),
+}));
+
+vi.mock('../lib/supabase', () => ({
+  supabase: { from: vi.fn() },
+  registrarAuditoria: vi.fn(),
+}));
+
+import { getFromIDB, saveToIDB, getAllFromIDB } from '../lib/idb';
+import { addToSyncQueue } from '../lib/syncService';
 import {
   sanitizeReceitaForSupabase,
   sanitizeParcelaReceberForSupabase,
@@ -15,13 +25,20 @@ import {
   sanitizeDespesaForSupabase,
   getParcelasReceber,
   getParcelasPagar,
+  registrarRecebimento,
+  registrarPagamento,
+  estornarRecebimento,
+  estornarPagamento,
   Receita,
   ParcelaReceber,
   ParcelaPagar,
   Despesa,
 } from './financeiroService';
 
+const mockGetFromIDB = vi.mocked(getFromIDB);
+const mockSaveToIDB = vi.mocked(saveToIDB);
 const mockGetAllFromIDB = vi.mocked(getAllFromIDB);
+const mockAddToSyncQueue = vi.mocked(addToSyncQueue);
 
 const baseReceita: Receita = {
   id: 'nao-e-um-uuid',
@@ -300,5 +317,152 @@ describe('getParcelasPagar (offline, fallback IDB)', () => {
     mockGetAllFromIDB.mockResolvedValue(parcelas);
     const out = await getParcelasPagar(false, 'all');
     expect(out.map(p => p.id).sort()).toEqual(['p1', 'p2', 'p3']);
+  });
+});
+
+describe('registrarRecebimento (offline)', () => {
+  beforeEach(() => {
+    mockGetFromIDB.mockReset();
+    mockSaveToIDB.mockReset();
+    mockAddToSyncQueue.mockReset();
+  });
+
+  it('lança erro quando a parcela não é encontrada no cache local', async () => {
+    mockGetFromIDB.mockResolvedValue(null);
+    await expect(registrarRecebimento(false, 'p1', {})).rejects.toThrow('Parcela não encontrada');
+  });
+
+  it('marca como recebido e usa o valor da própria parcela quando valor_recebido não é informado', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p1', valor: 89.9, forma_pagamento: 'pix' });
+    await registrarRecebimento(false, 'p1', {});
+    const salvo = mockSaveToIDB.mock.calls[0][1] as ParcelaReceber;
+    expect(salvo.status).toBe('recebido');
+    expect(salvo.valor_recebido).toBe(89.9);
+    expect(salvo.forma_pagamento_efetivo).toBe('pix');
+  });
+
+  it('usa o valor e a forma de pagamento efetiva informados, quando presentes', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p1', valor: 89.9, forma_pagamento: 'pix' });
+    await registrarRecebimento(false, 'p1', { valor_recebido: 50, forma_pagamento_efetivo: 'dinheiro' });
+    const salvo = mockSaveToIDB.mock.calls[0][1] as ParcelaReceber;
+    expect(salvo.valor_recebido).toBe(50);
+    expect(salvo.forma_pagamento_efetivo).toBe('dinheiro');
+  });
+
+  it('enfileira a atualização para sincronizar depois, em vez de chamar o Supabase, quando offline', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p1' });
+    await registrarRecebimento(false, 'p1', {});
+    expect(mockAddToSyncQueue).toHaveBeenCalledWith(
+      expect.objectContaining({ storeName: 'parcelas_receber', action: 'update' })
+    );
+  });
+});
+
+describe('registrarPagamento (offline)', () => {
+  beforeEach(() => {
+    mockGetFromIDB.mockReset();
+    mockSaveToIDB.mockReset();
+    mockAddToSyncQueue.mockReset();
+  });
+
+  it('lança erro quando a parcela não é encontrada no cache local', async () => {
+    mockGetFromIDB.mockResolvedValue(null);
+    await expect(registrarPagamento(false, 'p1', {})).rejects.toThrow('Parcela não encontrada');
+  });
+
+  it('marca como pago e usa o valor da própria parcela quando valor_pago não é informado', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaPagar, id: 'p1', valor: 500, forma_pagamento: 'boleto' });
+    await registrarPagamento(false, 'p1', {});
+    const salvo = mockSaveToIDB.mock.calls[0][1] as ParcelaPagar;
+    expect(salvo.status).toBe('pago');
+    expect(salvo.valor_pago).toBe(500);
+    expect(salvo.forma_pagamento_efetivo).toBe('boleto');
+  });
+
+  it('enfileira a atualização para sincronizar depois, em vez de chamar o Supabase, quando offline', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaPagar, id: 'p1' });
+    await registrarPagamento(false, 'p1', {});
+    expect(mockAddToSyncQueue).toHaveBeenCalledWith(
+      expect.objectContaining({ storeName: 'parcelas_pagar', action: 'update' })
+    );
+  });
+});
+
+describe('estornarRecebimento (offline)', () => {
+  beforeEach(() => {
+    mockGetFromIDB.mockReset();
+    mockSaveToIDB.mockReset();
+    mockAddToSyncQueue.mockReset();
+    vi.setSystemTime(new Date('2026-09-05T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('não lança erro quando a parcela não é encontrada — apenas não faz nada (diferente de registrarRecebimento)', async () => {
+    mockGetFromIDB.mockResolvedValue(null);
+    await expect(estornarRecebimento(false, 'p1', 'engano')).resolves.toBeUndefined();
+    expect(mockSaveToIDB).not.toHaveBeenCalled();
+  });
+
+  it('volta para "atrasado" quando o vencimento já passou', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p1', status: 'recebido', data_vencimento: '2026-09-01' });
+    await estornarRecebimento(false, 'p1', 'engano');
+    const salvo = mockSaveToIDB.mock.calls[0][1] as ParcelaReceber;
+    expect(salvo.status).toBe('atrasado');
+  });
+
+  it('volta para "pendente" quando o vencimento ainda não chegou', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p1', status: 'recebido', data_vencimento: '2026-09-10' });
+    await estornarRecebimento(false, 'p1', 'engano');
+    const salvo = mockSaveToIDB.mock.calls[0][1] as ParcelaReceber;
+    expect(salvo.status).toBe('pendente');
+  });
+
+  it('limpa os campos de recebimento e registra a observação de estorno', async () => {
+    mockGetFromIDB.mockResolvedValue({
+      ...baseParcelaReceber, id: 'p1', status: 'recebido', data_vencimento: '2026-09-10', valor_recebido: 89.9,
+    });
+    await estornarRecebimento(false, 'p1', 'engano no valor');
+    const salvo = mockSaveToIDB.mock.calls[0][1] as ParcelaReceber;
+    expect(salvo.valor_recebido).toBeNull();
+    expect(salvo.data_pagamento).toBeNull();
+    expect(salvo.observacao_recebimento).toBe('Estornado: engano no valor');
+  });
+});
+
+describe('estornarPagamento (offline)', () => {
+  beforeEach(() => {
+    mockGetFromIDB.mockReset();
+    mockSaveToIDB.mockReset();
+    mockAddToSyncQueue.mockReset();
+    vi.setSystemTime(new Date('2026-09-05T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('não lança erro quando a parcela não é encontrada — apenas não faz nada', async () => {
+    mockGetFromIDB.mockResolvedValue(null);
+    await expect(estornarPagamento(false, 'p1', 'engano')).resolves.toBeUndefined();
+    expect(mockSaveToIDB).not.toHaveBeenCalled();
+  });
+
+  it('volta para "atrasado" quando o vencimento já passou', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaPagar, id: 'p1', status: 'pago', data_vencimento: '2026-09-01' });
+    await estornarPagamento(false, 'p1', 'engano');
+    const salvo = mockSaveToIDB.mock.calls[0][1] as ParcelaPagar;
+    expect(salvo.status).toBe('atrasado');
+  });
+
+  it('volta para "pendente" quando o vencimento ainda não chegou, e limpa os campos de pagamento', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaPagar, id: 'p1', status: 'pago', data_vencimento: '2026-09-10', valor_pago: 500 });
+    await estornarPagamento(false, 'p1', 'engano');
+    const salvo = mockSaveToIDB.mock.calls[0][1] as ParcelaPagar;
+    expect(salvo.status).toBe('pendente');
+    expect(salvo.valor_pago).toBeNull();
+    expect(salvo.observacao_pagamento).toBe('Estornado: engano');
   });
 });
