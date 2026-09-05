@@ -1,14 +1,27 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('../lib/idb', () => ({
+  getFromIDB: vi.fn(),
+  saveToIDB: vi.fn(),
+  getAllFromIDB: vi.fn(),
+  deleteFromIDB: vi.fn(),
+}));
+
+import { getAllFromIDB } from '../lib/idb';
 import {
   sanitizeReceitaForSupabase,
   sanitizeParcelaReceberForSupabase,
   sanitizeParcelaPagarForSupabase,
   sanitizeDespesaForSupabase,
+  getParcelasReceber,
+  getParcelasPagar,
   Receita,
   ParcelaReceber,
   ParcelaPagar,
   Despesa,
 } from './financeiroService';
+
+const mockGetAllFromIDB = vi.mocked(getAllFromIDB);
 
 const baseReceita: Receita = {
   id: 'nao-e-um-uuid',
@@ -207,5 +220,85 @@ describe('sanitizeDespesaForSupabase', () => {
     });
     expect(out.data_emissao).toBe('2026-09-04');
     expect(out.data_inicio_pagamento).toBe('2026-09-10');
+  });
+});
+
+describe('getParcelasReceber (offline, fallback IDB)', () => {
+  beforeEach(() => {
+    mockGetAllFromIDB.mockReset();
+  });
+
+  const parcelas: ParcelaReceber[] = [
+    { ...baseParcelaReceber, id: 'p1', tenant_id: 'emp-1' },
+    { ...baseParcelaReceber, id: 'p2', tenant_id: 'emp-2' },
+    { ...baseParcelaReceber, id: 'p3', tenant_id: 'default_tenant' },
+    { ...baseParcelaReceber, id: 'p4', tenant_id: 'emp-1', deleted_at: '2026-09-01T00:00:00.000Z' },
+  ];
+
+  it('quando offline, não consulta o Supabase e usa só o cache local', async () => {
+    mockGetAllFromIDB.mockResolvedValue(parcelas);
+    await getParcelasReceber(false, 'emp-1');
+    expect(mockGetAllFromIDB).toHaveBeenCalledWith('parcelas_receber');
+  });
+
+  it('filtra parcelas de outros tenants, mas mantém as do tenant "default_tenant"', async () => {
+    mockGetAllFromIDB.mockResolvedValue(parcelas);
+    const out = await getParcelasReceber(false, 'emp-1');
+    expect(out.map(p => p.id).sort()).toEqual(['p1', 'p3']);
+  });
+
+  it('exclui parcelas com deleted_at, mesmo pertencendo ao tenant certo', async () => {
+    mockGetAllFromIDB.mockResolvedValue(parcelas);
+    const out = await getParcelasReceber(false, 'emp-1');
+    expect(out.find(p => p.id === 'p4')).toBeUndefined();
+  });
+
+  it('com tenantId "all", não filtra por tenant (só remove as com deleted_at)', async () => {
+    mockGetAllFromIDB.mockResolvedValue(parcelas);
+    const out = await getParcelasReceber(false, 'all');
+    expect(out.map(p => p.id).sort()).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  it('retorna lista vazia quando o IDB não tem nada', async () => {
+    mockGetAllFromIDB.mockResolvedValue([]);
+    const out = await getParcelasReceber(false, 'emp-1');
+    expect(out).toEqual([]);
+  });
+});
+
+describe('getParcelasPagar (offline, fallback IDB)', () => {
+  beforeEach(() => {
+    mockGetAllFromIDB.mockReset();
+  });
+
+  const parcelas: ParcelaPagar[] = [
+    { ...baseParcelaPagar, id: 'p1', tenant_id: 'emp-1' },
+    { ...baseParcelaPagar, id: 'p2', tenant_id: 'emp-2' },
+    { ...baseParcelaPagar, id: 'p3', tenant_id: 'empresa_padrao' },
+    { ...baseParcelaPagar, id: 'p4', tenant_id: 'emp-1', deleted_at: '2026-09-01T00:00:00.000Z' },
+  ];
+
+  it('quando offline, não consulta o Supabase e usa só o cache local', async () => {
+    mockGetAllFromIDB.mockResolvedValue(parcelas);
+    await getParcelasPagar(false, 'emp-1');
+    expect(mockGetAllFromIDB).toHaveBeenCalledWith('parcelas_pagar');
+  });
+
+  it('filtra parcelas de outros tenants, mas mantém as do tenant "empresa_padrao"', async () => {
+    mockGetAllFromIDB.mockResolvedValue(parcelas);
+    const out = await getParcelasPagar(false, 'emp-1');
+    expect(out.map(p => p.id).sort()).toEqual(['p1', 'p3']);
+  });
+
+  it('exclui parcelas com deleted_at, mesmo pertencendo ao tenant certo', async () => {
+    mockGetAllFromIDB.mockResolvedValue(parcelas);
+    const out = await getParcelasPagar(false, 'emp-1');
+    expect(out.find(p => p.id === 'p4')).toBeUndefined();
+  });
+
+  it('com tenantId "all", não filtra por tenant (só remove as com deleted_at)', async () => {
+    mockGetAllFromIDB.mockResolvedValue(parcelas);
+    const out = await getParcelasPagar(false, 'all');
+    expect(out.map(p => p.id).sort()).toEqual(['p1', 'p2', 'p3']);
   });
 });
