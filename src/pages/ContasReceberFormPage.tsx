@@ -173,7 +173,7 @@ export const ContasReceberFormPage: React.FC = () => {
   useEffect(() => {
     const fetchAssociados = async () => {
       try {
-        const data = await getAssociados(state.isOnline, 'all');
+        const data = await getAssociados(state.isOnline, state.empresaSelecionada || 'empresa_padrao');
         setAssociados(data);
       } catch (e) {
         console.error(e);
@@ -193,8 +193,10 @@ export const ContasReceberFormPage: React.FC = () => {
       const loadReceita = async () => {
         setLoadingDados(true);
         try {
-          // Carrega lista completa de associados primeiro para garantir matching
-          const assocsList = await getAssociados(state.isOnline, 'all');
+          // Carrega associados do tenant atual primeiro para garantir matching
+          // (se o associado_id da receita pertencer a outro tenant, o fallback de
+          // placeholder logo abaixo cobre o caso usando rec.tenant_id)
+          const assocsList = await getAssociados(state.isOnline, state.empresaSelecionada || 'empresa_padrao');
           setAssociados(assocsList);
 
           const { receita: rec, parcelas: parcs } = await getReceitaCompleta(state.isOnline, id, targetParcelaId);
