@@ -2,7 +2,7 @@ import React from 'react';
 import { Associado } from '../../services/associadosService';
 import { MessageCircle, Edit2, Trash2 } from 'lucide-react';
 import { formatDateSafe } from '../../utils/dateUtils';
-import { PlanoPax } from '../../services/planosPaxService';
+import { PlanoPax } from '../../types/planosPax';
 
 interface AssociadosListTableProps {
   filtered: Associado[];

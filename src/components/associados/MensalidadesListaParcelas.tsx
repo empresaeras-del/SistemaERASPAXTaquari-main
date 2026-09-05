@@ -1,7 +1,8 @@
 import React from 'react';
 import { Trash2, DollarSign, Printer, Edit3 } from 'lucide-react';
 import { ParcelaReceber } from '../../services/financeiroService';
-import { formatLocalDate, formatCurrency } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatters';
+import { formatLocalDate } from '../../utils/dateUtils';
 
 interface MensalidadesListaParcelasProps {
   filtradasTabela: ParcelaReceber[];
