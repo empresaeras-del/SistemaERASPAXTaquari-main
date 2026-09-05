@@ -2,11 +2,11 @@ import React from 'react';
 import { Associado } from '../../services/associadosService';
 import { ShieldCheck, Calendar, Users, MessageCircle, Edit2, Trash2 } from 'lucide-react';
 import { formatDateSafe } from '../../utils/dateUtils';
-import { PlanoPax } from '../../types/planosPax';
+import { PlanoPaxResumo } from '../../types/planosPax';
 
 interface AssociadosListGridProps {
   filtered: Associado[];
-  planos: PlanoPax[];
+  planos: PlanoPaxResumo[];
   parcelasAbertasMap: Record<string, number>;
   isOnline: boolean;
   setPreviewAssociado: (assoc: Associado) => void;
