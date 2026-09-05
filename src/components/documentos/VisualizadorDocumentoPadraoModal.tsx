@@ -52,6 +52,7 @@ import { formatLocalDate } from '../../utils/dateUtils';
 import { getAllFromIDB } from '../../lib/idb';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useAppContext } from '../../context/AppContext';
 import {
   resolverVariaveisEmpresa,
   resolverVariaveisAssociado,
@@ -154,6 +155,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   const [selectedRequisicaoId, setSelectedRequisicaoId] = useState<string>('');
 
   const { user: usuarioLogado } = useAuth();
+  const { state: { empresaSelecionada } } = useAppContext();
 
   const [currentEmpresa, setCurrentEmpresa] = useState<Empresa | null>(initialEmpresaData || null);
   const [placeholderValues, setPlaceholderValues] =
@@ -219,11 +221,11 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
           }
         }
         if (associados.length === 0) {
-          const assocs = await getAssociados(true, 'all');
+          const assocs = await getAssociados(true, empresaSelecionada || 'empresa_padrao');
           setAssociados(assocs || []);
         }
         if (atendimentos.length === 0) {
-          const atds = await getAtendimentos(true, 'all');
+          const atds = await getAtendimentos(true, empresaSelecionada || 'empresa_padrao');
           setAtendimentos(atds || []);
         }
         if (planos.length === 0) {
@@ -269,15 +271,15 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
           }
         }
         if (receitas.length === 0) {
-          const rec = await getReceitas(true, 'all');
+          const rec = await getReceitas(true, empresaSelecionada || 'empresa_padrao');
           setReceitas(rec || []);
         }
         if (parcelasReceber.length === 0) {
-          const parc = await getParcelasReceber(true, 'all');
+          const parc = await getParcelasReceber(true, empresaSelecionada || 'empresa_padrao');
           setParcelasReceber(parc || []);
         }
         if (requisicoes.length === 0) {
-          const reqs = await getRequisicoes(true, 'all');
+          const reqs = await getRequisicoes(true, empresaSelecionada || 'empresa_padrao');
           setRequisicoes(reqs || []);
         }
       } catch (e) {
@@ -286,7 +288,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     };
 
     carregarEntidades();
-  }, [isOpen]);
+  }, [isOpen, empresaSelecionada]);
 
   // Sincroniza empresa atual caso mude por props
   useEffect(() => {

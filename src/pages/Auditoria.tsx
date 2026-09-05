@@ -261,7 +261,7 @@ export const AuditoriaPage: React.FC = () => {
           ? getEmpresaById(state.empresaSelecionada, state.isOnline)
           : Promise.resolve(null),
         getEmpresas(state.isOnline),
-        getUsuarios(state.isOnline, 'all')
+        getUsuarios(state.isOnline, state.empresaSelecionada || 'all')
       ]);
       
       setEmpresa(empData);
