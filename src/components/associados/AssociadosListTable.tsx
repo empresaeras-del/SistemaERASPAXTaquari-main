@@ -2,12 +2,12 @@ import React from 'react';
 import { Associado } from '../../services/associadosService';
 import { MessageCircle, Edit2, Trash2 } from 'lucide-react';
 import { formatDateSafe } from '../../utils/dateUtils';
-import { PlanoPax } from '../../types/planosPax';
+import { PlanoPaxResumo } from '../../types/planosPax';
 
 interface AssociadosListTableProps {
   filtered: Associado[];
   isVisible: (col: string) => boolean;
-  planos: PlanoPax[];
+  planos: PlanoPaxResumo[];
   parcelasAbertasMap: Record<string, number>;
   setPreviewAssociado: (assoc: Associado) => void;
   handleWhatsAppMenu: (assoc: Associado) => void;

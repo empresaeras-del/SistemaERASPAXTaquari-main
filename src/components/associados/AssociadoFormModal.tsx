@@ -16,7 +16,7 @@ import { validarDadosAssociado } from '../../utils/associadoValidation';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { formatDateSafe } from '../../utils/dateUtils';
 import { formatPhone } from '../../utils/formatters';
-import { Associado } from '../../services/associadosService';
+import { Associado, Dependente } from '../../services/associadosService';
 import { uploadDocumentoAssociado } from '../../services/associadosService';
 import { isPdfDocument, isImageDocument, downloadDocumento } from '../../utils/documentUtils';
 import { PlanoPaxSelect } from '../planos-pax/PlanoPaxSelect';
@@ -891,7 +891,7 @@ export const AssociadoFormModal = (props: any) => {
                         ) : (
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {editingAssociado.dependentes
-                              .filter((dep) => {
+                              .filter((dep: Dependente) => {
                                 if (!buscaDependenteInterno) return true;
                                 const s = buscaDependenteInterno.toLowerCase();
                                 const sDigits = s.replace(/\D/g, "");
@@ -901,7 +901,7 @@ export const AssociadoFormModal = (props: any) => {
                                   (dep.cpf && dep.cpf.replace(/\D/g, "").includes(sDigits))
                                 );
                               })
-                              .map((dep, index) => {
+                              .map((dep: Dependente, index: number) => {
                                 const initials = (dep.nome || "D")
                                   .split(" ")
                                   .filter(Boolean)
@@ -1230,7 +1230,7 @@ export const AssociadoFormModal = (props: any) => {
                               </div>
                               {editingAssociado.historico_contratos &&
                                 editingAssociado.historico_contratos.map(
-                                  (hist) => (
+                                  (hist: NonNullable<Associado['historico_contratos']>[number]) => (
                                     <div className="flex gap-4" key={hist.id}>
                                       <div className="mt-1">
                                         <div className="w-2 h-2 rounded-full bg-[#60A5FA]"></div>
