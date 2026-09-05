@@ -3,12 +3,87 @@ import { X, Table, Eye, EyeOff, Plus, Check, Sparkles, Sliders } from 'lucide-re
 
 export type EstiloTabela =
   'grade-visivel' | 'grade-oculta' | 'grade-zebrada' | 'cabecalho-destacado';
+export type EspacamentoTabela = 'compacto' | 'normal' | 'espacoso';
 
 export interface DocumentoTableModalProps {
   isOpen: boolean;
   onClose: () => void;
   onInsertTable: (html: string) => void;
 }
+
+export const PADDING_POR_ESPACAMENTO: Record<EspacamentoTabela, string> = {
+  compacto: '4px 8px',
+  normal: '8px 12px',
+  espacoso: '14px 16px',
+};
+
+export interface GerarTabelaOptions {
+  rows: number;
+  cols: number;
+  estilo: EstiloTabela;
+  temCabecalho: boolean;
+  largura100: boolean;
+  alturaLinha: number; // 0 = automática (altura do conteúdo)
+  espacamento: EspacamentoTabela;
+}
+
+/**
+ * Gera o HTML de uma tabela personalizada a partir das opções escolhidas no
+ * modal. Extraída do componente para poder ser testada sem precisar montar
+ * a UI — linhas/colunas são sempre limitadas a um intervalo razoável
+ * (1-20 linhas, 1-8 colunas) independente do que for passado.
+ */
+export const gerarTabelaHtml = ({
+  rows, cols, estilo, temCabecalho, largura100, alturaLinha, espacamento,
+}: GerarTabelaOptions): string => {
+  const numRows = Math.max(1, Math.min(20, rows));
+  const numCols = Math.max(1, Math.min(8, cols));
+
+  const isGradeOculta = estilo === 'grade-oculta';
+  const isZebrada = estilo === 'grade-zebrada';
+  const isCabecalhoDestacado = estilo === 'cabecalho-destacado';
+
+  const tableClass = isGradeOculta
+    ? 'tabela-sem-grade'
+    : isZebrada
+    ? 'tabela-zebrada'
+    : 'tabela-padrao';
+
+  const tableStyle = isGradeOculta
+    ? `width: ${largura100 ? '100%' : 'auto'}; border-collapse: collapse; border: none; margin: 15px 0;`
+    : `width: ${largura100 ? '100%' : 'auto'}; border-collapse: collapse; border: 1px solid #cbd5e1; margin: 15px 0;`;
+
+  const cellBorder = isGradeOculta ? 'border: none;' : 'border: 1px solid #cbd5e1;';
+  const cellPadding = `padding: ${PADDING_POR_ESPACAMENTO[espacamento]};`;
+  const rowHeightStyle = alturaLinha > 0 ? `height: ${alturaLinha}px;` : '';
+
+  let html = `<table class="${tableClass}" style="${tableStyle}">\n`;
+
+  if (temCabecalho) {
+    const headerBg = isCabecalhoDestacado
+      ? 'background-color: #1e293b; color: #ffffff;'
+      : 'background-color: #f1f5f9; color: #0f172a;';
+
+    html += `  <thead>\n    <tr style="${headerBg} ${rowHeightStyle}">\n`;
+    for (let c = 1; c <= numCols; c++) {
+      html += `      <th style="${cellBorder} ${cellPadding} text-align: left; font-weight: bold;">Coluna ${c}</th>\n`;
+    }
+    html += `    </tr>\n  </thead>\n`;
+  }
+
+  html += `  <tbody>\n`;
+  for (let r = 1; r <= numRows; r++) {
+    const rowBg = isZebrada && r % 2 === 0 ? 'background-color: #f8fafc;' : '';
+    html += `    <tr style="${rowBg} ${rowHeightStyle}">\n`;
+    for (let c = 1; c <= numCols; c++) {
+      html += `      <td style="${cellBorder} ${cellPadding} vertical-align: top;">Texto ${r}.${c}</td>\n`;
+    }
+    html += `    </tr>\n`;
+  }
+  html += `  </tbody>\n</table>\n<p><br/></p>`;
+
+  return html;
+};
 
 export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
   isOpen,
@@ -20,6 +95,8 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
   const [estilo, setEstilo] = useState<EstiloTabela>('grade-visivel');
   const [temCabecalho, setTemCabecalho] = useState(true);
   const [largura100, setLargura100] = useState(true);
+  const [alturaLinha, setAlturaLinha] = useState(0); // 0 = automática (altura do conteúdo)
+  const [espacamento, setEspacamento] = useState<EspacamentoTabela>('normal');
 
   if (!isOpen) return null;
 
@@ -96,53 +173,7 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
   };
 
   const handleGenerateCustomTable = () => {
-    const numRows = Math.max(1, Math.min(20, rows));
-    const numCols = Math.max(1, Math.min(8, cols));
-
-    const isGradeOculta = estilo === 'grade-oculta';
-    const isZebrada = estilo === 'grade-zebrada';
-    const isCabecalhoDestacado = estilo === 'cabecalho-destacado';
-
-    const tableClass = isGradeOculta
-      ? 'tabela-sem-grade'
-      : isZebrada
-        ? 'tabela-zebrada'
-        : 'tabela-padrao';
-
-    const tableStyle = isGradeOculta
-      ? `width: ${largura100 ? '100%' : 'auto'}; border-collapse: collapse; border: none; margin: 15px 0;`
-      : `width: ${largura100 ? '100%' : 'auto'}; border-collapse: collapse; border: 1px solid #cbd5e1; margin: 15px 0;`;
-
-    const cellBorder = isGradeOculta ? 'border: none;' : 'border: 1px solid #cbd5e1;';
-    const cellPadding = 'padding: 8px 12px;';
-
-    let html = `<table class="${tableClass}" style="${tableStyle}">\n`;
-
-    // Cabeçalho opcional
-    if (temCabecalho) {
-      const headerBg = isCabecalhoDestacado
-        ? 'background-color: #1e293b; color: #ffffff;'
-        : 'background-color: #f1f5f9; color: #0f172a;';
-
-      html += `  <thead>\n    <tr style="${headerBg}">\n`;
-      for (let c = 1; c <= numCols; c++) {
-        html += `      <th style="${cellBorder} ${cellPadding} text-align: left; font-weight: bold;">Coluna ${c}</th>\n`;
-      }
-      html += `    </tr>\n  </thead>\n`;
-    }
-
-    // Corpo da tabela
-    html += `  <tbody>\n`;
-    for (let r = 1; r <= numRows; r++) {
-      const rowBg = isZebrada && r % 2 === 0 ? 'background-color: #f8fafc;' : '';
-      html += `    <tr style="${rowBg}">\n`;
-      for (let c = 1; c <= numCols; c++) {
-        html += `      <td style="${cellBorder} ${cellPadding} vertical-align: top;">Texto ${r}.${c}</td>\n`;
-      }
-      html += `    </tr>\n`;
-    }
-    html += `  </tbody>\n</table>\n<p><br/></p>`;
-
+    const html = gerarTabelaHtml({ rows, cols, estilo, temCabecalho, largura100, alturaLinha, espacamento });
     onInsertTable(html);
     onClose();
   };
@@ -361,6 +392,51 @@ export const DocumentoTableModal: React.FC<DocumentoTableModalProps> = ({
                 />
                 Ocupar 100% da Largura da Página
               </label>
+            </div>
+
+            {/* Altura de linha e espaçamento interno das células */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-400">
+                  Altura da linha
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={0}
+                    max={80}
+                    step={4}
+                    value={alturaLinha}
+                    onChange={(e) => setAlturaLinha(Number(e.target.value))}
+                    className="flex-1 accent-indigo-500"
+                  />
+                  <span className="text-xs font-bold text-white w-16 text-right shrink-0">
+                    {alturaLinha > 0 ? `${alturaLinha}px` : 'Auto'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-400">
+                  Espaçamento interno da célula
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(['compacto', 'normal', 'espacoso'] as const).map(opcao => (
+                    <button
+                      key={opcao}
+                      type="button"
+                      onClick={() => setEspacamento(opcao)}
+                      className={`py-1.5 rounded-lg text-[11px] font-semibold capitalize transition-colors ${
+                        espacamento === opcao
+                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500'
+                          : 'bg-[#13171f] text-slate-400 border border-[#2d3544] hover:border-indigo-500/40'
+                      }`}
+                    >
+                      {opcao}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
