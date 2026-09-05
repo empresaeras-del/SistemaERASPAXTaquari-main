@@ -1,6 +1,6 @@
 import React from 'react';
-import { X, User, Users, Activity, FileText, FolderOpen, ClipboardList, DollarSign, ChevronRight, CheckCircle, Save } from 'lucide-react';
-import { AlertaAlteracoesPendentes } from './common/AlertaAlteracoesPendentes';
+import { X, User, Users, Activity, FileText, FolderOpen, ClipboardList, DollarSign, ChevronRight, CheckCircle, Save, AlertCircle, Phone, MapPin, Search, ShieldCheck, Edit2, Trash2, Plus, UploadCloud, ImageIcon, AlertTriangle, Eye, Download, Heart, Printer } from 'lucide-react';
+import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 import { AssociadoRequisicoesTab } from './AssociadoRequisicoesTab';
 import { AssociadoAtendimentosTab } from './AssociadoAtendimentosTab';
 import { AssociadoResumoFinanceiroTab } from './AssociadoResumoFinanceiroTab';
@@ -12,6 +12,16 @@ import { VisualizadorDocumentoModal } from './VisualizadorDocumentoModal';
 import { DependenteFormModal } from './DependenteFormModal';
 import { ContratoDocumentosGenerator } from './ContratoDocumentosGenerator';
 import { NovoContratoWizard } from '../contratos/NovoContratoWizard';
+import { validarDadosAssociado } from '../../utils/associadoValidation';
+import { maskCPFOrCNPJ } from '../../utils/validators';
+import { formatDateSafe } from '../../utils/dateUtils';
+import { formatPhone } from '../../utils/formatters';
+import { Associado } from '../../services/associadosService';
+import { uploadDocumentoAssociado } from '../../services/associadosService';
+import { isPdfDocument, isImageDocument, downloadDocumento } from '../../utils/documentUtils';
+import { PlanoPaxSelect } from '../planos-pax/PlanoPaxSelect';
+import { RelatorioAssociadosModal } from './RelatorioAssociadosModal';
+
 
 export const AssociadoFormModal = (props: any) => {
   const {
@@ -420,7 +430,7 @@ export const AssociadoFormModal = (props: any) => {
                                 handleFieldChange("cpf", formatted);
                                 const cpfLimpo = formatted.replace(/\D/g, '');
                                 if (cpfLimpo.length === 11) {
-                                  const duplicateUser = associados.find(a => a.status === 'ativo' && a.cpf?.replace(/\D/g, '') === cpfLimpo && a.id !== editingAssociado.id);
+                                  const duplicateUser = associados.find((a: any) => a.status === 'ativo' && a.cpf?.replace(/\D/g, '') === cpfLimpo && a.id !== editingAssociado.id);
                                   if (duplicateUser) {
                                     toast.error(`ATENÇÃO: CPF já cadastrado no associado ativo: ${duplicateUser.nome}`);
                                   }
@@ -896,7 +906,7 @@ export const AssociadoFormModal = (props: any) => {
                                   .split(" ")
                                   .filter(Boolean)
                                   .slice(0, 2)
-                                  .map((p) => p[0])
+                                  .map((p: any) => p[0])
                                   .join("")
                                   .toUpperCase();
 
@@ -1038,7 +1048,7 @@ export const AssociadoFormModal = (props: any) => {
                                 className="w-full bg-bg-base border border-border-default rounded-xl px-4 py-2.5 text-sm text-text-base focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent outline-none transition-all"
                               >
                                 <option value="">Selecione a empresa conveniada</option>
-                                {fornecedores.filter(f => f.categoria === 'Convenios Associados' && f.status === 'ativo').map(f => (
+                                {fornecedores.filter((f: any) => f.categoria === 'Convenios Associados' && f.status === 'ativo').map((f: any) => (
                                   <option key={f.id} value={f.id}>{f.razao_social || f.nome_fantasia}</option>
                                 ))}
                               </select>
@@ -1070,7 +1080,7 @@ export const AssociadoFormModal = (props: any) => {
                           </div>
                           
                           {/* Inactive Contracts Widgets */}
-                          {editingAssociado.historico_contratos?.map(hist => (
+                          {editingAssociado.historico_contratos?.map((hist: any) => (
                             <div 
                               key={hist.id}
                               onClick={() => setSelectedContratoId(hist.id)}
@@ -1117,7 +1127,7 @@ export const AssociadoFormModal = (props: any) => {
                                 <div>
                                   <p className="text-sm font-medium text-text-subtle mb-1">Plano Atual</p>
                                   <h4 className="text-lg font-bold text-text-base capitalize">
-                                    {editingAssociado.plano_pax_id ? planos.find(p => p.id === editingAssociado.plano_pax_id)?.nome || editingAssociado.plano_nome : editingAssociado.plano_nome || "Nenhum Plano Selecionado"}
+                                    {editingAssociado.plano_pax_id ? planos.find((p: any) => p.id === editingAssociado.plano_pax_id)?.nome || editingAssociado.plano_nome : editingAssociado.plano_nome || "Nenhum Plano Selecionado"}
                                   </h4>
                                 </div>
                                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -1272,7 +1282,7 @@ export const AssociadoFormModal = (props: any) => {
                           ) : (
                             <div className="p-6 bg-bg-surface border border-border-default rounded-xl max-w-2xl">
                                {(() => {
-                                 const hist = editingAssociado.historico_contratos?.find(h => h.id === selectedContratoId);
+                                 const hist = editingAssociado.historico_contratos?.find((h: any) => h.id === selectedContratoId);
                                  if (!hist) return <p className="text-text-subtle">Contrato não encontrado.</p>;
                                  return (
                                    <div className="space-y-6">
@@ -1296,7 +1306,7 @@ export const AssociadoFormModal = (props: any) => {
                       )}
                     </div>
                   ) : activeTab === "mensalidades" ? (
-                    <MensalidadesTab associado={editingAssociado} onSuccess={!isEditingMode ? () => setActiveTab("documentos") : undefined} />
+                    <AssociadoMensalidadesTab associado={editingAssociado} onSuccess={!isEditingMode ? () => setActiveTab("documentos") : undefined} />
                   ) : activeTab === "requisicoes" ? (
                     <AssociadoRequisicoesTab associado={editingAssociado} />
                   ) : activeTab === "atendimentos" ? (
@@ -1414,7 +1424,7 @@ export const AssociadoFormModal = (props: any) => {
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {editingAssociado.documentos.map((doc, idx) => {
+                                {editingAssociado.documentos.map((doc: any, idx: number) => {
                                   const isPdf = isPdfDocument(doc);
                                   const isImg = isImageDocument(doc);
                                   const isLegacyBlob = doc.url && doc.url.startsWith("blob:");
@@ -1656,10 +1666,10 @@ export const AssociadoFormModal = (props: any) => {
                           </td>
                         </tr>
                       ) : (
-                        dependentesFiltrados.map((d, index) => {
-                          const assoc = associados.find(a => 
+                        dependentesFiltrados.map((d: any, index: number) => {
+                          const assoc = associados.find((a: any) => 
                             (a.nome && d.titular_nome && a.nome.trim().toLowerCase() === d.titular_nome.trim().toLowerCase()) ||
-                            (a.dependentes && a.dependentes.some(dep => dep.id === d.id))
+                            (a.dependentes && a.dependentes.some((dep: any) => dep.id === d.id))
                           );
                           return (
                             <tr 
@@ -1812,7 +1822,7 @@ export const AssociadoFormModal = (props: any) => {
                         setNovoPlanoSelecionado(id);
                       }}
                       nVidas={1 + (editingAssociado?.dependentes?.length || 0)}
-                      idadesDependentes={editingAssociado?.dependentes?.filter(d => d.data_nascimento).map(d => {
+                      idadesDependentes={editingAssociado?.dependentes?.filter((d: any) => d.data_nascimento).map((d: any) => {
                         const ageDifMs = Date.now() - new Date(d.data_nascimento!).getTime();
                         const ageDate = new Date(ageDifMs);
                         return Math.abs(ageDate.getUTCFullYear() - 1970);
@@ -1881,13 +1891,13 @@ export const AssociadoFormModal = (props: any) => {
           }}
           dependente={dependenteEmEdicao}
           titularNome={editingAssociado.nome}
-          existingCpfs={(editingAssociado.dependentes || []).map((d) => d.cpf || "").filter(Boolean)}
+          existingCpfs={(editingAssociado.dependentes || []).map((d: any) => d.cpf || "").filter(Boolean)}
           onDelete={handleExcluirDependente}
           onSave={(salvoDep) => {
-            setEditingAssociado(prev => {
+            setEditingAssociado((prev: any) => {
               if (!prev) return null;
               const deps = prev.dependentes ? [...prev.dependentes] : [];
-              const index = deps.findIndex((d) => d.id === salvoDep.id);
+              const index = deps.findIndex((d: any) => d.id === salvoDep.id);
               if (index !== -1) {
                 deps[index] = salvoDep;
               } else {
