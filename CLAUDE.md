@@ -184,15 +184,16 @@ Resultado (linhas antes → depois, só com essa extração):
 |---|---|---|---|
 | `pages/Associados.tsx` | 3110 | 2855 (nesta rodada) | `utils/associadoValidation.ts`, `utils/associadoHelpers.ts` |
 | `components/associados/AssociadoMensalidadesTab.tsx` | 1843 | 1794 | `utils/mensalidadesAssociadoHelpers.ts`, `formatCurrency` em `utils/formatters.ts` |
-| `services/financeiroService.ts` | 1661 | 1661* | *não decomposto (ver nota abaixo) — só ganhou testes para os 3 `sanitize*ForSupabase` que ainda não tinham |
+| `services/financeiroService.ts` | 1661 | 1661* | *não decomposto (ver nota abaixo) — ganhou teste para as 4 `sanitize*ForSupabase` e, numa rodada posterior, para o caminho offline de 6 funções assíncronas (ver "Testes" abaixo) |
 | `pages/Configuracoes.tsx` | 1641 | 1622 | `utils/configuracoesHelpers.ts` |
 | `pages/Auditoria.tsx` | 1564 | 1266 | `utils/auditoriaHelpers.ts` |
 
 **Por que `financeiroService.ts` não foi decomposto**: ao contrário dos outros quatro, é um service
 de acesso a dados (async, Supabase + IndexedDB + fila de sync), não um componente com lógica pura
 misturada — quase todo o arquivo já segue o padrão offline-first documentado acima, então não havia
-lógica pura relevante para extrair além das 4 funções `sanitize*ForSupabase` (uma já tinha teste, as
-outras três ganharam agora). Fisicamente dividir o arquivo em módulos menores (`receitasService.ts`,
+lógica pura relevante para extrair além das 4 funções `sanitize*ForSupabase` — hoje todas testadas,
+junto com o caminho offline de boa parte das funções assíncronas do arquivo (ver "Testes" abaixo).
+Fisicamente dividir o arquivo em módulos menores (`receitasService.ts`,
 `despesasService.ts`...) é uma mudança estrutural de risco bem maior — o arquivo é importado por
 ~15 outros — e foi deixada de fora desta rodada por não caber no critério "validável sem UI".
 
@@ -252,8 +253,27 @@ runtime.
 ## Testes
 
 Ver `README.md`. Ao mexer num arquivo de `utils/` ou numa função pura de `services/`, adicione ou
-atualize o teste correspondente — é o único jeito de saber se uma mudança quebrou algo, já que não
-há suíte de testes de componente/UI ainda.
+atualize o teste correspondente — é o critério mínimo para saber se uma mudança quebrou algo.
+
+**Mockando services offline-first**: os primeiros testes de `services/` cobriam só funções puras
+(`sanitize*ForSupabase` em `financeiroService.ts`). Para testar as funções assíncronas que seguem o
+padrão offline-first (ver seção acima), mocka-se `../lib/idb` com `vi.mock` — e, quando a função
+também grava auditoria ou enfileira sync, `../lib/syncService` e `../lib/supabase` — e testa-se só o
+caminho `isOnline=false`: é ali que mora a lógica de negócio de verdade (filtro por `tenant_id`,
+fallback de valores, transições de status), sem precisar de rede real nem de IndexedDB de verdade.
+Ver `financeiroService.test.ts` (`getParcelasReceber`, `registrarRecebimento`,
+`estornarRecebimento`...), `requisicoesService.test.ts` e `faturamentoService.test.ts` como
+referência do padrão ao testar um service novo.
+
+**Primeiro teste de componente**: `AssociadoFormModal.test.tsx` é o primeiro teste de render do
+projeto, com `@testing-library/react` (já era devDependency havia tempo, mas nunca tinha sido usada).
+Componentes que recebem todo o estado via props e não têm hooks próprios — o estado mora num hook
+externo, como `useAssociadosState.ts` para os de associados — são os mais baratos de testar assim:
+dá para isolar o que renderiza incondicionalmente (cabeçalho, avisos, botões) passando um valor de
+controle (ex. `activeTab: '__nenhuma_aba__'`) que não bate com nenhum caso conhecido, sem precisar
+simular os dados de cada aba/seção condicional. Ainda não existe suíte de teste de UI além desse
+smoke test — ao testar um componente grande "orientado a props" na mesma linha, vale seguir o mesmo
+padrão em vez de tentar renderizar a árvore inteira de uma vez.
 
 ## Performance: bibliotecas pesadas em `services/` usados pelo shell do app
 
