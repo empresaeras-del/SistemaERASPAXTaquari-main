@@ -213,13 +213,7 @@ export const AssociadosPage: React.FC = () => {
               <ColumnVisibilityToggle
                 columns={columns}
                 visibleColumns={visibleColumns}
-                onToggleColumn={(colId) => {
-                  if (visibleColumns.includes(colId)) {
-                    setVisibleColumns(visibleColumns.filter(id => id !== colId));
-                  } else {
-                    setVisibleColumns([...visibleColumns, colId]);
-                  }
-                }}
+                onChange={setVisibleColumns}
               />
             )}
           </div>
