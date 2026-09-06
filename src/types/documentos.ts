@@ -1,5 +1,8 @@
 import type { MargensConfig } from '../components/documentos/DocumentoMargensModal';
 
+// Reexportado para que `utils/` possa tipar margens sem depender de `components/`.
+export type { MargensConfig };
+
 export type TipoDocumento = 'contrato_adesao' | 'termo_rescisao' | 'termo_credenciamento' | 'aditivo' | 'outro';
 
 export type OrientacaoPapel = 'retrato' | 'paisagem';

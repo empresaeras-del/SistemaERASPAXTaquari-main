@@ -13,12 +13,32 @@ import type {
   AssinaturaConfig,
   AssinaturaConfigV1,
   AssinaturaConfigV2,
+  MargensConfig,
   OrientacaoPapel,
 } from '../types/documentos';
 import { isAssinaturaConfigV2 } from '../types/documentos';
 
-/** Margem da página usada pelo CSS de impressão (`@page { margin }`), em mm. */
+/** Margem usada quando o documento não tem margens próprias gravadas, em mm. */
 export const MARGEM_PAGINA_MM = 15;
+
+/** Margens de fallback: documentos antigos não têm `margens` gravado. */
+export const MARGENS_PADRAO: MargensConfig = {
+  top: MARGEM_PAGINA_MM,
+  bottom: MARGEM_PAGINA_MM,
+  left: MARGEM_PAGINA_MM,
+  right: MARGEM_PAGINA_MM,
+};
+
+/** Normaliza margens possivelmente ausentes ou parciais vindas do banco. */
+export function margensOu(margens?: MargensConfig | null): MargensConfig {
+  if (!margens) return MARGENS_PADRAO;
+  return {
+    top: Number.isFinite(margens.top) ? margens.top : MARGENS_PADRAO.top,
+    bottom: Number.isFinite(margens.bottom) ? margens.bottom : MARGENS_PADRAO.bottom,
+    left: Number.isFinite(margens.left) ? margens.left : MARGENS_PADRAO.left,
+    right: Number.isFinite(margens.right) ? margens.right : MARGENS_PADRAO.right,
+  };
+}
 
 /** Dimensões do papel A4 em mm. */
 export const A4_MM = { largura: 210, altura: 297 };
@@ -38,9 +58,10 @@ export function alturaPapelMm(orientacao: Orientacao): number {
   return ehPaisagem(orientacao) ? A4_MM.largura : A4_MM.altura;
 }
 
-/** Largura da área útil (papel menos as duas margens), em mm. */
-export function larguraUtilMm(orientacao: Orientacao): number {
-  return larguraPapelMm(orientacao) - MARGEM_PAGINA_MM * 2;
+/** Largura da área útil (papel menos as margens laterais do documento), em mm. */
+export function larguraUtilMm(orientacao: Orientacao, margens?: MargensConfig | null): number {
+  const m = margensOu(margens);
+  return larguraPapelMm(orientacao) - m.left - m.right;
 }
 
 /**
@@ -48,8 +69,9 @@ export function larguraUtilMm(orientacao: Orientacao): number {
  * páginas no fluxo impresso, já que o conteúdo de cada página ocupa exatamente
  * essa altura antes de quebrar.
  */
-export function alturaUtilMm(orientacao: Orientacao): number {
-  return alturaPapelMm(orientacao) - MARGEM_PAGINA_MM * 2;
+export function alturaUtilMm(orientacao: Orientacao, margens?: MargensConfig | null): number {
+  const m = margensOu(margens);
+  return alturaPapelMm(orientacao) - m.top - m.bottom;
 }
 
 /**
@@ -71,8 +93,9 @@ export function pxPorMm(larguraFolhaPx: number, orientacao: Orientacao): number 
 export function decomporEmPagina(
   deslocamentoMm: number,
   orientacao: Orientacao,
+  margens?: MargensConfig | null,
 ): { pagina: number; yMm: number } {
-  const passo = alturaUtilMm(orientacao);
+  const passo = alturaUtilMm(orientacao, margens);
   const seguro = Math.max(0, deslocamentoMm);
   const pagina = Math.floor(seguro / passo);
   return { pagina, yMm: seguro - pagina * passo };
@@ -82,8 +105,9 @@ export function decomporEmPagina(
 export function deslocamentoContinuoMm(
   config: AssinaturaConfigV2,
   orientacao: Orientacao,
+  margens?: MargensConfig | null,
 ): number {
-  return config.pagina * alturaUtilMm(orientacao) + config.yMm;
+  return config.pagina * alturaUtilMm(orientacao, margens) + config.yMm;
 }
 
 /**
@@ -97,9 +121,10 @@ export function configDeArrasto(
   alturaPx: number,
   escalaPxPorMm: number,
   orientacao: Orientacao,
+  margens?: MargensConfig | null,
 ): AssinaturaConfigV2 | null {
   if (!escalaPxPorMm || escalaPxPorMm <= 0) return null;
-  const { pagina, yMm } = decomporEmPagina(yPx / escalaPxPorMm, orientacao);
+  const { pagina, yMm } = decomporEmPagina(yPx / escalaPxPorMm, orientacao, margens);
   return {
     versao: 2,
     pagina,
@@ -123,6 +148,7 @@ export function converterLegado(
   legado: AssinaturaConfigV1,
   medidas: { larguraFolhaPx: number; alturaFolhaPx: number; paddingTopPx: number; paddingEsquerdaPx: number },
   orientacao: Orientacao,
+  margens?: MargensConfig | null,
 ): AssinaturaConfigV2 | null {
   const escala = pxPorMm(medidas.larguraFolhaPx, orientacao);
   if (!escala) return null;
@@ -134,7 +160,7 @@ export function converterLegado(
   const larguraPx = (legado.largura / 100) * medidas.larguraFolhaPx;
   const alturaPx = (legado.altura / 100) * medidas.alturaFolhaPx;
 
-  return configDeArrasto(xPx, yPx, larguraPx, alturaPx, escala, orientacao);
+  return configDeArrasto(xPx, yPx, larguraPx, alturaPx, escala, orientacao, margens);
 }
 
 /** Normaliza qualquer formato guardado para o atual. Devolve `null` se não der para converter. */
@@ -142,10 +168,11 @@ export function normalizarConfig(
   config: AssinaturaConfig | null | undefined,
   medidas: { larguraFolhaPx: number; alturaFolhaPx: number; paddingTopPx: number; paddingEsquerdaPx: number },
   orientacao: Orientacao,
+  margens?: MargensConfig | null,
 ): AssinaturaConfigV2 | null {
   if (!config) return null;
   if (isAssinaturaConfigV2(config)) return config;
-  return converterLegado(config, medidas, orientacao);
+  return converterLegado(config, medidas, orientacao, margens);
 }
 
 /**
@@ -156,10 +183,11 @@ export function normalizarConfig(
 export function estiloAssinaturaMm(
   config: AssinaturaConfigV2,
   orientacao: Orientacao,
+  margens?: MargensConfig | null,
 ): { left: string; top: string; width: string; height: string } {
   return {
     left: `${config.xMm.toFixed(2)}mm`,
-    top: `${deslocamentoContinuoMm(config, orientacao).toFixed(2)}mm`,
+    top: `${deslocamentoContinuoMm(config, orientacao, margens).toFixed(2)}mm`,
     width: `${config.larguraMm.toFixed(2)}mm`,
     height: `${config.alturaMm.toFixed(2)}mm`,
   };
@@ -170,10 +198,11 @@ export function configEmPx(
   config: AssinaturaConfigV2,
   escalaPxPorMm: number,
   orientacao: Orientacao,
+  margens?: MargensConfig | null,
 ): { x: number; y: number; largura: number; altura: number } {
   return {
     x: config.xMm * escalaPxPorMm,
-    y: deslocamentoContinuoMm(config, orientacao) * escalaPxPorMm,
+    y: deslocamentoContinuoMm(config, orientacao, margens) * escalaPxPorMm,
     largura: config.larguraMm * escalaPxPorMm,
     altura: config.alturaMm * escalaPxPorMm,
   };
@@ -186,15 +215,16 @@ export function configEmPx(
 export function configPadrao(
   alturaUtilFolhaMm: number,
   orientacao: Orientacao,
+  margens?: MargensConfig | null,
 ): AssinaturaConfigV2 {
-  const passo = alturaUtilMm(orientacao);
+  const passo = alturaUtilMm(orientacao, margens);
   const totalPaginas = Math.max(1, Math.ceil(alturaUtilFolhaMm / passo));
   const larguraMm = 70;
   const alturaMm = 32;
   return {
     versao: 2,
     pagina: totalPaginas - 1,
-    xMm: Math.max(0, (larguraUtilMm(orientacao) - larguraMm) / 2),
+    xMm: Math.max(0, (larguraUtilMm(orientacao, margens) - larguraMm) / 2),
     yMm: Math.max(0, passo - alturaMm - 12),
     larguraMm,
     alturaMm,
@@ -202,6 +232,10 @@ export function configPadrao(
 }
 
 /** Quantas páginas a folha do visualizador ocupa, para desenhar as guias de página. */
-export function totalPaginasDaFolha(alturaUtilFolhaMm: number, orientacao: Orientacao): number {
-  return Math.max(1, Math.ceil(alturaUtilFolhaMm / alturaUtilMm(orientacao)));
+export function totalPaginasDaFolha(
+  alturaUtilFolhaMm: number,
+  orientacao: Orientacao,
+  margens?: MargensConfig | null,
+): number {
+  return Math.max(1, Math.ceil(alturaUtilFolhaMm / alturaUtilMm(orientacao, margens)));
 }

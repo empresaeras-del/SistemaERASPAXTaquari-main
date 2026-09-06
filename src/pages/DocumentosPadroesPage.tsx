@@ -16,7 +16,7 @@ import { DocumentoTableEditModal } from '../components/documentos/DocumentoTable
 import { DocumentoImageModal } from '../components/documentos/DocumentoImageModal';
 import { DocumentoMiniaturasPreview } from '../components/documentos/DocumentoMiniaturasPreview';
 import { resolverVariaveisAssociado, resolverVariaveisContrato, resolverVariaveisEmpresa } from '../utils/documentoVariaveis';
-import { montarHtmlImpressaoDocumento } from '../utils/documentoPrintStyles';
+import { margensOu } from '../utils/assinaturaPosicao';
 import { sanitizeDocumentoHtml } from '../utils/sanitizeHtml';
 import { MODULOS_VARIAVEIS as MODULOS, VariavelInfo, ModuloInfo } from '../config/documentoVariaveis.config';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
@@ -454,29 +454,6 @@ export const DocumentosPadroesPage = () => {
     setPlaceholderValues(prev => ({ ...prev, ...resolvidas }));
   };
 
-  const handlePrint = () => {
-    const printArea = document.getElementById('print-area');
-    if (!printArea) {
-      window.print();
-      return;
-    }
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(
-        montarHtmlImpressaoDocumento(docToPrint?.nome || 'Documento', printArea.innerHTML, 'portrait')
-      );
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 350);
-    } else {
-      window.print();
-    }
-  };
-
   const handleOpenForm = (doc?: DocumentoPadrao) => {
     const initialObj: Partial<DocumentoPadrao> = doc ? { ...doc } : { 
       ativo: true, 
@@ -485,6 +462,9 @@ export const DocumentosPadroesPage = () => {
       empresa_id: empresaSelecionada || ''
     };
     setEditingDoc(initialObj);
+    // As margens são propriedade do documento: sem ler daqui, o valor gravado era
+    // ignorado ao reabrir e o editor voltava sempre ao preset padrão.
+    setMargens(margensOu(doc?.margens));
     setInitialDocJson(JSON.stringify(initialObj));
     setIsSaving(false);
     setIsSaved(false);
@@ -531,10 +511,13 @@ export const DocumentosPadroesPage = () => {
     
     setIsSaving(true);
     try {
+      // `margens` vive num estado separado do formulário; sem juntá-la aqui, o
+      // que o usuário escolhia na ferramenta de margens nunca era persistido.
+      const payload = { ...editingDoc, margens };
       if (editingDoc?.id) {
-        await editar(editingDoc.id, editingDoc);
+        await editar(editingDoc.id, payload);
       } else {
-        await criar(editingDoc as any);
+        await criar(payload as any);
       }
       setIsSaved(true);
       setTimeout(() => {
@@ -817,6 +800,15 @@ export const DocumentosPadroesPage = () => {
           } catch (err) {
             console.error('Erro ao salvar posição da assinatura:', err);
             toast.error('Erro ao salvar a posição da assinatura.');
+          }
+        }}
+        onSaveOrientacao={async (orientacao) => {
+          if (!docToPrint || docToPrint.orientacao === orientacao) return;
+          try {
+            await editar(docToPrint.id, { orientacao });
+          } catch (err) {
+            console.error('Erro ao salvar a orientação do documento:', err);
+            toast.error('Erro ao salvar a orientação do documento.');
           }
         }}
       />
