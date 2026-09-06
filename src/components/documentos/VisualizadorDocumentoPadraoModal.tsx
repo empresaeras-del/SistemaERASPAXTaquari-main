@@ -70,17 +70,17 @@ import {
 } from '../../utils/documentoVariaveis';
 import { montarHtmlImpressaoDocumento } from '../../utils/documentoPrintStyles';
 import {
-  MARGEM_PAGINA_MM,
   alturaUtilMm,
   configDeArrasto,
   configEmPx,
   configPadrao,
   estiloAssinaturaMm,
   normalizarConfig,
+  margensOu,
   pxPorMm,
   totalPaginasDaFolha,
 } from '../../utils/assinaturaPosicao';
-import type { AssinaturaConfigV2 } from '../../types/documentos';
+import type { AssinaturaConfigV2, OrientacaoPapel } from '../../types/documentos';
 import { sanitizeDocumentoHtml } from '../../utils/sanitizeHtml';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
@@ -114,6 +114,8 @@ export interface VisualizadorDocumentoPadraoModalProps {
   customTitle?: string;
   /** Quando informado, habilita o modo de posicionamento livre (drag-and-drop) da assinatura da empresa e persiste a escolha através deste callback. */
   onSaveAssinaturaConfig?: (config: AssinaturaConfig | null) => void;
+  /** Persiste a orientação do papel escolhida na barra de ferramentas. */
+  onSaveOrientacao?: (orientacao: OrientacaoPapel) => void;
 }
 
 export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPadraoModalProps> = ({
@@ -136,6 +138,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   onFornecedorSelect,
   customTitle,
   onSaveAssinaturaConfig,
+  onSaveOrientacao,
 }) => {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [zoom, setZoom] = useState<number>(100);
@@ -198,6 +201,8 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   const [escalaPxPorMm, setEscalaPxPorMm] = useState(0);
   /** Altura da área útil da folha, em mm — define quantas páginas o documento ocupa. */
   const [alturaUtilFolhaMm, setAlturaUtilFolhaMm] = useState(0);
+  /** Margens do documento; a folha, as guias de página e a impressão usam todas estas. */
+  const margens = useMemo(() => margensOu(documento?.margens), [documento?.margens]);
 
   // Sincroniza listas vindas de props
   useEffect(() => {
@@ -368,6 +373,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     });
 
     setPlaceholderValues(initialVals);
+    setOrientation(documento.orientacao === 'paisagem' ? 'landscape' : 'portrait');
     // `assinaturaConfig` é inicializada no efeito de medição abaixo, que precisa
     // das dimensões reais da folha para converter o formato legado. Zerar aqui
     // não funcionaria: efeitos de layout rodam ANTES dos passivos no mesmo
@@ -432,6 +438,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
               paddingEsquerdaPx: area.offsetLeft,
             },
             orientation,
+            margens,
           ),
         );
       }
@@ -443,10 +450,21 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     const observer = new ResizeObserver(medir);
     observer.observe(folha);
     return () => observer.disconnect();
-  }, [isOpen, orientation, documento?.id, documento?.assinatura_config]);
+  }, [isOpen, orientation, margens, documento?.id, documento?.assinatura_config]);
+
+  /**
+   * A orientação é uma propriedade do documento, não uma preferência de sessão:
+   * antes vivia só em `useState` e voltava para retrato a cada reabertura, com a
+   * coluna `orientacao` nula em todos os registros.
+   */
+  const handleTrocarOrientacao = (proxima: 'portrait' | 'landscape') => {
+    if (proxima === orientation) return;
+    setOrientation(proxima);
+    if (onSaveOrientacao) onSaveOrientacao(proxima === 'landscape' ? 'paisagem' : 'retrato');
+  };
 
   const handleIniciarPosicionamentoAssinatura = () => {
-    setAssinaturaConfig((prev) => prev || configPadrao(alturaUtilFolhaMm, orientation));
+    setAssinaturaConfig((prev) => prev || configPadrao(alturaUtilFolhaMm, orientation, margens));
     setIsPosicionandoAssinatura(true);
   };
 
@@ -456,7 +474,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     larguraPx: number,
     alturaPx: number,
   ) => {
-    const proxima = configDeArrasto(xPx, yPx, larguraPx, alturaPx, escalaPxPorMm, orientation);
+    const proxima = configDeArrasto(xPx, yPx, larguraPx, alturaPx, escalaPxPorMm, orientation, margens);
     if (proxima) setAssinaturaConfig(proxima);
   };
 
@@ -684,6 +702,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
       documento?.nome || 'Documento Oficial',
       printArea.innerHTML,
       orientation,
+      margens,
     );
 
     printWindow.document.write(printHtml);
@@ -711,8 +730,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
       });
 
       const pageWidth = orientation === 'landscape' ? 297 : 210;
-      const margin = 15;
-      const contentWidth = pageWidth - margin * 2;
+      const contentWidth = pageWidth - margens.left - margens.right;
 
       await pdf.html(printArea, {
         callback: (doc) => {
@@ -725,8 +743,8 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
           toast.success('Documento em PDF baixado com sucesso!', { id: 'export-doc-pdf' });
           setIsExportingPDF(false);
         },
-        x: margin,
-        y: margin,
+        x: margens.left,
+        y: margens.top,
         width: contentWidth,
         windowWidth: orientation === 'landscape' ? 1122 : 794,
         autoPaging: 'text',
@@ -799,7 +817,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
           {/* Seletor de Orientação */}
           <div className="flex items-center gap-1 bg-[#13171f] p-0.5 rounded-lg border border-[#2d3544]">
             <button
-              onClick={() => setOrientation('portrait')}
+              onClick={() => handleTrocarOrientacao('portrait')}
               className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md transition-all ${
                 orientation === 'portrait'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -811,7 +829,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
               <span className="hidden sm:inline">Retrato</span>
             </button>
             <button
-              onClick={() => setOrientation('landscape')}
+              onClick={() => handleTrocarOrientacao('landscape')}
               className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md transition-all ${
                 orientation === 'landscape'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -1704,11 +1722,11 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
               style={{
                 width: orientation === 'landscape' ? '297mm' : '210mm',
                 minHeight: orientation === 'landscape' ? '210mm' : '297mm',
-                // Mesma margem do `@page` da impressão. Enquanto eram valores
-                // diferentes (22mm/20mm aqui contra 15mm lá), a área de texto da
-                // tela era 10mm mais estreita que a impressa: o texto refluía, a
-                // paginação mudava e as guias de página não valiam nada.
-                padding: `${MARGEM_PAGINA_MM}mm`,
+                // As mesmas margens que o `@page` da impressão recebe. Enquanto
+                // eram valores diferentes, a área de texto da tela não batia com a
+                // impressa: o texto refluía, a paginação mudava e as guias de
+                // página não valiam nada.
+                padding: `${margens.top}mm ${margens.right}mm ${margens.bottom}mm ${margens.left}mm`,
                 boxSizing: 'border-box',
                 position: 'relative',
               }}
@@ -1790,22 +1808,22 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 ref={areaAssinaturaRef}
                 className="doc-assinatura-area absolute pointer-events-none"
                 style={{
-                  top: `${MARGEM_PAGINA_MM}mm`,
-                  left: `${MARGEM_PAGINA_MM}mm`,
-                  right: `${MARGEM_PAGINA_MM}mm`,
-                  bottom: `${MARGEM_PAGINA_MM}mm`,
+                  top: `${margens.top}mm`,
+                  left: `${margens.left}mm`,
+                  right: `${margens.right}mm`,
+                  bottom: `${margens.bottom}mm`,
                 }}
               >
                 {/* Guias das quebras de página, só enquanto se posiciona: sem elas
                     não há como saber em que página a assinatura está sendo solta. */}
                 {isPosicionandoAssinatura &&
                   Array.from({
-                    length: totalPaginasDaFolha(alturaUtilFolhaMm, orientation) - 1,
+                    length: totalPaginasDaFolha(alturaUtilFolhaMm, orientation, margens) - 1,
                   }).map((_, i) => (
                     <div
                       key={i}
                       className="doc-guia-pagina absolute left-0 right-0 border-t border-dashed border-fuchsia-400/60"
-                      style={{ top: `${(i + 1) * alturaUtilMm(orientation)}mm` }}
+                      style={{ top: `${(i + 1) * alturaUtilMm(orientation, margens)}mm` }}
                     >
                       <span className="absolute right-0 -top-4 text-[9px] font-bold text-fuchsia-500 bg-white/90 px-1 rounded">
                         pág. {i + 2}
@@ -1817,15 +1835,15 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                   <Rnd
                     bounds="parent"
                     position={{
-                      x: configEmPx(assinaturaConfig, escalaPxPorMm, orientation).x,
-                      y: configEmPx(assinaturaConfig, escalaPxPorMm, orientation).y,
+                      x: configEmPx(assinaturaConfig, escalaPxPorMm, orientation, margens).x,
+                      y: configEmPx(assinaturaConfig, escalaPxPorMm, orientation, margens).y,
                     }}
                     size={{
-                      width: configEmPx(assinaturaConfig, escalaPxPorMm, orientation).largura,
-                      height: configEmPx(assinaturaConfig, escalaPxPorMm, orientation).altura,
+                      width: configEmPx(assinaturaConfig, escalaPxPorMm, orientation, margens).largura,
+                      height: configEmPx(assinaturaConfig, escalaPxPorMm, orientation, margens).altura,
                     }}
                     onDragStop={(_e: any, d: any) => {
-                      const atual = configEmPx(assinaturaConfig, escalaPxPorMm, orientation);
+                      const atual = configEmPx(assinaturaConfig, escalaPxPorMm, orientation, margens);
                       handleAssinaturaDragResizeStop(d.x, d.y, atual.largura, atual.altura);
                     }}
                     onResizeStop={(_e: any, _dir: any, ref: any, _delta: any, pos: any) =>
@@ -1852,7 +1870,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 {assinaturaConfig && !isPosicionandoAssinatura && (
                   <div
                     className="doc-assinatura-livre absolute flex flex-col items-center justify-end text-center overflow-hidden"
-                    style={estiloAssinaturaMm(assinaturaConfig, orientation)}
+                    style={estiloAssinaturaMm(assinaturaConfig, orientation, margens)}
                   >
                     {currentEmpresa?.assinatura_url && (
                       <img

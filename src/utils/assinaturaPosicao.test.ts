@@ -13,6 +13,8 @@ import {
   configEmPx,
   configPadrao,
   totalPaginasDaFolha,
+  margensOu,
+  MARGENS_PADRAO,
 } from './assinaturaPosicao';
 import type { AssinaturaConfigV1, AssinaturaConfigV2 } from '../types/documentos';
 
@@ -226,5 +228,59 @@ describe('totalPaginasDaFolha', () => {
     expect(totalPaginasDaFolha(267, 'retrato')).toBe(1);
     expect(totalPaginasDaFolha(268, 'retrato')).toBe(2);
     expect(totalPaginasDaFolha(7 * 267, 'retrato')).toBe(7);
+  });
+});
+
+describe('margensOu', () => {
+  it('cai no padrão de 15mm quando o documento não tem margens gravadas', () => {
+    expect(margensOu(null)).toEqual(MARGENS_PADRAO);
+    expect(margensOu(undefined)).toEqual(MARGENS_PADRAO);
+  });
+
+  it('preserva as margens do documento', () => {
+    const m = { top: 20, bottom: 20, left: 25, right: 25 };
+    expect(margensOu(m)).toEqual(m);
+  });
+
+  it('completa lado a lado o que vier inválido do JSONB', () => {
+    // O banco guarda um jsonb livre: um registro antigo pode ter só alguns lados.
+    const parcial = { top: 30, bottom: NaN, left: 10 } as unknown as typeof MARGENS_PADRAO;
+    expect(margensOu(parcial)).toEqual({ top: 30, bottom: 15, left: 10, right: 15 });
+  });
+});
+
+describe('área útil com margens do documento', () => {
+  const largas = { top: 25.4, bottom: 25.4, left: 35, right: 35 };
+
+  it('desconta as margens reais, não a constante', () => {
+    expect(larguraUtilMm('retrato', largas)).toBeCloseTo(210 - 70, 6);
+    expect(alturaUtilMm('retrato', largas)).toBeCloseTo(297 - 50.8, 6);
+  });
+
+  it('muda o passo de página, e com ele a decomposição', () => {
+    const passo = alturaUtilMm('retrato', largas); // 246,2mm
+    const r = decomporEmPagina(passo + 10, 'retrato', largas);
+    expect(r.pagina).toBe(1);
+    expect(r.yMm).toBeCloseTo(10, 6);
+    // Com as margens padrão (passo 267mm) o mesmo deslocamento ainda seria a página 0.
+    expect(decomporEmPagina(passo + 10, 'retrato').pagina).toBe(0);
+  });
+
+  it('mantém a assinatura no mesmo ponto da página quando as margens mudam', () => {
+    // yMm é medido a partir do topo da área útil, então a posição relativa à
+    // página não depende da margem — só o deslocamento contínuo muda.
+    const cfg = { versao: 2 as const, pagina: 2, xMm: 40, yMm: 100, larguraMm: 70, alturaMm: 32 };
+    expect(deslocamentoContinuoMm(cfg, 'retrato')).toBeCloseTo(2 * 267 + 100, 6);
+    expect(deslocamentoContinuoMm(cfg, 'retrato', largas)).toBeCloseTo(2 * 246.2 + 100, 6);
+  });
+
+  it('centraliza a sugestão padrão na área útil real', () => {
+    const cfg = configPadrao(100, 'retrato', largas);
+    expect(cfg.xMm).toBeCloseTo((140 - 70) / 2, 6);
+  });
+
+  it('conta as páginas da folha com o passo das margens do documento', () => {
+    expect(totalPaginasDaFolha(500, 'retrato', largas)).toBe(3); // 500 / 246,2
+    expect(totalPaginasDaFolha(500, 'retrato')).toBe(2); // 500 / 267
   });
 });

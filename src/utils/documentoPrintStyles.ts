@@ -1,3 +1,6 @@
+import type { MargensConfig } from '../types/documentos';
+import { margensOu } from './assinaturaPosicao';
+
 /**
  * CSS de impressão dos Documentos Padrões — fonte única.
  *
@@ -7,11 +10,15 @@
  * tabelas, quebras de página). Esta função centraliza o CSS para as duas
  * janelas de impressão ficarem sempre visualmente idênticas.
  */
-export function gerarCssImpressaoDocumento(orientacao: 'portrait' | 'landscape' = 'portrait'): string {
+export function gerarCssImpressaoDocumento(
+  orientacao: 'portrait' | 'landscape' = 'portrait',
+  margens?: MargensConfig | null,
+): string {
+  const m = margensOu(margens);
   return `
     @page {
       size: A4 ${orientacao};
-      margin: 15mm 15mm 15mm 15mm;
+      margin: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm;
     }
     *, *::before, *::after {
       box-sizing: border-box;
@@ -196,7 +203,8 @@ export function gerarCssImpressaoDocumento(orientacao: 'portrait' | 'landscape' 
 export function montarHtmlImpressaoDocumento(
   titulo: string,
   bodyHtml: string,
-  orientacao: 'portrait' | 'landscape' = 'portrait'
+  orientacao: 'portrait' | 'landscape' = 'portrait',
+  margens?: MargensConfig | null,
 ): string {
   return `
     <!DOCTYPE html>
@@ -204,7 +212,7 @@ export function montarHtmlImpressaoDocumento(
       <head>
         <meta charset="utf-8" />
         <title>${titulo}</title>
-        <style>${gerarCssImpressaoDocumento(orientacao)}</style>
+        <style>${gerarCssImpressaoDocumento(orientacao, margens)}</style>
       </head>
       <body>
         <div class="doc-container">
