@@ -32,6 +32,11 @@ export function gerarCssImpressaoDocumento(orientacao: 'portrait' | 'landscape' 
       max-width: 100%;
       margin: 0 auto;
       background: #ffffff;
+      /* Âncora da assinatura de posição livre. A impressão recebe o conteúdo de
+         DENTRO da folha do visualizador, não a folha (que é 'position: relative');
+         sem este 'relative' aqui, o 'position: absolute' da assinatura passava a
+         ser resolvido contra a caixa da página e caía em outro lugar e tamanho. */
+      position: relative;
     }
     .doc-header {
       width: 100%;
@@ -90,6 +95,55 @@ export function gerarCssImpressaoDocumento(orientacao: 'portrait' | 'landscape' 
       width: 280px;
       border-top: 1px solid #0f172a;
       margin: 6px auto;
+    }
+    /* ── Assinatura de posição livre (drag-and-drop) ──────────────────────────
+       A janela de impressão não carrega Tailwind, então nada do 'max-h-full
+       max-w-full object-contain' / 'flex items-center' que existe no
+       visualizador chega até aqui. Sem estas regras a imagem era desenhada no
+       tamanho natural do arquivo (um carimbo digitalizado passa de 25cm) e
+       transbordava a caixa. Tudo o que a assinatura precisa para se comportar
+       tem que estar nomeado neste bloco. */
+    .doc-assinatura-area {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      pointer-events: none;
+    }
+    .doc-assinatura-livre {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      text-align: center;
+      overflow: hidden;
+    }
+    .doc-assinatura-livre img {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .doc-assinatura-livre .signature-line {
+      width: 80%;
+      margin: 4px auto 3px;
+      flex: 0 0 auto;
+    }
+    .doc-assinatura-livre p {
+      margin: 0;
+      font-size: 8pt;
+      line-height: 1.25;
+      font-weight: bold;
+      text-transform: uppercase;
+      flex: 0 0 auto;
+    }
+    /* Guias de página do visualizador: existem só para orientar o arrasto. */
+    .doc-guia-pagina {
+      display: none !important;
     }
     h1, h2, h3, h4 {
       color: #0f172a;

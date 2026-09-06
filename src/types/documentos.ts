@@ -5,13 +5,46 @@ export type TipoDocumento = 'contrato_adesao' | 'termo_rescisao' | 'termo_creden
 export type OrientacaoPapel = 'retrato' | 'paisagem';
 export type TamanhoPapel = 'a4' | 'carta' | 'oficio';
 
-/** Posição/tamanho da assinatura da empresa, escolhidos livremente pelo usuário no editor (coordenadas em % da página, para funcionar em qualquer zoom/tela). */
-export interface AssinaturaConfig {
-  x: number; // % da largura da página, a partir da esquerda
-  y: number; // % da altura da página, a partir do topo
-  largura: number; // % da largura da página
-  altura: number; // % da altura da página
-  pagina: number; // índice da página (0 = primeira), para documentos com quebra de página
+/**
+ * Formato **legado** da posição da assinatura: porcentagens da folha contínua
+ * inteira do visualizador (que cresce com o documento), e não de uma página.
+ *
+ * Isso quebrava na impressão: lá o mesmo `%` era remedido contra a caixa de uma
+ * única página, então uma assinatura colocada aos 13% de uma folha de 7 páginas
+ * (~236mm, fim da página 1) reaparecia aos 13% de 267mm (~36mm) com 1/7 do
+ * tamanho. Mantido apenas para ler registros antigos e convertê-los para o
+ * formato atual — nada grava mais neste formato.
+ */
+export interface AssinaturaConfigV1 {
+  versao?: 1;
+  x: number; // % da largura da folha, a partir da esquerda
+  y: number; // % da altura da FOLHA INTEIRA, a partir do topo
+  largura: number; // % da largura da folha
+  altura: number; // % da altura da folha inteira
+  pagina: number; // sempre gravado como 0; nunca era lido
+}
+
+/**
+ * Formato atual da posição da assinatura: milímetros a partir do canto superior
+ * esquerdo da **área útil de uma página**, mais o índice da página.
+ *
+ * Milímetro é a unidade natural do papel: o mesmo valor vale no visualizador e
+ * na impressão sem depender de contra qual caixa a porcentagem seria resolvida.
+ */
+export interface AssinaturaConfigV2 {
+  versao: 2;
+  pagina: number; // índice da página (0 = primeira)
+  xMm: number; // mm a partir da margem esquerda da área útil
+  yMm: number; // mm a partir do topo da área útil DA PÁGINA `pagina`
+  larguraMm: number;
+  alturaMm: number;
+}
+
+export type AssinaturaConfig = AssinaturaConfigV1 | AssinaturaConfigV2;
+
+/** Discrimina os dois formatos de `assinatura_config` guardados no JSONB. */
+export function isAssinaturaConfigV2(cfg: AssinaturaConfig): cfg is AssinaturaConfigV2 {
+  return (cfg as AssinaturaConfigV2).versao === 2;
 }
 
 /** Uma variável personalizada criada pelo usuário no editor (além do catálogo padrão por módulo). */

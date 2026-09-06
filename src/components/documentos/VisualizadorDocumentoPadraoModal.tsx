@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import {
   X,
   Printer,
@@ -69,6 +69,18 @@ import {
   resolverVariaveisSistema,
 } from '../../utils/documentoVariaveis';
 import { montarHtmlImpressaoDocumento } from '../../utils/documentoPrintStyles';
+import {
+  MARGEM_PAGINA_MM,
+  alturaUtilMm,
+  configDeArrasto,
+  configEmPx,
+  configPadrao,
+  estiloAssinaturaMm,
+  normalizarConfig,
+  pxPorMm,
+  totalPaginasDaFolha,
+} from '../../utils/assinaturaPosicao';
+import type { AssinaturaConfigV2 } from '../../types/documentos';
 import { sanitizeDocumentoHtml } from '../../utils/sanitizeHtml';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
@@ -174,17 +186,18 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   });
 
   const printAreaRef = useRef<HTMLDivElement>(null);
+  /** Área útil da folha (dentro dos paddings) — é a referência do arrastar. */
+  const areaAssinaturaRef = useRef<HTMLDivElement>(null);
+  /** Documento cuja assinatura já foi inicializada, para não reconverter a cada medição. */
+  const docNormalizadoRef = useRef<string | null>(null);
 
   // Posicionamento livre (drag-and-drop) da assinatura da empresa
-  const [assinaturaConfig, setAssinaturaConfig] = useState<AssinaturaConfig | null>(null);
+  const [assinaturaConfig, setAssinaturaConfig] = useState<AssinaturaConfigV2 | null>(null);
   const [isPosicionandoAssinatura, setIsPosicionandoAssinatura] = useState(false);
-  const DEFAULT_ASSINATURA_CONFIG: AssinaturaConfig = {
-    x: 35,
-    y: 82,
-    largura: 30,
-    altura: 10,
-    pagina: 0,
-  };
+  /** Pixels de layout por milímetro na folha renderizada; 0 enquanto não medida. */
+  const [escalaPxPorMm, setEscalaPxPorMm] = useState(0);
+  /** Altura da área útil da folha, em mm — define quantas páginas o documento ocupa. */
+  const [alturaUtilFolhaMm, setAlturaUtilFolhaMm] = useState(0);
 
   // Sincroniza listas vindas de props
   useEffect(() => {
@@ -355,7 +368,10 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     });
 
     setPlaceholderValues(initialVals);
-    setAssinaturaConfig(documento.assinatura_config ?? null);
+    // `assinaturaConfig` é inicializada no efeito de medição abaixo, que precisa
+    // das dimensões reais da folha para converter o formato legado. Zerar aqui
+    // não funcionaria: efeitos de layout rodam ANTES dos passivos no mesmo
+    // commit, então este `set` desfaria a inicialização que acabou de acontecer.
     setIsPosicionandoAssinatura(false);
 
     // Ajusta seções abertas com base no tipo de documento detectado
@@ -372,8 +388,65 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
   }, [documento, isOpen, modulosDetectados]);
 
   // ── Posicionamento livre (drag-and-drop) da assinatura ──
+
+  /**
+   * Mede a folha renderizada e, na primeira medição válida de cada documento,
+   * normaliza uma `assinatura_config` no formato legado (% da folha contínua)
+   * para o formato atual (mm por página). A conversão só é possível aqui porque
+   * depende da altura que a folha efetivamente tem na tela.
+   *
+   * Usa `clientWidth`/`clientHeight` (espaço de layout) e não
+   * `getBoundingClientRect()` (espaço visual): o zoom da folha é um
+   * `transform: scale()` num ancestral, e o arrastar também trabalha em
+   * coordenadas de layout — as duas medidas precisam vir da mesma base.
+   */
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      // Ao fechar, esquece o documento inicializado para que reabrir volte a ler
+      // a posição salva em vez de manter a que estava em memória.
+      docNormalizadoRef.current = null;
+      return;
+    }
+    const folha = printAreaRef.current;
+    const area = areaAssinaturaRef.current;
+    if (!folha || !area) return;
+
+    const medir = () => {
+      const escala = pxPorMm(folha.clientWidth, orientation);
+      if (!escala) return;
+      setEscalaPxPorMm(escala);
+      setAlturaUtilFolhaMm(area.clientHeight / escala);
+
+      // Inicializa uma única vez por documento aberto: reconverter a cada
+      // remedição arrastaria a assinatura sozinha conforme a folha crescesse.
+      const docId = documento?.id ?? null;
+      if (docNormalizadoRef.current !== docId) {
+        docNormalizadoRef.current = docId;
+        setAssinaturaConfig(
+          normalizarConfig(
+            documento?.assinatura_config ?? null,
+            {
+              larguraFolhaPx: folha.clientWidth,
+              alturaFolhaPx: folha.clientHeight,
+              paddingTopPx: area.offsetTop,
+              paddingEsquerdaPx: area.offsetLeft,
+            },
+            orientation,
+          ),
+        );
+      }
+    };
+
+    medir();
+    // A folha cresce conforme imagens do documento carregam; sem observar isso,
+    // a contagem de páginas ficaria congelada na medição inicial.
+    const observer = new ResizeObserver(medir);
+    observer.observe(folha);
+    return () => observer.disconnect();
+  }, [isOpen, orientation, documento?.id, documento?.assinatura_config]);
+
   const handleIniciarPosicionamentoAssinatura = () => {
-    setAssinaturaConfig((prev) => prev || DEFAULT_ASSINATURA_CONFIG);
+    setAssinaturaConfig((prev) => prev || configPadrao(alturaUtilFolhaMm, orientation));
     setIsPosicionandoAssinatura(true);
   };
 
@@ -383,21 +456,8 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
     larguraPx: number,
     alturaPx: number,
   ) => {
-    // Usa clientWidth/clientHeight (espaço de layout) em vez de getBoundingClientRect() (espaço visual),
-    // pois o zoom da folha é aplicado via CSS transform: scale() num ancestral — o Rnd posiciona a
-    // assinatura em coordenadas de layout, não visuais, então a conversão precisa usar a mesma base.
-    const container = printAreaRef.current;
-    if (!container) return;
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-    if (width === 0 || height === 0) return;
-    setAssinaturaConfig({
-      x: (xPx / width) * 100,
-      y: (yPx / height) * 100,
-      largura: (larguraPx / width) * 100,
-      altura: (alturaPx / height) * 100,
-      pagina: 0,
-    });
+    const proxima = configDeArrasto(xPx, yPx, larguraPx, alturaPx, escalaPxPorMm, orientation);
+    if (proxima) setAssinaturaConfig(proxima);
   };
 
   const handleSalvarPosicaoAssinatura = () => {
@@ -1644,7 +1704,11 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
               style={{
                 width: orientation === 'landscape' ? '297mm' : '210mm',
                 minHeight: orientation === 'landscape' ? '210mm' : '297mm',
-                padding: '22mm 20mm',
+                // Mesma margem do `@page` da impressão. Enquanto eram valores
+                // diferentes (22mm/20mm aqui contra 15mm lá), a área de texto da
+                // tela era 10mm mais estreita que a impressa: o texto refluía, a
+                // paginação mudava e as guias de página não valiam nada.
+                padding: `${MARGEM_PAGINA_MM}mm`,
                 boxSizing: 'border-box',
                 position: 'relative',
               }}
@@ -1716,74 +1780,96 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                 </div>
               )}
 
-              {/* Assinatura com posicionamento livre (drag-and-drop), quando configurada */}
-              {assinaturaConfig && isPosicionandoAssinatura && (
-                <Rnd
-                  bounds="parent"
-                  position={{
-                    x: (assinaturaConfig.x / 100) * (printAreaRef.current?.clientWidth || 1),
-                    y: (assinaturaConfig.y / 100) * (printAreaRef.current?.clientHeight || 1),
-                  }}
-                  size={{
-                    width:
-                      (assinaturaConfig.largura / 100) * (printAreaRef.current?.clientWidth || 1),
-                    height:
-                      (assinaturaConfig.altura / 100) * (printAreaRef.current?.clientHeight || 1),
-                  }}
-                  onDragStop={(_e: any, d: any) =>
-                    handleAssinaturaDragResizeStop(
-                      d.x,
-                      d.y,
-                      (assinaturaConfig.largura / 100) * (printAreaRef.current?.clientWidth || 1),
-                      (assinaturaConfig.altura / 100) * (printAreaRef.current?.clientHeight || 1),
-                    )
-                  }
-                  onResizeStop={(_e: any, _dir: any, ref: any, _delta: any, pos: any) =>
-                    handleAssinaturaDragResizeStop(pos.x, pos.y, ref.offsetWidth, ref.offsetHeight)
-                  }
-                  className="border-2 border-dashed border-fuchsia-500 bg-fuchsia-500/5 flex flex-col items-center justify-center text-center cursor-move z-10"
-                >
-                  {currentEmpresa?.assinatura_url && (
-                    <img
-                      src={currentEmpresa.assinatura_url}
-                      alt="Assinatura da Empresa"
-                      className="max-h-full max-w-full object-contain pointer-events-none"
-                    />
-                  )}
-                  <div className="signature-line w-4/5 border-t border-slate-900 my-1 pointer-events-none"></div>
-                  <p className="text-[10px] font-bold text-slate-900 uppercase pointer-events-none">
-                    {currentEmpresa?.nome_fantasia ||
-                      currentEmpresa?.razao_social ||
-                      'Assinatura Autorizada'}
-                  </p>
-                </Rnd>
-              )}
+              {/* ── Área útil da folha ────────────────────────────────────────
+                  Referência de coordenadas da assinatura livre. Cobre exatamente
+                  a região dentro dos paddings, que é o equivalente da área útil
+                  da página na impressão — é o que permite os mesmos milímetros
+                  valerem nos dois lugares. Na impressão, `.doc-assinatura-area`
+                  é reposicionada para colar em `.doc-container`. */}
+              <div
+                ref={areaAssinaturaRef}
+                className="doc-assinatura-area absolute pointer-events-none"
+                style={{
+                  top: `${MARGEM_PAGINA_MM}mm`,
+                  left: `${MARGEM_PAGINA_MM}mm`,
+                  right: `${MARGEM_PAGINA_MM}mm`,
+                  bottom: `${MARGEM_PAGINA_MM}mm`,
+                }}
+              >
+                {/* Guias das quebras de página, só enquanto se posiciona: sem elas
+                    não há como saber em que página a assinatura está sendo solta. */}
+                {isPosicionandoAssinatura &&
+                  Array.from({
+                    length: totalPaginasDaFolha(alturaUtilFolhaMm, orientation) - 1,
+                  }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="doc-guia-pagina absolute left-0 right-0 border-t border-dashed border-fuchsia-400/60"
+                      style={{ top: `${(i + 1) * alturaUtilMm(orientation)}mm` }}
+                    >
+                      <span className="absolute right-0 -top-4 text-[9px] font-bold text-fuchsia-500 bg-white/90 px-1 rounded">
+                        pág. {i + 2}
+                      </span>
+                    </div>
+                  ))}
 
-              {assinaturaConfig && !isPosicionandoAssinatura && (
-                <div
-                  className="absolute flex flex-col items-center justify-center text-center"
-                  style={{
-                    left: `${assinaturaConfig.x}%`,
-                    top: `${assinaturaConfig.y}%`,
-                    width: `${assinaturaConfig.largura}%`,
-                    height: `${assinaturaConfig.altura}%`,
-                  }}
-                >
-                  {currentEmpresa?.assinatura_url && (
-                    <img
-                      src={currentEmpresa.assinatura_url}
-                      alt="Assinatura da Empresa"
-                      className="max-h-full max-w-full object-contain"
-                    />
-                  )}
-                  <div className="signature-line w-4/5 border-t border-slate-900 my-1"></div>
-                  <p className="text-[10px] font-bold text-slate-900 uppercase">
-                    {currentEmpresa?.nome_fantasia ||
-                      currentEmpresa?.razao_social ||
-                      'Assinatura Autorizada'}
-                  </p>
-                </div>
-              )}
+                {assinaturaConfig && isPosicionandoAssinatura && escalaPxPorMm > 0 && (
+                  <Rnd
+                    bounds="parent"
+                    position={{
+                      x: configEmPx(assinaturaConfig, escalaPxPorMm, orientation).x,
+                      y: configEmPx(assinaturaConfig, escalaPxPorMm, orientation).y,
+                    }}
+                    size={{
+                      width: configEmPx(assinaturaConfig, escalaPxPorMm, orientation).largura,
+                      height: configEmPx(assinaturaConfig, escalaPxPorMm, orientation).altura,
+                    }}
+                    onDragStop={(_e: any, d: any) => {
+                      const atual = configEmPx(assinaturaConfig, escalaPxPorMm, orientation);
+                      handleAssinaturaDragResizeStop(d.x, d.y, atual.largura, atual.altura);
+                    }}
+                    onResizeStop={(_e: any, _dir: any, ref: any, _delta: any, pos: any) =>
+                      handleAssinaturaDragResizeStop(pos.x, pos.y, ref.offsetWidth, ref.offsetHeight)
+                    }
+                    className="doc-assinatura-livre pointer-events-auto border-2 border-dashed border-fuchsia-500 bg-fuchsia-500/5 flex flex-col items-center justify-end text-center cursor-move z-10 overflow-hidden"
+                  >
+                    {currentEmpresa?.assinatura_url && (
+                      <img
+                        src={currentEmpresa.assinatura_url}
+                        alt="Assinatura da Empresa"
+                        className="min-h-0 flex-1 max-h-full max-w-full object-contain pointer-events-none"
+                      />
+                    )}
+                    <div className="signature-line w-4/5 border-t border-slate-900 my-1 pointer-events-none shrink-0"></div>
+                    <p className="text-[10px] font-bold text-slate-900 uppercase pointer-events-none shrink-0">
+                      {currentEmpresa?.nome_fantasia ||
+                        currentEmpresa?.razao_social ||
+                        'Assinatura Autorizada'}
+                    </p>
+                  </Rnd>
+                )}
+
+                {assinaturaConfig && !isPosicionandoAssinatura && (
+                  <div
+                    className="doc-assinatura-livre absolute flex flex-col items-center justify-end text-center overflow-hidden"
+                    style={estiloAssinaturaMm(assinaturaConfig, orientation)}
+                  >
+                    {currentEmpresa?.assinatura_url && (
+                      <img
+                        src={currentEmpresa.assinatura_url}
+                        alt="Assinatura da Empresa"
+                        className="min-h-0 flex-1 max-h-full max-w-full object-contain"
+                      />
+                    )}
+                    <div className="signature-line w-4/5 border-t border-slate-900 my-1 shrink-0"></div>
+                    <p className="text-[10px] font-bold text-slate-900 uppercase shrink-0">
+                      {currentEmpresa?.nome_fantasia ||
+                        currentEmpresa?.razao_social ||
+                        'Assinatura Autorizada'}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </main>
