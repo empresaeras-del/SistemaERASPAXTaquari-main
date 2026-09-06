@@ -325,6 +325,11 @@ export function useAssociadosState() {
   };
 
   const handleOpenModal = (associado?: Associado) => {
+    // Fecha o modal de detalhes antes de abrir o de edição: os dois são
+    // `fixed z-50`, então manter ambos abertos deixava o de edição atrás do de
+    // detalhes (o de detalhes é renderizado depois no DOM e, com z-index igual,
+    // ganha o empilhamento).
+    setPreviewAssociado(null);
     setDependenteEmEdicao(null);
     setDependenteFormModalOpen(false);
     setBuscaDependenteInterno("");
