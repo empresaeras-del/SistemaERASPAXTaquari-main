@@ -239,6 +239,40 @@ tanto em `AssociadosListTable.tsx` quanto em `AssociadosListGrid.tsx`, porque é
 `useAssociadosState.ts` de fato expõe) — um mismatch aqui só aparece no `tsc`, não no lint nem em
 runtime.
 
+## Menu lateral (`components/layout/Sidebar.tsx`)
+
+O menu passou por um redesenho em três entregas (setembro/2026). Nenhuma funcionalidade mudou —
+rotas, filtro por permissão, submenus, badges, recolher/expandir e a ordem persistida continuam como
+estavam —, mas quatro convenções do arquivo passaram a valer:
+
+- **Itens pertencem a uma seção.** `NavItem` tem um campo obrigatório `group`
+  (`'operacao' | 'cadastros' | 'sistema'`), e a lista é renderizada agrupada, com rótulo por seção
+  (`navGroups` define os rótulos e a ordem das seções). Ao adicionar um item novo a
+  `defaultNavItems`, escolha o `group` — o `tsc` cobra. Uma seção cujos itens sejam todos barrados
+  por permissão não renderiza rótulo nem separador.
+- **Arrastar identifica o item por `id`, nunca por índice.** A lista renderizada é filtrada por
+  permissão (`hasModuleAccess`), então o índice na tela não corresponde ao de `navItems` — usar o
+  índice reordenava o item errado para qualquer usuário sem acesso a algum módulo (bug real,
+  corrigido nessa rodada). Como cada item pertence a uma seção, `handleDragOver` ignora um alvo de
+  outro `group`: reordenar vale dentro da seção. O formato persistido em IndexedDB
+  (`sidebar_menu_order`) não mudou — segue a lista achatada de ids.
+- **O tooltip do modo recolhido vai para o `body` via `createPortal`.** A lista de itens tem
+  `overflow-x-hidden`, que cortaria um tooltip posicionado à direita do menu. Como a posição vem de
+  `getBoundingClientRect()` (coordenadas de viewport), o tooltip é dispensado ao rolar a lista e ao
+  expandir o menu. Não volte a usar o atributo `title` aqui: além de ~1s de espera, ele é renderizado
+  pelo sistema operacional, fora do tema.
+- **Submenu anima com `grid-rows-[0fr] → [1fr]`, não com `max-height`.** A versão anterior usava
+  `max-h-40` (160px) e "Associados", com 4 subitens, já estava no limite — um quinto seria cortado
+  sem nenhum aviso. O wrapper é `grid` e o filho é `min-h-0 overflow-hidden`.
+
+O estado ativo tem um vocabulário só: fundo `#3B82F6/15` mais um trilho de 3px na borda esquerda,
+igual para item e subitem. O item-pai perde o fundo quando o submenu está aberto (o trilho passa a
+marcar o subitem ativo) — se mexer nisso, mantenha os dois casos coerentes.
+
+Lacuna conhecida, **pré-existente e não corrigida**: o item-pai de submenu é um `div` com `onClick`,
+sem `role` nem `tabIndex` — não dá para acioná-lo pelo teclado. Corrigir muda comportamento, não só
+estética; ficou fora das entregas de redesenho.
+
 ## Segurança
 
 - Funções `SECURITY DEFINER` sensíveis (`admin_alterar_senha_usuario`, `admin_excluir_usuario`) só
