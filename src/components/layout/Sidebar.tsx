@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useFinanceiroAlerts } from '../../hooks/useFinanceiroAlerts';
 import { LayoutDashboard, Users, DollarSign, Settings, ShieldAlert, Package, ClipboardList, Building2, ChevronLeft, ChevronDown, Info, GripVertical, Briefcase, GraduationCap } from 'lucide-react';
@@ -80,8 +81,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
   const [navItems, setNavItems] = useState<NavItem[]>(defaultNavItems);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  // Tooltip próprio do menu recolhido — substitui o `title` nativo, que só
+  // aparece depois de ~1s e é renderizado pelo sistema operacional, fora do tema.
+  const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
   const location = useLocation();
   const { alertasReceber, alertasPagar } = useFinanceiroAlerts();
+
+  // Ao expandir o menu, o tooltip perde o sentido (o rótulo volta a ficar visível).
+  useEffect(() => {
+    if (!isCollapsed) setTooltip(null);
+  }, [isCollapsed]);
+
+  const showTooltip = (e: React.MouseEvent<HTMLElement>, label: string) => {
+    if (!isCollapsed) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltip({ label, top: rect.top + rect.height / 2, left: rect.right + 12 });
+  };
+
+  const hideTooltip = () => setTooltip(null);
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -205,7 +222,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
         )}
       </div>
       
-      <div className="flex-1 overflow-y-auto overflow-x-hidden relative flex flex-col">
+      {/* O tooltip é posicionado em coordenadas de viewport; rolar a lista o
+          deixaria fora do lugar, então ele é dispensado ao rolar. */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden relative flex flex-col" onScroll={hideTooltip}>
         <nav className="flex-1 py-3 flex flex-col gap-0.5 px-3">
           {visibleNavItems.map((item, index) => {
             if (item.subItems) {
@@ -223,7 +242,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
                 >
                   <div
                     onClick={() => toggleSubMenu(item.label)}
-                    title={isCollapsed ? item.label : undefined}
+                    onMouseEnter={(e) => showTooltip(e, item.label)}
+                    onMouseLeave={hideTooltip}
+                    aria-label={isCollapsed ? item.label : undefined}
                     className={`nav-glass-wrapper p-[1px] rounded-xl block group cursor-pointer ${active && !expanded ? "active-nav" : ""}`}
                   >
                     <div
@@ -264,41 +285,45 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
                   </div>
                   
                   {!isCollapsed && (
-                    <div className={`flex flex-col gap-1 mt-1 overflow-hidden transition-all duration-300 ${expanded ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}>
-                      {item.subItems.map(sub => (
-                        <NavLink
-                          key={sub.path}
-                          to={sub.path}
-                          className={({ isActive }) =>
-                            `relative flex items-center gap-3 pr-3 pl-[42px] py-1.5 rounded-lg transition-all w-full text-[13px] ${
-                              isActive
-                                ? "text-text-base bg-[#3B82F6]/15 font-semibold"
-                                : "text-text-subtle hover:text-text-base hover:bg-bg-hover"
-                            }`
-                          }
-                        >
-                          {({ isActive }) => (
-                            <>
-                              {isActive && (
-                                <span className="absolute left-[3px] top-1/2 -translate-y-1/2 w-[3px] h-[15px] rounded-full bg-gradient-to-b from-[#60A5FA] to-[#3B82F6]" />
-                              )}
-                              <div className="flex items-center justify-between w-full">
-                                <span className="truncate">{sub.label}</span>
-                                {sub.path.includes('contas-a-receber') && alertasReceber > 0 && (
-                                  <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 leading-tight">
-                                    {alertasReceber}
-                                  </span>
+                    /* `grid-rows-[0fr] → [1fr]` anima a mesma abertura sem depender de uma
+                       altura máxima fixa: nada é cortado quando um submenu ganha itens. */
+                    <div className={`grid transition-all duration-300 ${expanded ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0"}`}>
+                      <div className="flex flex-col gap-1 min-h-0 overflow-hidden">
+                        {item.subItems.map(sub => (
+                          <NavLink
+                            key={sub.path}
+                            to={sub.path}
+                            className={({ isActive }) =>
+                              `relative flex items-center gap-3 pr-3 pl-[42px] py-1.5 rounded-lg transition-all w-full text-[13px] ${
+                                isActive
+                                  ? "text-text-base bg-[#3B82F6]/15 font-semibold"
+                                  : "text-text-subtle hover:text-text-base hover:bg-bg-hover"
+                              }`
+                            }
+                          >
+                            {({ isActive }) => (
+                              <>
+                                {isActive && (
+                                  <span className="absolute left-[3px] top-1/2 -translate-y-1/2 w-[3px] h-[15px] rounded-full bg-gradient-to-b from-[#60A5FA] to-[#3B82F6]" />
                                 )}
-                                {sub.path.includes('contas-a-pagar') && alertasPagar > 0 && (
-                                  <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 leading-tight">
-                                    {alertasPagar}
-                                  </span>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </NavLink>
-                      ))}
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="truncate">{sub.label}</span>
+                                  {sub.path.includes('contas-a-receber') && alertasReceber > 0 && (
+                                    <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 leading-tight">
+                                      {alertasReceber}
+                                    </span>
+                                  )}
+                                  {sub.path.includes('contas-a-pagar') && alertasPagar > 0 && (
+                                    <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 leading-tight">
+                                      {alertasPagar}
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </NavLink>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -316,7 +341,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
               >
                 <NavLink
                   to={item.path!}
-                  title={isCollapsed ? item.label : undefined}
+                  onMouseEnter={(e) => showTooltip(e, item.label)}
+                  onMouseLeave={hideTooltip}
+                  aria-label={isCollapsed ? item.label : undefined}
                   className={({ isActive }) =>
                     `nav-glass-wrapper p-[1px] rounded-xl block group ${
                       isActive ? "active-nav" : ""
@@ -358,6 +385,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
             ERAS ERP v1.0
           </span>
         </div>
+      )}
+
+      {/* Portal para o body: a lista de itens tem `overflow-x-hidden`, que cortaria
+          um tooltip posicionado à direita do menu. */}
+      {tooltip && createPortal(
+        <div
+          role="tooltip"
+          style={{ top: tooltip.top, left: tooltip.left }}
+          className="fixed z-[60] -translate-y-1/2 pointer-events-none px-2.5 py-1.5 rounded-lg bg-bg-surface border border-border-default text-text-base text-xs font-medium whitespace-nowrap shadow-lg"
+        >
+          {tooltip.label}
+        </div>,
+        document.body
       )}
     </aside>
   );
