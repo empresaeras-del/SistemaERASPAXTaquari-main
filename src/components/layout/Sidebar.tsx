@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useFinanceiroAlerts } from '../../hooks/useFinanceiroAlerts';
-import { LayoutDashboard, Users, DollarSign, Settings, ShieldAlert, Package, Building2, ChevronLeft, ChevronRight, ChevronDown, Info, GripVertical, Briefcase, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, Users, DollarSign, Settings, ShieldAlert, Package, ClipboardList, Building2, ChevronLeft, ChevronDown, Info, GripVertical, Briefcase, GraduationCap } from 'lucide-react';
 import { getFromIDB, saveToIDB } from '../../lib/idb';
 import { useAppContext } from '../../context/AppContext';
 import { hasModuleAccess } from '../../utils/permissions';
@@ -37,7 +37,7 @@ const defaultNavItems: NavItem[] = [
       { label: 'Caixas / Fluxo de Caixa', path: '/caixas' }
     ]
   },
-  { id: 'planos', icon: Package, label: 'Planos', path: '/planos' },
+  { id: 'planos', icon: ClipboardList, label: 'Planos', path: '/planos' },
   { id: 'itens_funerarios', icon: Package, label: 'Itens Funerários', path: '/itens-funerarios' },
   { 
     id: 'credenciados',
@@ -172,26 +172,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
 
   return (
     <aside className={`bg-bg-surface text-text-subtle flex flex-col h-full border-r border-border-default transition-all duration-300 ${isCollapsed ? "w-20" : "w-64"}`}>
-      <div className={`h-16 flex items-center border-b border-border-default relative ${isCollapsed ? "justify-center" : "px-6"}`}>
+      <div className={`h-16 flex items-center border-b border-border-default relative shrink-0 ${isCollapsed ? "justify-center" : "px-4"}`}>
         {!isCollapsed && (
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-text-base tracking-tight">ERAS<span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3B82F6] to-[#60A5FA]">.</span></h1>
-            <button 
-              onClick={() => window.dispatchEvent(new CustomEvent('open-welcome-modal'))}
-              className="text-text-subtle hover:text-[#3B82F6] transition-colors"
-              title="Informações do Sistema"
+          <>
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="text-xl font-bold text-text-base tracking-tight">ERAS<span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3B82F6] to-[#60A5FA]">.</span></h1>
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('open-welcome-modal'))}
+                className="text-text-subtle hover:text-[#3B82F6] transition-colors"
+                title="Informações do Sistema"
+              >
+                <Info className="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              onClick={onToggle}
+              title="Recolher menu"
+              className="ml-auto p-1.5 rounded-lg text-text-subtle hover:bg-bg-hover hover:text-text-base transition-colors"
             >
-              <Info className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4" />
             </button>
-          </div>
+          </>
         )}
         {isCollapsed && (
-          <h1 className="text-xl font-bold text-text-base tracking-tight">E<span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3B82F6] to-[#60A5FA]">.</span></h1>
+          <button
+            onClick={onToggle}
+            title="Expandir menu"
+            className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#3B82F6] to-[#60A5FA] text-white font-bold text-sm flex items-center justify-center shadow-lg shadow-[#3B82F6]/20 hover:opacity-90 transition-opacity"
+          >
+            E
+          </button>
         )}
       </div>
       
       <div className="flex-1 overflow-y-auto overflow-x-hidden relative flex flex-col">
-        <nav className="flex-1 py-4 flex flex-col gap-1 px-3">
+        <nav className="flex-1 py-3 flex flex-col gap-0.5 px-3">
           {visibleNavItems.map((item, index) => {
             if (item.subItems) {
               const active = isSubMenuActive(item);
@@ -212,24 +227,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
                     className={`nav-glass-wrapper p-[1px] rounded-xl block group cursor-pointer ${active && !expanded ? "active-nav" : ""}`}
                   >
                     <div
-                      className={`relative z-10 flex items-center ${isCollapsed ? "justify-center" : "justify-between"} px-3 py-3 rounded-xl transition-all w-full h-full ${
+                      className={`relative z-10 flex items-center ${isCollapsed ? "justify-center" : "justify-between"} px-3 py-2.5 rounded-xl transition-all w-full h-full text-sm ${
                         active && !expanded
-                          ? "bg-gradient-to-r from-[#3B82F6]/20 to-[#60A5FA]/20 text-text-base font-medium shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]"
-                          : "bg-transparent text-text-subtle group-hover:bg-bg-hover group-hover:text-text-base"
+                          ? "bg-[#3B82F6]/15 text-text-base font-medium shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]"
+                          : active
+                            ? "bg-transparent text-text-base font-medium"
+                            : "bg-transparent text-text-subtle group-hover:bg-bg-hover group-hover:text-text-base"
                       }`}
                     >
-                      <div className={`flex items-center ${isCollapsed ? "justify-center" : "gap-3"}`}>
-                        {!isCollapsed && <GripVertical className="w-4 h-4 text-slate-600 opacity-0 group-hover/item:opacity-100 cursor-grab shrink-0 -ml-1 transition-opacity" />}
-                        <item.icon className={`w-5 h-5 shrink-0 ${active ? "text-[#3B82F6]" : "text-text-subtle group-hover:text-text-base"}`} />
-                        
+                      {active && !expanded && !isCollapsed && (
+                        <span className="absolute left-[3px] top-1/2 -translate-y-1/2 w-[3px] h-[17px] rounded-full bg-gradient-to-b from-[#60A5FA] to-[#3B82F6]" />
+                      )}
+                      {!isCollapsed && (
+                        <GripVertical className="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-3 text-text-subtle/60 opacity-0 group-hover/item:opacity-100 cursor-grab transition-opacity" />
+                      )}
+                      <div className={`flex items-center min-w-0 ${isCollapsed ? "justify-center" : "gap-3"}`}>
+                        <item.icon className={`w-[18px] h-[18px] shrink-0 ${active ? "text-[#3B82F6]" : "text-text-subtle group-hover:text-text-base"}`} />
+
                         {!isCollapsed && <span className="truncate">{item.label}</span>}
-                        {item.label === 'Financeiro' && (alertasReceber > 0 || alertasPagar > 0) && (
-                           <div className={`w-2 h-2 rounded-full bg-amber-500 ${!isCollapsed ? 'ml-auto mr-2' : 'absolute top-1 right-1'}`} />
+                        {item.label === 'Financeiro' && (alertasReceber + alertasPagar) > 0 && isCollapsed && (
+                           <div className="w-2 h-2 rounded-full bg-amber-500 absolute top-1 right-1" />
                         )}
 
                       </div>
                       {!isCollapsed && (
-                        <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expanded ? "rotate-180" : ""}`} />
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {item.label === 'Financeiro' && (alertasReceber + alertasPagar) > 0 && (
+                            <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-tight">
+                              {alertasReceber + alertasPagar}
+                            </span>
+                          )}
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${expanded ? "rotate-180" : ""}`} />
+                        </div>
                       )}
                     </div>
                   </div>
@@ -241,28 +270,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
                           key={sub.path}
                           to={sub.path}
                           className={({ isActive }) =>
-                            `flex items-center gap-3 px-3 pl-11 py-2 rounded-xl transition-all w-full text-sm ${
+                            `relative flex items-center gap-3 pr-3 pl-[42px] py-1.5 rounded-lg transition-all w-full text-[13px] ${
                               isActive
-                                ? "text-text-base bg-bg-hover font-medium"
+                                ? "text-text-base bg-[#3B82F6]/15 font-semibold"
                                 : "text-text-subtle hover:text-text-base hover:bg-bg-hover"
                             }`
                           }
                         >
-                          
-                          <div className="flex items-center justify-between w-full">
-                            <span className="truncate">{sub.label}</span>
-                            {sub.path.includes('contas-a-receber') && alertasReceber > 0 && (
-                              <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                                {alertasReceber}
-                              </span>
-                            )}
-                            {sub.path.includes('contas-a-pagar') && alertasPagar > 0 && (
-                              <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                                {alertasPagar}
-                              </span>
-                            )}
-                          </div>
-
+                          {({ isActive }) => (
+                            <>
+                              {isActive && (
+                                <span className="absolute left-[3px] top-1/2 -translate-y-1/2 w-[3px] h-[15px] rounded-full bg-gradient-to-b from-[#60A5FA] to-[#3B82F6]" />
+                              )}
+                              <div className="flex items-center justify-between w-full">
+                                <span className="truncate">{sub.label}</span>
+                                {sub.path.includes('contas-a-receber') && alertasReceber > 0 && (
+                                  <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 leading-tight">
+                                    {alertasReceber}
+                                  </span>
+                                )}
+                                {sub.path.includes('contas-a-pagar') && alertasPagar > 0 && (
+                                  <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 leading-tight">
+                                    {alertasPagar}
+                                  </span>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </NavLink>
                       ))}
                     </div>
@@ -291,21 +325,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
                 >
                   {({ isActive }) => (
                     <div
-                      className={`relative z-10 flex items-center ${isCollapsed ? "justify-center" : "gap-3"} px-3 py-3 rounded-xl transition-all w-full h-full ${
+                      className={`relative z-10 flex items-center ${isCollapsed ? "justify-center" : "gap-3"} px-3 py-2.5 rounded-xl transition-all w-full h-full text-sm ${
                         isActive
-                          ? "bg-gradient-to-r from-[#3B82F6]/20 to-[#60A5FA]/20 text-text-base font-medium shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]"
+                          ? "bg-[#3B82F6]/15 text-text-base font-medium shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]"
                           : "bg-transparent text-text-subtle group-hover:bg-bg-hover group-hover:text-text-base"
                       }`}
                     >
-                      <div className={`flex items-center ${isCollapsed ? "justify-center" : "gap-3"}`}>
-                        {!isCollapsed && <GripVertical className="w-4 h-4 text-slate-600 opacity-0 group-hover/item:opacity-100 cursor-grab shrink-0 -ml-1 transition-opacity" />}
-                        <item.icon className={`w-5 h-5 shrink-0 ${isActive ? "text-[#3B82F6]" : "text-text-subtle group-hover:text-text-base"}`} />
-                        
-                        {!isCollapsed && <span className="truncate">{item.label}</span>}
-                        {item.label === 'Financeiro' && (alertasReceber > 0 || alertasPagar > 0) && (
-                           <div className={`w-2 h-2 rounded-full bg-amber-500 ${!isCollapsed ? 'ml-auto mr-2' : 'absolute top-1 right-1'}`} />
-                        )}
+                      {isActive && !isCollapsed && (
+                        <span className="absolute left-[3px] top-1/2 -translate-y-1/2 w-[3px] h-[17px] rounded-full bg-gradient-to-b from-[#60A5FA] to-[#3B82F6]" />
+                      )}
+                      {!isCollapsed && (
+                        <GripVertical className="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-3 text-text-subtle/60 opacity-0 group-hover/item:opacity-100 cursor-grab transition-opacity" />
+                      )}
+                      <div className={`flex items-center min-w-0 ${isCollapsed ? "justify-center" : "gap-3"}`}>
+                        <item.icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? "text-[#3B82F6]" : "text-text-subtle group-hover:text-text-base"}`} />
 
+                        {!isCollapsed && <span className="truncate">{item.label}</span>}
                       </div>
                     </div>
                   )}
@@ -316,19 +351,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
         </nav>
       </div>
       
-      <div className={`p-4 border-t border-border-default flex items-center ${isCollapsed ? "justify-center" : "justify-between"}`}>
-        {!isCollapsed && (
-          <span className="text-xs text-text-subtle font-medium tracking-wide">
+      {/* O botão de recolher/expandir vive no cabeçalho; aqui fica só a versão. */}
+      {!isCollapsed && (
+        <div className="px-4 py-3 border-t border-border-default">
+          <span className="text-[11px] text-text-subtle/70 font-medium tracking-wide uppercase">
             ERAS ERP v1.0
           </span>
-        )}
-        <button 
-          onClick={onToggle}
-          className="p-1.5 rounded-lg bg-bg-hover hover:bg-[#64748B] text-text-subtle hover:text-text-base transition-colors"
-        >
-          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-        </button>
-      </div>
+        </div>
+      )}
     </aside>
   );
 };
