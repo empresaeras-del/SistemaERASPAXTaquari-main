@@ -12,6 +12,7 @@ import { CredenciadoInsert, CredenciadoUpdate, CredenciadoStatus } from '../type
 import { usePlanosPax } from '../hooks/usePlanosPax';
 import { useProcedimentos } from '../hooks/useProcedimentos';
 import { ProcedimentosCredenciado } from '../components/credenciados/ProcedimentosCredenciado';
+import { FaturamentosCredenciadoTab } from '../components/credenciados/FaturamentosCredenciadoTab';
 import { exportToPDF, exportFichasToPDF } from "../lib/pdfExport";
 import { isValidCPFOrCNPJ, maskCPFOrCNPJ } from "../utils/validators";
 import { getEmpresaById, Empresa } from "../services/empresasService";
@@ -92,10 +93,11 @@ export const CredenciadosPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [ramoFilter, setRamoFilter] = useState('todos');
+  const [especialidadeFilter, setEspecialidadeFilter] = useState('todas');
   
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   
-  const [activeTab, setActiveTab] = useState<'dados' | 'procedimentos'>('dados');
+  const [activeTab, setActiveTab] = useState<'dados' | 'procedimentos' | 'faturamentos'>('dados');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isLinkOpen, setIsLinkOpen] = useState(false);
   const [showRelatorioModal, setShowRelatorioModal] = useState(false);
@@ -136,7 +138,8 @@ export const CredenciadosPage: React.FC = () => {
                           (c.nome_fantasia || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter ? c.status === statusFilter : true;
     const matchesRamo = ramoFilter !== 'todos' ? c.ramo_atividade === ramoFilter : true;
-    return matchesSearch && matchesStatus && matchesRamo;
+    const matchesEspecialidade = especialidadeFilter !== 'todas' ? c.especialidade === especialidadeFilter : true;
+    return matchesSearch && matchesStatus && matchesRamo && matchesEspecialidade;
   });
 
   /**
@@ -273,6 +276,11 @@ export const CredenciadosPage: React.FC = () => {
     };
     loadEmpresa();
   }, [state.empresaSelecionada, state.isOnline]);
+
+  const getEspecialidadesList = () => {
+    const especialidades = credenciados.map(c => c.especialidade).filter(Boolean) as string[];
+    return [...new Set(especialidades)].sort();
+  };
 
   const handleExportPDF = () => {
     setShowRelatorioModal(true);
@@ -453,6 +461,19 @@ export const CredenciadosPage: React.FC = () => {
             <option value="bloqueado">Bloqueados</option>
             <option value="descredenciado">Descredenciados</option>
           </select>
+
+          {getRamoList().some(r => r.includes('medico') || r.includes('clinica') || r.includes('hospital') || r.includes('dentista') || r.includes('fisioterapia') || r.includes('psicologia')) && (
+            <select
+              value={especialidadeFilter}
+              onChange={(e) => setEspecialidadeFilter(e.target.value)}
+              className="bg-bg-subtle border border-border-default rounded-xl px-3 py-2 text-text-base focus:outline-none focus:border-[#3B82F6] max-w-[200px]"
+            >
+              <option value="todas">Todas as Especialidades</option>
+              {getEspecialidadesList().map(esp => (
+                <option key={esp} value={esp}>{esp}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* VIEW MODE TOGGLES */}
@@ -685,6 +706,12 @@ export const CredenciadosPage: React.FC = () => {
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap flex-1 md:flex-none ${activeTab === 'procedimentos' ? 'bg-bg-hover text-[#3B82F6] shadow-sm border border-[#3B82F6]/20' : 'text-text-subtle hover:text-[#3B82F6]'}`}
                     >
                       Tabela de Valores
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('faturamentos')}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap flex-1 md:flex-none ${activeTab === 'faturamentos' ? 'bg-bg-hover text-[#3B82F6] shadow-sm border border-[#3B82F6]/20' : 'text-text-subtle hover:text-[#3B82F6]'}`}
+                    >
+                      Faturamentos & Guias
                     </button>
                   </div>
                 )}
@@ -965,7 +992,7 @@ export const CredenciadosPage: React.FC = () => {
                     </SecaoFormulario>
                   </form>
                 </div>
-              ) : (
+              ) : activeTab === 'procedimentos' ? (
                 <ProcedimentosCredenciado 
                   credenciadoId={editingId!}
                   vincularProcedimento={vincularProcedimento}
@@ -973,6 +1000,8 @@ export const CredenciadosPage: React.FC = () => {
                   atualizarValorProcedimento={atualizarValorProcedimento}
                   buscarProcedimentosVinculados={buscarProcedimentosVinculados}
                 />
+              ) : (
+                <FaturamentosCredenciadoTab credenciadoId={editingId!} />
               )}
             </div>
             
@@ -1104,12 +1133,13 @@ export const CredenciadosPage: React.FC = () => {
         onClose={() => setShowRelatorioModal(false)}
         credenciados={filtered}
         empresaData={empresaData}
+        userName={state.usuario?.nome}
         currentFilters={{
           searchTerm,
           statusFilter,
-          ramoFilter: ramoFilter !== 'todos' ? ramoFilter : undefined
+          ramoFilter,
+          especialidadeFilter,
         }}
-        userName={state.user?.nome || 'Operador'}
       />
     </div>
   );

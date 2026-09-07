@@ -35,6 +35,7 @@ interface RelatorioCredenciadosModalProps {
     searchTerm?: string;
     statusFilter?: string;
     ramoFilter?: string;
+    especialidadeFilter?: string;
   };
   userName?: string;
 }
@@ -236,7 +237,8 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
           </table>
 
           <div class="filters-bar">
-            <div><strong>Ramo:</strong> ${currentFilters.ramoFilter ? currentFilters.ramoFilter.toUpperCase() : 'TODOS'}</div>
+            <div><strong>Ramo:</strong> ${currentFilters.ramoFilter && currentFilters.ramoFilter !== 'todos' ? currentFilters.ramoFilter.toUpperCase() : 'TODOS'}</div>
+            <div><strong>Especialidade:</strong> ${currentFilters.especialidadeFilter && currentFilters.especialidadeFilter !== 'todas' ? currentFilters.especialidadeFilter.toUpperCase() : 'TODAS'}</div>
             <div><strong>Status:</strong> ${currentFilters.statusFilter ? currentFilters.statusFilter.toUpperCase() : 'TODOS'}</div>
             <div><strong>Busca:</strong> ${currentFilters.searchTerm ? `"${currentFilters.searchTerm}"` : 'Todos'}</div>
             <div><strong>Total Listado:</strong> ${reportData.length} credenciados</div>
