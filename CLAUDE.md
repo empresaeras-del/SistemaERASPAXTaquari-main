@@ -136,12 +136,58 @@ sistema:
   `tableGridModel.test.ts`).
 - **CSS de impressão**: compartilhado entre o visualizador e a página de modelos via
   `utils/documentoPrintStyles.ts` — não duplique o `<style>` de novo se precisar mexer na impressão.
+  Leia a seção "Impressão" abaixo antes de mexer: esse arquivo tem regras que não são óbvias.
 - **Sanitização**: todo `dangerouslySetInnerHTML` de conteúdo de documento passa por
   `utils/sanitizeHtml.ts` (DOMPurify). Se adicionar um novo ponto de renderização de HTML de
   documento, sanitize também.
-- **Assinatura com posição livre**: `assinatura_config` (JSONB, `{x, y, largura, altura, pagina}` em
-  % da página) no registro do documento; drag-and-drop via `react-rnd` em
-  `VisualizadorDocumentoPadraoModal.tsx`.
+- **Assinatura com posição livre**: `assinatura_config` (JSONB) no registro do documento;
+  drag-and-drop via `react-rnd` em `VisualizadorDocumentoPadraoModal.tsx`. As conversões de
+  coordenada são funções puras em `utils/assinaturaPosicao.ts` — ver "Impressão" abaixo.
+
+### Impressão: três regras que já foram quebradas
+
+A impressão de um documento abre uma janela nova (`window.open('')`) e escreve nela o
+`innerHTML` da folha do visualizador mais o CSS de `documentoPrintStyles.ts`. Essa janela é um
+documento à parte, e três consequências disso já produziram bugs reais (corrigidos em setembro/2026,
+PRs #16 e #17):
+
+1. **Não existe Tailwind dentro da janela de impressão.** Nenhuma classe utilitária que vier no
+   `innerHTML` corresponde a regra alguma lá: `absolute`, `flex`, `items-center`, `max-h-full`,
+   `w-4/5`, `text-xs` — todas inertes. Só vale o que o CSS gerado nomeia explicitamente
+   (`.doc-header`, `.doc-content`, `.doc-footer`, `.signature-line`, `.doc-assinatura-livre`,
+   tabelas). Foi assim que a assinatura de posição livre imprimia sem `position: absolute`: os
+   `left`/`top` inline viravam inertes, a altura percentual colapsava e a imagem saía no tamanho
+   natural do arquivo — um carimbo digitalizado de 26cm no meio do contrato. **Ao renderizar
+   qualquer coisa nova que vá para a impressão, dê a ela uma classe própria e escreva a regra em
+   `documentoPrintStyles.ts`; não confie em `className` do Tailwind.**
+
+2. **A folha do visualizador não vai junto — só o conteúdo dela.** A folha é
+   `position: relative` e serve de âncora para o `position: absolute` da assinatura, mas quem chega
+   na impressão é `.doc-container`, que a substitui. Por isso `.doc-container` é
+   `position: relative` no CSS de impressão. Se remover esse `relative`, a assinatura volta a ser
+   posicionada contra a caixa da página.
+
+3. **A margem é do documento, e uma fonte só alimenta tudo.** `documento.margens` (JSONB
+   `{top,bottom,left,right}` em mm) define, ao mesmo tempo: o `@page { margin }` da impressão, o
+   `padding` da folha do visualizador, a área de referência do arrastar da assinatura e as margens
+   da exportação em PDF. Enquanto esses valores divergiam (160mm de área útil no editor, 170mm no
+   visualizador, 180mm na impressão), o texto refluía entre as etapas e a paginação da tela não
+   correspondia à impressa. Use sempre `margensOu(documento?.margens)` de `utils/assinaturaPosicao.ts`
+   para normalizar — a coluna é jsonb livre e pode vir nula ou parcial.
+   **Lacuna conhecida**: o editor Jodit ainda desenha a própria folha com paddings no `iframeStyle`
+   e é a única etapa fora desse alinhamento.
+
+**Coordenadas da assinatura** (`utils/assinaturaPosicao.ts`): são milímetros a partir do canto
+superior esquerdo da área útil **de uma página**, mais o índice da página (`AssinaturaConfigV2`).
+O formato antigo (`AssinaturaConfigV1`) usava porcentagens da folha contínua inteira do
+visualizador — que cresce com o documento — e por isso nunca sobrevivia à paginação; ele é lido e
+convertido na abertura do documento, usando as medidas reais da folha, e nada mais grava nele.
+O passo entre páginas é `alturaUtilMm(orientacao, margens)`, não uma constante: mudar as margens
+muda o passo. Se precisar mexer aqui, as funções são puras e testadas em `assinaturaPosicao.test.ts`
+— mude com teste.
+
+`orientacao` também é propriedade do documento (persistida ao trocar na barra do visualizador), não
+preferência de sessão.
 
 ## Validação (Zod)
 
@@ -298,6 +344,17 @@ fallback de valores, transições de status), sem precisar de rede real nem de I
 Ver `financeiroService.test.ts` (`getParcelasReceber`, `registrarRecebimento`,
 `estornarRecebimento`...), `requisicoesService.test.ts` e `faturamentoService.test.ts` como
 referência do padrão ao testar um service novo.
+
+**Conferindo a impressão de verdade**: o CSS de impressão não é observável por teste unitário — só
+dá para checar que a string gerada contém a regra certa (é o que `documentoPrintStyles.test.ts` faz).
+O que o navegador realmente produz precisa de um navegador. Este ambiente tem Chromium pré-instalado
+em `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` e `puppeteer` já nas dependências: dá para
+montar o HTML com `montarHtmlImpressaoDocumento()`, `page.setContent()`, `page.pdf()` e então medir
+posições no DOM ou inspecionar o PDF resultante (contar `/Type /Pages /Count`, ou localizar um
+elemento por uma cor única no content stream de cada página). Foi assim que se descobriu que a
+assinatura imprimia com `position: static` — um diagnóstico feito só pela leitura do código tinha
+chegado ao mecanismo errado. Vale o esforço sempre que a mudança for sobre o que sai no papel; não é
+teste de suíte, é verificação pontual antes do commit.
 
 **Primeiro teste de componente**: `AssociadoFormModal.test.tsx` é o primeiro teste de render do
 projeto, com `@testing-library/react` (já era devDependency havia tempo, mas nunca tinha sido usada).
