@@ -17,7 +17,7 @@ import {
   Activity
 } from 'lucide-react';
 import { formatLocalDate } from '../../utils/dateUtils';
-import { formatCurrency } from '../../utils/currencyUtils';
+import { formatCurrency } from '../../utils/formatters';
 
 interface FaturamentosCredenciadoTabProps {
   credenciadoId: string;
