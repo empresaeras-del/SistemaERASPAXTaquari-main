@@ -144,7 +144,7 @@ export const RequisicaoDocumentoPreview: React.FC<RequisicaoDocumentoPreviewProp
       
       const docPadrao: DocumentoPadrao = {
         id: 'mock-req-' + requisicao.id,
-        titulo: \`Guia \${requisicao.codigo_requisicao}\`,
+        titulo: `Guia ${requisicao.codigo_requisicao}`,
         tipo: 'outro',
         conteudo_html: TEMPLATE_HTML,
         ativo: true,
@@ -173,7 +173,7 @@ export const RequisicaoDocumentoPreview: React.FC<RequisicaoDocumentoPreviewProp
       documento={documentoMock}
       empresaData={empresaData}
       initialPlaceholderValues={placeholders}
-      customTitle={\`Imprimir Guia: \${requisicao?.codigo_requisicao}\`}
+      customTitle={`Imprimir Guia: ${requisicao?.codigo_requisicao}`}
     />
   );
 };
