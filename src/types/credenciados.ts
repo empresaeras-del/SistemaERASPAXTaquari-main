@@ -22,6 +22,8 @@ export interface Credenciado {
   responsavel_nome?: string;
   responsavel_telefone?: string;
   ramo_atividade: string;
+  /** Especialidade médica (rótulo do catálogo em `config/especialidadesMedicas.ts`). */
+  especialidade?: string;
   registro_profissional?: string;
   banco?: string;
   agencia?: string;

@@ -19,8 +19,39 @@ import { useAppContext } from "../context/AppContext";
 import { useConfirm } from '../context/ConfirmContext';
 import { RelatorioCredenciadosModal } from '../components/credenciados/RelatorioCredenciadosModal';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
+import { ComboBoxBusca } from '../components/common/ComboBoxBusca';
+import { ESPECIALIDADES_MEDICAS, ehEspecialidadeConhecida } from '../config/especialidadesMedicas';
 import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
 import toast from 'react-hot-toast';
+
+/**
+ * Classes dos campos do formulário de credenciados. Estavam repetidas em 21
+ * inputs/selects — qualquer ajuste de design precisava ser feito 21 vezes, e
+ * bastava esquecer um para a tela ficar desalinhada.
+ */
+const CAMPO_CLASSE =
+  'w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] hover:border-[#3B82F6]/40 transition-all';
+
+const ROTULO_CLASSE = 'block text-sm font-medium text-text-subtle mb-1.5';
+
+/**
+ * Cabeçalho de seção do formulário. Os quatro títulos estavam escritos à mão com
+ * markup levemente diferente entre si — e o da "Identificação Principal" tinha a
+ * régua da direita duplicada, o que engrossava a linha só naquela seção.
+ */
+const TituloSecao: React.FC<{ icone: React.ElementType; children: React.ReactNode }> = ({
+  icone: Icone,
+  children,
+}) => (
+  <h4 className="text-[13px] font-bold text-text-base uppercase tracking-wider mb-5 flex items-center gap-2.5">
+    <span className="w-7 h-7 rounded-lg bg-[#3B82F6]/10 border border-[#3B82F6]/20 flex items-center justify-center shrink-0">
+      <Icone className="w-3.5 h-3.5 text-[#3B82F6]" />
+    </span>
+    {children}
+    <span className="flex-1 h-px bg-border-default" />
+  </h4>
+);
+
 
 export const CredenciadosPage: React.FC = () => {
   const { state } = useAppContext();
@@ -98,7 +129,7 @@ export const CredenciadosPage: React.FC = () => {
 
   const handleOpenCreate = () => {
     setEditingId(null);
-    const initialObj: Partial<CredenciadoInsert> = { razao_social: '', cnpj_cpf: '', ramo_atividade: 'clinica_medica', status: 'ativo' as CredenciadoStatus };
+    const initialObj: Partial<CredenciadoInsert> = { razao_social: '', cnpj_cpf: '', ramo_atividade: 'clinica_medica', especialidade: '', status: 'ativo' as CredenciadoStatus };
     setFormData(initialObj);
     setInitialFormDataJson(JSON.stringify(initialObj));
     setIsSaving(false);
@@ -145,6 +176,7 @@ export const CredenciadosPage: React.FC = () => {
           nome_fantasia: '',
           cnpj_cpf: '',
           ramo_atividade: 'clinica_medica',
+          especialidade: '',
           status: 'ativo'
         });
         setEditingId(null);
@@ -460,6 +492,12 @@ export const CredenciadosPage: React.FC = () => {
                     <strong className="text-text-subtle min-w-[70px]">CNPJ/CPF:</strong>
                     <span className="font-mono text-text-base">{cred.cnpj_cpf}</span>
                   </p>
+                  {cred.especialidade && (
+                    <p className="flex items-center gap-2">
+                      <Stethoscope className="w-3.5 h-3.5 text-text-subtle shrink-0" />
+                      <span className="truncate">{cred.especialidade}</span>
+                    </p>
+                  )}
                   
                   {cred.telefone && (
                     <p className="flex items-center gap-2">
@@ -539,6 +577,11 @@ export const CredenciadosPage: React.FC = () => {
                       <span className="px-2.5 py-1 rounded-lg bg-bg-subtle text-text-subtle font-medium border border-border-default text-xs whitespace-nowrap">
                         {cred.ramo_atividade.replace('_', ' ').toUpperCase()}
                       </span>
+                      {cred.especialidade && (
+                        <div className="mt-1.5 text-xs text-text-muted truncate max-w-[180px]" title={cred.especialidade}>
+                          {cred.especialidade}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-4 whitespace-nowrap">
                       {getStatusBadge(cred.status)}
@@ -632,67 +675,63 @@ export const CredenciadosPage: React.FC = () => {
                     
                     {/* Identificação Principal */}
                     <section>
-                      <h4 className="text-sm font-bold text-text-base uppercase tracking-wider mb-5 flex items-center gap-2">
-                        <span className="w-6 h-px bg-border-default"></span>
-                        Identificação Principal
-                        <span className="flex-1 h-px bg-border-default"></span>
-                      <span className="flex-1 h-px bg-border-default"></span></h4>
+                      <TituloSecao icone={Building2}>Identificação Principal</TituloSecao>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="space-y-1.5 md:col-span-2">
-                          <label className="block text-sm font-semibold text-text-subtle">Razão Social *</label>
+                          <label className={ROTULO_CLASSE}>Razão Social *</label>
                           <input 
                             required 
                             value={formData.razao_social || ''}
                             onChange={e => setFormData({...formData, razao_social: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                             placeholder="Nome legal da empresa"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="block text-sm font-semibold text-text-subtle">Nome Fantasia</label>
+                          <label className={ROTULO_CLASSE}>Nome Fantasia</label>
                           <input 
                             value={formData.nome_fantasia || ''}
                             onChange={e => setFormData({...formData, nome_fantasia: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                             placeholder="Como é conhecido no mercado"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="block text-sm font-semibold text-text-subtle">CNPJ / CPF *</label>
+                          <label className={ROTULO_CLASSE}>CNPJ / CPF *</label>
                                                     <input 
                             required 
                             value={formData.cnpj_cpf || ''}
                             onChange={e => setFormData({...formData, cnpj_cpf: maskCPFOrCNPJ(e.target.value)})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all font-mono placeholder:font-sans" 
+                            className={`${CAMPO_CLASSE} font-mono placeholder:font-sans`} 
                             placeholder="00.000.000/0000-00"
                           />
                         </div>
-                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div>
-                                <label className="block text-sm font-semibold text-text-subtle mb-1.5">E-mail</label>
-                                <input 
-                                    type="email"
-                                    value={formData.email || ''}
-                                    onChange={e => setFormData({...formData, email: e.target.value})}
-                                    className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-text-subtle mb-1.5">Telefone Principal</label>
-                                <input 
-                                    value={formData.telefone || ''}
-                                    onChange={e => setFormData({...formData, telefone: e.target.value})}
-                                    className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
-                                />
-                            </div>
+                        <div>
+                          <label className={ROTULO_CLASSE}>E-mail</label>
+                          <input
+                            type="email"
+                            value={formData.email || ''}
+                            onChange={e => setFormData({...formData, email: e.target.value})}
+                            className={CAMPO_CLASSE}
+                            placeholder="contato@exemplo.com.br"
+                          />
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Ramo de Atividade *</label>
+                          <label className={ROTULO_CLASSE}>Telefone Principal</label>
+                          <input
+                            value={formData.telefone || ''}
+                            onChange={e => setFormData({...formData, telefone: e.target.value})}
+                            className={CAMPO_CLASSE}
+                            placeholder="(67) 99999-9999"
+                          />
+                        </div>
+                        <div>
+                          <label className={ROTULO_CLASSE}>Ramo de Atividade *</label>
                           <select 
                             required 
                             value={formData.ramo_atividade || 'clinica_medica'}
                             onChange={e => setFormData({...formData, ramo_atividade: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                            className={CAMPO_CLASSE}
                           >
                             <option value="clinica_medica">Clínica Médica</option>
                             <option value="laboratorio">Laboratório</option>
@@ -706,16 +745,40 @@ export const CredenciadosPage: React.FC = () => {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Status</label>
+                          <label className={ROTULO_CLASSE}>Status</label>
                           <select 
                             value={formData.status || 'ativo'}
                             onChange={e => setFormData({...formData, status: e.target.value as any})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                            className={CAMPO_CLASSE}
                           >
                             <option value="ativo">Ativo</option>
                             <option value="bloqueado">Bloqueado</option>
                             <option value="descredenciado">Descredenciado</option>
                           </select>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className={ROTULO_CLASSE} htmlFor="credenciado-especialidade">
+                            Especialidade
+                          </label>
+                          <ComboBoxBusca
+                            id="credenciado-especialidade"
+                            value={formData.especialidade || ''}
+                            onChange={valor => setFormData({ ...formData, especialidade: valor })}
+                            options={ESPECIALIDADES_MEDICAS}
+                            placeholder="Selecione a especialidade (opcional)"
+                            emptyLabel="Nenhuma especialidade encontrada"
+                          />
+                          <p className="mt-1.5 text-xs text-text-muted">
+                            As 55 especialidades reconhecidas pela Resolução CFM 2.221/2018 — a lista
+                            que o CRM/MS usa. Credenciados sem registro médico (laboratório, farmácia)
+                            podem ficar sem preencher.
+                          </p>
+                          {formData.especialidade && !ehEspecialidadeConhecida(formData.especialidade) && (
+                            <p className="mt-1.5 text-xs text-amber-400">
+              &ldquo;{formData.especialidade}&rdquo; não está no catálogo — valor antigo,
+                              mantido como está até ser trocado.
+                            </p>
+                          )}
                         </div>
                       </div>
                     </section>
@@ -723,24 +786,22 @@ export const CredenciadosPage: React.FC = () => {
 
                     {/* Responsável e Contato */}
                     <section>
-                      <h4 className="text-sm font-bold text-text-base uppercase tracking-wider mb-5 flex items-center gap-2"><span className="w-6 h-px bg-border-default"></span>
-                        <Users className="w-4 h-4" /> Responsável
-                      <span className="flex-1 h-px bg-border-default"></span></h4>
+                      <TituloSecao icone={Users}>Responsável</TituloSecao>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Nome do Responsável</label>
+                          <label className={ROTULO_CLASSE}>Nome do Responsável</label>
                           <input 
                             value={formData.responsavel_nome || ''}
                             onChange={e => setFormData({...formData, responsavel_nome: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Telefone do Responsável</label>
+                          <label className={ROTULO_CLASSE}>Telefone do Responsável</label>
                           <input 
                             value={formData.responsavel_telefone || ''}
                             onChange={e => setFormData({...formData, responsavel_telefone: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                           />
                         </div>
                       </div>
@@ -748,64 +809,62 @@ export const CredenciadosPage: React.FC = () => {
 
                     {/* Endereço */}
                     <section>
-                      <h4 className="text-sm font-bold text-text-base uppercase tracking-wider mb-5 flex items-center gap-2"><span className="w-6 h-px bg-border-default"></span>
-                        <MapPin className="w-4 h-4" /> Endereço Completo
-                      <span className="flex-1 h-px bg-border-default"></span></h4>
+                      <TituloSecao icone={MapPin}>Endereço Completo</TituloSecao>
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
                         <div className="md:col-span-3">
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">CEP</label>
+                          <label className={ROTULO_CLASSE}>CEP</label>
                           <input 
                             value={formData.cep || ''}
                             onChange={e => setFormData({...formData, cep: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                           />
                         </div>
                         <div className="md:col-span-7">
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Endereço</label>
+                          <label className={ROTULO_CLASSE}>Endereço</label>
                           <input 
                             value={formData.endereco || ''}
                             onChange={e => setFormData({...formData, endereco: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                           />
                         </div>
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Número</label>
+                          <label className={ROTULO_CLASSE}>Número</label>
                           <input 
                             value={formData.numero || ''}
                             onChange={e => setFormData({...formData, numero: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                           />
                         </div>
                         <div className="md:col-span-4">
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Complemento</label>
+                          <label className={ROTULO_CLASSE}>Complemento</label>
                           <input 
                             value={formData.complemento || ''}
                             onChange={e => setFormData({...formData, complemento: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                           />
                         </div>
                         <div className="md:col-span-4">
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Bairro</label>
+                          <label className={ROTULO_CLASSE}>Bairro</label>
                           <input 
                             value={formData.bairro || ''}
                             onChange={e => setFormData({...formData, bairro: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                           />
                         </div>
                         <div className="md:col-span-3">
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Cidade</label>
+                          <label className={ROTULO_CLASSE}>Cidade</label>
                           <input 
                             value={formData.cidade || ''}
                             onChange={e => setFormData({...formData, cidade: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                           />
                         </div>
                         <div className="md:col-span-1">
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">UF</label>
+                          <label className={ROTULO_CLASSE}>UF</label>
                           <input 
                             value={formData.estado || ''}
                             onChange={e => setFormData({...formData, estado: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                             maxLength={2}
                           />
                         </div>
@@ -814,24 +873,22 @@ export const CredenciadosPage: React.FC = () => {
 
                     {/* Dados Bancários */}
                     <section>
-                      <h4 className="text-sm font-bold text-text-base uppercase tracking-wider mb-5 flex items-center gap-2"><span className="w-6 h-px bg-border-default"></span>
-                        <Banknote className="w-4 h-4" /> Dados Bancários
-                      <span className="flex-1 h-px bg-border-default"></span></h4>
+                      <TituloSecao icone={Banknote}>Dados Bancários</TituloSecao>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Banco</label>
+                          <label className={ROTULO_CLASSE}>Banco</label>
                           <input 
                             value={formData.banco || ''}
                             onChange={e => setFormData({...formData, banco: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-text-subtle mb-1.5">Chave PIX</label>
+                          <label className={ROTULO_CLASSE}>Chave PIX</label>
                           <input 
                             value={formData.chave_pix || ''}
                             onChange={e => setFormData({...formData, chave_pix: e.target.value})}
-                            className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all" 
+                            className={CAMPO_CLASSE} 
                           />
                         </div>
                       </div>
@@ -898,12 +955,12 @@ export const CredenciadosPage: React.FC = () => {
                 <h4 className="text-sm font-semibold text-text-muted uppercase tracking-wider">Adicionar Novo Vínculo<span className="flex-1 h-px bg-border-default"></span></h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-semibold text-text-subtle mb-1.5">Selecione o Plano Pax</label>
+                    <label className={ROTULO_CLASSE}>Selecione o Plano Pax</label>
                     <select
                       required
                       value={linkData.plano_pax_id}
                       onChange={e => setLinkData({...linkData, plano_pax_id: e.target.value})}
-                      className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                      className={CAMPO_CLASSE}
                     >
                       <option value="" disabled>Selecione um plano...</option>
                       {planos.map(p => (
@@ -912,23 +969,23 @@ export const CredenciadosPage: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-text-subtle mb-1.5">% de Desconto</label>
+                    <label className={ROTULO_CLASSE}>% de Desconto</label>
                     <input
                       type="number"
                       step="0.01"
                       value={linkData.percentual_desconto}
                       onChange={e => setLinkData({...linkData, percentual_desconto: Number(e.target.value)})}
-                      className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                      className={CAMPO_CLASSE}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-text-subtle mb-1.5">Coparticipação (R$)</label>
+                    <label className={ROTULO_CLASSE}>Coparticipação (R$)</label>
                     <input
                       type="number"
                       step="0.01"
                       value={linkData.valor_coparticipacao}
                       onChange={e => setLinkData({...linkData, valor_coparticipacao: Number(e.target.value)})}
-                      className="w-full px-4 py-3 bg-bg-surface border border-border-default rounded-xl text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all"
+                      className={CAMPO_CLASSE}
                     />
                   </div>
                 </div>
