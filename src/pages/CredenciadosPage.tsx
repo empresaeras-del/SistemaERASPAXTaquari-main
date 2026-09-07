@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Users, 
   Plus, Search, Building2, MapPin, MoreVertical, 
   ShieldCheck, FileText, Banknote, Link, Download, Printer, 
@@ -20,7 +20,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { RelatorioCredenciadosModal } from '../components/credenciados/RelatorioCredenciadosModal';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
 import { ComboBoxBusca } from '../components/common/ComboBoxBusca';
-import { ESPECIALIDADES_MEDICAS, ehEspecialidadeConhecida } from '../config/especialidadesMedicas';
+import { catalogoDoRamo, ehEspecialidadeConhecida } from '../config/especialidadesConselhos';
 import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
 import toast from 'react-hot-toast';
 
@@ -50,6 +50,24 @@ const TituloSecao: React.FC<{ icone: React.ElementType; children: React.ReactNod
     {children}
     <span className="flex-1 h-px bg-border-default" />
   </h4>
+);
+
+/**
+ * Cada assunto do formulário num cartão próprio. Antes eram cinco blocos
+ * corridos separados só por espaço vertical, sem pista de onde um terminava e o
+ * outro começava — num formulário deste tamanho isso pesa na leitura.
+ */
+const SecaoFormulario: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <section className="bg-bg-surface/40 border border-border-default rounded-2xl p-5 md:p-6">
+    {children}
+  </section>
+);
+
+/** Marcador de campo obrigatório, para não depender de um asterisco solto no rótulo. */
+const Obrigatorio = () => (
+  <span className="text-rose-400 ml-0.5" aria-hidden="true">
+    *
+  </span>
 );
 
 
@@ -120,6 +138,27 @@ export const CredenciadosPage: React.FC = () => {
     const matchesRamo = ramoFilter !== 'todos' ? c.ramo_atividade === ramoFilter : true;
     return matchesSearch && matchesStatus && matchesRamo;
   });
+
+  /**
+   * Catálogo de especialidades aplicável ao credenciado sendo editado: cada
+   * conselho tem a sua lista, então quem escolhe é o ramo de atividade. Ramo sem
+   * catálogo (farmácia, outros) devolve null e o campo some do formulário.
+   */
+  /**
+   * Validade do CNPJ/CPF enquanto se digita. A checagem já existia, mas só era
+   * aplicada no submit, via toast: quem errava o documento só descobria depois
+   * de preencher o formulário inteiro. `null` = ainda não dá para julgar.
+   */
+  const documentoValido = useMemo(() => {
+    const valor = (formData.cnpj_cpf || '').replace(/\D/g, '');
+    if (valor.length !== 11 && valor.length !== 14) return null;
+    return isValidCPFOrCNPJ(formData.cnpj_cpf || '');
+  }, [formData.cnpj_cpf]);
+
+  const catalogoEspecialidades = useMemo(
+    () => catalogoDoRamo(formData.ramo_atividade),
+    [formData.ramo_atividade],
+  );
 
   // KPI calculations
   const totalCredenciados = credenciados.length;
@@ -662,7 +701,7 @@ export const CredenciadosPage: React.FC = () => {
             <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col bg-bg-base relative">
               {activeTab === 'dados' ? (
                 <div className="p-6 md:p-8">
-                  <form id="credenciadoForm" onSubmit={handleSubmit} className="max-w-3xl mx-auto space-y-10">
+                  <form id="credenciadoForm" onSubmit={handleSubmit} className="max-w-3xl mx-auto space-y-5">
                     {isDirty && (
                       <AlertaAlteracoesPendentes
                         visivel={isDirty}
@@ -674,11 +713,11 @@ export const CredenciadosPage: React.FC = () => {
                     )}
                     
                     {/* Identificação Principal */}
-                    <section>
+                    <SecaoFormulario>
                       <TituloSecao icone={Building2}>Identificação Principal</TituloSecao>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="space-y-1.5 md:col-span-2">
-                          <label className={ROTULO_CLASSE}>Razão Social *</label>
+                          <label className={ROTULO_CLASSE}>Razão Social<Obrigatorio /></label>
                           <input 
                             required 
                             value={formData.razao_social || ''}
@@ -697,14 +736,26 @@ export const CredenciadosPage: React.FC = () => {
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className={ROTULO_CLASSE}>CNPJ / CPF *</label>
-                                                    <input 
-                            required 
+                          <label className={ROTULO_CLASSE}>CNPJ / CPF<Obrigatorio /></label>
+                          <input
+                            required
                             value={formData.cnpj_cpf || ''}
                             onChange={e => setFormData({...formData, cnpj_cpf: maskCPFOrCNPJ(e.target.value)})}
-                            className={`${CAMPO_CLASSE} font-mono placeholder:font-sans`} 
+                            aria-invalid={documentoValido === false}
+                            className={`${CAMPO_CLASSE} font-mono placeholder:font-sans ${
+                              documentoValido === false
+                                ? '!border-rose-500/60 focus:!ring-rose-500/40'
+                                : documentoValido
+                                  ? '!border-emerald-500/50'
+                                  : ''
+                            }`}
                             placeholder="00.000.000/0000-00"
                           />
+                          {documentoValido === false && (
+                            <p className="mt-1.5 text-xs text-rose-400">
+                              Documento inválido — confira os dígitos.
+                            </p>
+                          )}
                         </div>
                         <div>
                           <label className={ROTULO_CLASSE}>E-mail</label>
@@ -726,7 +777,7 @@ export const CredenciadosPage: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className={ROTULO_CLASSE}>Ramo de Atividade *</label>
+                          <label className={ROTULO_CLASSE}>Ramo de Atividade<Obrigatorio /></label>
                           <select 
                             required 
                             value={formData.ramo_atividade || 'clinica_medica'}
@@ -756,36 +807,55 @@ export const CredenciadosPage: React.FC = () => {
                             <option value="descredenciado">Descredenciado</option>
                           </select>
                         </div>
-                        <div className="md:col-span-2">
-                          <label className={ROTULO_CLASSE} htmlFor="credenciado-especialidade">
-                            Especialidade
-                          </label>
-                          <ComboBoxBusca
-                            id="credenciado-especialidade"
-                            value={formData.especialidade || ''}
-                            onChange={valor => setFormData({ ...formData, especialidade: valor })}
-                            options={ESPECIALIDADES_MEDICAS}
-                            placeholder="Selecione a especialidade (opcional)"
-                            emptyLabel="Nenhuma especialidade encontrada"
-                          />
-                          <p className="mt-1.5 text-xs text-text-muted">
-                            As 55 especialidades reconhecidas pela Resolução CFM 2.221/2018 — a lista
-                            que o CRM/MS usa. Credenciados sem registro médico (laboratório, farmácia)
-                            podem ficar sem preencher.
-                          </p>
-                          {formData.especialidade && !ehEspecialidadeConhecida(formData.especialidade) && (
-                            <p className="mt-1.5 text-xs text-amber-400">
-              &ldquo;{formData.especialidade}&rdquo; não está no catálogo — valor antigo,
-                              mantido como está até ser trocado.
-                            </p>
-                          )}
-                        </div>
+                        {(catalogoEspecialidades || formData.especialidade) && (
+                          <div className="md:col-span-2">
+                            <label className={ROTULO_CLASSE} htmlFor="credenciado-especialidade">
+                              Especialidade
+                              {catalogoEspecialidades && (
+                                <span className="ml-2 px-1.5 py-0.5 rounded-md bg-[#3B82F6]/10 text-[#3B82F6] text-[10px] font-bold tracking-wide align-middle">
+                                  {catalogoEspecialidades.conselho}
+                                </span>
+                              )}
+                            </label>
+                            <ComboBoxBusca
+                              id="credenciado-especialidade"
+                              value={formData.especialidade || ''}
+                              onChange={valor => setFormData({ ...formData, especialidade: valor })}
+                              options={catalogoEspecialidades?.itens ?? []}
+                              disabled={!catalogoEspecialidades}
+                              placeholder="Selecione a especialidade (opcional)"
+                              emptyLabel="Nenhuma especialidade encontrada"
+                            />
+                            {catalogoEspecialidades ? (
+                              <p className="mt-1.5 text-xs text-text-muted">
+                                Lista do {catalogoEspecialidades.conselho} ({catalogoEspecialidades.itens.length}{' '}
+                                especialidades), aplicada por causa do ramo de atividade escolhido.
+                                Opcional.
+                              </p>
+                            ) : (
+                              <p className="mt-1.5 text-xs text-text-muted">
+                                Este ramo de atividade não tem catálogo de especialidades. O valor
+                                abaixo veio de um cadastro anterior e continua guardado.
+                              </p>
+                            )}
+                            {formData.especialidade &&
+                              !ehEspecialidadeConhecida(
+                                formData.especialidade,
+                                catalogoEspecialidades?.itens ?? [],
+                              ) && (
+                                <p className="mt-1.5 text-xs text-amber-400">
+                                  &ldquo;{formData.especialidade}&rdquo; não pertence a este catálogo —
+                                  mantido como está até ser trocado.
+                                </p>
+                              )}
+                          </div>
+                        )}
                       </div>
-                    </section>
+                    </SecaoFormulario>
 
 
                     {/* Responsável e Contato */}
-                    <section>
+                    <SecaoFormulario>
                       <TituloSecao icone={Users}>Responsável</TituloSecao>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
@@ -805,10 +875,10 @@ export const CredenciadosPage: React.FC = () => {
                           />
                         </div>
                       </div>
-                    </section>
+                    </SecaoFormulario>
 
                     {/* Endereço */}
-                    <section>
+                    <SecaoFormulario>
                       <TituloSecao icone={MapPin}>Endereço Completo</TituloSecao>
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
                         <div className="md:col-span-3">
@@ -869,10 +939,10 @@ export const CredenciadosPage: React.FC = () => {
                           />
                         </div>
                       </div>
-                    </section>
+                    </SecaoFormulario>
 
                     {/* Dados Bancários */}
-                    <section>
+                    <SecaoFormulario>
                       <TituloSecao icone={Banknote}>Dados Bancários</TituloSecao>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
@@ -892,7 +962,7 @@ export const CredenciadosPage: React.FC = () => {
                           />
                         </div>
                       </div>
-                    </section>
+                    </SecaoFormulario>
                   </form>
                 </div>
               ) : (

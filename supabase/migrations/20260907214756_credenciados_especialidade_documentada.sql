@@ -21,7 +21,7 @@ ALTER TABLE public.credenciados
 
 COMMENT ON COLUMN public.credenciados.especialidade IS
   'Especialidade médica do credenciado, gravada pelo rótulo (ex.: "Cardiologia"). '
-  'Catálogo em src/config/especialidadesMedicas.ts — as 55 especialidades da '
+  'Catálogo em src/config/especialidadesConselhos.ts — as 55 especialidades da '
   'Resolução CFM 2.221/2018, que é a lista que o CRM/MS usa para registrar '
   'especialistas. Opcional: credenciados não-médicos (laboratório, farmácia, '
   'odontologia) podem ficar sem especialidade.';
