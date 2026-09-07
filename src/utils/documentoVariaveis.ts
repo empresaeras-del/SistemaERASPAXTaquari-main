@@ -305,11 +305,11 @@ export function resolverVariaveisParcelaPagar(parcela: ParcelaPagar): Record<str
   };
 }
 
-export function resolverVariaveisRequisicao(req: Requisicao): Record<string, string> {
+export function resolverVariaveisRequisicao(req: Requisicao, especialidadeCredenciado?: string): Record<string, string> {
   const itensLista =
     req.itens && req.itens.length > 0
-      ? req.itens.map((i) => `${i.quantidade}x ${i.descricao} (${formatBRL(i.valor_total)})`).join('<br/>')
-      : 'Nenhum item';
+      ? req.itens.map((i) => `<tr><td style="padding: 4px; border: 1px solid #e2e8f0; font-size: 11px;">${i.codigo_tuss || '-'}</td><td style="padding: 4px; border: 1px solid #e2e8f0; font-size: 11px;">${i.descricao}</td><td style="padding: 4px; border: 1px solid #e2e8f0; font-size: 11px; text-align: center;">${i.quantidade}</td></tr>`).join('')
+      : '<tr><td colspan="3" style="padding: 4px; border: 1px solid #e2e8f0; font-size: 11px; text-align: center;">Nenhum item</td></tr>';
 
   return {
     '{{requisicao_codigo}}': req.codigo_requisicao || '',
@@ -318,6 +318,7 @@ export function resolverVariaveisRequisicao(req: Requisicao): Record<string, str
     '{{requisicao_paciente_nome}}': req.paciente_nome || '',
     '{{requisicao_paciente_cpf}}': req.paciente_cpf || '',
     '{{requisicao_credenciado_nome}}': req.credenciado_nome || '',
+    '{{requisicao_credenciado_especialidade}}': especialidadeCredenciado || 'Não Informada',
     '{{requisicao_medico_solicitante}}': req.medico_solicitante || '',
     '{{requisicao_crm_solicitante}}': req.crm_solicitante || '',
     '{{requisicao_itens_lista}}': itensLista,
