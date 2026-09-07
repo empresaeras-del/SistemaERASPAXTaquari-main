@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Associado } from '../../services/associadosService';
 import { Requisicao } from '../../types/requisicoes';
-import { getRequisicoes, gerarPDFGuiaRequisicao } from '../../services/requisicoesService';
+import { getRequisicoes } from '../../services/requisicoesService';
 import { getEmpresaById } from '../../services/empresasService';
 import { useAppContext } from '../../context/AppContext';
 import { FileText, Search, ClipboardList, Filter, Printer } from 'lucide-react';
 import { formatLocalDate } from '../../utils/dateUtils';
+import { RequisicaoDocumentoPreview } from '../requisicoes/RequisicaoDocumentoPreview';
 
 interface AssociadoRequisicoesTabProps {
   associado: Associado;
@@ -18,6 +19,7 @@ export const AssociadoRequisicoesTab: React.FC<AssociadoRequisicoesTabProps> = (
   const [requisicoes, setRequisicoes] = useState<Requisicao[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [requisicaoParaVisualizar, setRequisicaoParaVisualizar] = useState<Requisicao | null>(null);
 
   useEffect(() => {
     const fetchRequisicoes = async () => {
@@ -115,11 +117,7 @@ export const AssociadoRequisicoesTab: React.FC<AssociadoRequisicoesTabProps> = (
                 
                 <div className="flex flex-col items-end justify-between">
                   <button
-                    onClick={async () => {
-                      const tenantId = state.empresaSelecionada || 'default_tenant';
-                      const empresa = await getEmpresaById(tenantId, state.isOnline);
-                      await gerarPDFGuiaRequisicao(req, empresa);
-                    }}
+                    onClick={() => setRequisicaoParaVisualizar(req)}
                     className="p-2 text-text-subtle hover:text-primary hover:bg-primary/10 rounded-lg transition-colors self-end mb-2"
                     title="Imprimir Guia"
                   >
@@ -142,6 +140,13 @@ export const AssociadoRequisicoesTab: React.FC<AssociadoRequisicoesTabProps> = (
           </div>
         )}
       </div>
+
+      <RequisicaoDocumentoPreview
+        isOpen={!!requisicaoParaVisualizar}
+        onClose={() => setRequisicaoParaVisualizar(null)}
+        requisicao={requisicaoParaVisualizar}
+      />
     </div>
   );
 };
+

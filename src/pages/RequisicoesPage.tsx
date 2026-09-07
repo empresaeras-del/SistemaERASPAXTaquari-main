@@ -14,9 +14,9 @@ import {
   criarRequisicao, 
   atualizarRequisicao, 
   atualizarStatusRequisicao, 
-  excluirRequisicao,
-  gerarPDFGuiaRequisicao 
+  excluirRequisicao
 } from '../services/requisicoesService';
+import { RequisicaoDocumentoPreview } from '../components/requisicoes/RequisicaoDocumentoPreview';
 import { getAssociados, Associado, Dependente } from '../services/associadosService';
 import { getEmpresaById } from '../services/empresasService';
 import { useCredenciados } from '../hooks/useCredenciados';
@@ -67,6 +67,7 @@ export const RequisicoesPage: React.FC = () => {
   const [requisicoes, setRequisicoes] = useState<Requisicao[]>([]);
   const [associados, setAssociados] = useState<Associado[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requisicaoParaVisualizar, setRequisicaoParaVisualizar] = useState<Requisicao | null>(null);
 
   const handleExcluirGuia = (req: Requisicao) => {
     if (!canDelete(state.user, state.isOnline)) {
@@ -417,15 +418,9 @@ export const RequisicoesPage: React.FC = () => {
       toast.success(`Guia ${novaReq.codigo_requisicao} emitida com sucesso!`);
       setModalNovaGuia(false);
       resetForm();
+      setRequisicaoParaVisualizar(novaReq);
       await loadData();
 
-      // Offer printing
-      try {
-        const empresa = await getEmpresaById(tenantId, state.isOnline);
-        await gerarPDFGuiaRequisicao(novaReq, empresa);
-      } catch (pdfErr) {
-        console.warn('Erro ao gerar prévia PDF da guia:', pdfErr);
-      }
     } catch (err: any) {
       console.error(err);
       toast.error('Erro ao emitir guia de requisição.');
@@ -771,11 +766,7 @@ export const RequisicoesPage: React.FC = () => {
                         )}
 
                         <button
-                          onClick={async () => {
-                            const tenantId = state.empresaSelecionada || 'default_tenant';
-                            const empresa = await getEmpresaById(tenantId, state.isOnline);
-                            await gerarPDFGuiaRequisicao(req, empresa);
-                          }}
+                          onClick={() => setRequisicaoParaVisualizar(req)}
                           className="p-1.5 text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-colors"
                           title="Imprimir Guia em PDF"
                         >
@@ -1314,7 +1305,7 @@ export const RequisicoesPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t border-border-default">
+            <div className="flex justify-end gap-3 pt-6 border-t border-border-default mt-6">
               <button
                 onClick={() => setModalDetalhes(null)}
                 className="px-4 py-2 bg-bg-subtle text-text-subtle hover:text-text-base rounded-xl text-xs font-medium"
@@ -1323,14 +1314,13 @@ export const RequisicoesPage: React.FC = () => {
               </button>
               <button
                 onClick={async () => {
-                  const tenantId = state.empresaSelecionada || 'default_tenant';
-                  const empresa = await getEmpresaById(tenantId, state.isOnline);
-                  await gerarPDFGuiaRequisicao(modalDetalhes, empresa);
+                  setRequisicaoParaVisualizar(modalDetalhes);
+                  setModalDetalhes(null);
                 }}
-                className="px-4 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-xs font-medium flex items-center gap-2"
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors flex items-center gap-2 shadow-sm"
               >
                 <Printer className="w-4 h-4" />
-                <span>Imprimir PDF</span>
+                Visualizar & Imprimir
               </button>
             </div>
           </div>
@@ -1447,6 +1437,13 @@ export const RequisicoesPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* MODAL DE PREVIEW PADRÃO (REQUISIÇÕES) */}
+      <RequisicaoDocumentoPreview
+        isOpen={!!requisicaoParaVisualizar}
+        onClose={() => setRequisicaoParaVisualizar(null)}
+        requisicao={requisicaoParaVisualizar}
+      />
 
     </div>
   );
