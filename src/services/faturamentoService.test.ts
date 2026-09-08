@@ -64,10 +64,10 @@ describe('getRemessas (offline, fallback IDB)', () => {
     expect(mockGetAllFromIDB).toHaveBeenCalledWith('remessas_faturamento');
   });
 
-  it('filtra remessas de outros tenants, mas mantém as do tenant "empresa_padrao"', async () => {
+  it('não devolve a remessa com o tenant coringa legado "empresa_padrao"', async () => {
     mockGetAllFromIDB.mockResolvedValue(remessas);
     const out = await getRemessas(false, 'emp-1');
-    expect(out.map(r => r.id).sort()).toEqual(['rm1', 'rm3']);
+    expect(out.map(r => r.id).sort()).toEqual(['rm1']);
   });
 
   it('exclui remessas com deleted_at, mesmo pertencendo ao tenant certo', async () => {

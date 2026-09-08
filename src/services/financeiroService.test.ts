@@ -73,10 +73,17 @@ describe('sanitizeReceitaForSupabase', () => {
     expect(out.tenant_id).toBe('emp-2');
   });
 
-  it('cai para "default_tenant" quando não há tenant nem fallback', () => {
+  it('recusa a gravação quando não há tenant nem fallback, em vez de carimbar um coringa', () => {
+    // Antes o último elo era 'default_tenant', que a RLS lia como "de todas as empresas":
+    // a receita era gravada sem erro e nascia visível para todo mundo.
     const semTenant: Receita = { ...baseReceita, tenant_id: '' };
-    const out = sanitizeReceitaForSupabase(semTenant);
-    expect(out.tenant_id).toBe('default_tenant');
+    expect(() => sanitizeReceitaForSupabase(semTenant)).toThrow(/empresa/i);
+  });
+
+  it('trata um coringa legado gravado antes da correção como ausência de tenant', () => {
+    const legado: Receita = { ...baseReceita, tenant_id: 'empresa_padrao' };
+    expect(sanitizeReceitaForSupabase(legado, 'emp-2').tenant_id).toBe('emp-2');
+    expect(() => sanitizeReceitaForSupabase(legado)).toThrow(/empresa/i);
   });
 
   it('anula associado_id quando não é um UUID válido, em vez de enviar lixo ao Postgres', () => {
@@ -173,9 +180,14 @@ describe('sanitizeParcelaPagarForSupabase', () => {
     expect(out.despesa_id).toBe('123e4567-e89b-12d3-a456-426614174000');
   });
 
-  it('cai para "default_tenant" quando não há tenant nem fallback', () => {
-    const out = sanitizeParcelaPagarForSupabase({ ...baseParcelaPagar, tenant_id: '' });
-    expect(out.tenant_id).toBe('default_tenant');
+  it('recusa a gravação quando não há tenant nem fallback, em vez de carimbar um coringa', () => {
+    expect(() => sanitizeParcelaPagarForSupabase({ ...baseParcelaPagar, tenant_id: '' })).toThrow(/empresa/i);
+  });
+
+  it('mantém tenant_id e empresa_id iguais ao tenant resolvido', () => {
+    const out = sanitizeParcelaPagarForSupabase({ ...baseParcelaPagar, tenant_id: '' }, undefined, 'emp-2');
+    expect(out.tenant_id).toBe('emp-2');
+    expect(out.empresa_id).toBe('emp-2');
   });
 
   it('trunca data_vencimento e data_pagamento para a parte de data', () => {
@@ -258,10 +270,12 @@ describe('getParcelasReceber (offline, fallback IDB)', () => {
     expect(mockGetAllFromIDB).toHaveBeenCalledWith('parcelas_receber');
   });
 
-  it('filtra parcelas de outros tenants, mas mantém as do tenant "default_tenant"', async () => {
+  it('não devolve a parcela com o tenant coringa legado "default_tenant"', async () => {
+    // p3 tem tenant_id 'default_tenant'. Antes ele passava no filtro de qualquer empresa;
+    // agora só quem tem exatamente esse tenant o vê — o mesmo critério que a RLS aplica.
     mockGetAllFromIDB.mockResolvedValue(parcelas);
     const out = await getParcelasReceber(false, 'emp-1');
-    expect(out.map(p => p.id).sort()).toEqual(['p1', 'p3']);
+    expect(out.map(p => p.id).sort()).toEqual(['p1']);
   });
 
   it('exclui parcelas com deleted_at, mesmo pertencendo ao tenant certo', async () => {
@@ -301,10 +315,10 @@ describe('getParcelasPagar (offline, fallback IDB)', () => {
     expect(mockGetAllFromIDB).toHaveBeenCalledWith('parcelas_pagar');
   });
 
-  it('filtra parcelas de outros tenants, mas mantém as do tenant "empresa_padrao"', async () => {
+  it('não devolve a parcela com o tenant coringa legado "empresa_padrao"', async () => {
     mockGetAllFromIDB.mockResolvedValue(parcelas);
     const out = await getParcelasPagar(false, 'emp-1');
-    expect(out.map(p => p.id).sort()).toEqual(['p1', 'p3']);
+    expect(out.map(p => p.id).sort()).toEqual(['p1']);
   });
 
   it('exclui parcelas com deleted_at, mesmo pertencendo ao tenant certo', async () => {

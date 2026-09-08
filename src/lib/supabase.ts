@@ -40,7 +40,10 @@ export const isolatedSupabase = createClient(supabaseUrl, supabaseKey, {
 // Wrapper para auditoria
 export const registrarAuditoria = async (acao: string, detalhes: any) => {
   let userId = 'system';
-  let tenantId = 'empresa_padrao';
+  // 'system' é o default da própria coluna auditoria.tenant_id e, ao contrário do
+  // antigo 'empresa_padrao', não é um valor coringa na RLS: uma entrada de auditoria com
+  // tenant desconhecido deixa de nascer legível por todas as empresas.
+  let tenantId = 'system';
   let userName = 'Sistema';
   let userEmail = 'sistema@eras.com.br';
   let userNivel: string | undefined = undefined;

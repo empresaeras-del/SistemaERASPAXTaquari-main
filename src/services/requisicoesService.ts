@@ -1,4 +1,5 @@
 import { supabase, registrarAuditoria } from '../lib/supabase';
+import { registroPertenceAoTenant } from '../utils/tenant';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { addToSyncQueue } from '../lib/syncService';
 import { v4 as uuidv4 } from 'uuid';
@@ -28,7 +29,7 @@ export const getRequisicoes = async (isOnline: boolean, tenantId: string): Promi
     try {
       let query = supabase.from('requisicoes').select('*').is('deleted_at', null);
       if (tenantId && tenantId !== 'all') {
-        query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+        query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
       }
       query = query.order('data_emissao', { ascending: false });
       const { data, error } = await query;
@@ -88,7 +89,7 @@ export const getRequisicoes = async (isOnline: boolean, tenantId: string): Promi
   const localData = await getAllFromIDB<Requisicao>('requisicoes');
   let result = localData.filter(r => !(r as any).deleted_at);
   if (tenantId && tenantId !== 'all') {
-    result = result.filter(r => r.tenant_id === tenantId || (r as any).empresa_id === tenantId || r.tenant_id === 'default_tenant' || r.tenant_id === 'empresa_padrao');
+    result = result.filter(r => registroPertenceAoTenant(r.tenant_id, tenantId) || (r as any).empresa_id === tenantId);
   }
   return result.sort((a, b) => new Date(b.data_emissao).getTime() - new Date(a.data_emissao).getTime());
 };

@@ -1,4 +1,5 @@
 import { supabase, registrarAuditoria } from '../lib/supabase';
+import { registroPertenceAoTenant, tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { addToSyncQueue } from '../lib/syncService';
 import { generateUUID } from '../utils/uuid';
@@ -27,7 +28,7 @@ export const getRemessas = async (isOnline: boolean, tenantId: string): Promise<
     try {
       let query = supabase.from('remessas_faturamento').select('*');
       if (tenantId && tenantId !== 'all') {
-        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+        query = query.or(`tenant_id.eq.${tenantId}`);
       }
       query = query.order('data_criacao', { ascending: false });
       const { data, error } = await query;
@@ -61,7 +62,7 @@ export const getRemessas = async (isOnline: boolean, tenantId: string): Promise<
   const localData = await getAllFromIDB<RemessaFaturamento>('remessas_faturamento');
   let result = localData.filter(r => !(r as any).deleted_at);
   if (tenantId && tenantId !== 'all') {
-    result = result.filter(r => r.tenant_id === tenantId || r.tenant_id === 'default_tenant' || r.tenant_id === 'empresa_padrao');
+    result = result.filter(r => registroPertenceAoTenant(r.tenant_id, tenantId));
   }
 
   return result.sort((a, b) => new Date(b.data_criacao).getTime() - new Date(a.data_criacao).getTime());
@@ -190,7 +191,10 @@ export const fecharRemessaEGerarContaPagar = async (
     throw new Error('Remessa não encontrada.');
   }
 
-  const effectiveTenantId = remessa.tenant_id || tenantId || 'default_tenant';
+  const effectiveTenantId = tenantDeEscrita(remessa.tenant_id, tenantId);
+  if (!effectiveTenantId) {
+    throw new Error(`Não foi possível determinar a empresa da remessa. ${MENSAGEM_TENANT_INDEFINIDO}`);
+  }
   const despesaId = remessa.despesa_id || generateUUID();
   const parcelaId = remessa.parcela_pagar_id || generateUUID();
   const dataHoje = new Date().toISOString();

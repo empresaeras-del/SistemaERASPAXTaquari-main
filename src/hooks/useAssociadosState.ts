@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
+import { tenantDeEscrita, tenantDeRegistroExistente, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 import { useToast } from "../context/ToastContext";
 import { useConfirm } from "../context/ConfirmContext";
 import React, { useState, useEffect } from "react";
@@ -340,9 +341,9 @@ export function useAssociadosState() {
       setInitialAssociadoSnapshot(JSON.stringify(cloned));
       setIsEditingMode(true);
     } else {
-      const defaultTenant = (state.empresaSelecionada && state.empresaSelecionada !== 'all') 
-        ? state.empresaSelecionada 
-        : 'default_tenant';
+      // Fica vazio quando não há empresa resolvida: o formulário abre normalmente e a
+      // recusa acontece no salvar, com mensagem — em vez de carimbar um tenant coringa.
+      const defaultTenant = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id) ?? '';
       const novoAssoc: Associado = {
         id: uuidv4(),
         tenant_id: defaultTenant,
@@ -428,11 +429,12 @@ export function useAssociadosState() {
         }
       }
 
-      const targetTenant = (state.empresaSelecionada && state.empresaSelecionada !== 'all')
-        ? state.empresaSelecionada
-        : (editingAssociado.tenant_id && editingAssociado.tenant_id !== 'all' && editingAssociado.tenant_id !== '')
-          ? editingAssociado.tenant_id
-          : 'default_tenant';
+      const targetTenant = tenantDeEscrita(state.empresaSelecionada, null)
+        ?? tenantDeRegistroExistente(editingAssociado.tenant_id, null, state.user?.tenant_id);
+      if (!targetTenant) {
+        toast.error(MENSAGEM_TENANT_INDEFINIDO);
+        return;
+      }
 
       const novoAssociado = {
         ...editingAssociado,

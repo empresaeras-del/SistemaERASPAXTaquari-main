@@ -1,4 +1,5 @@
 import { supabase, registrarAuditoria } from '../lib/supabase';
+import { registroPertenceAoTenant, tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { addToSyncQueue } from '../lib/syncService';
 
@@ -76,7 +77,7 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
           .select('*, dependentes(*)')
           .is('deleted_at', null);
         if (tenantId && tenantId !== 'all') {
-          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
         }
         const res = await query;
         if (!res.error && res.data && res.data.length > 0) {
@@ -93,7 +94,7 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
           .select('*')
           .is('deleted_at', null);
         if (tenantId && tenantId !== 'all') {
-          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
         }
         const res = await query;
         if (!res.error && res.data && res.data.length > 0) {
@@ -165,11 +166,7 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
     if (!a) return false;
     if (a.deleted_at) return false;
     if (tenantId && tenantId !== 'all') {
-      const matchTenant = !a.tenant_id || 
-        a.tenant_id === tenantId || 
-        a.tenant_id === 'all' || 
-        a.tenant_id === 'default_tenant' || 
-        a.tenant_id === 'empresa_padrao' ||
+      const matchTenant = registroPertenceAoTenant(a.tenant_id, tenantId) ||
         (a as any).empresa_id === tenantId;
       if (!matchTenant) return false;
     }
@@ -277,9 +274,12 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const associadoId = UUID_REGEX.test(associado.id) ? associado.id : crypto.randomUUID();
 
-  const tenantId = (rest.tenant_id && rest.tenant_id !== 'all') 
-    ? rest.tenant_id 
-    : 'default_tenant';
+  // Sem empresa resolvida o associado não tem dono. O fallback antigo era
+  // `'default_tenant'`, que a RLS lia como "de todas as empresas" — ver utils/tenant.ts.
+  const tenantId = tenantDeEscrita(rest.tenant_id);
+  if (!tenantId) {
+    throw new Error(`Não foi possível determinar a empresa do associado. ${MENSAGEM_TENANT_INDEFINIDO}`);
+  }
   const empresaId = (rest.empresa_id && rest.empresa_id !== 'all') 
     ? rest.empresa_id 
     : tenantId;

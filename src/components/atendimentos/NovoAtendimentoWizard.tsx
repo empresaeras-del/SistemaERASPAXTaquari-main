@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO } from '../../utils/tenant';
 import { generateUUID } from '../../utils/uuid';
 import { useAppContext } from '../../context/AppContext';
 import {
@@ -206,10 +207,12 @@ export const NovoAtendimentoWizard: React.FC<{
         }
       }
 
-      const tenantId =
-        state.empresaSelecionada && state.empresaSelecionada !== 'all'
-          ? state.empresaSelecionada
-          : 'default_tenant';
+      // Sem empresa resolvida o atendimento não tem dono — ver utils/tenant.ts.
+      const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
+      if (!tenantId) {
+        toast.error(MENSAGEM_TENANT_INDEFINIDO);
+        return;
+      }
 
       const newAtendimento: Atendimento = {
         id: generateUUID(),

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { tenantDeRegistroExistente, MENSAGEM_TENANT_INDEFINIDO } from '../../utils/tenant';
 import { useAppContext } from '../../context/AppContext';
 import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { getAssociados, saveAssociado, Associado } from '../../services/associadosService';
@@ -249,12 +250,13 @@ export const NovoContratoWizard: React.FC<{
       // 2. Gerar Mensalidades no Financeiro
       const mestreId = uuidv4();
       const totalReceita = parcelas.reduce((acc, p) => acc + p.valor, 0);
-      const targetTenant =
-        selectedAssociado.tenant_id && selectedAssociado.tenant_id !== 'all'
-          ? selectedAssociado.tenant_id
-          : state.empresaSelecionada && state.empresaSelecionada !== 'all'
-            ? state.empresaSelecionada
-            : 'default_tenant';
+      const targetTenant = tenantDeRegistroExistente(
+        selectedAssociado.tenant_id, state.empresaSelecionada, state.user?.tenant_id,
+      );
+      if (!targetTenant) {
+        alert(MENSAGEM_TENANT_INDEFINIDO);
+        return;
+      }
 
       const receitaMestre = {
         id: mestreId,

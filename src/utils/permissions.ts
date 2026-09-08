@@ -539,7 +539,11 @@ export const canEditEmpresa = (
   if (!user || !empresaId) return false;
   if (user.nivel === 'super_admin') return true;
   if (user.nivel === 'admin') {
-    return user.tenant_id === empresaId || empresaId === 'empresa_padrao';
+    // A regra documentada acima é "o admin edita a sua respectiva empresa". O
+    // `|| empresaId === 'empresa_padrao'` que existia aqui era a versão frontend do
+    // mesmo coringa da RLS: dava a qualquer admin permissão sobre uma "empresa" que
+    // não existe de fato — ver utils/tenant.ts.
+    return user.tenant_id === empresaId;
   }
   return false;
 };

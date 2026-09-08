@@ -161,7 +161,7 @@ export const getDashboardStats = async (
       try {
         let query = supabase.from('receitas').select('id, associado_id').is('deleted_at', null).eq('tipo_devedor', 'associado');
         if (tenantId && tenantId !== 'all') {
-          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
         }
         const { data } = await query;
         if (data) allReceitas = data;

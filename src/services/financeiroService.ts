@@ -2,6 +2,7 @@ import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { addToSyncQueue } from '../lib/syncService';
 import { generateUUID } from '../utils/uuid';
+import { tenantDeEscrita, registroPertenceAoTenant, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 
 export type FormaPagamento = string;
 
@@ -126,12 +127,30 @@ export interface ParcelaPagar {
   deleted_at?: string | null;
 }
 
+/**
+ * Resolve o tenant de um registro que está prestes a ir para o Supabase.
+ *
+ * Antes, o último elo desta cadeia era `'default_tenant'` — um valor que a RLS tratava
+ * como "de todas as empresas". Um registro sem tenant resolvido era gravado sem erro e
+ * nascia compartilhado. Agora a falta de tenant é um erro visível, e não um registro
+ * global silencioso.
+ */
+const tenantParaSupabase = (
+  tenantDoRegistro: string | null | undefined,
+  fallbackTenantId: string | undefined,
+  descricaoDoRegistro: string,
+): string => {
+  const tenantId = tenantDeEscrita(tenantDoRegistro, fallbackTenantId);
+  if (!tenantId) {
+    throw new Error(`Não foi possível determinar a empresa de ${descricaoDoRegistro}. ${MENSAGEM_TENANT_INDEFINIDO}`);
+  }
+  return tenantId;
+};
+
 export const sanitizeReceitaForSupabase = (r: Receita, fallbackTenantId?: string) => {
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const rId = UUID_REGEX.test(r.id || '') ? r.id : generateUUID();
-  const tId = (r.tenant_id && r.tenant_id !== 'all' && r.tenant_id.trim() !== '') 
-    ? r.tenant_id 
-    : ((fallbackTenantId && fallbackTenantId !== 'all' && fallbackTenantId.trim() !== '') ? fallbackTenantId : 'default_tenant');
+  const tId = tenantParaSupabase(r.tenant_id, fallbackTenantId, 'uma receita');
   const empresaId = ((r as any).empresa_id && (r as any).empresa_id !== 'all' && String((r as any).empresa_id).trim() !== '')
     ? (r as any).empresa_id
     : tId;
@@ -175,9 +194,7 @@ export const sanitizeParcelaReceberForSupabase = (p: ParcelaReceber, fallbackRec
     ? p.receita_id 
     : ((fallbackReceitaId && UUID_REGEX.test(fallbackReceitaId)) ? fallbackReceitaId : null);
   
-  const tId = (p.tenant_id && p.tenant_id !== 'all' && p.tenant_id.trim() !== '') 
-    ? p.tenant_id 
-    : ((fallbackTenantId && fallbackTenantId !== 'all' && fallbackTenantId.trim() !== '') ? fallbackTenantId : 'default_tenant');
+  const tId = tenantParaSupabase(p.tenant_id, fallbackTenantId, 'uma parcela a receber');
   const empresaId = ((p as any).empresa_id && (p as any).empresa_id !== 'all' && String((p as any).empresa_id).trim() !== '')
     ? (p as any).empresa_id
     : tId;
@@ -394,7 +411,7 @@ export const getParcelasReceber = async (isOnline: boolean, tenantId: string): P
     try {
       let query = supabase.from('parcelas_receber').select('*');
       if (tenantId && tenantId !== 'all') {
-        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+        query = query.or(`tenant_id.eq.${tenantId}`);
       }
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
@@ -426,12 +443,7 @@ export const getParcelasReceber = async (isOnline: boolean, tenantId: string): P
     if (!p) return false;
     if (p.deleted_at) return false;
     if (tenantId && tenantId !== 'all') {
-      const matchTenant = !p.tenant_id || 
-        p.tenant_id === tenantId || 
-        p.tenant_id === 'all' || 
-        p.tenant_id === 'default_tenant' || 
-        p.tenant_id === 'empresa_padrao';
-      if (!matchTenant) return false;
+      if (!registroPertenceAoTenant(p.tenant_id, tenantId)) return false;
     }
     return true;
   });
@@ -441,11 +453,12 @@ export const sanitizeParcelaPagarForSupabase = (p: ParcelaPagar, fallbackDespesa
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const pId = UUID_REGEX.test(p.id || '') ? p.id : generateUUID();
   const dId = UUID_REGEX.test(p.despesa_id || fallbackDespesaId || '') ? (p.despesa_id || fallbackDespesaId) : fallbackDespesaId;
+  const tId = tenantParaSupabase(p.tenant_id, fallbackTenantId, 'uma parcela a pagar');
 
   return {
     id: pId,
-    tenant_id: p.tenant_id || fallbackTenantId || 'default_tenant',
-    empresa_id: p.tenant_id || fallbackTenantId || 'default_tenant',
+    tenant_id: tId,
+    empresa_id: tId,
     despesa_id: dId,
     numero_parcela: Number(p.numero_parcela) || 1,
     valor: Number(p.valor) || 0,
@@ -473,11 +486,12 @@ export const sanitizeParcelaPagarForSupabase = (p: ParcelaPagar, fallbackDespesa
 export const sanitizeDespesaForSupabase = (d: Despesa) => {
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const dId = UUID_REGEX.test(d.id || '') ? d.id : generateUUID();
+  const tId = tenantParaSupabase(d.tenant_id, undefined, 'uma despesa');
 
   return {
     id: dId,
-    tenant_id: d.tenant_id || 'default_tenant',
-    empresa_id: d.tenant_id || 'default_tenant',
+    tenant_id: tId,
+    empresa_id: tId,
     tipo_credor: d.tipo_credor || 'fornecedor',
     fornecedor_id: d.fornecedor_id && UUID_REGEX.test(d.fornecedor_id) ? d.fornecedor_id : null,
     fornecedor_nome: d.fornecedor_nome || null,
@@ -578,7 +592,7 @@ export const getParcelasPagar = async (isOnline: boolean, tenantId: string): Pro
     try {
       let query = supabase.from('parcelas_pagar').select('*');
       if (tenantId && tenantId !== 'all') {
-        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+        query = query.or(`tenant_id.eq.${tenantId}`);
       }
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
@@ -610,12 +624,7 @@ export const getParcelasPagar = async (isOnline: boolean, tenantId: string): Pro
     if (!p) return false;
     if (p.deleted_at) return false;
     if (tenantId && tenantId !== 'all') {
-      const matchTenant = !p.tenant_id || 
-        p.tenant_id === tenantId || 
-        p.tenant_id === 'all' || 
-        p.tenant_id === 'default_tenant' || 
-        p.tenant_id === 'empresa_padrao';
-      if (!matchTenant) return false;
+      if (!registroPertenceAoTenant(p.tenant_id, tenantId)) return false;
     }
     return true;
   });
@@ -1570,7 +1579,7 @@ export const getDespesas = async (isOnline: boolean, tenantId: string): Promise<
     try {
       let query = supabase.from('despesas').select('*');
       if (tenantId && tenantId !== 'all') {
-        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+        query = query.or(`tenant_id.eq.${tenantId}`);
       }
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
@@ -1600,12 +1609,7 @@ export const getDespesas = async (isOnline: boolean, tenantId: string): Promise<
     if (!d) return false;
     if (d.deleted_at) return false;
     if (tenantId && tenantId !== 'all') {
-      const matchTenant = !d.tenant_id || 
-        d.tenant_id === tenantId || 
-        d.tenant_id === 'all' || 
-        d.tenant_id === 'default_tenant' || 
-        d.tenant_id === 'empresa_padrao';
-      if (!matchTenant) return false;
+      if (!registroPertenceAoTenant(d.tenant_id, tenantId)) return false;
     }
     return true;
   });
@@ -1619,7 +1623,7 @@ export const getReceitas = async (isOnline: boolean, tenantId: string): Promise<
     try {
       let query = supabase.from('receitas').select('*');
       if (tenantId && tenantId !== 'all') {
-        query = query.or(`tenant_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+        query = query.or(`tenant_id.eq.${tenantId}`);
       }
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
@@ -1649,12 +1653,7 @@ export const getReceitas = async (isOnline: boolean, tenantId: string): Promise<
     if (!r) return false;
     if (r.deleted_at) return false;
     if (tenantId && tenantId !== 'all') {
-      const matchTenant = !r.tenant_id || 
-        r.tenant_id === tenantId || 
-        r.tenant_id === 'all' || 
-        r.tenant_id === 'default_tenant' || 
-        r.tenant_id === 'empresa_padrao';
-      if (!matchTenant) return false;
+      if (!registroPertenceAoTenant(r.tenant_id, tenantId)) return false;
     }
     return true;
   });
