@@ -14,10 +14,18 @@ import {
   Clock,
   Banknote,
   Stethoscope,
-  Activity
+  Activity,
+  Columns3,
+  ListTree
 } from 'lucide-react';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatters';
+import {
+  agruparPorStatus,
+  guiasDaRemessa,
+  guiasFaltando,
+  totaisGerais,
+} from '../../utils/faturamentosKanban';
 
 interface FaturamentosCredenciadoTabProps {
   credenciadoId: string;
@@ -29,6 +37,10 @@ export const FaturamentosCredenciadoTab: React.FC<FaturamentosCredenciadoTabProp
   const [remessas, setRemessas] = useState<RemessaFaturamento[]>([]);
   const [requisicoes, setRequisicoes] = useState<Requisicao[]>([]);
   const [expandedRemessas, setExpandedRemessas] = useState<Set<string>>(new Set());
+  /** Kanban por status é a visão padrão; a árvore continua disponível. */
+  const [visao, setVisao] = useState<'kanban' | 'arvore'>('kanban');
+  /** Remessa aberta no kanban — só uma por vez, para o card não virar uma parede. */
+  const [remessaAberta, setRemessaAberta] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -116,6 +128,9 @@ export const FaturamentosCredenciadoTab: React.FC<FaturamentosCredenciadoTabProp
     }
   };
 
+  const colunas = agruparPorStatus(remessas);
+  const totais = totaisGerais(remessas);
+
   if (loading) {
     return (
       <div className="p-12 flex flex-col items-center justify-center text-text-subtle">
@@ -142,15 +157,151 @@ export const FaturamentosCredenciadoTab: React.FC<FaturamentosCredenciadoTabProp
   return (
     <div className="p-6 md:p-8 bg-bg-base">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-text-base flex items-center gap-2">
-            <Banknote className="w-5 h-5 text-[#3B82F6]" />
-            Remessas de Faturamento
-          </h2>
-          <span className="text-xs font-semibold text-text-subtle bg-bg-surface px-3 py-1 rounded-full border border-border-default">
-            Total: {remessas.length} remessa(s)
-          </span>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-text-base flex items-center gap-2">
+              <Banknote className="w-5 h-5 text-[#3B82F6]" />
+              Remessas de Faturamento
+            </h2>
+            <p className="text-xs text-text-subtle mt-1">
+              {totais.qtdRemessas} remessa(s) · {totais.totalGuias} guia(s) ·{' '}
+              <span className="font-semibold text-text-base">{formatCurrency(totais.totalLiquido)}</span> líquido
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1 bg-bg-surface p-1 rounded-xl border border-border-default">
+            <button
+              type="button"
+              onClick={() => setVisao('kanban')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                visao === 'kanban'
+                  ? 'bg-[#3B82F6] text-white'
+                  : 'text-text-subtle hover:text-text-base'
+              }`}
+            >
+              <Columns3 className="w-3.5 h-3.5" /> Kanban
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisao('arvore')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                visao === 'arvore'
+                  ? 'bg-[#3B82F6] text-white'
+                  : 'text-text-subtle hover:text-text-base'
+              }`}
+            >
+              <ListTree className="w-3.5 h-3.5" /> Organograma
+            </button>
+          </div>
         </div>
+
+        {visao === 'kanban' && (
+          /* Uma coluna por etapa do ciclo da remessa. Colunas vazias ficam: a
+             ausência de remessa numa etapa é informação, não buraco de layout. */
+          <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar -mx-1 px-1">
+            {colunas.map((coluna) => (
+              <div key={coluna.status} className="shrink-0 w-[280px] flex flex-col">
+                <div className="mb-3 px-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-text-base">
+                      {coluna.rotulo}
+                    </span>
+                    <span className="text-[11px] font-bold text-text-subtle bg-bg-surface border border-border-default rounded-full px-2 py-0.5">
+                      {coluna.remessas.length}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-text-muted mt-1">
+                    {coluna.totalGuias} guia(s) · {formatCurrency(coluna.totalLiquido)}
+                  </p>
+                  <div className="h-0.5 rounded-full bg-border-default mt-2" />
+                </div>
+
+                <div className="flex flex-col gap-2.5">
+                  {coluna.remessas.length === 0 && (
+                    <p className="text-[11px] text-text-muted italic px-1 py-3">Nenhuma remessa</p>
+                  )}
+
+                  {coluna.remessas.map((remessa) => {
+                    const aberta = remessaAberta === remessa.id;
+                    const guias = guiasDaRemessa(remessa, requisicoes);
+                    const faltando = guiasFaltando(remessa, requisicoes);
+                    return (
+                      <div
+                        key={remessa.id}
+                        className={`bg-bg-surface border rounded-xl transition-all ${
+                          aberta ? 'border-[#3B82F6] shadow-lg' : 'border-border-default hover:border-[#3B82F6]/40'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setRemessaAberta(aberta ? null : remessa.id)}
+                          aria-expanded={aberta}
+                          className="w-full text-left p-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-mono text-xs font-bold text-[#3B82F6]">
+                              {remessa.codigo_remessa}
+                            </span>
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 text-text-subtle shrink-0 transition-transform ${aberta ? 'rotate-180' : ''}`}
+                            />
+                          </div>
+                          <p className="text-[11px] text-text-muted mt-1.5 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" /> {formatLocalDate(remessa.data_criacao)}
+                          </p>
+                          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-default">
+                            <span className="text-[11px] text-text-subtle">{remessa.qtd_guias} guia(s)</span>
+                            <span className="text-xs font-bold text-text-base">
+                              {formatCurrency(remessa.valor_liquido)}
+                            </span>
+                          </div>
+                        </button>
+
+                        {aberta && (
+                          /* O ramo do organograma: as guias penduradas na remessa. */
+                          <div className="px-3 pb-3">
+                            <div className="pl-3 border-l border-dashed border-[#3B82F6]/40 flex flex-col gap-2">
+                              {guias.length === 0 && (
+                                <p className="text-[11px] text-text-muted italic">
+                                  Nenhuma guia vinculada.
+                                </p>
+                              )}
+                              {guias.map((guia) => (
+                                <div key={guia.id} className="bg-bg-base border border-border-default rounded-lg p-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-mono text-[11px] font-bold text-text-base truncate">
+                                      {guia.codigo_requisicao}
+                                    </span>
+                                    {getRequisicaoStatusBadge(guia.status)}
+                                  </div>
+                                  <p className="text-[11px] text-text-subtle truncate mt-1 flex items-center gap-1">
+                                    <Stethoscope className="w-3 h-3 shrink-0" />
+                                    {guia.paciente_nome}
+                                  </p>
+                                  <p className="text-[11px] font-bold text-[#3B82F6] mt-1">
+                                    {formatCurrency(guia.valor_total)}
+                                  </p>
+                                </div>
+                              ))}
+                              {faltando > 0 && (
+                                <p className="text-[11px] text-amber-400">
+                                  {faltando} guia(s) referenciada(s) não foram encontradas.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {visao === 'arvore' && (
+        <>
 
         {/* ESTRUTURA KANBAN/ORGANOGRAMA - Lista vertical com nested items estilizados */}
         <div className="space-y-6 relative before:absolute before:inset-y-0 before:left-[21px] before:w-px before:bg-border-default before:-z-10 ml-2">
@@ -269,6 +420,8 @@ export const FaturamentosCredenciadoTab: React.FC<FaturamentosCredenciadoTabProp
             );
           })}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

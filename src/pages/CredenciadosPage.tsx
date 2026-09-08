@@ -22,6 +22,7 @@ import { RelatorioCredenciadosModal } from '../components/credenciados/Relatorio
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
 import { ComboBoxBusca } from '../components/common/ComboBoxBusca';
 import { catalogoDoRamo, ehEspecialidadeConhecida } from '../config/especialidadesConselhos';
+import { filtrarCredenciados, especialidadesPresentes } from '../utils/credenciadosFiltros';
 import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
 import toast from 'react-hot-toast';
 
@@ -132,15 +133,16 @@ export const CredenciadosPage: React.FC = () => {
   });
 
   // Filters
-  const filtered = credenciados.filter(c => {
-    const matchesSearch = c.razao_social.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          c.cnpj_cpf.includes(searchTerm) ||
-                          (c.nome_fantasia || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter ? c.status === statusFilter : true;
-    const matchesRamo = ramoFilter !== 'todos' ? c.ramo_atividade === ramoFilter : true;
-    const matchesEspecialidade = especialidadeFilter !== 'todas' ? c.especialidade === especialidadeFilter : true;
-    return matchesSearch && matchesStatus && matchesRamo && matchesEspecialidade;
-  });
+  const filtered = useMemo(
+    () =>
+      filtrarCredenciados(credenciados, {
+        busca: searchTerm,
+        status: statusFilter,
+        ramo: ramoFilter,
+        especialidade: especialidadeFilter,
+      }),
+    [credenciados, searchTerm, statusFilter, ramoFilter, especialidadeFilter],
+  );
 
   /**
    * Catálogo de especialidades aplicável ao credenciado sendo editado: cada
@@ -276,11 +278,6 @@ export const CredenciadosPage: React.FC = () => {
     };
     loadEmpresa();
   }, [state.empresaSelecionada, state.isOnline]);
-
-  const getEspecialidadesList = () => {
-    const especialidades = credenciados.map(c => c.especialidade).filter(Boolean) as string[];
-    return [...new Set(especialidades)].sort();
-  };
 
   const handleExportPDF = () => {
     setShowRelatorioModal(true);
@@ -469,7 +466,7 @@ export const CredenciadosPage: React.FC = () => {
               className="bg-bg-subtle border border-border-default rounded-xl px-3 py-2 text-text-base focus:outline-none focus:border-[#3B82F6] max-w-[200px]"
             >
               <option value="todas">Todas as Especialidades</option>
-              {getEspecialidadesList().map(esp => (
+              {especialidadesPresentes(credenciados).map(esp => (
                 <option key={esp} value={esp}>{esp}</option>
               ))}
             </select>
