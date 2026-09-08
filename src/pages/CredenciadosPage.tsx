@@ -1133,7 +1133,7 @@ export const CredenciadosPage: React.FC = () => {
         onClose={() => setShowRelatorioModal(false)}
         credenciados={filtered}
         empresaData={empresaData}
-        userName={state.usuario?.nome}
+        userName={state.user?.nome}
         currentFilters={{
           searchTerm,
           statusFilter,

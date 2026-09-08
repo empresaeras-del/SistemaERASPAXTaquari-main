@@ -227,7 +227,10 @@ export const ContasReceberPage: React.FC = () => {
         if (emp) setEmpresaData(emp);
         if (assocs) setAssociados(assocs);
       } else {
-        const assocs = await getAssociados(state.isOnline, 'all');
+        // Sem empresa selecionada, 'all' desligava o filtro de tenant e trazia
+        // associados de todas as empresas. Mesmo tratamento das demais telas
+        // (ver ContasReceberFormPage): cai no tenant padrão, não em tudo.
+        const assocs = await getAssociados(state.isOnline, 'empresa_padrao');
         if (assocs) setAssociados(assocs);
       }
       const [dataParcelas, dataReceitas] = await Promise.all([
