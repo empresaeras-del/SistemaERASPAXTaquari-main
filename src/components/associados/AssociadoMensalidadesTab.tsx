@@ -183,7 +183,7 @@ export const AssociadoMensalidadesTab: React.FC<{
   };
 
   // Salvar Edição de Receita Pai
-  const handleSalvarEdicaoReceita = async (e: React.FormEvent) => {
+  const handleSalvarEdicaoReceita = async (e: React.FormEvent | React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (!editingReceita) return;
@@ -239,7 +239,7 @@ export const AssociadoMensalidadesTab: React.FC<{
   };
 
   // Salvar Edição de Parcela
-  const handleSalvarEdicaoParcela = async (e: React.FormEvent) => {
+  const handleSalvarEdicaoParcela = async (e: React.FormEvent | React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (!editingParcela) return;
@@ -545,7 +545,7 @@ export const AssociadoMensalidadesTab: React.FC<{
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleSalvarEdicaoReceita} className="p-6 space-y-4 text-xs">
+            <div className="p-6 space-y-4 text-xs">
               <div>
                 <label className="block font-medium text-text-subtle mb-1">Descrição / Nome do Contrato</label>
                 <input
@@ -617,14 +617,15 @@ export const AssociadoMensalidadesTab: React.FC<{
                   Cancelar
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleSalvarEdicaoReceita}
                   disabled={loading}
                   className="px-5 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/20"
                 >
                   Salvar Alterações
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -706,7 +707,7 @@ export const AssociadoMensalidadesTab: React.FC<{
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleSalvarEdicaoParcela} className="p-6 space-y-4 text-xs">
+            <div className="p-6 space-y-4 text-xs">
               <div>
                 <label className="block font-medium text-text-subtle mb-1">Descrição da Parcela</label>
                 <input
@@ -793,14 +794,15 @@ export const AssociadoMensalidadesTab: React.FC<{
                   Cancelar
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleSalvarEdicaoParcela}
                   disabled={loading}
                   className="px-5 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/20"
                 >
                   Salvar Alterações
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
