@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { salvarReceita, getReceitaCompleta, Receita, ParcelaReceber } from '../services/financeiroService';
@@ -14,6 +14,8 @@ import { generateUUID } from '../utils/uuid';
 import toast from 'react-hot-toast';
 import { tenantDeEscrita, tenantDeRegistroExistente, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 import { format, lastDayOfMonth } from 'date-fns';
+import { useConfirm } from '../context/ConfirmContext';
+import { registrarAuditoria } from '../lib/supabase';
 
 import { useOptions } from '../hooks/useOptions';
 import { OptionsModal } from '../components/OptionsModal';
@@ -132,7 +134,12 @@ export const ContasReceberFormPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const targetParcelaId = searchParams.get('parcela');
   const { state } = useAppContext();
+  const { confirm } = useConfirm();
   const isEditing = !!id;
+
+  // Guarda snapshot das parcelas originais carregadas para comparação na auditoria
+  const parcelasOriginaisRef = useRef<{ id?: string; numero_parcela: number; valor: number; data_vencimento: string; forma_pagamento: string }[]>([]);
+  const valorTotalOriginalRef = useRef<number>(0);
 
   useEffect(() => {
     const fetchContas = async () => {
@@ -265,6 +272,16 @@ export const ContasReceberFormPage: React.FC = () => {
                 observacao: p.observacoes || (p as any).observacao || ''
               }))
             });
+
+            // Salva snapshot original das parcelas para diff de auditoria
+            parcelasOriginaisRef.current = parcs.map(p => ({
+              id: p.id,
+              numero_parcela: Number(p.numero_parcela) || 1,
+              valor: Number(p.valor) || 0,
+              data_vencimento: p.data_vencimento ? p.data_vencimento.split('T')[0] : dataInicio,
+              forma_pagamento: matchFormaPagamento(p.forma_pagamento || rec.forma_pagamento_padrao || 'Boleto', formasPagamento)
+            }));
+            valorTotalOriginalRef.current = totalVal;
           } else {
             toast.error('Receita vinculada não encontrada.');
           }
@@ -317,14 +334,21 @@ export const ContasReceberFormPage: React.FC = () => {
     return novasParcelas;
   };
 
-  const onSubmit = async (data: ReceitaFormData) => {
+  /**
+   * Executa a persistência efetiva da receita e parcelas.
+   * Separado do onSubmit para ser chamado após confirmação do usuário.
+   */
+  const executarSalvamento = async (data: ReceitaFormData) => {
     let parcelasSubmit = data.parcelas || [];
-    const totalForm = Number(data.valor_total) || 0;
     const sumParcelas = parcelasSubmit.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
-    
-    // Se não gerou parcelas ou se a soma não bate, gera automaticamente
-    if (parcelasSubmit.length === 0 || Math.abs(sumParcelas - totalForm) > 0.05) {
-      parcelasSubmit = gerarParcelas(data);
+
+    // Em modo edição: NÃO redistribuir parcelas. Usar a soma das parcelas como novo valor_total.
+    // Em modo criação: manter comportamento original de gerar parcelas se necessário.
+    if (!isEditing) {
+      const totalForm = Number(data.valor_total) || 0;
+      if (parcelasSubmit.length === 0 || Math.abs(sumParcelas - totalForm) > 0.05) {
+        parcelasSubmit = gerarParcelas(data);
+      }
     }
 
     if (parcelasSubmit.length === 0) {
@@ -332,13 +356,16 @@ export const ContasReceberFormPage: React.FC = () => {
       return;
     }
 
-    // Sem empresa resolvida a receita não tem dono. Gravar um valor de fallback aqui era
-    // o que fazia o registro nascer visível para todas as empresas — ver utils/tenant.ts.
     const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
     if (!tenantId) {
       toast.error(MENSAGEM_TENANT_INDEFINIDO);
       return;
     }
+
+    // Em modo edição, o valor_total é a soma real das parcelas (editadas ou não)
+    const valorTotalFinal = isEditing
+      ? parcelasSubmit.reduce((acc, p) => acc + (Number(p.valor) || 0), 0)
+      : (Number(data.valor_total) || 0);
 
     setLoading(true);
     try {
@@ -369,7 +396,7 @@ export const ContasReceberFormPage: React.FC = () => {
         categoria: data.categoria,
         data_emissao: data.data_emissao,
         data_inicio_cobranca: data.data_inicio_cobranca,
-        valor_total: totalForm,
+        valor_total: valorTotalFinal,
         qtd_parcelas: Number(data.qtd_parcelas) || 1,
         forma_pagamento_padrao: data.forma_pagamento_padrao as any,
         conta_bancaria_id: data.conta_bancaria_id,
@@ -401,6 +428,41 @@ export const ContasReceberFormPage: React.FC = () => {
       });
 
       await salvarReceita(state.isOnline, novaReceita, parcelasGeradas);
+
+      // Registra auditoria detalhada com diff de alterações (somente em edição)
+      if (isEditing && parcelasOriginaisRef.current.length > 0) {
+        const alteracoes: any[] = [];
+        for (const pNova of parcelasSubmit) {
+          const pOriginal = parcelasOriginaisRef.current.find(o => o.id === pNova.id);
+          if (pOriginal) {
+            const mudancas: Record<string, { de: any; para: any }> = {};
+            if (Math.abs(pOriginal.valor - (Number(pNova.valor) || 0)) > 0.001) {
+              mudancas.valor = { de: pOriginal.valor, para: Number(pNova.valor) };
+            }
+            if (pOriginal.data_vencimento !== pNova.data_vencimento) {
+              mudancas.data_vencimento = { de: pOriginal.data_vencimento, para: pNova.data_vencimento };
+            }
+            if (pOriginal.forma_pagamento !== pNova.forma_pagamento) {
+              mudancas.forma_pagamento = { de: pOriginal.forma_pagamento, para: pNova.forma_pagamento };
+            }
+            if (Object.keys(mudancas).length > 0) {
+              alteracoes.push({ parcela_id: pNova.id, numero_parcela: pNova.numero_parcela, mudancas });
+            }
+          }
+        }
+
+        if (alteracoes.length > 0 || Math.abs(valorTotalOriginalRef.current - valorTotalFinal) > 0.001) {
+          await registrarAuditoria('Edição de Parcelas - Receita', {
+            receita_id: receitaId,
+            descricao: data.descricao,
+            valor_total_anterior: valorTotalOriginalRef.current,
+            valor_total_novo: valorTotalFinal,
+            parcelas_alteradas: alteracoes,
+            usuario: state.user?.nome || 'Sistema'
+          });
+        }
+      }
+
       toast.success(isEditing ? 'Receita atualizada com sucesso!' : 'Receita criada com sucesso!');
       navigate('/financeiro/contas-a-receber');
     } catch (e: any) {
@@ -408,6 +470,50 @@ export const ContasReceberFormPage: React.FC = () => {
       toast.error('Erro ao salvar receita: ' + (e?.message || 'Tente novamente.'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onSubmit = async (data: ReceitaFormData) => {
+    // Em modo edição, solicitar confirmação do usuário antes de salvar
+    if (isEditing) {
+      const parcelasAtuais = data.parcelas || [];
+      const somaParcelas = parcelasAtuais.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
+      const valorOriginal = valorTotalOriginalRef.current;
+      const diferencaTotal = somaParcelas - valorOriginal;
+
+      // Identifica parcelas que foram alteradas
+      const parcelasAlteradas: string[] = [];
+      for (const pNova of parcelasAtuais) {
+        const pOriginal = parcelasOriginaisRef.current.find(o => o.id === pNova.id);
+        if (pOriginal) {
+          if (Math.abs(pOriginal.valor - (Number(pNova.valor) || 0)) > 0.001 ||
+              pOriginal.data_vencimento !== pNova.data_vencimento ||
+              pOriginal.forma_pagamento !== pNova.forma_pagamento) {
+            parcelasAlteradas.push(`Parcela ${pNova.numero_parcela}`);
+          }
+        }
+      }
+
+      const resumoAlteracoes = parcelasAlteradas.length > 0
+        ? `\n\nParcelas alteradas: ${parcelasAlteradas.join(', ')}`
+        : '';
+
+      const resumoValor = Math.abs(diferencaTotal) > 0.01
+        ? `\nValor total da receita: R$ ${valorOriginal.toFixed(2)} → R$ ${somaParcelas.toFixed(2)} (${diferencaTotal > 0 ? '+' : ''}R$ ${diferencaTotal.toFixed(2)})`
+        : '';
+
+      confirm({
+        title: 'Confirmar Alterações na Receita',
+        message: `Deseja confirmar as alterações realizadas nesta receita e suas parcelas?${resumoAlteracoes}${resumoValor}\n\nEsta ação será registrada na auditoria do sistema.`,
+        confirmText: 'Confirmar Alterações',
+        cancelText: 'Cancelar',
+        onConfirm: async () => {
+          await executarSalvamento(data);
+        }
+      });
+    } else {
+      // Criação nova: salvar direto sem confirmação
+      await executarSalvamento(data);
     }
   };
 
@@ -632,14 +738,22 @@ export const ContasReceberFormPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-text-subtle mb-1">Valor Total (R$) *</label>
-                <input 
-                  type="number"
-                  step="0.01"
-                  disabled={isEditing}
-                  {...form.register("valor_total")}
-                  className={`w-full bg-bg-surface border ${errors.valor_total ? 'border-rose-500' : 'border-border-default'} rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none disabled:opacity-50 disabled:cursor-not-allowed`}
-                />
+                <label className="block text-sm font-medium text-text-subtle mb-1">
+                  Valor Total (R$) *
+                  {isEditing && <span className="text-xs text-amber-500 ml-2">(calculado pela soma das parcelas)</span>}
+                </label>
+                {isEditing ? (
+                  <div className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base opacity-70 cursor-not-allowed">
+                    R$ {(form.watch("parcelas") || []).reduce((acc, p) => acc + (Number(p?.valor) || 0), 0).toFixed(2)}
+                  </div>
+                ) : (
+                  <input 
+                    type="number"
+                    step="0.01"
+                    {...form.register("valor_total")}
+                    className={`w-full bg-bg-surface border ${errors.valor_total ? 'border-rose-500' : 'border-border-default'} rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none`}
+                  />
+                )}
                 {errors.valor_total && (
                   <p className="text-rose-500 text-xs mt-1">{errors.valor_total.message}</p>
                 )}
