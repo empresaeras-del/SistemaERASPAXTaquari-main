@@ -101,7 +101,7 @@ export const primeOfflineCache = async (
       try {
         let query = supabase.from(item.table).select('*');
         if (item.filterTenant && tenantId && tenantId !== 'all') {
-          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId},tenant_id.eq.default_tenant,tenant_id.eq.empresa_padrao`);
+          query = query.or(`tenant_id.eq.${tenantId},empresa_id.eq.${tenantId}`);
         }
 
         const { data, error } = await query;

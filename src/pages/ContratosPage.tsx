@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { tenantDeEscrita } from '../utils/tenant';
 import { useAppContext } from '../context/AppContext';
 import { getAssociados, Associado } from '../services/associadosService';
 import { getEmpresas, Empresa } from '../services/empresasService';
@@ -89,8 +90,10 @@ export const ContratosPage: React.FC = () => {
               .maybeSingle();
 
             const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            const cTenantId =
-              assoc.tenant_id && assoc.tenant_id !== 'all' ? assoc.tenant_id : 'default_tenant';
+            // Backfill em lote: associado sem empresa definida é pulado, em vez de gerar
+            // um contrato compartilhado entre todas as empresas — ver utils/tenant.ts.
+            const cTenantId = tenantDeEscrita(assoc.tenant_id);
+            if (!cTenantId) continue;
             const cPlanoId =
               assoc.plano_pax_id && UUID_REGEX.test(assoc.plano_pax_id) ? assoc.plano_pax_id : null;
             const cDataInicio =

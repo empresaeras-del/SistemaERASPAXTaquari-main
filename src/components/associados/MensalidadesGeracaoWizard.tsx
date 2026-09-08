@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { tenantDeRegistroExistente, MENSAGEM_TENANT_INDEFINIDO } from '../../utils/tenant';
 import { format } from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
 import { AlertCircle } from 'lucide-react';
@@ -92,9 +93,13 @@ export const MensalidadesGeracaoWizard = ({
     try {
       const mestreId = uuidv4();
       const totalReceita = parcelas.reduce((acc, p) => acc + p.valor, 0);
-      const targetTenant = (associado.tenant_id && associado.tenant_id !== 'all')
-        ? associado.tenant_id
-        : (state.empresaSelecionada && state.empresaSelecionada !== 'all' ? state.empresaSelecionada : 'default_tenant');
+      const targetTenant = tenantDeRegistroExistente(
+        associado.tenant_id, state.empresaSelecionada, state.user?.tenant_id,
+      );
+      if (!targetTenant) {
+        toast.error(MENSAGEM_TENANT_INDEFINIDO);
+        return;
+      }
 
       const receitaMestre = {
         id: mestreId,

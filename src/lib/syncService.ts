@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { getFromIDB, saveToIDB, deleteFromIDB, getAllFromIDB } from './idb';
 import { generateUUID } from '../utils/uuid';
+import { tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 
 export interface SyncTask {
   id: string;
@@ -146,7 +147,8 @@ export const processSyncQueue = async (isOnline: boolean) => {
           if (targetTable === 'associados') {
             const { dependentes, fornecedor_id, justificativa_modificacao_plano, complemento, endereco_complemento, municipio, ...assocClean } = payload;
             
-            const tenantId = (assocClean.tenant_id && assocClean.tenant_id !== 'all') ? assocClean.tenant_id : 'default_tenant';
+            const tenantId = tenantDeEscrita(assocClean.tenant_id);
+            if (!tenantId) throw new Error(`Associado ${assocClean.id ?? ''} na fila de sync sem empresa definida. ${MENSAGEM_TENANT_INDEFINIDO}`);
             const empresaId = (assocClean.empresa_id && assocClean.empresa_id !== 'all') ? assocClean.empresa_id : tenantId;
             const planoPaxId = assocClean.plano_pax_id && UUID_REGEX.test(assocClean.plano_pax_id) ? assocClean.plano_pax_id : null;
             const planoId = assocClean.plano_id && UUID_REGEX.test(assocClean.plano_id) ? assocClean.plano_id : null;
@@ -229,7 +231,8 @@ export const processSyncQueue = async (isOnline: boolean) => {
               }
             }
           } else if (targetTable === 'receitas') {
-            const tenantId = (payload.tenant_id && payload.tenant_id !== 'all') ? payload.tenant_id : 'default_tenant';
+            const tenantId = tenantDeEscrita(payload.tenant_id);
+            if (!tenantId) throw new Error(`Receita ${payload.id ?? ''} na fila de sync sem empresa definida. ${MENSAGEM_TENANT_INDEFINIDO}`);
             const cleanReceita = {
               ...payload,
               tenant_id: tenantId,
@@ -246,7 +249,8 @@ export const processSyncQueue = async (isOnline: boolean) => {
             const { error } = await supabase.from(targetTable).upsert(cleanReceita);
             if (error) throw error;
           } else if (targetTable === 'parcelas_receber') {
-            const tenantId = (payload.tenant_id && payload.tenant_id !== 'all') ? payload.tenant_id : 'default_tenant';
+            const tenantId = tenantDeEscrita(payload.tenant_id);
+            if (!tenantId) throw new Error(`Parcela ${payload.id ?? ''} na fila de sync sem empresa definida. ${MENSAGEM_TENANT_INDEFINIDO}`);
             const isPaid = payload.status === 'recebido' || payload.status === 'pago';
             const cleanParcela = {
               ...payload,

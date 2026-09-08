@@ -9,6 +9,7 @@ import * as z from 'zod';
 import { ArrowLeft, Save, Settings, Loader2 } from 'lucide-react';
 import { generateUUID } from '../utils/uuid';
 import toast from 'react-hot-toast';
+import { tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 import { format, lastDayOfMonth } from 'date-fns';
 import { getContasBancariasAtivas } from '../services/contasBancariasService';
 import { ContaBancaria } from '../types/contasBancarias';
@@ -237,7 +238,15 @@ export const ContasPagarFormPage: React.FC = () => {
       toast.error('Informe um valor total maior que zero para gerar parcelas.');
       return;
     }
-    
+
+    // Sem empresa resolvida a despesa não tem dono. Gravar um valor de fallback aqui era
+    // o que fazia o registro nascer visível para todas as empresas — ver utils/tenant.ts.
+    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
+    if (!tenantId) {
+      toast.error(MENSAGEM_TENANT_INDEFINIDO);
+      return;
+    }
+
     setLoading(true);
     try {
       const despesaId = id || generateUUID();
@@ -246,7 +255,7 @@ export const ContasPagarFormPage: React.FC = () => {
       
       const novaDespesa: Despesa = {
         id: despesaId,
-        tenant_id: state.empresaSelecionada || 'empresa_padrao',
+        tenant_id: tenantId,
         tipo_credor: data.tipo_credor,
         credor_nome: data.credor_nome,
         credor_cpf_cnpj: data.credor_cpf_cnpj,
@@ -268,7 +277,7 @@ export const ContasPagarFormPage: React.FC = () => {
         const dbP = p.id ? dbParcMap.get(p.id) : null;
         return {
           id: p.id || generateUUID(),
-          tenant_id: state.empresaSelecionada || 'empresa_padrao',
+          tenant_id: tenantId,
           despesa_id: despesaId,
           numero_parcela: p.numero_parcela,
           total_parcelas: Number(data.qtd_parcelas) || 1,

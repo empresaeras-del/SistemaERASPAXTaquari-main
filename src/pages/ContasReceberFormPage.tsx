@@ -12,6 +12,7 @@ import * as z from 'zod';
 import { ArrowLeft, Save, Settings, Loader2 } from 'lucide-react';
 import { generateUUID } from '../utils/uuid';
 import toast from 'react-hot-toast';
+import { tenantDeEscrita, tenantDeRegistroExistente, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 import { format, lastDayOfMonth } from 'date-fns';
 
 import { useOptions } from '../hooks/useOptions';
@@ -222,7 +223,7 @@ export const ContasReceberFormPage: React.FC = () => {
             if (resolvedAssociadoId && !assocsList.some(a => a.id === resolvedAssociadoId)) {
               const placeholder: Associado = {
                 id: resolvedAssociadoId,
-                tenant_id: rec.tenant_id || state.empresaSelecionada || 'default_tenant',
+                tenant_id: tenantDeRegistroExistente(rec.tenant_id, state.empresaSelecionada, state.user?.tenant_id) ?? '',
                 nome: rec.associado_nome || parcs[0]?.devedor_nome || 'Associado Selecionado',
                 cpf: rec.associado_cpf || parcs[0]?.devedor_cpf_cnpj || '',
                 status: 'ativo',
@@ -330,7 +331,15 @@ export const ContasReceberFormPage: React.FC = () => {
       toast.error('Informe um valor total maior que zero para gerar parcelas.');
       return;
     }
-    
+
+    // Sem empresa resolvida a receita não tem dono. Gravar um valor de fallback aqui era
+    // o que fazia o registro nascer visível para todas as empresas — ver utils/tenant.ts.
+    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
+    if (!tenantId) {
+      toast.error(MENSAGEM_TENANT_INDEFINIDO);
+      return;
+    }
+
     setLoading(true);
     try {
       const receitaId = id || generateUUID();
@@ -344,7 +353,7 @@ export const ContasReceberFormPage: React.FC = () => {
 
       const novaReceita: Receita = {
         id: receitaId,
-        tenant_id: state.empresaSelecionada || 'empresa_padrao',
+        tenant_id: tenantId,
         tipo_devedor: data.tipo_devedor,
         
         associado_id: data.associado_id,
@@ -373,7 +382,7 @@ export const ContasReceberFormPage: React.FC = () => {
         const dbP = p.id ? dbParcMap.get(p.id) : null;
         return {
           id: p.id || generateUUID(),
-          tenant_id: state.empresaSelecionada || 'empresa_padrao',
+          tenant_id: tenantId,
           receita_id: receitaId,
           numero_parcela: p.numero_parcela,
           total_parcelas: Number(data.qtd_parcelas) || 1,

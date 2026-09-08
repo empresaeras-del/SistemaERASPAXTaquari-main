@@ -31,6 +31,38 @@ No frontend, o tenant/empresa selecionado vive em `AppContext` (`state.empresaSe
 valor `'all'` significa "sem filtro de tenant" (usado por telas administrativas) — não confunda com
 um `tenant_id` real.
 
+### Nunca invente um `tenant_id` (o caso `empresa_padrao`)
+
+Até 08/09/2026, `has_tenant_access()` devolvia verdadeiro para três valores de `tenant_id`
+— `'default_tenant'`, `'empresa_padrao'` e `'all'` — para **qualquer** usuário autenticado de
+**qualquer** empresa, com a intenção de marcar "registros globais, compartilhados". Ao mesmo tempo,
+o frontend usava dois deles com outro sentido: eram o fallback de "empresa ainda não selecionada"
+(`state.empresaSelecionada || 'empresa_padrao'`). Somados, um registro criado sem empresa escolhida
+— uma conta a pagar, uma receita, uma entrada de auditoria — **nascia legível e gravável por todas
+as empresas**, sem erro e sem nada visível na tela. Só um super_admin chegava nesse estado (para os
+demais níveis o `AppContext` força `empresaSelecionada = user.tenant_id`), o que tornava o problema
+ainda mais silencioso: quem criava o registro enxergava tudo de qualquer forma.
+
+Regras que passaram a valer:
+
+- **Toda resolução de tenant passa por `utils/tenant.ts`** — `tenantDeEscrita()` para um registro
+  novo, `tenantDeRegistroExistente()` quando é preciso reaproveitar o de um registro, e
+  `registroPertenceAoTenant()` no filtro do caminho offline dos services. Não escreva um novo
+  encadeamento `x || y || 'algum_literal'` à mão.
+- **Quando não dá para determinar a empresa, recuse a gravação** com
+  `MENSAGEM_TENANT_INDEFINIDO`, em vez de carimbar um valor de fallback. Um erro visível na hora é
+  melhor que um registro compartilhado em silêncio.
+- **Não acrescente valores coringa a `has_tenant_access`.** Para um catálogo realmente global, use
+  uma cláusula própria na policy da tabela, como `procedimentos` já faz
+  (`tenant_id IS NULL OR has_tenant_access(tenant_id)`). O `COMMENT` da função registra isso.
+- `'all'` continua sendo o único marcador de transmissão a todos, usado pelas notificações. Ele
+  nunca é gravado como tenant de um registro de negócio.
+
+Sobra do estado anterior, deliberadamente não mexida: várias telas ainda passam
+`state.empresaSelecionada || 'default_tenant'` como **filtro de leitura**. Depois da correção esse
+valor não casa com nada — o resultado é uma lista vazia, não a lista de todo mundo —, então não é
+mais ambíguo, só verboso.
+
 ## Padrão offline-first
 
 Praticamente todo `service` segue o mesmo formato:

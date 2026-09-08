@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { ehTenantUtilizavel } from '../utils/tenant';
 import { saveToIDB, getAllFromIDB } from '../lib/idb';
 import { getUsuarios, UsuarioCadastro } from './usuariosService';
 
@@ -28,12 +29,16 @@ export const getLogsAuditoria = async (isOnline: boolean, tenantId: string | nul
   try {
     // O tenant já chega por parâmetro: usar 'all' aqui removia o filtro por
     // completo e trazia usuários de todas as empresas só para montar o mapa de
-    // nomes dos logs.
-    const usuariosList = await getUsuarios(isOnline, tenantId || 'empresa_padrao');
-    usuariosList.forEach(u => {
-      if (u.id) usersMap.set(u.id, u);
-      if (u.email) usersMap.set(u.email.toLowerCase(), u);
-    });
+    // nomes dos logs. Sem tenant definido, o mapa simplesmente não é montado — os
+    // logs aparecem com o id em vez do nome. Antes isso era escrito consultando
+    // 'empresa_padrao', uma consulta feita de propósito para não casar com nada.
+    if (ehTenantUtilizavel(tenantId)) {
+      const usuariosList = await getUsuarios(isOnline, tenantId);
+      usuariosList.forEach(u => {
+        if (u.id) usersMap.set(u.id, u);
+        if (u.email) usersMap.set(u.email.toLowerCase(), u);
+      });
+    }
   } catch (e) {
     console.warn('Erro ao carregar mapa de usuários para auditoria:', e);
   }

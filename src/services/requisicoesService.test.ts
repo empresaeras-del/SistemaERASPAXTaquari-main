@@ -66,10 +66,10 @@ describe('getRequisicoes (offline, fallback IDB)', () => {
     expect(mockGetAllFromIDB).toHaveBeenCalledWith('requisicoes');
   });
 
-  it('filtra requisições de outros tenants, mas mantém as do tenant "default_tenant"', async () => {
+  it('não devolve a requisição com o tenant coringa legado "default_tenant"', async () => {
     mockGetAllFromIDB.mockResolvedValue(requisicoes);
     const out = await getRequisicoes(false, 'emp-1');
-    expect(out.map(r => r.id).sort()).toEqual(['r1', 'r3']);
+    expect(out.map(r => r.id).sort()).toEqual(['r1']);
   });
 
   it('exclui requisições com deleted_at, mesmo pertencendo ao tenant certo', async () => {
