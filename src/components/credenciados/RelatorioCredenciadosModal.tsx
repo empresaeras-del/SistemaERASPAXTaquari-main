@@ -85,6 +85,7 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
         nomeFantasia: c.nome_fantasia || '-',
         cnpjCpf: c.cnpj_cpf,
         ramoFormatado: (c.ramo_atividade || 'outros').replace(/_/g, ' ').toUpperCase(),
+        especialidade: c.especialidade || '',
         registroProfissional: c.registro_profissional || '-',
         enderecoCompleto: endereco || 'Endereço não informado',
         contatoCompleto: contato || 'Contato não informado',
@@ -150,6 +151,7 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
         </td>
         <td style="font-size: 9.5px; color: #2563eb; font-weight: 700;">
           ${item.ramoFormatado}
+          ${item.especialidade ? `<div style="color: #0f172a; font-size: 9px; font-weight: 600;">${item.especialidade}</div>` : ''}
           ${item.registroProfissional !== '-' ? `<div style="color: #64748b; font-size: 8.5px; font-weight: normal;">Reg: ${item.registroProfissional}</div>` : ''}
         </td>
         <td style="font-size: 9.5px; color: #334155; line-height: 1.25;">
@@ -272,7 +274,7 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
               <tr>
                 <th style="width: 3%; text-align: center;">#</th>
                 <th style="width: 27%;">Credenciado / Razão Social</th>
-                <th style="width: 17%;">Ramo de Atividade</th>
+                <th style="width: 17%;">Ramo / Especialidade</th>
                 <th style="width: 25%;">Endereço Completo</th>
                 <th style="width: 20%;">Contatos / Responsável</th>
                 <th style="width: 8%; text-align: center;">Status</th>
@@ -630,7 +632,7 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
                       Credenciado / Razão Social
                     </th>
                     <th className="py-2 px-3 w-[17%] border-r border-slate-700">
-                      Ramo de Atividade
+                      Ramo / Especialidade
                     </th>
                     <th className="py-2 px-3 w-[25%] border-r border-slate-700">
                       Endereço Completo
@@ -660,6 +662,11 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
                         <div className="font-bold text-blue-700 text-[10.5px]">
                           {item.ramoFormatado}
                         </div>
+                        {item.especialidade && (
+                          <div className="text-[10px] font-semibold text-slate-800">
+                            {item.especialidade}
+                          </div>
+                        )}
                         {item.registroProfissional !== '-' && (
                           <div className="text-[9.5px] text-slate-500">
                             Reg: {item.registroProfissional}
