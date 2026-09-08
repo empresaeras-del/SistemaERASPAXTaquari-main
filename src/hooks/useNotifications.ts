@@ -6,6 +6,7 @@ import { getRemessas } from '../services/faturamentoService';
 import { Requisicao } from '../types/requisicoes';
 import { RemessaFaturamento } from '../types/faturamento';
 import toast from 'react-hot-toast';
+import { tenantDeEscrita } from '../utils/tenant';
 
 export const useNotifications = () => {
   const { state } = useAppContext();
@@ -35,10 +36,12 @@ export const useNotifications = () => {
       const pendRems = remsData.filter(r => r.status === 'em_aberto');
       setPendingRemessas(pendRems);
 
-      // Seed initial mock notifications if empty and not yet attempted
-      if (notifsData.length === 0 && !hasAttemptedSeedRef.current) {
+      // Seed initial mock notifications if empty and not yet attempted.
+      // Só semeia quando dá para determinar a empresa: sem ela, a notificação nascia com
+      // tenant nulo e ficava visível para todas as empresas (ver notificacoesService).
+      const mockTenantId = tenantDeEscrita(tenantId, state.user?.tenant_id);
+      if (notifsData.length === 0 && !hasAttemptedSeedRef.current && mockTenantId) {
         hasAttemptedSeedRef.current = true;
-        const mockTenantId = state.user?.tenant_id || (tenantId !== 'all' ? tenantId : undefined);
         const mockNotifs: Omit<Notificacao, 'id' | 'created_at'>[] = [
           {
             usuario_id: state.user.id,

@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { generateUUID } from '../utils/uuid';
+import { ehTenantUtilizavel, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 
 export interface Notificacao {
   id: string;
@@ -23,8 +24,12 @@ export const getNotificacoes = async (isOnline: boolean, usuarioId: string, tena
   if (isOnline) {
     try {
       let query = supabase.from('notificacoes').select('*').is('deleted_at', null);
-      if (tenantId && tenantId !== 'all') {
-         query = query.or(`tenant_id.eq.${tenantId},tenant_id.is.null,tenant_id.eq.all,usuario_id.eq.${usuarioId}`);
+      if (ehTenantUtilizavel(tenantId)) {
+         // Uma notificação é minha se é da minha empresa ou se é endereçada a mim.
+         // `tenant_id.is.null` e `tenant_id.eq.all` estavam aqui como "transmissão a
+         // todos" — um escape que nenhuma notificação real usava (0 registros) e que
+         // fazia a caixa de um usuário aparecer para as outras empresas.
+         query = query.or(`tenant_id.eq.${tenantId},usuario_id.eq.${usuarioId}`);
       }
       const { data, error } = await query;
       if (error) throw error;
@@ -43,9 +48,24 @@ export const getNotificacoes = async (isOnline: boolean, usuarioId: string, tena
     notificacoes = await getAllFromIDB<Notificacao>(STORE_NAME);
   }
 
-  // Filter for user
+  // Mesmo critério da policy no servidor: a notificação é minha se é endereçada a mim,
+  // ou se pertence à minha empresa. O caminho offline lê o IndexedDB inteiro, então
+  // precisa aplicar o filtro de empresa aqui — antes ele checava só o destinatário, e um
+  // `usuario_id: 'all'` em cache atravessava a fronteira entre empresas.
+  //
+  // A regra é mais estrita que a de `registroPertenceAoTenant`, e de propósito: aquele
+  // predicado deixa passar registro sem tenant (é o catálogo compartilhado, como
+  // `procedimentos`) e desliga o filtro quando não há empresa selecionada. Notificação não
+  // tem catálogo compartilhado — sem tenant, ou sem empresa para comparar, só vale o que
+  // está endereçado a mim.
   return notificacoes
-    .filter(n => !n.deleted_at && (n.usuario_id === usuarioId || n.usuario_id === 'all' || !n.usuario_id))
+    .filter(n => {
+      if (n.deleted_at) return false;
+      if (n.usuario_id === usuarioId) return true;
+      if (!ehTenantUtilizavel(n.tenant_id) || !ehTenantUtilizavel(tenantId)) return false;
+      if (n.tenant_id !== tenantId) return false;
+      return n.usuario_id === 'all' || !n.usuario_id;
+    })
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 };
 
@@ -112,6 +132,15 @@ export const createNotificacao = async (notificacao: Omit<Notificacao, 'id' | 'c
   try {
     if (isOnline) {
       try {
+        // Sem empresa e sem destinatário, os defaults antigos eram `usuario_id: 'all'` e
+        // `tenant_id: null` — os dois valores que a policy lia como "todo mundo, em todas
+        // as empresas". Uma notificação precisa de dono; sem ele, não vai para o servidor.
+        if (!ehTenantUtilizavel(newNotif.tenant_id)) {
+          throw new Error(`Notificação sem empresa definida. ${MENSAGEM_TENANT_INDEFINIDO}`);
+        }
+        if (!newNotif.usuario_id) {
+          throw new Error('Notificação sem destinatário: informe o usuário ou o escopo da empresa.');
+        }
         const payload: any = {
           id: newNotif.id,
           titulo: newNotif.titulo,
@@ -119,8 +148,8 @@ export const createNotificacao = async (notificacao: Omit<Notificacao, 'id' | 'c
           tipo: newNotif.tipo || 'info',
           lida: newNotif.lida || false,
           link: newNotif.link || null,
-          usuario_id: newNotif.usuario_id || 'all',
-          tenant_id: (newNotif.tenant_id && newNotif.tenant_id !== 'all') ? newNotif.tenant_id : null,
+          usuario_id: newNotif.usuario_id,
+          tenant_id: newNotif.tenant_id,
           created_at: newNotif.created_at
         };
         await supabase.from('notificacoes').insert([payload]);
