@@ -69,6 +69,33 @@ export const getNotificacoes = async (isOnline: boolean, usuarioId: string, tena
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 };
 
+/**
+ * O usuário já teve alguma notificação — inclusive as que ele já apagou?
+ *
+ * `getNotificacoes` filtra `deleted_at IS NULL`, então "caixa vazia" e "usuário novo" são
+ * indistinguíveis por lá. Como excluir é *soft delete*, quem apagava todas as suas
+ * notificações voltava a parecer novo e ganhava as de boas-vindas de novo, a cada
+ * carregamento. Um usuário chegou a acumular 24 delas, 22 já excluídas.
+ *
+ * Esta função é a pergunta certa para decidir o seeding: conta o histórico, não a caixa.
+ * Só responde online — offline não dá para distinguir "não tem" de "ainda não sincronizou",
+ * e semear no escuro é exatamente o que produzia duplicata.
+ */
+export const usuarioJaTeveNotificacao = async (isOnline: boolean, usuarioId: string): Promise<boolean> => {
+  if (!isOnline) return true; // no escuro, assume que sim: não semear é o lado seguro
+  try {
+    const { count, error } = await supabase
+      .from('notificacoes')
+      .select('id', { count: 'exact', head: true })
+      .eq('usuario_id', usuarioId);
+    if (error) throw error;
+    return (count ?? 0) > 0;
+  } catch (e) {
+    console.warn('Não foi possível conferir o histórico de notificações; seeding adiado.', e);
+    return true;
+  }
+};
+
 export const markAsRead = async (id: string, isOnline: boolean): Promise<void> => {
   try {
     if (isOnline) {

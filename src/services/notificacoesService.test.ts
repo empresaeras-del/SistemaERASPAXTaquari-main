@@ -7,10 +7,23 @@ vi.mock('../lib/idb', () => ({
   deleteFromIDB: vi.fn(),
 }));
 
+vi.mock('../lib/supabase', () => ({
+  supabase: { from: vi.fn() },
+}));
+
 import { getAllFromIDB } from '../lib/idb';
-import { getNotificacoes, Notificacao } from './notificacoesService';
+import { supabase } from '../lib/supabase';
+import { getNotificacoes, usuarioJaTeveNotificacao, Notificacao } from './notificacoesService';
 
 const mockGetAllFromIDB = vi.mocked(getAllFromIDB);
+const mockFrom = vi.mocked(supabase.from);
+
+/** Encadeia o `.select(...).eq(...)` que `usuarioJaTeveNotificacao` monta. */
+const mockContagem = (resultado: { count?: number | null; error?: unknown }) => {
+  const eq = vi.fn().mockResolvedValue(resultado);
+  mockFrom.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) } as never);
+  return eq;
+};
 
 const EU = 'usuario-1';
 const OUTRO = 'usuario-2';
@@ -95,5 +108,50 @@ describe('getNotificacoes (offline, fallback IDB)', () => {
     ]);
     const out = await getNotificacoes(false, EU, null);
     expect(out.map(n => n.id)).toEqual(['minha']);
+  });
+});
+
+
+/**
+ * É esta função que decide se o usuário ganha as notificações de boas-vindas. Ela conta o
+ * histórico — inclusive as excluídas —, e não a caixa de entrada: apagar tudo não pode
+ * fazer o usuário parecer novo de novo.
+ */
+describe('usuarioJaTeveNotificacao', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('diz que não, para quem nunca teve nenhuma', async () => {
+    mockContagem({ count: 0 });
+    expect(await usuarioJaTeveNotificacao(true, EU)).toBe(false);
+  });
+
+  it('diz que sim quando existe histórico, mesmo que tudo esteja excluído', async () => {
+    // A consulta não filtra `deleted_at`, então as excluídas entram na contagem — é o que
+    // impede o seeding de rodar de novo depois que o usuário apaga tudo.
+    mockContagem({ count: 24 });
+    expect(await usuarioJaTeveNotificacao(true, EU)).toBe(true);
+  });
+
+  it('conta pelo destinatário, não pela empresa', async () => {
+    const eq = mockContagem({ count: 2 });
+    await usuarioJaTeveNotificacao(true, EU);
+    expect(eq).toHaveBeenCalledWith('usuario_id', EU);
+  });
+
+  it('não pergunta ao servidor quando offline, e responde "sim"', async () => {
+    // Offline não dá para distinguir "não tem" de "ainda não sincronizou"; não semear é o
+    // lado seguro, e semear no escuro é o que produzia duplicata.
+    expect(await usuarioJaTeveNotificacao(false, EU)).toBe(true);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('responde "sim" quando a consulta falha, adiando o seeding em vez de arriscar', async () => {
+    mockContagem({ error: new Error('rede caiu') });
+    expect(await usuarioJaTeveNotificacao(true, EU)).toBe(true);
+  });
+
+  it('trata count nulo como ausência de histórico', async () => {
+    mockContagem({ count: null });
+    expect(await usuarioJaTeveNotificacao(true, EU)).toBe(false);
   });
 });

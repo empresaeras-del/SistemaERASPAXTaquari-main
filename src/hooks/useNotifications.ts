@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { getNotificacoes, markAsRead, markAllAsRead, deleteNotificacao, Notificacao, createNotificacao } from '../services/notificacoesService';
+import { getNotificacoes, markAsRead, markAllAsRead, deleteNotificacao, Notificacao, createNotificacao, usuarioJaTeveNotificacao } from '../services/notificacoesService';
 import { getRequisicoes, atualizarStatusRequisicao } from '../services/requisicoesService';
 import { getRemessas } from '../services/faturamentoService';
 import { Requisicao } from '../types/requisicoes';
@@ -8,13 +8,22 @@ import { RemessaFaturamento } from '../types/faturamento';
 import toast from 'react-hot-toast';
 import { tenantDeEscrita } from '../utils/tenant';
 
+/**
+ * Usuários para os quais o seeding de boas-vindas já foi tentado nesta sessão do app.
+ *
+ * Mora no módulo, não num `useRef`, porque o hook é montado **duas vezes** ao mesmo tempo
+ * — `Topbar` e `NotificationCenter` ambos o chamam. Com um ref por montagem, cada uma
+ * semeava por conta própria e o resultado era o par de notificações duplicado no mesmo
+ * segundo, visível no banco em quase toda rodada de seeding.
+ */
+const seedingTentadoPara = new Set<string>();
+
 export const useNotifications = () => {
   const { state } = useAppContext();
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [pendingRequisicoes, setPendingRequisicoes] = useState<Requisicao[]>([]);
   const [pendingRemessas, setPendingRemessas] = useState<RemessaFaturamento[]>([]);
   const [loading, setLoading] = useState(true);
-  const hasAttemptedSeedRef = useRef(false);
 
   const fetchNotificacoes = useCallback(async () => {
     if (!state.user?.id) return;
@@ -36,12 +45,25 @@ export const useNotifications = () => {
       const pendRems = remsData.filter(r => r.status === 'em_aberto');
       setPendingRemessas(pendRems);
 
-      // Seed initial mock notifications if empty and not yet attempted.
-      // Só semeia quando dá para determinar a empresa: sem ela, a notificação nascia com
-      // tenant nulo e ficava visível para todas as empresas (ver notificacoesService).
+      // Notificações de boas-vindas: só para quem nunca teve nenhuma.
+      //
+      // Três condições, e cada uma existe por um motivo aprendido no dado real:
+      //  1. a caixa está vazia agora;
+      //  2. o usuário nunca teve notificação alguma — nem as que ele já apagou. Sem isso,
+      //     apagar todas fazia o usuário parecer novo e as boas-vindas voltavam a cada
+      //     carregamento (24 acumuladas para um único usuário, 22 delas já excluídas);
+      //  3. dá para determinar a empresa — senão a notificação nasceria sem dono.
+      // O `Set` de módulo cobre as duas montagens simultâneas do hook (Topbar e
+      // NotificationCenter), que antes semeavam em paralelo.
       const mockTenantId = tenantDeEscrita(tenantId, state.user?.tenant_id);
-      if (notifsData.length === 0 && !hasAttemptedSeedRef.current && mockTenantId) {
-        hasAttemptedSeedRef.current = true;
+      const podeSemear =
+        notifsData.length === 0 &&
+        !!mockTenantId &&
+        !seedingTentadoPara.has(state.user.id) &&
+        !(await usuarioJaTeveNotificacao(state.isOnline, state.user.id));
+
+      if (podeSemear) {
+        seedingTentadoPara.add(state.user.id);
         const mockNotifs: Omit<Notificacao, 'id' | 'created_at'>[] = [
           {
             usuario_id: state.user.id,
