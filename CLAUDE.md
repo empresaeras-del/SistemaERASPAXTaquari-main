@@ -110,8 +110,24 @@ Ao criar uma migration nova:
    histórico rastreado.
 2. Sempre crie também o arquivo `.sql` correspondente em `supabase/migrations/` com timestamp novo,
    para o repositório continuar sendo a documentação de referência.
-3. Use `ADD COLUMN IF NOT EXISTS` / `COMMENT ON COLUMN` como nas migrations mais recentes — torna a
+3. **Nomeie o arquivo com a versão que o banco registrou**, não com o timestamp que você escolheu.
+   O `apply_migration` grava a versão do *servidor* no momento da aplicação, que quase nunca é a do
+   nome do arquivo. Consulte `supabase_migrations.schema_migrations` depois de aplicar e renomeie.
+   Isso não é cosmético: o CLI compara as versões dos arquivos com a tabela de controle, então um
+   arquivo com versão que não existe lá seria **reaplicado** num `supabase db push`.
+4. **Uma migration aplicada, um arquivo.** Se uma migration se mostrar insuficiente e você aplicar
+   uma correção, crie um arquivo novo para ela — não edite o arquivo da primeira para "consertá-la".
+   O par `20260904123956_revoke_anon_admin_functions` / `20260904124031_revoke_public_admin_functions`
+   é exatamente esse caso: revogar de `anon` não bastava, e por um tempo a correção existia só no
+   banco, com o SQL enfiado dentro do arquivo da primeira. O arquivo passou a mentir sobre o que
+   aquela migration aplicou, e a segunda ficou sem registro nenhum. Guardar o passo insuficiente
+   separado também preserva a lição de por que ele não funcionou.
+5. Use `ADD COLUMN IF NOT EXISTS` / `COMMENT ON COLUMN` como nas migrations mais recentes — torna a
    migration idempotente e autodocumentada.
+
+Para conferir se os dois lados batem, compare **por nome**, não por número: a versão diverge por
+construção quando o arquivo não foi renomeado, e comparar por número produz falso alarme (foi o que
+aconteceu na conferência de 08/09 — 7 "divergências" que, por nome, eram 1).
 
 ### O bug recorrente: campo no TypeScript sem a coluna correspondente no banco
 
