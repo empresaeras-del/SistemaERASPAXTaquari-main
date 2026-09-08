@@ -83,7 +83,7 @@ export const RelatorioCredenciadosModal: React.FC<RelatorioCredenciadosModalProp
         id: c.id,
         razaoSocial: c.razao_social,
         nomeFantasia: c.nome_fantasia || '-',
-        cnpjCpf: c.cnpj_cpf,
+        cnpjCpf: c.cnpj_cpf || '-',
         ramoFormatado: (c.ramo_atividade || 'outros').replace(/_/g, ' ').toUpperCase(),
         especialidade: c.especialidade || '',
         registroProfissional: c.registro_profissional || '-',

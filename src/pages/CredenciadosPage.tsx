@@ -152,7 +152,9 @@ export const CredenciadosPage: React.FC = () => {
   /**
    * Validade do CNPJ/CPF enquanto se digita. A checagem já existia, mas só era
    * aplicada no submit, via toast: quem errava o documento só descobria depois
-   * de preencher o formulário inteiro. `null` = ainda não dá para julgar.
+   * de preencher o formulário inteiro. `null` = ainda não dá para julgar —
+   * inclusive quando o campo está vazio, já que o documento é opcional (ver
+   * CLAUDE.md): campo em branco não é campo inválido.
    */
   const documentoValido = useMemo(() => {
     const valor = (formData.cnpj_cpf || '').replace(/\D/g, '');
@@ -198,13 +200,20 @@ export const CredenciadosPage: React.FC = () => {
       toast.error('Operação bloqueada no Modo de Visualização (Offline).');
       return;
     }
-    if (!isValidCPFOrCNPJ(formData.cnpj_cpf || '')) {
+    // Documento é opcional (ver CLAUDE.md): só valida o formato quando algo
+    // foi digitado. Campo vazio nunca bloqueia o salvamento.
+    const cnpjCpfDigitado = (formData.cnpj_cpf || '').trim();
+    if (cnpjCpfDigitado && !isValidCPFOrCNPJ(cnpjCpfDigitado)) {
       toast.error('CPF ou CNPJ inválido.');
       return;
     }
     setIsSaving(true);
     try {
       const { id, created_at, updated_at, empresa_id, ...dataToSave } = formData as any;
+      // Nunca grava string vazia: a coluna tem UNIQUE, e duas strings vazias
+      // colidiriam entre si na próxima gravação sem documento. `null` não
+      // colide com outro `null` (ver migration 20260908182307).
+      dataToSave.cnpj_cpf = cnpjCpfDigitado || null;
       if (editingId) {
         await editar(editingId, dataToSave as CredenciadoUpdate);
         toast.success('Credenciado atualizado com sucesso!');
@@ -547,7 +556,7 @@ export const CredenciadosPage: React.FC = () => {
                 <div className="space-y-1.5 text-xs text-text-muted my-3 border-t border-border-default/50 pt-3">
                   <p className="flex items-center gap-2">
                     <strong className="text-text-subtle min-w-[70px]">CNPJ/CPF:</strong>
-                    <span className="font-mono text-text-base">{cred.cnpj_cpf}</span>
+                    <span className="font-mono text-text-base">{cred.cnpj_cpf || '—'}</span>
                   </p>
                   {cred.especialidade && (
                     <p className="flex items-center gap-2">
@@ -629,7 +638,7 @@ export const CredenciadosPage: React.FC = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-xs font-mono text-text-muted">{cred.cnpj_cpf}</td>
+                    <td className="px-5 py-4 text-xs font-mono text-text-muted">{cred.cnpj_cpf || '—'}</td>
                     <td className="px-5 py-4">
                       <span className="px-2.5 py-1 rounded-lg bg-bg-subtle text-text-subtle font-medium border border-border-default text-xs whitespace-nowrap">
                         {cred.ramo_atividade.replace('_', ' ').toUpperCase()}
@@ -760,9 +769,13 @@ export const CredenciadosPage: React.FC = () => {
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className={ROTULO_CLASSE}>CNPJ / CPF<Obrigatorio /></label>
+                          <label className={ROTULO_CLASSE}>
+                            CNPJ / CPF
+                            <span className="ml-1.5 text-[10px] font-normal normal-case text-text-muted">
+                              (opcional)
+                            </span>
+                          </label>
                           <input
-                            required
                             value={formData.cnpj_cpf || ''}
                             onChange={e => setFormData({...formData, cnpj_cpf: maskCPFOrCNPJ(e.target.value)})}
                             aria-invalid={documentoValido === false}
@@ -773,7 +786,7 @@ export const CredenciadosPage: React.FC = () => {
                                   ? '!border-emerald-500/50'
                                   : ''
                             }`}
-                            placeholder="00.000.000/0000-00"
+                            placeholder="00.000.000/0000-00 (se houver)"
                           />
                           {documentoValido === false && (
                             <p className="mt-1.5 text-xs text-rose-400">
