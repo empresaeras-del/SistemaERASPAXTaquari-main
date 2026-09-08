@@ -20,12 +20,11 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { Associado, DocumentoAssociado } from '../../services/associadosService';
-import { getEmpresaById } from '../../services/empresasService';
-import { useAppContext } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { VisualizadorDocumentoModal } from './VisualizadorDocumentoModal';
 import { CarteirinhaAssociadoModal } from './CarteirinhaAssociadoModal';
+import { FichaCadastroModal } from './FichaCadastroModal';
 import { downloadDocumento, isPdfDocument, isImageDocument } from '../../utils/documentUtils';
 
 interface Props {
@@ -36,7 +35,6 @@ interface Props {
 
 export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onEdit }) => {
   const toast = useToast();
-  const { state } = useAppContext();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [documentoVisualizando, setDocumentoVisualizando] = useState<DocumentoAssociado | null>(
     null,
@@ -45,6 +43,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
   const [selectedBeneficiarioId, setSelectedBeneficiarioId] = useState<string | undefined>(
     undefined,
   );
+  const [fichaModalOpen, setFichaModalOpen] = useState(false);
 
   const copiarTexto = async (texto: string, label: string, id: string) => {
     try {
@@ -54,171 +53,6 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
       setTimeout(() => setCopiedId(null), 2000);
     } catch (err) {
       toast.error('Erro ao copiar');
-    }
-  };
-
-  const handlePrint = async () => {
-    let logoHtml = '';
-    let assinaturaHtml = '';
-    let empresaNome = '';
-    let empresaCnpj = '';
-
-    try {
-      const tenantId = state.empresaSelecionada || 'default_tenant';
-      const empresa = await getEmpresaById(tenantId, state.isOnline);
-      if (empresa) {
-        empresaNome = empresa.nome_fantasia || empresa.razao_social || '';
-        empresaCnpj = empresa.cnpj || '';
-
-        if (empresa.logo_url) {
-          logoHtml = `<div style="width: 100%; text-align: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #1e293b;"><img src="${empresa.logo_url}" style="width: 100%; max-height: 95px; object-fit: contain;" /></div>`;
-        } else if (empresaNome) {
-          logoHtml = `<div style="width: 100%; text-align: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #1e293b;"><h2 style="margin: 0; font-size: 20px; text-transform: uppercase;">${empresaNome}</h2>${empresaCnpj ? `<p style="margin: 4px 0 0 0; font-size: 12px; color: #64748b;">CNPJ: ${empresaCnpj}</p>` : ''}</div>`;
-        }
-
-        if (empresa.assinatura_url) {
-          assinaturaHtml = `
-            <div style="text-align: center; width: 45%;">
-              <div style="margin-bottom: 4px; min-height: 60px; display: flex; align-items: flex-end; justify-content: center;">
-                <img src="${empresa.assinatura_url}" style="max-height: 60px; max-width: 200px; object-fit: contain;" />
-              </div>
-              <div style="border-top: 1px solid #1e293b; width: 100%; margin-bottom: 4px;"></div>
-              <p style="margin: 0; font-weight: bold; font-size: 12px; text-transform: uppercase;">${empresaNome || 'Assinatura Autorizada'}</p>
-              ${empresaCnpj ? `<p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">CNPJ: ${empresaCnpj}</p>` : ''}
-            </div>
-          `;
-        } else {
-          assinaturaHtml = `
-            <div style="text-align: center; width: 45%;">
-              <div style="min-height: 60px;"></div>
-              <div style="border-top: 1px solid #1e293b; width: 100%; margin-bottom: 4px;"></div>
-              <p style="margin: 0; font-weight: bold; font-size: 12px; text-transform: uppercase;">${empresaNome || 'Assinatura da Empresa'}</p>
-              ${empresaCnpj ? `<p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">CNPJ: ${empresaCnpj}</p>` : ''}
-            </div>
-          `;
-        }
-      }
-    } catch (e) {
-      console.error('Erro ao buscar empresa:', e);
-    }
-
-    const printContent = `
-      <html>
-        <head>
-          <title>Ficha de Cadastro - ${associado.nome}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 24px; color: #1e293b; line-height: 1.4; }
-            h1 { font-size: 20px; border-bottom: 2px solid #1e293b; padding-bottom: 8px; margin-bottom: 16px; text-transform: uppercase; text-align: center; }
-            h2 { font-size: 14px; margin-top: 16px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; text-transform: uppercase; color: #334155; }
-            p { margin: 4px 0; font-size: 13px; }
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-            .full { grid-column: span 2; }
-            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-            th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; font-size: 12px; }
-            th { background-color: #f1f5f9; font-weight: bold; }
-            .footer-signatures { margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; page-break-inside: avoid; }
-            @media print {
-              body { padding: 10mm; }
-              button { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          ${logoHtml}
-          <h1>Ficha de Cadastro do Associado</h1>
-          
-          <h2>Dados Pessoais</h2>
-          <div class="grid">
-            <p><strong>Nome:</strong> ${associado.nome}</p>
-            <p><strong>CPF:</strong> ${associado.cpf}</p>
-            <p><strong>RG:</strong> ${associado.rg || 'Não informado'}</p>
-            <p><strong>Data de Nascimento:</strong> ${formatLocalDate(associado.data_nascimento, 'dd/MM/yyyy', 'Não informada')}</p>
-            <p><strong>Sexo:</strong> ${associado.sexo || 'Não informado'}</p>
-            <p><strong>Status:</strong> ${associado.status.toUpperCase()}</p>
-            <p><strong>Data de Adesão:</strong> ${formatLocalDate(associado.data_adesao, 'dd/MM/yyyy', 'Não informada')}</p>
-          </div>
-
-          <h2>Contato</h2>
-          <div class="grid">
-            <p><strong>Telefone:</strong> ${associado.telefone || 'Não informado'}</p>
-            <p><strong>E-mail:</strong> ${associado.email || 'Não informado'}</p>
-          </div>
-
-          <h2>Endereço Residencial</h2>
-          <p><strong>Logradouro:</strong> ${associado.endereco_logradouro || ''} ${associado.endereco_numero ? ', ' + associado.endereco_numero : 's/n'}</p>
-          <div class="grid">
-            <p><strong>Bairro:</strong> ${associado.endereco_bairro || ''}</p>
-            <p><strong>Cidade/UF:</strong> ${associado.endereco_cidade || ''}</p>
-            <p><strong>CEP:</strong> ${associado.endereco_cep || ''}</p>
-          </div>
-
-          <h2>Filiação</h2>
-          <div class="grid">
-            <p><strong>Nome da Mãe:</strong> ${associado.nome_mae || 'Não informado'}</p>
-            <p><strong>Nome do Pai:</strong> ${associado.nome_pai || 'Não informado'}</p>
-          </div>
-
-          <h2>Plano & Contrato</h2>
-          <div class="grid">
-            <p><strong>Plano Atual:</strong> ${associado.plano_nome || 'Sem plano vinculado'}</p>
-            <p><strong>Valor do Plano:</strong> ${associado.valor_plano ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(associado.valor_plano) : 'R$ 0,00'}</p>
-            <p><strong>Total de Vidas:</strong> ${associado.n_vidas || 1}</p>
-          </div>
-
-          <h2>Dependentes (${associado.dependentes?.length || 0})</h2>
-          ${
-            associado.dependentes && associado.dependentes.length > 0
-              ? `
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Parentesco</th>
-                  <th>CPF</th>
-                  <th>Data de Nascimento</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${associado.dependentes
-                  .map(
-                    (dep) => `
-                  <tr>
-                    <td>${dep.nome}</td>
-                    <td>${dep.parentesco || ''}</td>
-                    <td>${dep.cpf || ''}</td>
-                    <td>${formatLocalDate(dep.data_nascimento, 'dd/MM/yyyy', '')}</td>
-                  </tr>
-                `,
-                  )
-                  .join('')}
-              </tbody>
-            </table>
-          `
-              : '<p style="font-style: italic; color: #64748b; font-size: 12px;">Nenhum dependente cadastrado.</p>'
-          }
-          
-          <div class="footer-signatures">
-            <div style="text-align: center; width: 45%;">
-              <div style="min-height: 60px;"></div>
-              <div style="border-top: 1px solid #1e293b; width: 100%; margin-bottom: 4px;"></div>
-              <p style="margin: 0; font-weight: bold; font-size: 12px; text-transform: uppercase;">Assinatura do Associado</p>
-              <p style="margin: 2px 0 0 0; font-size: 10px; color: #64748b;">${associado.nome}</p>
-            </div>
-            ${assinaturaHtml}
-          </div>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 250);
     }
   };
 
@@ -283,8 +117,8 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
               <span>Carteirinha</span>
             </button>
             <button
-              onClick={handlePrint}
-              title="Imprimir Ficha"
+              onClick={() => setFichaModalOpen(true)}
+              title="Ficha de Cadastro: pré-visualizar, imprimir ou salvar em PDF"
               className="p-2 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors"
             >
               <Printer className="w-5 h-5" />
@@ -658,6 +492,15 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
           onClose={() => setCarteirinhaModalOpen(false)}
           associado={associado}
           initialBeneficiarioId={selectedBeneficiarioId}
+        />
+      )}
+
+      {/* Ficha de Cadastro: pré-visualização com zoom, impressão e PDF */}
+      {fichaModalOpen && (
+        <FichaCadastroModal
+          isOpen={fichaModalOpen}
+          onClose={() => setFichaModalOpen(false)}
+          associado={associado}
         />
       )}
     </div>

@@ -167,6 +167,17 @@ migração da coluna antiga:
 Não pule direto para o passo 4 — dropar uma coluna que algo ainda escreve quebra silenciosamente
 esse algo mais tarde.
 
+## Campo opcional com `UNIQUE`: grave `NULL`, nunca string vazia
+
+`credenciados.cnpj_cpf` (opcional desde a migration `20260908182307`) é o primeiro caso disso no
+projeto, mas o padrão vale para qualquer coluna futura que seja ao mesmo tempo opcional e
+`UNIQUE`. O Postgres trata cada `NULL` como distinto dos demais para fins de unicidade — vários
+registros sem valor coexistem normalmente —, mas duas strings vazias (`''`) são iguais entre si e
+colidem. Se o formulário salvar `''` no lugar de `NULL` quando o campo fica em branco, o *segundo*
+registro sem valor falha com uma violação de `UNIQUE` que parece dizer "já existe um igual a este",
+quando não existe nenhum de verdade — só o valor vazio duplicado. Normalize no ponto de escrita
+(`valor.trim() || null`), não na coluna.
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do
@@ -236,6 +247,25 @@ muda o passo. Se precisar mexer aqui, as funções são puras e testadas em `ass
 
 `orientacao` também é propriedade do documento (persistida ao trocar na barra do visualizador), não
 preferência de sessão.
+
+### A mesma regra vale fora deste módulo: outras impressões do sistema
+
+A ausência de Tailwind na janela de impressão (regra 1 acima) não é exclusiva dos Documentos
+Padrões — vale para **qualquer** `window.open('').document.write(...)`. A Ficha de Cadastro do
+Associado (`AssociadoDetailsModal` → `FichaCadastroModal.tsx`) e o Recibo de Pagamento
+(`VisualizadorReciboModal.tsx`) seguem o mesmo padrão: uma prévia em tela com Tailwind (com zoom,
+para conferir antes de imprimir/exportar), uma janela de impressão à parte com CSS próprio escrito
+à mão, e exportação em PDF via `jsPDF` + `jspdf-autotable` (múltiplas tabelas em sequência, cada
+uma com `startY: y` e `y = (doc as any).lastAutoTable.finalY + margem` para a próxima — ver
+`requisicoesService.ts` e `faturamentoService.ts` para mais exemplos desse encadeamento).
+
+Na Ficha de Cadastro, os três renderizadores (prévia em tela, HTML de impressão, PDF) leem os
+mesmos dados de `utils/fichaCadastroAssociado.ts` — funções puras e testadas
+(`montarSecoesFicha`, `montarDependentesFicha`, `montarHtmlImpressaoFicha`) — em vez de cada um
+remontar os campos à mão. Foi assim que apareceu um bug do template antigo: o rótulo prometia
+"Cidade/UF" mas só a cidade era interpolada, o UF nunca aparecia. Ao adicionar um documento
+imprimível novo com mais de um formato de saída, vale seguir esse desenho: uma função pura que
+decide **o quê** mostrar, e cada renderizador decide só **como**.
 
 ## Validação (Zod)
 

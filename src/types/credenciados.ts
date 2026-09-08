@@ -4,7 +4,12 @@ export interface Credenciado {
   id: string;
   razao_social: string;
   nome_fantasia?: string;
-  cnpj_cpf: string;
+  /**
+   * Opcional desde 08/09/2026 (migration `20260908182307`). Salve `null`
+   * quando ausente, nunca `''` — a coluna tem `UNIQUE`, e duas strings
+   * vazias colidiriam entre si (`NULL`s não colidem).
+   */
+  cnpj_cpf?: string | null;
   inscricao_estadual?: string;
   inscricao_municipal?: string;
   cep?: string;

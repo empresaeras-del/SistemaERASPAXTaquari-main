@@ -220,7 +220,7 @@ export const FaturamentosPage: React.FC = () => {
       const c = credenciados.find(item => item.id === selCredenciadoId);
       if (c) {
         credNome = c.nome_fantasia || c.razao_social;
-        credCnpj = c.cnpj_cpf;
+        credCnpj = c.cnpj_cpf || '';
       }
     }
 

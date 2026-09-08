@@ -328,7 +328,7 @@ export const RequisicoesPage: React.FC = () => {
       const credObj = credenciados.find(c => c.id === selCredenciadoId);
       if (credObj) {
         credNome = credObj.nome_fantasia || credObj.razao_social;
-        credCnpj = credObj.cnpj_cpf;
+        credCnpj = credObj.cnpj_cpf || '';
       }
     }
 

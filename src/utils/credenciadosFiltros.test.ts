@@ -46,6 +46,12 @@ describe('casaBusca', () => {
   it('não quebra com credenciado sem especialidade', () => {
     expect(casaBusca(BASE[3], 'farmacia')).toBe(true);
   });
+
+  it('não quebra com credenciado sem CNPJ/CPF — documento é opcional', () => {
+    const semDocumento = cred({ id: '5', razao_social: 'Dr Sem Documento', cnpj_cpf: undefined });
+    expect(casaBusca(semDocumento, 'sem documento')).toBe(true);
+    expect(casaBusca(semDocumento, '00.000')).toBe(false);
+  });
 });
 
 describe('filtrarCredenciados', () => {
