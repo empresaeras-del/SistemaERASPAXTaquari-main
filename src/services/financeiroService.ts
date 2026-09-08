@@ -401,6 +401,34 @@ export const atualizarParcelaReceber = async (isOnline: boolean, parcela: Partia
 
   await saveToIDB('parcelas_receber', { ...mesclada, ...sanitized });
   await registrarAuditoria('Atualizar Parcela Receber', { id: parcela.id, numero: sanitized.numero_parcela, valor: sanitized.valor });
+
+  // Recalcular e atualizar o total da Receita pai
+  try {
+    const receitaId = mesclada.receita_id;
+    if (receitaId) {
+      const receita = await getReceitaById(isOnline, receitaId);
+      if (receita) {
+        const todasParcelas = await getParcelasReceber(isOnline, mesclada.tenant_id);
+        const parcelasDaReceita = todasParcelas.filter(p => p.receita_id === receitaId);
+        
+        // Atualizar com o novo valor da parcela na lista
+        const idx = parcelasDaReceita.findIndex(p => p.id === parcela.id);
+        if (idx !== -1) {
+          parcelasDaReceita[idx] = mesclada;
+        } else {
+          parcelasDaReceita.push(mesclada);
+        }
+
+        const novoTotal = parcelasDaReceita.reduce((acc, p) => acc + (p.status !== 'cancelado' ? (Number(p.valor) || 0) : 0), 0);
+        
+        if (Number(receita.valor_total) !== novoTotal) {
+          await atualizarReceita(isOnline, { id: receita.id, valor_total: novoTotal });
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Erro ao recalcular total da receita pai:', e);
+  }
 };
 
 export const getParcelasReceber = async (isOnline: boolean, tenantId: string): Promise<ParcelaReceber[]> => {
@@ -847,6 +875,11 @@ export const estornarPagamento = async (isOnline: boolean, parcelaId: string, ob
 };
 
 export const excluirParcelaReceber = async (isOnline: boolean, parcelaId: string): Promise<void> => {
+  // Buscar a parcela antes de excluir para pegar o receita_id e tenant_id
+  const parcela = await getFromIDB<ParcelaReceber>('parcelas_receber', parcelaId);
+  const receitaId = parcela?.receita_id;
+  const tenantId = parcela?.tenant_id;
+
   if (isOnline) {
     try {
       const { error } = await supabase.from('parcelas_receber').delete().eq('id', parcelaId);
@@ -863,6 +896,24 @@ export const excluirParcelaReceber = async (isOnline: boolean, parcelaId: string
   }
   await deleteFromIDB('parcelas_receber', parcelaId);
   await registrarAuditoria('Excluir Parcela Receber', { id: parcelaId });
+
+  // Recalcular o total da Receita pai
+  try {
+    if (receitaId && tenantId) {
+      const receita = await getReceitaById(isOnline, receitaId);
+      if (receita) {
+        const todasParcelas = await getParcelasReceber(isOnline, tenantId);
+        const parcelasDaReceita = todasParcelas.filter(p => p.receita_id === receitaId);
+        const novoTotal = parcelasDaReceita.reduce((acc, p) => acc + (p.status !== 'cancelado' ? (Number(p.valor) || 0) : 0), 0);
+        
+        if (Number(receita.valor_total) !== novoTotal) {
+          await atualizarReceita(isOnline, { id: receita.id, valor_total: novoTotal });
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Erro ao recalcular total da receita pai após exclusão:', e);
+  }
 };
 
 export const excluirReceita = async (isOnline: boolean, receitaId: string): Promise<void> => {
