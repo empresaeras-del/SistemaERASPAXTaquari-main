@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Empresa, deleteEmpresa } from '../../../services/empresasService';
-import { canEditEmpresa, canDelete } from '../../../utils/permissions';
+import { canEditEmpresa, canDelete, canCreateEmpresa } from '../../../utils/permissions';
 import { useAppContext } from '../../../context/AppContext';
 import { useToast } from '../../../context/ToastContext';
 import { useConfirm } from '../../../context/ConfirmContext';
@@ -60,13 +60,15 @@ export const ConfigEmpresasTab: React.FC<ConfigEmpresasTabProps> = ({ empresas, 
           </h3>
           <p className="text-sm text-slate-400">Gerencie as empresas e filiais do sistema</p>
         </div>
-        <button
-          onClick={() => handleOpenModal({ status: 'ativo' })}
-          className="px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center gap-2 shadow-lg shadow-[#7E4CF3]/25"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nova Empresa</span>
-        </button>
+        {canCreateEmpresa(state.user, state.isOnline) && (
+          <button
+            onClick={() => handleOpenModal({ status: 'ativo' })}
+            className="px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center gap-2 shadow-lg shadow-[#7E4CF3]/25"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Nova Empresa</span>
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
