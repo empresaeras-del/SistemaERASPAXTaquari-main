@@ -142,14 +142,19 @@ export const RequisicaoDocumentoPreview: React.FC<RequisicaoDocumentoPreviewProp
 
       setPlaceholders({ ...baseVars, ...reqVars });
       
+      // `nome` e `conteudo` são os campos que o visualizador realmente lê.
+      // Antes isto montava `titulo` (campo inexistente) e `conteudo_html` — a
+      // coluna legada do drift de schema documentado no CLAUDE.md —, e o
+      // resultado era um modal que abria sem título e com o corpo em branco.
       const docPadrao: DocumentoPadrao = {
         id: 'mock-req-' + requisicao.id,
-        titulo: `Guia ${requisicao.codigo_requisicao}`,
+        nome: `Guia ${requisicao.codigo_requisicao}`,
         tipo: 'outro',
-        conteudo_html: TEMPLATE_HTML,
+        conteudo: TEMPLATE_HTML,
         ativo: true,
-        created_at: requisicao.data_emissao,
-        tenant_id: requisicao.tenant_id
+        criado_em: requisicao.data_emissao,
+        atualizado_em: requisicao.data_emissao,
+        empresa_id: requisicao.tenant_id,
       };
       
       setDocumentoMock(docPadrao);

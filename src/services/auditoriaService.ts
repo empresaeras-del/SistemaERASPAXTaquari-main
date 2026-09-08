@@ -26,7 +26,10 @@ export const getLogsAuditoria = async (isOnline: boolean, tenantId: string | nul
 
   // 1. Carrega mapeamento de usuários para enriquecer os logs com nome e email reais
   try {
-    const usuariosList = await getUsuarios(isOnline, 'all');
+    // O tenant já chega por parâmetro: usar 'all' aqui removia o filtro por
+    // completo e trazia usuários de todas as empresas só para montar o mapa de
+    // nomes dos logs.
+    const usuariosList = await getUsuarios(isOnline, tenantId || 'empresa_padrao');
     usuariosList.forEach(u => {
       if (u.id) usersMap.set(u.id, u);
       if (u.email) usersMap.set(u.email.toLowerCase(), u);
