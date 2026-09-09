@@ -613,6 +613,21 @@ estética; ficou fora das entregas de redesenho.
   do Postgres continua valendo por herança).
 - Toda função nova `SECURITY DEFINER` deve fixar `search_path` (`SET search_path = public, pg_temp`)
   — sem isso, o linter de segurança do Supabase acusa `function_search_path_mutable`.
+- **Função de trigger não deve ter `EXECUTE` para `PUBLIC`/`anon`/`authenticated`.** Ela nasce com
+  esse grant (padrão do Postgres + o que o Supabase concede ao schema `public`) e aparece exposta
+  em `/rest/v1/rpc/`, o que os advisors acusam. Não é explorável — o Postgres recusa a chamada
+  direta com "trigger functions can only be called as triggers" —, mas revogue mesmo assim
+  (migration `20260909171259`): **o trigger continua disparando, porque o `EXECUTE` só é verificado
+  na chamada direta, nunca na invocação pelo trigger** (verificado como `authenticated`, com JWT
+  real, antes e depois). Revogue de `PUBLIC` **e** dos dois papéis: aqui coexistiam o grant
+  implícito de PUBLIC e grants explícitos, então revogar de um lado só não resolve — é a lição do
+  par `revoke_anon`/`revoke_public` valendo nas duas direções.
+- **Não revogue `EXECUTE` das funções usadas pelas policies de RLS** (`has_tenant_access`,
+  `current_tenant_id`, `current_user_nivel`, `is_super_admin`), mesmo que os advisors as apontem.
+  A expressão de uma policy é avaliada com as permissões de quem consulta: sem `EXECUTE` em
+  `has_tenant_access`, um `SELECT` em `receitas` como `authenticated` falha com
+  "permission denied for function has_tenant_access" — comprovado em transação revertida. Para
+  essas, o alerta é esperado nesta arquitetura, não uma pendência em aberto.
 - HTML de documento (conteúdo editável por usuário) sempre passa por `sanitizeDocumentoHtml` antes
   de `dangerouslySetInnerHTML` — é a única forma de HTML não confiável no sistema hoje.
 
