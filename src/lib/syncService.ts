@@ -145,13 +145,20 @@ export const processSyncQueue = async (isOnline: boolean) => {
 
           // Sanitização específica para associados
           if (targetTable === 'associados') {
-            const { dependentes, fornecedor_id, justificativa_modificacao_plano, complemento, endereco_complemento, municipio, ...assocClean } = payload;
-            
+            // logradouro/numero/bairro/cidade/cep/uf/plano_id são as colunas legadas dos pares
+            // duplicados (ver CLAUDE.md, "Schema drift conhecido") — excluídas aqui para não
+            // reintroduzir o dual-write removido de associadosService.ts, caso um registro em fila
+            // ainda as carregue de antes dessa mudança.
+            const {
+              dependentes, fornecedor_id, justificativa_modificacao_plano, complemento,
+              endereco_complemento, municipio, logradouro, numero, bairro, cidade, cep, uf,
+              plano_id, ...assocClean
+            } = payload;
+
             const tenantId = tenantDeEscrita(assocClean.tenant_id);
             if (!tenantId) throw new Error(`Associado ${assocClean.id ?? ''} na fila de sync sem empresa definida. ${MENSAGEM_TENANT_INDEFINIDO}`);
             const empresaId = (assocClean.empresa_id && assocClean.empresa_id !== 'all') ? assocClean.empresa_id : tenantId;
             const planoPaxId = assocClean.plano_pax_id && UUID_REGEX.test(assocClean.plano_pax_id) ? assocClean.plano_pax_id : null;
-            const planoId = assocClean.plano_id && UUID_REGEX.test(assocClean.plano_id) ? assocClean.plano_id : null;
             const dataNascimento = (assocClean.data_nascimento && String(assocClean.data_nascimento).trim() !== '') ? String(assocClean.data_nascimento).split('T')[0] : null;
             const dataAdesao = (assocClean.data_adesao && String(assocClean.data_adesao).trim() !== '') ? String(assocClean.data_adesao).split('T')[0] : new Date().toISOString().split('T')[0];
             const valorPlano = (assocClean.valor_plano !== undefined && assocClean.valor_plano !== null && !isNaN(Number(assocClean.valor_plano))) ? Number(assocClean.valor_plano) : null;
@@ -164,9 +171,7 @@ export const processSyncQueue = async (isOnline: boolean) => {
               cpf: assocClean.cpf ? String(assocClean.cpf).trim() : null,
               rg: assocClean.rg ? String(assocClean.rg).trim() : null,
               email: assocClean.email ? String(assocClean.email).trim() : null,
-              endereco_cidade: assocClean.endereco_cidade || assocClean.cidade || municipio || null,
-              cidade: assocClean.endereco_cidade || assocClean.cidade || municipio || null,
-              plano_id: planoId,
+              endereco_cidade: assocClean.endereco_cidade || cidade || municipio || null,
               plano_pax_id: planoPaxId,
               data_nascimento: dataNascimento,
               data_adesao: dataAdesao,

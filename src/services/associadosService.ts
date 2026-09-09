@@ -285,7 +285,6 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
     : tenantId;
 
   const planoPaxId = rest.plano_pax_id && UUID_REGEX.test(rest.plano_pax_id) ? rest.plano_pax_id : null;
-  const planoId = rest.plano_id && UUID_REGEX.test(rest.plano_id) ? rest.plano_id : null;
 
   const dataNascimento = (rest.data_nascimento && String(rest.data_nascimento).trim() !== '') 
     ? String(rest.data_nascimento).split('T')[0] 
@@ -389,20 +388,13 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
         celular_whatsapp: rest.celular_whatsapp || rest.telefone || null,
         email: rest.email ? String(rest.email).trim() : null,
         endereco_logradouro: rest.endereco_logradouro || rest.logradouro || null,
-        logradouro: rest.endereco_logradouro || rest.logradouro || null,
         endereco_numero: rest.endereco_numero || rest.numero || null,
-        numero: rest.endereco_numero || rest.numero || null,
         endereco_bairro: rest.endereco_bairro || rest.bairro || null,
-        bairro: rest.endereco_bairro || rest.bairro || null,
         endereco_cidade: rest.endereco_cidade || rest.cidade || rest.municipio || null,
-        cidade: rest.endereco_cidade || rest.cidade || rest.municipio || null,
         endereco_cep: rest.endereco_cep || rest.cep || null,
-        cep: rest.endereco_cep || rest.cep || null,
         endereco_estado: rest.endereco_estado || rest.uf || null,
-        uf: rest.endereco_estado || rest.uf || null,
         tipo_pessoa: rest.tipo_pessoa || 'PF',
         tipo_associado: rest.tipo_associado || 'titular',
-        plano_id: planoId,
         plano_pax_id: planoPaxId,
         plano_nome: rest.plano_nome || null,
         numero_contrato: rest.numero_contrato || null,

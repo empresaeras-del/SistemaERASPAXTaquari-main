@@ -181,15 +181,24 @@ não amostra):
   `information_schema.views` varridos), e não há Edge Functions no projeto — descarta o cenário de
   integração externa escrevendo por fora do app.
 
-Efeito prático: o passo 2 original ("migrar os poucos registros divergentes") não tem o que fazer —
-não há divergência, o problema é o oposto, dado demais sendo escrito nos dois lugares. A ordem que
-faz sentido a partir daqui:
+Efeito prático: o passo 2 original ("migrar os poucos registros divergentes") não tinha o que fazer —
+não havia divergência, o problema era o oposto, dado demais sendo escrito nos dois lugares.
+
 1. ~~Confirmar se as colunas legadas ainda recebem escrita~~ — feito, ver acima.
-2. Parar o dual-write no código (remover a metade legada dos payloads em `associadosService.ts` e
-   `useDocumentosPadroes.ts`, exceto `plano_id`, que já não recebe valor real e pode ser removido do
-   payload numa PR isolada e pequena). A partir daí a coluna legada passa a valer como só-leitura de
-   verdade, sem mais um segundo escritor.
-3. Manter a coluna legada por um ciclo de release como alias somente-leitura (não remover ainda).
+2. ~~Parar o dual-write no código~~ — feito. `associadosService.ts` (`saveAssociado`) não grava mais
+   `logradouro`/`numero`/`bairro`/`cidade`/`cep`/`uf`/`plano_id`, só o par canônico
+   `endereco_*`/`plano_pax_id`. `lib/syncService.ts` (fila de sync offline) tinha a mesma duplicação
+   isolada em `cidade`/`plano_id` — removida do mesmo jeito, com os nomes legados destruturados pra
+   fora do payload em vez de só pararem de ser sobrescritos (evita que um registro antigo na fila
+   ainda carregue o valor de antes desta mudança e vaze pro insert via `...assocClean`).
+   `useDocumentosPadroes.ts` (`criar`/`editar`) não grava mais `conteudo_html`/`created_at`/
+   `updated_at`, só `conteudo`/`criado_em`/`atualizado_em`. As leituras com fallback
+   (`assoc.endereco_logradouro || assoc.logradouro`, `item.conteudo || item.conteudo_html`) foram
+   mantidas de propósito — é o que faz a coluna legada continuar valendo como alias pra quem ainda
+   a lê, agora só-leitura de verdade. A normalização em `getAssociados()` que espelha
+   `endereco_logradouro` em `logradouro` no objeto devolvido pro app também ficou — isso não escreve
+   no Postgres, só mantém o formato local consistente pra qualquer leitor que acesse o nome antigo.
+3. Manter a coluna legada por um ciclo de release como alias somente-leitura (estado atual).
 4. Só então dropar a coluna legada, numa migration própria, depois de confirmar nos logs/advisors
    que nada mais a referencia.
 
