@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   BookOpen, Plus, Pencil, Power, PowerOff, ChevronRight, ChevronDown,
-  Sparkles, Search, TrendingUp, TrendingDown, X,
+  Sparkles, Search, TrendingUp, TrendingDown, X, CalendarRange, AlertTriangle,
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
@@ -43,6 +43,8 @@ export const PlanoContabilPage: React.FC = () => {
   const {
     plano, contas, arvore, loading, error,
     salvarConta, desativarConta, reativarConta, semearPlanoPadrao, paisPossiveis,
+    planos, exercicioExibido, exercicioCorrente, faltaExercicioCorrente,
+    selecionarExercicio, duplicarParaExercicio,
   } = usePlanoContabil();
 
   const [busca, setBusca] = useState('');
@@ -52,8 +54,21 @@ export const PlanoContabilPage: React.FC = () => {
   const [erros, setErros] = useState<ErroValidacaoConta[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [semeando, setSemeando] = useState(false);
+  const [duplicando, setDuplicando] = useState(false);
 
   const podeEditar = canEditFinanceiro(state.user, state.isOnline);
+
+  const duplicarExercicio = async () => {
+    setDuplicando(true);
+    try {
+      const { contas: copiadas } = await duplicarParaExercicio(exercicioCorrente);
+      toast.success(`Plano de ${exercicioCorrente} criado com ${copiadas.length} contas copiadas.`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Não foi possível copiar o plano.');
+    } finally {
+      setDuplicando(false);
+    }
+  };
 
   const linhas = useMemo(() => {
     const todas = achatarArvore(arvore);
@@ -194,6 +209,49 @@ export const PlanoContabilPage: React.FC = () => {
       {error && (
         <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm">
           {error}
+        </div>
+      )}
+
+      {plano && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl border border-border-default bg-bg-surface">
+          <div className="flex items-center gap-2">
+            <CalendarRange className="w-4 h-4 text-[#3B82F6] shrink-0" />
+            <label htmlFor="exercicio-plano" className="text-sm font-medium text-text-subtle">
+              Exercício
+            </label>
+            <select
+              id="exercicio-plano"
+              value={exercicioExibido}
+              onChange={(e) => selecionarExercicio(Number(e.target.value))}
+              className="bg-bg-base border border-border-default rounded-lg px-3 py-1.5 text-sm text-text-base focus:border-[#3B82F6] outline-none"
+            >
+              {planos.map((p) => (
+                <option key={p.id} value={p.exercicio}>
+                  {p.exercicio}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/*
+            O plano de um exercício fechado continua existindo com os lançamentos daquele ano
+            pendurados nele. Por isso duplicar copia, nunca move — e por isso a tela avisa
+            quando o exercício corrente ainda não foi montado, em vez de mostrar em silêncio o
+            plano do ano passado como se fosse o de agora.
+          */}
+          {faltaExercicioCorrente && podeEditar && (
+            <div className="flex items-center gap-2 text-xs text-amber-400 sm:ml-auto">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span>Ainda não há plano para {exercicioCorrente}.</span>
+              <button
+                onClick={duplicarExercicio}
+                disabled={duplicando}
+                className="px-2.5 py-1 rounded-lg bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-60 text-white font-bold"
+              >
+                {duplicando ? 'Copiando…' : `Copiar para ${exercicioCorrente}`}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -338,7 +396,8 @@ export const PlanoContabilPage: React.FC = () => {
 
           <p className="text-xs text-text-muted">
             {contas.filter((c) => c.tipo === 'analitica' && c.ativo).length} contas lançáveis ·{' '}
-            {contas.filter((c) => c.tipo === 'sintetica').length} grupos · plano <b>{plano.nome}</b>
+            {contas.filter((c) => c.tipo === 'sintetica').length} grupos · plano <b>{plano.nome}</b> ·{' '}
+            exercício <b>{plano.exercicio}</b>
           </p>
         </>
       )}
@@ -420,13 +479,32 @@ export const PlanoContabilPage: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-text-subtle mb-1">Código</label>
+                  <label className="block text-xs font-medium text-text-subtle mb-1">
+                    Código{' '}
+                    <span className="text-text-muted" title="O código segue a posição da conta na árvore">
+                      (automático)
+                    </span>
+                  </label>
+                  {/*
+                    Codificação imposta: o código vem da conta pai e da próxima posição livre
+                    abaixo dela, e não é digitável. Código livre deixava criar "3.1.01" dentro
+                    de "4.2" — a árvore desenhada pelos códigos passava a discordar da árvore
+                    real de `conta_pai_id`, e o relatório por grupo saía errado sem nenhum
+                    aviso. O código de uma conta que já existe também não muda: é por ele que
+                    quem exportou relatório reconhece a conta.
+                  */}
                   <input
                     value={form.codigo}
-                    onChange={(e) => setForm({ ...form, codigo: e.target.value })}
+                    readOnly
+                    aria-readonly="true"
                     placeholder="3.1.01"
-                    className={`w-full bg-bg-base border rounded-xl px-3 py-2 text-sm font-mono text-text-base outline-none ${
-                      erroDo('codigo') ? 'border-rose-500' : 'border-border-default focus:border-[#3B82F6]'
+                    title={
+                      form.id
+                        ? 'O código de uma conta existente não muda.'
+                        : 'Gerado a partir da conta pai escolhida acima.'
+                    }
+                    className={`w-full bg-bg-surface/60 border rounded-xl px-3 py-2 text-sm font-mono text-text-muted outline-none cursor-not-allowed ${
+                      erroDo('codigo') ? 'border-rose-500' : 'border-border-default'
                     }`}
                   />
                 </div>

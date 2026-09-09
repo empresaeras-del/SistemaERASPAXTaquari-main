@@ -17,43 +17,64 @@ import {
   CODIGO_PLANO_PADRAO,
   NOME_PLANO_PADRAO,
 } from '../config/planoContabilPadrao.config';
-import { codigoDoPai, nivelDoCodigo, resolverContaPorCodigo } from '../utils/planoContabilTree';
+import { codigoDoPai, nivelDoCodigo, resolverContaPorCodigo, compararCodigos } from '../utils/planoContabilTree';
 
 const STORE_PLANOS = 'planos_contabeis';
 const STORE_CONTAS = 'contas_contabeis';
 
 const agora = () => new Date().toISOString();
 
-/** Plano vigente da empresa, ou `null` quando ela ainda não tem plano montado. */
-export const getPlanoAtivo = async (
+export const exercicioCorrente = (): number => new Date().getFullYear();
+
+/** Todos os planos ativos da empresa, um por exercício, do mais recente para o mais antigo. */
+export const getPlanosDoTenant = async (
   isOnline: boolean,
   tenantId?: string | null,
-): Promise<PlanoContabil | null> => {
+): Promise<PlanoContabil[]> => {
   if (isOnline) {
     try {
-      let query = supabase
-        .from(STORE_PLANOS)
-        .select('*')
-        .is('deleted_at', null)
-        .eq('ativo', true);
+      let query = supabase.from(STORE_PLANOS).select('*').is('deleted_at', null).eq('ativo', true);
+      if (tenantId && tenantId !== 'all') query = query.eq('tenant_id', tenantId);
 
-      if (tenantId) query = query.eq('tenant_id', tenantId);
-
-      const { data, error } = await query.limit(1);
+      const { data, error } = await query.order('exercicio', { ascending: false });
       if (!error && data) {
         for (const plano of data) await saveToIDB(STORE_PLANOS, plano);
-        return data[0] || null;
+        return data;
       }
     } catch (err) {
-      console.warn('Falha ao buscar plano contábil no Supabase, caindo para o IDB:', err);
+      console.warn('Falha ao buscar planos contábeis no Supabase, caindo para o IDB:', err);
     }
   }
 
   const locais = await getAllFromIDB<PlanoContabil>(STORE_PLANOS);
+  return locais
+    .filter((p) => p.ativo && !p.deleted_at && registroPertenceAoTenant(p.tenant_id, tenantId))
+    .sort((a, b) => (b.exercicio || 0) - (a.exercicio || 0));
+};
+
+/**
+ * Plano da empresa para um exercício, ou `null` quando ela ainda não tem plano montado.
+ *
+ * Sem `exercicio`, usa o ano corrente. Quando não existe plano para o ano pedido, **cai para
+ * o exercício mais recente que existir**, e não para `null`: sem essa queda, na virada do ano
+ * toda empresa perderia o plano de um dia para o outro e os lançamentos voltariam a nascer
+ * sem classificação (a isenção do trigger `exige_conta_contabil` passaria a valer), sem nada
+ * visível na tela. A queda mantém o sistema funcionando; quem avisa que falta montar o
+ * exercício novo é a tela do plano de contas.
+ */
+export const getPlanoAtivo = async (
+  isOnline: boolean,
+  tenantId?: string | null,
+  exercicio?: number,
+): Promise<PlanoContabil | null> => {
+  const alvo = exercicio ?? exercicioCorrente();
+  const planos = await getPlanosDoTenant(isOnline, tenantId);
+  if (planos.length === 0) return null;
+
   return (
-    locais.find(
-      (p) => p.ativo && !p.deleted_at && registroPertenceAoTenant(p.tenant_id, tenantId),
-    ) || null
+    planos.find((p) => p.exercicio === alvo) ||
+    planos.find((p) => p.exercicio < alvo) ||
+    planos[0]
   );
 };
 
@@ -135,6 +156,7 @@ export const salvarPlano = async (isOnline: boolean, plano: Partial<PlanoContabi
     empresa_id: plano.empresa_id || tenantId,
     codigo: (plano.codigo || CODIGO_PLANO_PADRAO).trim(),
     nome: (plano.nome || NOME_PLANO_PADRAO).trim(),
+    exercicio: plano.exercicio || exercicioCorrente(),
     vigencia_inicio: plano.vigencia_inicio || new Date().toISOString().split('T')[0],
     ativo: plano.ativo !== undefined ? plano.ativo : true,
     criado_em: existente?.criado_em || agora(),
@@ -221,23 +243,94 @@ export const reativarConta = async (isOnline: boolean, conta: ContaContabil): Pr
  * As contas são criadas na ordem do array, que garante o pai antes das filhas: o
  * `conta_pai_id` é resolvido pelo código do pai já inserido.
  */
+/**
+ * Copia o plano de um exercício para outro — a operação de virada de ano.
+ *
+ * Copia, e não move: o plano de origem continua intacto, com os lançamentos daquele ano
+ * apontando para as contas dele. É isso que faz o relatório de um exercício fechado continuar
+ * batendo depois que o plano do ano seguinte for editado.
+ *
+ * Os ids são novos, e `conta_pai_id` é remapeado do id antigo para o novo — copiar mantendo
+ * o `conta_pai_id` de origem penduraria as contas de 2027 nas de 2026, e a FK composta
+ * `(tenant_id, plano_id, conta_pai_id)` recusaria a gravação de qualquer forma. As contas
+ * são percorridas em ordem de código, que garante o pai antes das filhas.
+ */
+export const duplicarPlanoParaExercicio = async (
+  isOnline: boolean,
+  planoOrigem: PlanoContabil,
+  exercicioDestino: number,
+): Promise<{ plano: PlanoContabil; contas: ContaContabil[] }> => {
+  const tenantId = tenantDeEscrita(planoOrigem.tenant_id);
+  if (!tenantId) throw new Error(MENSAGEM_TENANT_INDEFINIDO);
+
+  const planos = await getPlanosDoTenant(isOnline, tenantId);
+  if (planos.some((p) => p.exercicio === exercicioDestino)) {
+    throw new Error(`Esta empresa já tem um plano de contas ativo para ${exercicioDestino}.`);
+  }
+
+  const origem = await getContasDoPlano(isOnline, planoOrigem.id, tenantId);
+
+  const plano = await salvarPlano(isOnline, {
+    tenant_id: tenantId,
+    codigo: planoOrigem.codigo,
+    nome: `${planoOrigem.nome.replace(/\s*\d{4}$/, '')} ${exercicioDestino}`.trim(),
+    descricao: `Copiado do exercício ${planoOrigem.exercicio}.`,
+    exercicio: exercicioDestino,
+    ativo: true,
+  });
+
+  const idNovoPorAntigo = new Map<string, string>();
+  const contas: ContaContabil[] = [];
+
+  for (const conta of [...origem].sort((a, b) => compararCodigos(a.codigo, b.codigo))) {
+    const criada = await salvarConta(isOnline, {
+      tenant_id: tenantId,
+      plano_id: plano.id,
+      conta_pai_id: conta.conta_pai_id ? idNovoPorAntigo.get(conta.conta_pai_id) || null : null,
+      codigo: conta.codigo,
+      nome: conta.nome,
+      descricao: conta.descricao || null,
+      natureza: conta.natureza,
+      tipo: conta.tipo,
+      ordem_exibicao: conta.ordem_exibicao ?? null,
+      // Conta desativada no exercício anterior não volta a valer no novo por acidente.
+      ativo: conta.ativo,
+    });
+    idNovoPorAntigo.set(conta.id, criada.id);
+    contas.push(criada);
+  }
+
+  await registrarAuditoria('Duplicar Plano Contábil', {
+    plano_origem_id: planoOrigem.id,
+    exercicio_origem: planoOrigem.exercicio,
+    plano_id: plano.id,
+    exercicio_destino: exercicioDestino,
+    contas_copiadas: contas.length,
+  });
+
+  return { plano, contas };
+};
+
 export const semearPlanoPadrao = async (
   isOnline: boolean,
   tenantIdBruto?: string | null,
+  exercicio?: number,
 ): Promise<{ plano: PlanoContabil; contas: ContaContabil[] }> => {
   const tenantId = tenantDeEscrita(tenantIdBruto);
   if (!tenantId) throw new Error(MENSAGEM_TENANT_INDEFINIDO);
 
-  const jaExiste = await getPlanoAtivo(isOnline, tenantId);
-  if (jaExiste) {
-    throw new Error('Esta empresa já tem um plano de contas ativo. Desative o atual antes de criar outro.');
+  const alvo = exercicio ?? exercicioCorrente();
+  const planos = await getPlanosDoTenant(isOnline, tenantId);
+  if (planos.some((p) => p.exercicio === alvo)) {
+    throw new Error(`Esta empresa já tem um plano de contas ativo para ${alvo}.`);
   }
 
   const plano = await salvarPlano(isOnline, {
     tenant_id: tenantId,
     codigo: CODIGO_PLANO_PADRAO,
-    nome: NOME_PLANO_PADRAO,
+    nome: `${NOME_PLANO_PADRAO} ${alvo}`,
     descricao: 'Criado a partir do modelo padrão do sistema.',
+    exercicio: alvo,
     ativo: true,
   });
 

@@ -11,7 +11,10 @@ import { useAppContext } from '../context/AppContext';
 import { ContaContabil, NaturezaContabil, PlanoContabil } from '../types/planoContabil';
 import {
   getPlanoAtivo,
+  getPlanosDoTenant,
   getContasDoPlano,
+  duplicarPlanoParaExercicio as duplicarPlanoService,
+  exercicioCorrente,
   salvarConta as salvarContaService,
   desativarConta as desativarContaService,
   reativarConta as reativarContaService,
@@ -33,6 +36,10 @@ export function usePlanoContabil() {
   // gravação com MENSAGEM_TENANT_INDEFINIDO em vez de carimbar um valor coringa.
   const tenantDestino = tenantDeEscrita(empresaSelecionada, state.user?.tenant_id);
 
+  // Exercício que a tela está olhando. `null` = "o corrente", resolvido pelo service com a
+  // queda para o exercício mais recente que existir (ver `getPlanoAtivo`).
+  const [exercicioSelecionado, setExercicioSelecionado] = useState<number | null>(null);
+  const [planos, setPlanos] = useState<PlanoContabil[]>([]);
   const [plano, setPlano] = useState<PlanoContabil | null>(null);
   const [contas, setContas] = useState<ContaContabil[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +49,8 @@ export function usePlanoContabil() {
     setLoading(true);
     setError(null);
     try {
-      const planoAtivo = await getPlanoAtivo(isOnline, empresaSelecionada);
+      setPlanos(await getPlanosDoTenant(isOnline, empresaSelecionada));
+      const planoAtivo = await getPlanoAtivo(isOnline, empresaSelecionada, exercicioSelecionado ?? undefined);
       setPlano(planoAtivo);
       setContas(planoAtivo ? await getContasDoPlano(isOnline, planoAtivo.id, empresaSelecionada) : []);
     } catch (err: unknown) {
@@ -53,7 +61,7 @@ export function usePlanoContabil() {
     } finally {
       setLoading(false);
     }
-  }, [isOnline, empresaSelecionada]);
+  }, [isOnline, empresaSelecionada, exercicioSelecionado]);
 
   useEffect(() => {
     carregar();
@@ -91,11 +99,27 @@ export function usePlanoContabil() {
     [isOnline, carregar],
   );
 
-  const semearPlanoPadrao = useCallback(async () => {
-    const criado = await semearPlanoPadraoService(isOnline, tenantDestino);
-    await carregar();
-    return criado;
-  }, [isOnline, tenantDestino, carregar]);
+  const semearPlanoPadrao = useCallback(
+    async (exercicio?: number) => {
+      const criado = await semearPlanoPadraoService(isOnline, tenantDestino, exercicio);
+      setExercicioSelecionado(criado.plano.exercicio);
+      await carregar();
+      return criado;
+    },
+    [isOnline, tenantDestino, carregar],
+  );
+
+  /** Copia o plano visível para outro exercício e passa a mostrar o novo. */
+  const duplicarParaExercicio = useCallback(
+    async (exercicioDestino: number) => {
+      if (!plano) throw new Error('Não há plano de contas para copiar.');
+      const criado = await duplicarPlanoService(isOnline, plano, exercicioDestino);
+      setExercicioSelecionado(exercicioDestino);
+      await carregar();
+      return criado;
+    },
+    [isOnline, plano, carregar],
+  );
 
   const contasLancaveis = useCallback(
     (natureza?: NaturezaContabil) => filtrarLancaveis(contas, natureza),
@@ -107,8 +131,19 @@ export function usePlanoContabil() {
     [contas],
   );
 
+  // O plano mostrado pode não ser o do ano corrente: quando a empresa ainda não montou o
+  // exercício novo, `getPlanoAtivo` cai para o mais recente. A tela avisa em vez de fingir.
+  const exercicioExibido = plano?.exercicio ?? exercicioSelecionado ?? exercicioCorrente();
+  const faltaExercicioCorrente = !!plano && plano.exercicio < exercicioCorrente();
+
   return {
     plano,
+    planos,
+    exercicioExibido,
+    exercicioCorrente: exercicioCorrente(),
+    faltaExercicioCorrente,
+    selecionarExercicio: setExercicioSelecionado,
+    duplicarParaExercicio,
     contas,
     arvore,
     loading,

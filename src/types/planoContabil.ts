@@ -15,6 +15,12 @@ export interface PlanoContabil {
   codigo: string;
   nome: string;
   descricao?: string | null;
+  /**
+   * Ano contábil do plano. Uma empresa tem no máximo um plano ativo por exercício — o plano
+   * do ano anterior continua existindo, com os lançamentos daquele ano apontando para as
+   * contas dele. Ver a migration `20260909122831`.
+   */
+  exercicio: number;
   vigencia_inicio: string;
   vigencia_fim?: string | null;
   ativo: boolean;

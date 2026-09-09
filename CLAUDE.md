@@ -324,6 +324,57 @@ hook para saber se a empresa tem plano, e um hook no componente carregaria plano
 vezes por formulário aberto. Empresa que ainda não montou o plano continua vendo o seletor de
 categoria antigo: `categoria` é `NOT NULL`, então remover o campo travaria o formulário dela.
 
+### Fase 4: exercício, código imposto e centro de custo como tabela
+
+**O plano é por empresa E exercício** (migrations `20260909122831` e `20260909122900`).
+`planos_contabeis.exercicio` é um `integer` — o ano contábil —, e o índice único de plano
+ativo passou de `(tenant_id)` para `(tenant_id, exercicio)`. Duas coisas valem como regra:
+
+- **`getPlanoAtivo` cai para o exercício mais recente quando o pedido não existe**, em vez de
+  devolver `null`. Sem essa queda, na virada do ano toda empresa perderia o plano de um dia
+  para o outro, os lançamentos voltariam a nascer sem classificação (a isenção do trigger
+  `exige_conta_contabil` passaria a valer) e nada apareceria na tela. Quem avisa que falta
+  montar o exercício novo é a tela do plano, com o botão de copiar — não o silêncio.
+- **Duplicar copia, nunca move.** `duplicarPlanoParaExercicio` cria ids novos e **remapeia
+  `conta_pai_id` do id antigo para o novo**, percorrendo as contas em ordem de código (pai
+  antes das filhas). Copiar mantendo o `conta_pai_id` de origem penduraria as contas de 2027
+  nas de 2026 — e a FK composta `(tenant_id, plano_id, conta_pai_id)` recusaria de qualquer
+  forma. O plano do ano fechado continua intacto, com os lançamentos daquele ano nele: é isso
+  que faz o relatório de um exercício encerrado continuar batendo depois.
+
+A primeira migration desta parte **ficou incompleta e a segunda corrige**: soltar a unicidade
+do plano ativo para `(tenant, exercício)` não bastava, porque `planos_contabeis_codigo_uk
+unique (tenant_id, codigo)` continuava barrando o mesmo código em dois exercícios — duplicar
+"PADRAO" de 2026 para 2027 falhava no insert. Arquivo separado de propósito (ver "uma
+migration aplicada, um arquivo"): é o segundo par assim no repositório, depois de
+`revoke_anon`/`revoke_public`. **Ao afrouxar uma unicidade, verifique todas as outras chaves
+da tabela** — a que sobra costuma reimpor exatamente o que você acabou de liberar.
+
+**Codificação imposta.** O campo de código no formulário de conta é `readOnly`: o valor vem de
+`proximoCodigo(contas, paiCodigo)` a partir da conta pai escolhida. Código livre deixava criar
+`3.1.01` dentro de `4.2` — a árvore desenhada pelos códigos discordava da árvore real de
+`conta_pai_id`, e o relatório por grupo saía errado sem aviso. O código de uma conta que já
+existe também não muda: é por ele que quem exportou relatório reconhece a conta.
+
+**Centro de custo virou tabela** (`centros_custo`, migrations `20260909122921` e
+`20260909122939`). Era a mesma doença que `categoria` tinha antes do plano contábil: a lista
+vivia em `useOptions('centros_custo')`, ou seja, **no IndexedDB de cada navegador** — dois
+operadores da mesma empresa podiam ter listas diferentes, e a despesa guardava só o texto que
+aquele navegador oferecia. Agora é linha da empresa, com `unique (tenant_id, id)` do lado
+referenciado e FK composta `(tenant_id, centro_custo_id)` em `despesas`. `despesas.centro_custo`
+(texto) continua como **snapshot** do nome ao lado do id — mesmo par de
+`categoria`/`conta_contabil_id`, e pelo mesmo motivo.
+
+O código do centro é derivado do nome (`codigoDeCentroCusto`, puro e testado), não uma
+sequência numérica: centro de custo não tem hierarquia, e `ADMINISTRATIVO` diz o que é num
+relatório exportado enquanto `03` não diz nada. **A função em TypeScript e o `translate()` do
+backfill em SQL geram o mesmo código de propósito**, e há teste travando os seis do modelo —
+se divergirem, o app cria um centro duplicado em vez de reaproveitar o que a migration criou.
+
+Empresa sem nenhum centro cadastrado continua vendo o select antigo do `useOptions`, pelo
+mesmo motivo do seletor de categoria: `centro_custo` nunca foi obrigatório, e trocar a lista
+por um seletor vazio tiraria uma opção que a tela tinha.
+
 ## Campo opcional com `UNIQUE`: grave `NULL`, nunca string vazia
 
 `credenciados.cnpj_cpf` (opcional desde a migration `20260908182307`) é o primeiro caso disso no

@@ -8,6 +8,7 @@ import { Requisicao } from '../types/requisicoes';
 import { salvarDespesa, cancelarDespesa, Despesa, ParcelaPagar, FormaPagamento } from './financeiroService';
 import { resolverContaLancamento } from './planoContabilService';
 import { CODIGO_CONTA_REPASSE_CREDENCIADO } from '../config/planoContabilPadrao.config';
+import { getCentrosCusto } from './centrosCustoService';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
@@ -206,6 +207,12 @@ export const fecharRemessaEGerarContaPagar = async (
     isOnline, effectiveTenantId, 'despesa', CODIGO_CONTA_REPASSE_CREDENCIADO,
   );
 
+  // Fase 4: mesma ideia para o centro de custo, que aqui era o literal 'Rede Assistencial'.
+  // Sem centro cadastrado a despesa entra só com o snapshot de texto, como antes — a coluna
+  // é opcional e a FK não dispara com NULL.
+  const centroCusto = (await getCentrosCusto(isOnline, effectiveTenantId).catch(() => []))
+    .find((c) => c.ativo && c.codigo === 'REDE-ASSISTENCIAL') || null;
+
   // 1. Gerar Despesa (Contas a Pagar)
   const novaDespesa: Despesa = {
     id: despesaId,
@@ -216,7 +223,8 @@ export const fecharRemessaEGerarContaPagar = async (
     descricao: `Faturamento Remessa ${remessa.codigo_remessa} - ${remessa.credenciado_nome} (${remessa.qtd_guias} guias)`,
     categoria: contaContabil?.nome || 'Repasse Credenciados / Prestadores',
     conta_contabil_id: contaContabil?.id || null,
-    centro_custo: 'Rede Assistencial',
+    centro_custo: centroCusto?.nome || 'Rede Assistencial',
+    centro_custo_id: centroCusto?.id || null,
     data_emissao: dataHoje,
     data_inicio_pagamento: dataVencimento,
     valor_total: remessa.valor_liquido,

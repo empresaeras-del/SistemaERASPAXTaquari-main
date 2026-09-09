@@ -50,6 +50,12 @@ export interface Despesa {
   atualizado_em?: string;
   criado_por?: string;
   centro_custo?: string;
+  /**
+   * Centro de custo da despesa (fase 4). `centro_custo` acima é o snapshot do nome no
+   * momento do lançamento — escrito uma vez, nunca re-sincronizado; agrupar relatório é
+   * papel deste id. Mesmo par de `categoria`/`conta_contabil_id`.
+   */
+  centro_custo_id?: string | null;
   id: string;
   tenant_id: string;
   tipo_credor: 'fornecedor' | 'fornecedor_pf' | 'fornecedor_pj' | 'funcionario' | 'outro';
@@ -551,6 +557,7 @@ export const sanitizeDespesaForSupabase = (d: Despesa) => {
     conta_contabil_id: d.conta_contabil_id && UUID_REGEX.test(d.conta_contabil_id) ? d.conta_contabil_id : null,
     natureza_contabil: 'despesa',
     centro_custo: d.centro_custo || null,
+    centro_custo_id: d.centro_custo_id && UUID_REGEX.test(d.centro_custo_id) ? d.centro_custo_id : null,
     data_emissao: d.data_emissao ? d.data_emissao.split('T')[0] : new Date().toISOString().split('T')[0],
     data_inicio_pagamento: d.data_inicio_pagamento ? d.data_inicio_pagamento.split('T')[0] : new Date().toISOString().split('T')[0],
     valor_total: Number(d.valor_total) || 0,
