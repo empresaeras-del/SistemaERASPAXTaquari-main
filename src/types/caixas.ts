@@ -50,6 +50,18 @@ export interface MovimentacaoCaixa {
   observacao?: string;
   estornado?: boolean;
   criado_em?: string;
+  /**
+   * Conta analítica do plano contábil (fase 3). Fica nula em suprimento/sangria — são
+   * transferência de numerário entre caixa e banco, não receita nem despesa — e em
+   * movimentação anterior ao corte da fase 3.
+   */
+  conta_contabil_id?: string | null;
+  /**
+   * Derivada de `tipo` por trigger no banco (entrada => receita, saida => despesa). Existe
+   * só para viajar dentro da FK composta com `tenant_id`; não é dado de negócio, e o valor
+   * que o cliente mandar é sobrescrito.
+   */
+  natureza_contabil?: 'receita' | 'despesa';
 }
 
 export interface ResumoFluxoCaixa {

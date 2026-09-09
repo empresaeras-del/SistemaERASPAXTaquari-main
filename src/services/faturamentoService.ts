@@ -6,6 +6,8 @@ import { generateUUID } from '../utils/uuid';
 import { RemessaFaturamento, StatusRemessa } from '../types/faturamento';
 import { Requisicao } from '../types/requisicoes';
 import { salvarDespesa, cancelarDespesa, Despesa, ParcelaPagar, FormaPagamento } from './financeiroService';
+import { resolverContaLancamento } from './planoContabilService';
+import { CODIGO_CONTA_REPASSE_CREDENCIADO } from '../config/planoContabilPadrao.config';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
@@ -199,6 +201,11 @@ export const fecharRemessaEGerarContaPagar = async (
   const parcelaId = remessa.parcela_pagar_id || generateUUID();
   const dataHoje = new Date().toISOString();
 
+  // Fase 3: o repasse ao credenciado nasce classificado, sem passar por formulário.
+  const contaContabil = await resolverContaLancamento(
+    isOnline, effectiveTenantId, 'despesa', CODIGO_CONTA_REPASSE_CREDENCIADO,
+  );
+
   // 1. Gerar Despesa (Contas a Pagar)
   const novaDespesa: Despesa = {
     id: despesaId,
@@ -207,7 +214,8 @@ export const fecharRemessaEGerarContaPagar = async (
     credor_nome: remessa.credenciado_nome,
     credor_cpf_cnpj: remessa.credenciado_cnpj_cpf,
     descricao: `Faturamento Remessa ${remessa.codigo_remessa} - ${remessa.credenciado_nome} (${remessa.qtd_guias} guias)`,
-    categoria: 'Repasse Credenciados / Prestadores',
+    categoria: contaContabil?.nome || 'Repasse Credenciados / Prestadores',
+    conta_contabil_id: contaContabil?.id || null,
     centro_custo: 'Rede Assistencial',
     data_emissao: dataHoje,
     data_inicio_pagamento: dataVencimento,

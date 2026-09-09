@@ -12,6 +12,8 @@ import { useItensFunerarios } from '../../hooks/useItensFunerarios';
 import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { saveAtendimento } from '../../services/atendimentosService';
 import { salvarReceita } from '../../services/financeiroService';
+import { resolverContaLancamento } from '../../services/planoContabilService';
+import { CODIGO_CONTA_SERVICO_EXTRA } from '../../config/planoContabilPadrao.config';
 import { registrarAuditoria } from '../../lib/supabase';
 import {
   X,
@@ -262,6 +264,11 @@ export const NovoAtendimentoWizard: React.FC<{
         const devNome = tipoCliente === 'associado' ? selectedAssociado?.nome : fNome;
         const devCpf = tipoCliente === 'associado' ? selectedAssociado?.cpf : fCpf;
 
+        // Fase 3: o lançamento nasce classificado mesmo sem passar por formulário.
+        const contaContabil = await resolverContaLancamento(
+          state.isOnline, tenantId, 'receita', CODIGO_CONTA_SERVICO_EXTRA,
+        );
+
         const dataHojeStr = format(new Date(), 'yyyy-MM-dd');
         const dataVencimento = new Date();
         dataVencimento.setDate(dataVencimento.getDate() + 2);
@@ -279,7 +286,8 @@ export const NovoAtendimentoWizard: React.FC<{
             cliente_nome: fNome,
             cliente_cpf_cnpj: fCpf,
             descricao: `Serviços Adicionais - Atendimento: ${fNome}`,
-            categoria: 'Serviço Extra',
+            categoria: contaContabil?.nome || 'Serviço Extra',
+            conta_contabil_id: contaContabil?.id || null,
             data_emissao: dataHojeStr,
             data_inicio_cobranca: dataHojeStr,
             valor_total: financeiro.totalUncovered,

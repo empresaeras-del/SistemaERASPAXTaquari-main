@@ -17,7 +17,7 @@ import {
   CODIGO_PLANO_PADRAO,
   NOME_PLANO_PADRAO,
 } from '../config/planoContabilPadrao.config';
-import { codigoDoPai, nivelDoCodigo } from '../utils/planoContabilTree';
+import { codigoDoPai, nivelDoCodigo, resolverContaPorCodigo } from '../utils/planoContabilTree';
 
 const STORE_PLANOS = 'planos_contabeis';
 const STORE_CONTAS = 'contas_contabeis';
@@ -85,6 +85,40 @@ export const getContasDoPlano = async (
   return locais.filter(
     (c) => c.plano_id === planoId && !c.deleted_at && registroPertenceAoTenant(c.tenant_id, tenantId),
   );
+};
+
+/**
+ * Conta que um caminho automático deve gravar num lançamento novo.
+ *
+ * Usada por quem cria receita/despesa sem passar por formulário — o wizard de atendimento, a
+ * requisição com co-participação, a geração de mensalidades, o contrato novo e o faturamento
+ * de credenciado. Devolve `null` quando a empresa ainda não tem plano (ou não tem conta
+ * lançável da natureza): aí o lançamento é gravado sem conta e o trigger `exige_conta_contabil`
+ * o isenta, mantendo esses fluxos funcionando exatamente como antes da fase 3.
+ *
+ * Como todo o resto do módulo, é offline-first: online consulta o Supabase e reidrata o IDB,
+ * offline responde do cache — um atendimento registrado sem rede continua nascendo classificado.
+ */
+export const resolverContaLancamento = async (
+  isOnline: boolean,
+  tenantId: string | null | undefined,
+  natureza: 'receita' | 'despesa',
+  codigoPreferido: string,
+): Promise<ContaContabil | null> => {
+  if (!tenantId) return null;
+
+  try {
+    const plano = await getPlanoAtivo(isOnline, tenantId);
+    if (!plano) return null;
+
+    const contas = await getContasDoPlano(isOnline, plano.id, tenantId);
+    return resolverContaPorCodigo(contas, natureza, codigoPreferido);
+  } catch (err) {
+    // Classificar é desejável, mas nunca ao ponto de impedir o atendimento de ser salvo:
+    // sem conta o lançamento ainda entra, porque o trigger isenta quem não tem o que usar.
+    console.warn('Falha ao resolver a conta contábil do lançamento automático:', err);
+    return null;
+  }
 };
 
 export const salvarPlano = async (isOnline: boolean, plano: Partial<PlanoContabil>): Promise<PlanoContabil> => {

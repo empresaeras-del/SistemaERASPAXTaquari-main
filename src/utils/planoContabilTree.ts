@@ -8,6 +8,7 @@
  * de sequer oferecer uma operação inválida.
  */
 import { ContaContabil, ContaContabilNode, NaturezaContabil, TipoConta } from '../types/planoContabil';
+import { CODIGO_CONTA_SOBRA } from '../config/planoContabilPadrao.config';
 
 /** `'3.1.01'` → 3. Código vazio ou só separadores conta como nível 1. */
 export function nivelDoCodigo(codigo: string): number {
@@ -184,6 +185,34 @@ export function agruparContasPorPai(
     }));
 
   return { grupos, semGrupo: semGrupo.sort((a, b) => compararCodigos(a.codigo, b.codigo)) };
+}
+
+/**
+ * Conta que um caminho **automático** deve usar, procurando por código.
+ *
+ * Um lançamento gerado por atendimento, requisição, mensalidade ou faturamento não passa por
+ * formulário — não há quem escolha a conta —, mas desde a fase 3 ele também precisa nascer
+ * classificado. Daí a rede de três degraus: o código pedido, a conta de sobra da natureza
+ * (`Outras Receitas` / `Despesas Diversas`) e, se a empresa apagou até essa, a primeira conta
+ * analítica que sobrar. Devolve `null` só quando não existe conta lançável nenhuma da natureza
+ * — exatamente o caso que o trigger `exige_conta_contabil` isenta no banco, então o lançamento
+ * segue sem conta em vez de ser recusado.
+ *
+ * Nunca cai numa conta de outra natureza: é melhor gravar sem conta (e o banco aceita) do que
+ * lançar uma receita numa conta de despesa — que a FK composta recusaria de qualquer forma.
+ */
+export function resolverContaPorCodigo(
+  contas: ContaContabil[],
+  natureza: NaturezaContabil,
+  codigoPreferido: string,
+): ContaContabil | null {
+  const candidatas = contasLancaveis(contas, natureza);
+  return (
+    candidatas.find((c) => c.codigo === codigoPreferido) ||
+    candidatas.find((c) => c.codigo === CODIGO_CONTA_SOBRA[natureza]) ||
+    candidatas[0] ||
+    null
+  );
 }
 
 export interface ErroValidacaoConta {

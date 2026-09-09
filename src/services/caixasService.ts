@@ -273,6 +273,63 @@ export const getMovimentacoesCaixa = async (
   return result.sort((a, b) => new Date(b.data_movimentacao).getTime() - new Date(a.data_movimentacao).getTime());
 };
 
+/**
+ * Conta contábil que uma movimentação automática deve herdar do lançamento que a originou.
+ *
+ * Recebimento e pagamento não são um fato novo de resultado: a receita ou a despesa já foi
+ * classificada quando nasceu, e a movimentação é a liquidação dela no caixa. Por isso a conta
+ * é **herdada**, não escolhida de novo — perguntar ao operador do caixa abriria espaço para o
+ * mesmo valor aparecer em duas contas diferentes no relatório.
+ *
+ * Devolve `null` sem barulho quando não dá para resolver (parcela órfã, lançamento legado sem
+ * conta, sem rede e sem cache): o trigger do banco isenta a movimentação nesse caso, e travar
+ * a baixa de uma parcela por causa de classificação seria pior que a classificação faltando.
+ */
+const contaHerdadaDoLancamento = async (
+  isOnline: boolean,
+  origem: MovimentacaoCaixa['origem'],
+  referenciaId: string,
+): Promise<string | null> => {
+  // As duas consultas devolvem linha de tabelas diferentes, lidas por nome de campo; um
+  // registro genérico descreve isso melhor que `any` e mantém a leitura sob checagem.
+  type Linha = Record<string, unknown>;
+  const texto = (valor: unknown): string | null =>
+    typeof valor === 'string' && valor.length > 0 ? valor : null;
+
+  try {
+    const ehRecebimento = origem === 'contas_receber';
+    const storeParcela = ehRecebimento ? 'parcelas_receber' : 'parcelas_pagar';
+    const storeLancamento = ehRecebimento ? 'receitas' : 'despesas';
+    const campoPai = ehRecebimento ? 'receita_id' : 'despesa_id';
+
+    const parcelaLocal = await getFromIDB<Linha>(storeParcela, referenciaId);
+    let paiId = texto(parcelaLocal?.[campoPai]);
+
+    if (!paiId && isOnline) {
+      const { data } = await supabase.from(storeParcela).select(campoPai).eq('id', referenciaId).maybeSingle();
+      paiId = texto((data as Linha | null)?.[campoPai]);
+    }
+    if (!paiId) return null;
+
+    const lancamentoLocal = await getFromIDB<Linha>(storeLancamento, paiId);
+    const contaLocal = texto(lancamentoLocal?.conta_contabil_id);
+    if (contaLocal) return contaLocal;
+
+    if (isOnline) {
+      const { data } = await supabase
+        .from(storeLancamento)
+        .select('conta_contabil_id')
+        .eq('id', paiId)
+        .maybeSingle();
+      return texto((data as Linha | null)?.conta_contabil_id);
+    }
+    return null;
+  } catch (err) {
+    console.warn('Não foi possível herdar a conta contábil do lançamento de origem:', err);
+    return null;
+  }
+};
+
 export const registrarMovimentacao = async (
   isOnline: boolean,
   mov: Omit<MovimentacaoCaixa, 'id' | 'criado_em'>
@@ -282,6 +339,19 @@ export const registrarMovimentacao = async (
     id: uuidv4(),
     criado_em: new Date().toISOString()
   };
+
+  // Fase 3: a movimentação de recebimento/pagamento herda a conta do lançamento de origem.
+  // Suprimento e sangria não passam por aqui de propósito — transferir numerário entre caixa
+  // e banco não é receita nem despesa, e o trigger do banco isenta as duas origens.
+  if (
+    !novaMov.conta_contabil_id &&
+    novaMov.referencia_id &&
+    (novaMov.origem === 'contas_receber' || novaMov.origem === 'contas_pagar')
+  ) {
+    novaMov.conta_contabil_id = await contaHerdadaDoLancamento(
+      isOnline, novaMov.origem, novaMov.referencia_id,
+    );
+  }
 
   if (isOnline) {
     try {

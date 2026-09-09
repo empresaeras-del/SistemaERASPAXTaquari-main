@@ -6,6 +6,8 @@ import { AlertCircle } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { salvarReceita } from '../../services/financeiroService';
+import { resolverContaLancamento } from '../../services/planoContabilService';
+import { CODIGO_CONTA_MENSALIDADE } from '../../config/planoContabilPadrao.config';
 import { RegrasCalculoInfo } from './RegrasCalculoInfo';
 import { useSeletorPlanoPax } from '../../hooks/useSeletorPlanoPax';
 import { formatLocalDate } from '../../utils/dateUtils';
@@ -101,6 +103,11 @@ export const MensalidadesGeracaoWizard = ({
         return;
       }
 
+      // Fase 3: mensalidade nasce classificada na conta de mensalidades do plano.
+      const contaContabil = await resolverContaLancamento(
+        state.isOnline, targetTenant, 'receita', CODIGO_CONTA_MENSALIDADE,
+      );
+
       const receitaMestre = {
         id: mestreId,
         tenant_id: targetTenant,
@@ -111,7 +118,8 @@ export const MensalidadesGeracaoWizard = ({
         associado_cpf: associado.cpf,
         associado_plano: planoSelecionado?.nome,
         descricao: `Contrato de Plano: ${planoSelecionado?.nome}`,
-        categoria: 'Mensalidades',
+        categoria: contaContabil?.nome || 'Mensalidades',
+        conta_contabil_id: contaContabil?.id || null,
         data_emissao: format(new Date(), 'yyyy-MM-dd'),
         data_inicio_cobranca: parcelas[0].data_vencimento,
         valor_total: totalReceita,

@@ -56,6 +56,8 @@ import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import toast from 'react-hot-toast';
 import { getRemessas } from '../services/faturamentoService';
 import { salvarReceita, Receita, ParcelaReceber } from '../services/financeiroService';
+import { resolverContaLancamento } from '../services/planoContabilService';
+import { CODIGO_CONTA_SERVICO_EXTRA } from '../config/planoContabilPadrao.config';
 
 export const RequisicoesPage: React.FC = () => {
   const { state } = useAppContext();
@@ -379,6 +381,11 @@ export const RequisicoesPage: React.FC = () => {
         const dataVencimento = dPlus2.toISOString();
         const dataEmissao = new Date().toISOString();
 
+        // Fase 3: co-participação nasce classificada como serviço extra.
+        const contaContabil = await resolverContaLancamento(
+          state.isOnline, tenantId, 'receita', CODIGO_CONTA_SERVICO_EXTRA,
+        );
+
         const novaReceita: Receita = {
           id: generateUUID(),
           tenant_id: tenantId,
@@ -387,7 +394,8 @@ export const RequisicoesPage: React.FC = () => {
           associado_nome: associadoSelecionado.nome,
           associado_cpf: associadoSelecionado.cpf,
           descricao: `Co-participação - Guia ${novaReq.codigo_requisicao || 'Atualizada'}`,
-          categoria: 'Serviço Extra',
+          categoria: contaContabil?.nome || 'Serviço Extra',
+          conta_contabil_id: contaContabil?.id || null,
           data_emissao: dataEmissao,
           data_inicio_cobranca: dataVencimento,
           valor_total: valorTotalAssociado,

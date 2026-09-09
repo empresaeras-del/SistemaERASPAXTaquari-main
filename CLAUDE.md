@@ -260,6 +260,58 @@ teste em `planoContabilTree.test.ts`.
   seletor, por isso mesmo, ainda exibe a conta já gravada mesmo desativada, senão abrir o
   lançamento para editar apagaria a classificação dele.
 
+### Fase 3: a conta vira obrigatória — mas só daqui para frente (migrations `20260909120635`, `20260909120746`, `20260909120831`)
+
+Três coisas mudaram, e as três têm uma decisão de projeto por trás:
+
+- **A obrigatoriedade é um trigger, não um `NOT NULL`.** A regra é "lançamento criado a partir
+  de 09/09/2026 precisa de conta", e um `NOT NULL` vale para a linha, não para o instante em que
+  ela nasceu — quebraria o lançamento antigo no primeiro `UPDATE`. Além disso a regra tem duas
+  isenções que nenhum `CHECK` alcança, porque dependem de outra tabela e de outra coluna:
+  suprimento/sangria e empresa sem conta analítica da natureza. `exige_conta_contabil()` cobre
+  as três tabelas (`receitas`, `despesas`, `movimentacoes_caixa`) com uma função só.
+- **A isenção "empresa sem conta lançável" é o que impede a fase 3 de travar empresa nova.**
+  Enquanto a empresa não montar o plano, tudo segue como antes, com `categoria` de texto livre —
+  o mesmo fallback que os formulários já mostram desde a fase 2. Só se exige o que é possível
+  cumprir. **Ao criar regra obrigatória nova, prefira esse formato** a um `NOT NULL` que assume
+  que todo tenant já está no estado novo.
+- **O corte compara `criado_em`, que o cliente envia** (ver `sanitize*ForSupabase`). É
+  deliberado: um lançamento feito offline ontem e sincronizado amanhã carrega o `criado_em` de
+  ontem e entra sem conta, em vez de ser recusado na fila de sync — que seria perda silenciosa
+  de dado, a armadilha que este arquivo já documenta. Confiar no relógio do cliente aqui é o
+  preço de não perder o lançamento offline, não um descuido.
+
+**Os caminhos automáticos.** Cinco lugares criam lançamento sem passar por formulário nenhum —
+`NovoAtendimentoWizard`, `RequisicoesPage` (co-participação), `MensalidadesGeracaoWizard`,
+`NovoContratoWizard` e `faturamentoService` (repasse ao credenciado). Todos passaram a resolver
+a conta por **código** (`CODIGO_CONTA_*` em `config/planoContabilPadrao.config.ts`) via
+`resolverContaLancamento`, que se apoia na função pura `resolverContaPorCodigo` — código pedido
+→ conta de sobra da natureza → primeira analítica → `null`. Procurar por código, e não por nome,
+é o que faz a empresa que renomeou a conta continuar funcionando. **Ao criar um caminho novo que
+grave receita ou despesa, resolva a conta assim** — não repita um literal de `categoria`.
+
+**Movimentações de caixa entraram, mas nenhuma tela ganhou seletor** — e isso é o resultado
+certo, não uma pendência. Das quatro origens que o app de fato produz, `contas_receber` e
+`contas_pagar` **herdam** a conta do lançamento que as originou (em `registrarMovimentacao`,
+num lugar só, em vez de nos 3 pontos de chamada), porque a receita já foi classificada quando
+nasceu e a movimentação é a liquidação dela — perguntar de novo ao operador abriria espaço para
+o mesmo valor cair em duas contas no relatório. `suprimento` e `sangria` são **isentas**:
+transferir numerário entre caixa e banco não é receita nem despesa, e classificá-las inflaria o
+resultado do exercício. A origem `avulso` existe no tipo mas não tem produtor no código — se um
+dia ganhar tela, é ela que precisa do seletor.
+
+Em `movimentacoes_caixa` a `natureza_contabil` não é constante como em `receitas`/`despesas`:
+depende de `tipo` (`entrada` => receita, `saida` => despesa). Por isso é preenchida por trigger
+e travada por `CHECK` — o valor que o cliente mandar é sobrescrito, e a FK composta continua
+valendo sem depender de o app acertar.
+
+**O backfill classificou o legado por `categoria`**, em quatro degraus: nome da conta igual à
+categoria, mapa de sinônimos das categorias antigas do `useOptions`, conta de sobra da natureza,
+primeira analítica. Rodou sobre as 8 linhas que existiam (5 receitas, 1 despesa, 2 movimentações)
+e não sobrou nenhuma sem conta. O mapa de sinônimos cobre as categorias legadas, não só as que
+apareciam em produção — a base ainda é pequena, mas o arquivo serve de documentação de para onde
+cada categoria antiga foi.
+
 No frontend, `categoria` continua `NOT NULL` e passou a ser o **snapshot do nome da conta** no
 momento do lançamento — escrito uma vez, nunca re-sincronizado se a conta for renomeada, e
 nunca usado para agrupar relatório (isso é papel de `conta_contabil_id`). É o mesmo padrão que

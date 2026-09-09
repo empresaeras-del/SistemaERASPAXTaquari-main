@@ -59,3 +59,27 @@ export const PLANO_CONTABIL_PADRAO: ContaModelo[] = [
   { codigo: '4.9', nome: 'Outras Despesas', natureza: 'despesa', tipo: 'sintetica' },
   { codigo: '4.9.01', nome: 'Despesas Diversas', natureza: 'despesa', tipo: 'analitica' },
 ];
+
+/**
+ * Códigos que os caminhos **automáticos** procuram no plano da empresa.
+ *
+ * Um lançamento nascido de um atendimento, de uma requisição, da geração de mensalidades ou
+ * do faturamento de um credenciado não passa por formulário nenhum — ninguém escolhe a conta.
+ * Desde a fase 3 esse lançamento também precisa nascer classificado, então cada um desses
+ * caminhos resolve a conta por código, com a rede de segurança de `resolverContaPorCodigo`
+ * (código pedido → conta de sobra da natureza → primeira analítica; ver `planoContabilTree.ts`).
+ *
+ * São códigos do plano modelo. A empresa que renomeou a conta continua funcionando (o código
+ * é que é procurado, não o nome); a que **apagou** a conta cai na rede de segurança.
+ */
+export const CODIGO_CONTA_MENSALIDADE = '3.1.01';
+export const CODIGO_CONTA_TAXA_ADESAO = '3.1.02';
+export const CODIGO_CONTA_SERVICO_EXTRA = '3.1.03';
+export const CODIGO_CONTA_SERVICO_AVULSO = '3.1.04';
+export const CODIGO_CONTA_REPASSE_CREDENCIADO = '4.1.01';
+
+/** Conta que recebe o lançamento quando a conta específica não existe mais no plano. */
+export const CODIGO_CONTA_SOBRA: Record<'receita' | 'despesa', string> = {
+  receita: '3.2.02',
+  despesa: '4.9.01',
+};
