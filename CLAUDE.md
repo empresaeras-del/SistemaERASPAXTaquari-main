@@ -239,6 +239,39 @@ empresa vira dona das próprias contas. A ordem do array importa (pai antes das 
 `semearPlanoPadrao` resolve `conta_pai_id` pelo código do pai já inserido) e está travada por
 teste em `planoContabilTree.test.ts`.
 
+### Fase 2: os lançamentos apontam para a conta (migration `20260909112853`)
+
+`receitas` e `despesas` ganharam `conta_contabil_id` (nullable) e `natureza_contabil`
+(constante, garantida por `CHECK`). Três coisas dessa fase valem como regra geral:
+
+- **A natureza viaja dentro da FK.** A chave é
+  `(tenant_id, natureza_contabil, conta_contabil_id) → contas_contabeis (tenant_id, natureza, id)`.
+  Com isso o banco recusa, sozinho, tanto conta de outra empresa quanto **receita em conta de
+  despesa** — sem trigger e sem validação na aplicação. A coluna `natureza_contabil` existe
+  só para isso; não é dado de negócio.
+- **Nullable é o que preserva o legado.** Com `MATCH SIMPLE` (o padrão), uma FK composta é
+  satisfeita se qualquer coluna da chave for `NULL`, então todo lançamento anterior continua
+  válido sem exceção na constraint. A coluna só vira obrigatória na fase 3, depois do backfill,
+  em migration própria.
+- **O trigger `valida_conta_lancavel` checa `tipo`, mas de propósito não checa `ativo`.**
+  Desativar uma conta é decisão sobre lançamentos futuros; se `ativo` entrasse na validação,
+  editar um lançamento antigo (corrigir um valor, mudar uma observação) passaria a falhar
+  depois que a conta fosse desativada. O filtro por `ativo` pertence ao seletor da tela — e o
+  seletor, por isso mesmo, ainda exibe a conta já gravada mesmo desativada, senão abrir o
+  lançamento para editar apagaria a classificação dele.
+
+No frontend, `categoria` continua `NOT NULL` e passou a ser o **snapshot do nome da conta** no
+momento do lançamento — escrito uma vez, nunca re-sincronizado se a conta for renomeada, e
+nunca usado para agrupar relatório (isso é papel de `conta_contabil_id`). É o mesmo padrão que
+o schema já usa em `associado_nome`/`fornecedor_nome` ao lado dos respectivos ids, e **não** é o
+dual-write removido na PR #30: a diferença está em quem lê o campo depois.
+
+`components/financeiro/SeletorContaContabil.tsx` é usado pelas duas telas de lançamento e
+recebe as contas **por props**, sem chamar `usePlanoContabil` por dentro — a tela já precisa do
+hook para saber se a empresa tem plano, e um hook no componente carregaria plano e contas duas
+vezes por formulário aberto. Empresa que ainda não montou o plano continua vendo o seletor de
+categoria antigo: `categoria` é `NOT NULL`, então remover o campo travaria o formulário dela.
+
 ## Campo opcional com `UNIQUE`: grave `NULL`, nunca string vazia
 
 `credenciados.cnpj_cpf` (opcional desde a migration `20260908182307`) é o primeiro caso disso no

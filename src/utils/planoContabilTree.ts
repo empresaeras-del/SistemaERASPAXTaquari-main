@@ -146,6 +146,46 @@ export function paisPossiveis(
     .sort((a, b) => compararCodigos(a.codigo, b.codigo));
 }
 
+export interface GrupoDeContas {
+  /** `'3.1 — Receitas Operacionais'`, usado como rótulo do `<optgroup>`. */
+  titulo: string;
+  contas: ContaContabil[];
+}
+
+/**
+ * Agrupa as contas lançáveis pela conta sintética que as contém, para o seletor do
+ * lançamento render como plano de contas em vez de lista chapada. Conta cujo pai não está
+ * na lista (raiz analítica, ou pai excluído) volta em `semGrupo`, para não sumir da tela.
+ */
+export function agruparContasPorPai(
+  lancaveis: ContaContabil[],
+  todasAsContas: ContaContabil[],
+): { grupos: GrupoDeContas[]; semGrupo: ContaContabil[] } {
+  const porId = new Map(todasAsContas.map((c) => [c.id, c]));
+  const porPai = new Map<string, GrupoDeContas>();
+  const semGrupo: ContaContabil[] = [];
+
+  for (const conta of lancaveis) {
+    const pai = conta.conta_pai_id ? porId.get(conta.conta_pai_id) : undefined;
+    if (!pai) {
+      semGrupo.push(conta);
+      continue;
+    }
+    const grupo = porPai.get(pai.id) || { titulo: `${pai.codigo} — ${pai.nome}`, contas: [] };
+    grupo.contas.push(conta);
+    porPai.set(pai.id, grupo);
+  }
+
+  const grupos = Array.from(porPai.entries())
+    .sort((a, b) => compararCodigos(porId.get(a[0])?.codigo || '', porId.get(b[0])?.codigo || ''))
+    .map(([, grupo]) => ({
+      titulo: grupo.titulo,
+      contas: [...grupo.contas].sort((a, b) => compararCodigos(a.codigo, b.codigo)),
+    }));
+
+  return { grupos, semGrupo: semGrupo.sort((a, b) => compararCodigos(a.codigo, b.codigo)) };
+}
+
 export interface ErroValidacaoConta {
   campo: 'codigo' | 'nome' | 'natureza' | 'tipo' | 'conta_pai_id';
   mensagem: string;

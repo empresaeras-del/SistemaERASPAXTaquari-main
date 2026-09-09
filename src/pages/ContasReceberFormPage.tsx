@@ -18,6 +18,8 @@ import { useConfirm } from '../context/ConfirmContext';
 import { registrarAuditoria } from '../lib/supabase';
 
 import { useOptions } from '../hooks/useOptions';
+import { usePlanoContabil } from '../hooks/usePlanoContabil';
+import { SeletorContaContabil } from '../components/financeiro/SeletorContaContabil';
 import { OptionsModal } from '../components/OptionsModal';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
@@ -32,6 +34,9 @@ const receitaSchema = z.object({
   
   descricao: z.string().min(3, "Descrição muito curta (mínimo 3 caracteres)"),
   categoria: z.string().min(1, "Selecione uma categoria"),
+  // Opcional na fase 2 do plano contábil: empresa sem plano montado ainda lança sem conta,
+  // e lançamento antigo continua válido. Vira obrigatório na fase 3, depois do backfill.
+  conta_contabil_id: z.string().optional(),
   data_emissao: z.string().min(1, "Data de emissão obrigatória"),
   data_inicio_cobranca: z.string().min(1, "Data de início obrigatória"),
   valor_total: z.preprocess((v) => (v === '' || v === undefined ? 0 : Number(v)), z.number().min(0.01, "O valor deve ser maior que zero")),
@@ -130,6 +135,11 @@ export const ContasReceberFormPage: React.FC = () => {
   
   const [modalOpen, setModalOpen] = useState<'categoria' | 'forma_pagamento' | null>(null);
 
+  // Empresa sem plano de contas montado continua lançando pelo seletor de categoria antigo.
+  const { plano: planoContabil, contas: contasContabeis, contasLancaveis, loading: loadingPlano } = usePlanoContabil();
+  const contasReceitaLancaveis = contasLancaveis('receita');
+  const temPlanoContabil = !!planoContabil && contasReceitaLancaveis.length > 0;
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const targetParcelaId = searchParams.get('parcela');
@@ -163,6 +173,7 @@ export const ContasReceberFormPage: React.FC = () => {
       cliente_cpf_cnpj: '',
       descricao: '',
       categoria: '',
+      conta_contabil_id: '',
       data_emissao: format(new Date(), "yyyy-MM-dd"),
       data_inicio_cobranca: format(new Date(), "yyyy-MM-dd"),
       valor_total: 0,
@@ -256,6 +267,7 @@ export const ContasReceberFormPage: React.FC = () => {
               cliente_cpf_cnpj: rec.cliente_cpf_cnpj || rec.associado_cpf || parcs[0]?.devedor_cpf_cnpj || '',
               descricao: rec.descricao || parcs[0]?.descricao || '',
               categoria: resolvedCategoria,
+              conta_contabil_id: rec.conta_contabil_id || '',
               data_emissao: dataEmissao,
               data_inicio_cobranca: dataInicio,
               valor_total: totalVal,
@@ -393,7 +405,12 @@ export const ContasReceberFormPage: React.FC = () => {
         cliente_cpf_cnpj: data.cliente_cpf_cnpj,
         
         descricao: data.descricao,
+        // `categoria` é o rótulo do lançamento, gravado uma vez. Quando há conta contábil,
+        // ele é o nome dela no momento do lançamento — snapshot, não espelho: se a conta for
+        // renomeada depois, este texto não muda. Agrupar relatório é papel de
+        // `conta_contabil_id`, nunca deste campo (ver CLAUDE.md).
         categoria: data.categoria,
+        conta_contabil_id: data.conta_contabil_id || null,
         data_emissao: data.data_emissao,
         data_inicio_cobranca: data.data_inicio_cobranca,
         valor_total: valorTotalFinal,
@@ -657,25 +674,47 @@ export const ContasReceberFormPage: React.FC = () => {
                 )}
               </div>
 
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-sm font-medium text-text-subtle">Categoria *</label>
-                  <button type="button" onClick={() => setModalOpen('categoria')} className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors" title="Gerenciar opções">
-                    <Settings className="w-4 h-4" />
-                  </button>
+              {/*
+                Com plano de contas montado, a classificação passa a ser a conta contábil, e
+                `categoria` vira o nome dela. Sem plano (empresa que ainda não montou o seu), o
+                seletor antigo continua valendo — `categoria` é NOT NULL no banco, então tirar o
+                campo travaria o formulário dessa empresa.
+              */}
+              {temPlanoContabil ? (
+                <SeletorContaContabil
+                  natureza="receita"
+                  lancaveis={contasReceitaLancaveis}
+                  contas={contasContabeis}
+                  loading={loadingPlano}
+                  temPlano={!!planoContabil}
+                  value={form.watch("conta_contabil_id") || ''}
+                  onChange={(contaId, contaNome) => {
+                    form.setValue("conta_contabil_id", contaId, { shouldDirty: true });
+                    if (contaNome) form.setValue("categoria", contaNome, { shouldDirty: true, shouldValidate: true });
+                  }}
+                  erro={errors.categoria?.message}
+                />
+              ) : (
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-sm font-medium text-text-subtle">Categoria *</label>
+                    <button type="button" onClick={() => setModalOpen('categoria')} className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors" title="Gerenciar opções">
+                      <Settings className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <select
+                    {...form.register("categoria")}
+                    className={`w-full bg-bg-surface border ${errors.categoria ? 'border-rose-500' : 'border-border-default'} rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none`}
+                  >
+                    <option value="">Selecione...</option>
+                    {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    {form.watch("categoria") && !categorias.includes(form.watch("categoria")) && (
+                      <option value={form.watch("categoria")}>{form.watch("categoria")}</option>
+                    )}
+                  </select>
+                  {errors.categoria && <p className="text-rose-500 text-xs mt-1">{errors.categoria.message}</p>}
                 </div>
-                <select 
-                  {...form.register("categoria")}
-                  className={`w-full bg-bg-surface border ${errors.categoria ? 'border-rose-500' : 'border-border-default'} rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none`}
-                >
-                  <option value="">Selecione...</option>
-                  {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  {form.watch("categoria") && !categorias.includes(form.watch("categoria")) && (
-                    <option value={form.watch("categoria")}>{form.watch("categoria")}</option>
-                  )}
-                </select>
-                {errors.categoria && <p className="text-rose-500 text-xs mt-1">{errors.categoria.message}</p>}
-              </div>
+              )}
 
               <div>
                 <div className="flex justify-between items-center mb-1">

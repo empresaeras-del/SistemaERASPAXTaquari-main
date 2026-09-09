@@ -10,6 +10,7 @@ import {
   paisPossiveis,
   validarConta,
   proximoCodigo,
+  agruparContasPorPai,
 } from './planoContabilTree';
 import type { ContaContabil } from '../types/planoContabil';
 import { PLANO_CONTABIL_PADRAO } from '../config/planoContabilPadrao.config';
@@ -259,6 +260,54 @@ describe('proximoCodigo', () => {
   it('ignora irmã com segmento não numérico', () => {
     const lista = [conta({ id: 'a', codigo: '3.1.AA', conta_pai_id: 'r31' })];
     expect(proximoCodigo(lista, '3.1')).toBe('3.1.01');
+  });
+});
+
+describe('agruparContasPorPai', () => {
+  it('agrupa as lançáveis sob a sintética que as contém', () => {
+    const { grupos } = agruparContasPorPai(contasLancaveis(BASE, 'receita'), BASE);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].titulo).toBe('3.1 — Operacionais');
+    expect(grupos[0].contas.map((c) => c.codigo)).toEqual(['3.1.01', '3.1.02']);
+  });
+
+  it('conta analítica sem pai vai para semGrupo em vez de sumir do seletor', () => {
+    const solta = conta({ id: 'solta', codigo: '9', nome: 'Avulsa' });
+    const { grupos, semGrupo } = agruparContasPorPai([solta], [...BASE, solta]);
+    expect(grupos).toEqual([]);
+    expect(semGrupo.map((c) => c.codigo)).toEqual(['9']);
+  });
+
+  it('conta cujo pai não está na lista de referência também não some', () => {
+    const orfa = conta({ id: 'orfa', codigo: '7.1', conta_pai_id: 'pai-inexistente' });
+    const { semGrupo } = agruparContasPorPai([orfa], [orfa]);
+    expect(semGrupo.map((c) => c.id)).toEqual(['orfa']);
+  });
+
+  it('ordena os grupos e as contas dentro deles por código', () => {
+    const extra = [
+      conta({ id: 'g2', codigo: '3.10', nome: 'Grupo Dez', tipo: 'sintetica', conta_pai_id: 'r3' }),
+      conta({ id: 'c10', codigo: '3.10.01', conta_pai_id: 'g2' }),
+      conta({ id: 'c9', codigo: '3.1.09', conta_pai_id: 'r31' }),
+    ];
+    const todas = [...BASE, ...extra];
+    const { grupos } = agruparContasPorPai(contasLancaveis(todas, 'receita'), todas);
+
+    // 3.1 antes de 3.10 — comparação numérica por segmento, não alfabética
+    expect(grupos.map((g) => g.titulo)).toEqual(['3.1 — Operacionais', '3.10 — Grupo Dez']);
+    expect(grupos[0].contas.map((c) => c.codigo)).toEqual(['3.1.01', '3.1.02', '3.1.09']);
+  });
+
+  it('lista vazia devolve grupos e semGrupo vazios', () => {
+    expect(agruparContasPorPai([], BASE)).toEqual({ grupos: [], semGrupo: [] });
+  });
+
+  it('não muda as listas recebidas', () => {
+    const lancaveis = contasLancaveis(BASE, 'receita');
+    const antes = lancaveis.map((c) => c.id);
+    agruparContasPorPai(lancaveis, BASE);
+    expect(lancaveis.map((c) => c.id)).toEqual(antes);
+    expect(BASE).toHaveLength(7);
   });
 });
 

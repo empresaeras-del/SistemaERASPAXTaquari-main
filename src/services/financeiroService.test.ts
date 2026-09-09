@@ -252,6 +252,58 @@ describe('sanitizeDespesaForSupabase', () => {
   });
 });
 
+/**
+ * Estas funções são listas de permissão explícitas: campo que não está no objeto devolvido
+ * é descartado em silêncio a caminho do Supabase — o usuário vê "salvo com sucesso" e o dado
+ * não chega. É a armadilha nº 1 do repositório (ver CLAUDE.md), e é exatamente o risco de
+ * acrescentar `conta_contabil_id` só na interface TypeScript. Daí estes testes.
+ */
+describe('classificação contábil nos sanitizers (fase 2 do plano contábil)', () => {
+  const UUID = '123e4567-e89b-12d3-a456-426614174000';
+
+  it('leva conta_contabil_id da receita para o payload do Supabase', () => {
+    const out = sanitizeReceitaForSupabase({ ...baseReceita, conta_contabil_id: UUID });
+    expect(out.conta_contabil_id).toBe(UUID);
+  });
+
+  it('leva conta_contabil_id da despesa para o payload do Supabase', () => {
+    const out = sanitizeDespesaForSupabase({ ...baseDespesa, conta_contabil_id: UUID });
+    expect(out.conta_contabil_id).toBe(UUID);
+  });
+
+  it('lançamento legado (sem conta) vai com null, não com undefined nem string vazia', () => {
+    expect(sanitizeReceitaForSupabase(baseReceita).conta_contabil_id).toBeNull();
+    expect(sanitizeDespesaForSupabase(baseDespesa).conta_contabil_id).toBeNull();
+  });
+
+  it('anula conta_contabil_id que não é UUID, em vez de mandar lixo para a FK', () => {
+    const out = sanitizeReceitaForSupabase({ ...baseReceita, conta_contabil_id: 'id-invalido' });
+    expect(out.conta_contabil_id).toBeNull();
+  });
+
+  it('carimba a natureza correta em cada tabela — é o que a FK composta compara', () => {
+    expect(sanitizeReceitaForSupabase(baseReceita).natureza_contabil).toBe('receita');
+    expect(sanitizeDespesaForSupabase(baseDespesa).natureza_contabil).toBe('despesa');
+  });
+
+  it('ignora natureza_contabil vinda de fora: a constante do sanitizer é que vale', () => {
+    // Se um payload adulterado chegasse com a natureza trocada, a FK composta no banco
+    // recusaria a gravação. O sanitizer nem deixa chegar lá.
+    const adulterada = { ...baseReceita, natureza_contabil: 'despesa' } as unknown as Receita;
+    expect(sanitizeReceitaForSupabase(adulterada).natureza_contabil).toBe('receita');
+  });
+
+  it('preserva categoria como o rótulo do lançamento, ao lado da conta', () => {
+    const out = sanitizeReceitaForSupabase({
+      ...baseReceita,
+      categoria: 'Mensalidades de Planos',
+      conta_contabil_id: UUID,
+    });
+    expect(out.categoria).toBe('Mensalidades de Planos');
+    expect(out.conta_contabil_id).toBe(UUID);
+  });
+});
+
 describe('getParcelasReceber (offline, fallback IDB)', () => {
   beforeEach(() => {
     mockGetAllFromIDB.mockReset();
