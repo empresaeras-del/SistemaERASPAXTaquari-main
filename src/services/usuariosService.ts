@@ -86,7 +86,7 @@ export const saveUsuario = async (
     throw new Error("Não é possível salvar enquanto estiver offline.");
   }
 
-  const existing = await getFromIDB<UsuarioCadastro>(STORE_NAME, usuario.id);
+  const existing = usuario.id ? await getFromIDB<UsuarioCadastro>(STORE_NAME, usuario.id) : null;
   const isNew = !existing && Boolean(password);
 
   let finalUserId = usuario.id;
