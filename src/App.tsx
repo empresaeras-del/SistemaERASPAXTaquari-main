@@ -38,6 +38,7 @@ const ContasReceberPage = lazy(() => import('./pages/ContasReceberPage').then(m 
 const ContasPagarPage = lazy(() => import('./pages/ContasPagarPage').then(m => ({ default: m.ContasPagarPage })));
 const ContasReceberFormPage = lazy(() => import('./pages/ContasReceberFormPage').then(m => ({ default: m.ContasReceberFormPage })));
 const ContasPagarFormPage = lazy(() => import('./pages/ContasPagarFormPage').then(m => ({ default: m.ContasPagarFormPage })));
+const PlanoContabilPage = lazy(() => import('./pages/PlanoContabilPage').then(m => ({ default: m.PlanoContabilPage })));
 const RequisicoesPage = lazy(() => import('./pages/RequisicoesPage').then(m => ({ default: m.RequisicoesPage })));
 const FaturamentosPage = lazy(() => import('./pages/FaturamentosPage').then(m => ({ default: m.FaturamentosPage })));
 const FornecedoresPage = lazy(() => import('./pages/FornecedoresPage').then(m => ({ default: m.FornecedoresPage })));
@@ -77,6 +78,7 @@ export default function App() {
                         <Route path="caixas" element={<CaixasPage />} />
                         <Route path="financeiro/contas-a-receber/nova" element={<ContasReceberFormPage />} />
                         <Route path="financeiro/contas-a-receber/:id/editar" element={<ContasReceberFormPage />} />
+                        <Route path="financeiro/plano-contabil" element={<PlanoContabilPage />} />
                         <Route path="financeiro/contas-a-pagar/nova" element={<ContasPagarFormPage />} />
                         <Route path="financeiro/contas-a-pagar/:id/editar" element={<ContasPagarFormPage />} />
                         <Route path="planos" element={<PlanosPaxPage />} />

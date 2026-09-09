@@ -48,7 +48,8 @@ const defaultNavItems: NavItem[] = [
     subItems: [
       { label: 'Contas a Receber', path: '/financeiro/contas-a-receber' },
       { label: 'Contas a Pagar', path: '/financeiro/contas-a-pagar' },
-      { label: 'Caixas / Fluxo de Caixa', path: '/caixas' }
+      { label: 'Caixas / Fluxo de Caixa', path: '/caixas' },
+      { label: 'Plano de Contas', path: '/financeiro/plano-contabil' }
     ]
   },
   { id: 'planos', icon: ClipboardList, label: 'Planos', path: '/planos', group: 'cadastros' },
