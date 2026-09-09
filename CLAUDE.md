@@ -392,6 +392,50 @@ por props obrigaria a tela a saber de salvar/desativar/reativar, que não é ass
 excluir: desativar tira do seletor de lançamentos novos sem tocar nas despesas que já usam o
 centro (a FK é `ON DELETE RESTRICT` de qualquer forma).
 
+### Valores realizados no plano: a fonte é a parcela, nunca parcela + caixa
+
+A tela do Plano de Contas mostra, à frente de cada conta, o **realizado** e o **previsto** do
+exercício, e o botão "Demonstração Contábil" tira o mesmo número em prévia, impressão e PDF.
+Quatro decisões deste módulo valem como regra:
+
+- **Um recebimento produz dois registros, e só um pode ser somado.** A parcela muda de status
+  (ganha `data_pagamento` e `valor_recebido`) **e** nasce uma linha em `movimentacoes_caixa`
+  com a conta herdada do lançamento (ver `registrarMovimentacao`). Somar as duas fontes
+  contaria o mesmo dinheiro duas vezes em toda conta liquidada pelo caixa. A fonte escolhida é
+  a **parcela**: ela existe para todo lançamento (a movimentação só aparece quando a
+  liquidação passa por um caixa aberto), é quem carrega o valor efetivamente recebido/pago, e
+  é a mesma base que as telas de Contas a Receber e a Pagar já mostram — o relatório bate com
+  o que o operador vê. Ao somar dinheiro em relatório novo, escolha **uma** fonte e escreva
+  por que; as duas estão sempre disponíveis e sempre parecem complementares.
+- **Previsto e realizado têm datas diferentes, de propósito.** Previsto é a parcela lançada,
+  pelo valor de face e pelo **vencimento**; realizado é a parcela liquidada, pelo valor
+  efetivamente pago e pela **data da liquidação**. Uma parcela que vence em dezembro e é paga
+  em janeiro é prevista num exercício e realizada no outro — que é o que um demonstrativo por
+  exercício precisa dizer.
+- **O ano vem do texto da data, nunca de `new Date()`.** `new Date('2026-01-01')` é meia-noite
+  **UTC**; em UTC-3 isso é 31/12/2025, e todo lançamento de 1º de janeiro cairia no exercício
+  anterior. `anoDaData()` lê os quatro primeiros dígitos e pronto.
+- **O que não entra na soma aparece como nota, não some.** `foraDoExercicio` (conta deste
+  plano, data em outro ano) e `naoClassificado` (lançamento legado, ou conta de outro plano)
+  são devolvidos pela agregação e impressos no rodapé da tela e do relatório. Não é detalhe:
+  na produção de hoje o tenant principal tem R$ 1.370 previstos em 2026 e **R$ 1.652 fora
+  dele** — as prestações seguintes dos parcelamentos. Sem a nota, esse dinheiro simplesmente
+  não apareceria em lugar nenhum, e o operador concluiria que o sistema perdeu lançamento.
+
+A conta zerada continua na árvore e no relatório (com o filtro "somente contas com movimento"
+desmarcado): o plano é a **estrutura**, e uma linha faltando faz procurar a conta que se sabe
+que existe. O total de uma sintética é a soma das descendentes — nunca algo lançado nela, que
+o trigger `valida_conta_lancavel` não permite.
+
+A divisão é a mesma da Ficha de Cadastro: `utils/demonstracaoContabil.ts` decide **o quê**
+(agregação, rollup, achatamento em linhas) e cada renderizador decide só **como** — tela,
+`utils/demonstracaoContabilImpressao.ts` (janela de impressão) e o `jsPDF` do modal. `jspdf` e
+`jspdf-autotable` entram por **import dinâmico** dentro do handler, não no topo: confirmado no
+`dist/index.html` que não viram `modulepreload` e que o chunk da rota ficou em ~39 KB.
+
+`achatarArvore` (em `planoContabilTree.ts`) virou genérica no nó (`<T extends { filhas: T[] }>`)
+para a tela conseguir achatar `ContaComValores` sem perder os valores na assinatura.
+
 ### Filtrar lançamento por classificação: a parcela não sabe, o pai sabe
 
 As telas de Contas a Receber e a Pagar listam **parcelas**, e a classificação (conta contábil,

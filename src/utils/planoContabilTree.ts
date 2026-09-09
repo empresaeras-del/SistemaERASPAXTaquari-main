@@ -83,10 +83,16 @@ export function montarArvore(contas: ContaContabil[]): ContaContabilNode[] {
   return raizes;
 }
 
-/** Achata a árvore de volta em lista, na ordem em que a tela renderiza. */
-export function achatarArvore(nodes: ContaContabilNode[]): ContaContabilNode[] {
-  const saida: ContaContabilNode[] = [];
-  const visitar = (lista: ContaContabilNode[]) => {
+/**
+ * Achata a árvore de volta em lista, na ordem em que a tela renderiza.
+ *
+ * Genérico no nó para preservar o que foi acrescentado a ele: a tela do plano achata
+ * `ContaComValores` (nó + realizado/previsto do exercício) e precisa dos valores do outro
+ * lado — com o tipo fixo em `ContaContabilNode` eles se perderiam na assinatura.
+ */
+export function achatarArvore<T extends { filhas: T[] }>(nodes: T[]): T[] {
+  const saida: T[] = [];
+  const visitar = (lista: T[]) => {
     for (const node of lista) {
       saida.push(node);
       visitar(node.filhas);
