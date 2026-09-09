@@ -2,6 +2,7 @@ import React from 'react';
 import { LogAuditoria } from '../services/auditoriaService';
 import { isWithinInterval, subDays } from 'date-fns';
 import { Database, Trash2, RotateCcw, PlusCircle, DollarSign, Edit3, Activity } from 'lucide-react';
+import { mascararValorDeCampo } from './mascaraDocumento';
 
 /**
  * Funções puras extraídas de pages/Auditoria.tsx — comportamento idêntico ao
@@ -242,7 +243,20 @@ const formatValorParaTexto = (key: string, v: unknown): string => {
   if (typeof v === 'number' && key.toLowerCase().includes('valor')) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
   }
-  return typeof v === 'object' ? JSON.stringify(v) : String(v);
+  // O log guarda o registro inteiro: um campo de CPF/CNPJ sai mascarado no relatório, que é
+  // onde o dado deixa de estar protegido por login e RLS. Ver `mascaraDocumento.ts`.
+  const seguro = mascararValorDeCampo(key, v);
+  return typeof seguro === 'object' && seguro !== null ? JSON.stringify(seguro) : String(seguro);
+};
+
+/**
+ * Um valor do diff (`dados_anteriores`/`dados_novos`) pronto para exibição, com CPF/CNPJ
+ * mascarado. Exportada para a tela usar a **mesma** decisão que o texto/CSV/PDF — foi o
+ * descompasso entre esses dois caminhos que já produziu diffs diferentes no passado.
+ */
+export const valorDoDiffParaTexto = (key: string, valor: unknown): string => {
+  if (valor === undefined || valor === null) return 'Vazio';
+  return JSON.stringify(mascararValorDeCampo(key, valor));
 };
 
 /** Formata o objeto `detalhes` de um log de auditoria em uma linha de texto legível, para relatórios/CSV/PDF. */
@@ -255,8 +269,9 @@ export const formatDetalhesParaTexto = (detalhes: any): string => {
     if (changes.length === 0) return 'Sem alterações diretas em campos.';
     return changes
       .map(({ key, oldVal, newVal }) => {
-        const oldStr = oldVal !== undefined && oldVal !== null ? JSON.stringify(oldVal) : 'Vazio';
-        const newStr = newVal !== undefined && newVal !== null ? JSON.stringify(newVal) : 'Vazio';
+        // Mesma máscara do ramo acima: é aqui que "cpf: X -> Y" apareceria por extenso.
+        const oldStr = valorDoDiffParaTexto(key, oldVal);
+        const newStr = valorDoDiffParaTexto(key, newVal);
         return `${formatKeyName(key)}: ${oldStr} -> ${newStr}`;
       })
       .join(' | ');

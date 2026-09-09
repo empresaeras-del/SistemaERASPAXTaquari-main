@@ -20,6 +20,7 @@ import { format } from 'date-fns';
 import { ParcelaPagar, Despesa } from '../../services/financeiroService';
 import { Empresa } from '../../services/empresasService';
 import { formatLocalDate, formatLocalDateTime, isDateBeforeToday } from '../../utils/dateUtils';
+import { mascararDocumento } from '../../utils/mascaraDocumento';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import toast from 'react-hot-toast';
@@ -89,12 +90,17 @@ export const RelatorioContasPagarModal: React.FC<RelatorioContasPagarModalProps>
           desp?.funcionario_nome ||
           desp?.credor_nome ||
           'Não informado',
+        // Mascarado na montagem, e não em cada renderizador: prévia em tela, HTML de
+        // impressão e PDF leem este mesmo campo. Ver `mascaraDocumento.ts` — valor que não
+        // é CPF/CNPJ (este campo às vezes guarda um nome) volta intacto.
         credorDoc:
-          p.credor_cpf_cnpj ||
-          desp?.fornecedor_cnpj_cpf ||
-          desp?.funcionario_cpf ||
-          desp?.credor_cpf_cnpj ||
-          '-',
+          mascararDocumento(
+            p.credor_cpf_cnpj ||
+            desp?.fornecedor_cnpj_cpf ||
+            desp?.funcionario_cpf ||
+            desp?.credor_cpf_cnpj ||
+            '',
+          ) || '-',
         categoria: desp?.categoria || 'Geral',
         centroCusto: desp?.centro_custo || '-',
         descricao: p.descricao || desp?.descricao || 'Despesa',

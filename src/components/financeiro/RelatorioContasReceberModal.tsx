@@ -25,6 +25,7 @@ import { ParcelaReceber, Receita } from '../../services/financeiroService';
 import { Empresa } from '../../services/empresasService';
 import { Associado } from '../../services/associadosService';
 import { formatLocalDate, formatLocalDateTime, isDateBeforeToday } from '../../utils/dateUtils';
+import { mascararDocumento } from '../../utils/mascaraDocumento';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import toast from 'react-hot-toast';
@@ -156,7 +157,10 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
         associado: assoc,
         receita: rec,
         devedorNome: p.devedor_nome || assoc?.nome || 'Não informado',
-        devedorCpfCnpj: p.devedor_cpf_cnpj || assoc?.cpf || 'Não informado',
+        // Mascarado já na montagem do item, não em cada renderizador: as três saídas deste
+        // relatório (prévia em tela, HTML de impressão e PDF) leem este mesmo campo, então
+        // mascarar aqui cobre as três e não dá para esquecer uma. Ver `mascaraDocumento.ts`.
+        devedorCpfCnpj: mascararDocumento(p.devedor_cpf_cnpj || assoc?.cpf || '') || 'Não informado',
         planoNome: assoc?.plano_nome || rec?.associado_plano || 'Individual / Avulso',
         numeroContrato: assoc?.numero_contrato || '-',
         enderecoCompleto: enderecoFormatado,

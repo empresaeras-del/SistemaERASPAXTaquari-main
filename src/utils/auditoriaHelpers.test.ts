@@ -5,6 +5,7 @@ import {
   formatKeyName,
   calcularCamposAlterados,
   formatDetalhesParaTexto,
+  valorDoDiffParaTexto,
   filtrarLogsAuditoria,
   calcularEstatisticasAuditoria,
 } from './auditoriaHelpers';
@@ -235,5 +236,47 @@ describe('calcularEstatisticasAuditoria', () => {
     ];
     const stats = calcularEstatisticasAuditoria(logs);
     expect(stats.usuariosUnicos).toBe(2); // 'a@x.com' e 'anon'
+  });
+});
+
+/**
+ * O log de auditoria guarda o registro inteiro, então é por ele que um CPF sairia por extenso
+ * num relatório — inclusive de um associado que quem lê o log não teria motivo para consultar.
+ * Estes testes travam os dois caminhos: o diff e a lista de campos avulsos.
+ */
+describe('máscara de CPF/CNPJ na auditoria', () => {
+  it('mascara o CPF no diff de dados_anteriores/dados_novos', () => {
+    const texto = formatDetalhesParaTexto({
+      dados_anteriores: { cpf: '046.537.031-40' },
+      dados_novos: { cpf: '036.660.081-86' },
+    });
+    expect(texto).toContain('***.537.031-**');
+    expect(texto).toContain('***.660.081-**');
+    expect(texto).not.toContain('046.537.031-40');
+    expect(texto).not.toContain('036.660.081-86');
+  });
+
+  it('mascara CPF/CNPJ na lista de campos avulsos do log', () => {
+    const texto = formatDetalhesParaTexto({
+      associado_cpf: '046.537.031-40',
+      fornecedor_cnpj_cpf: '33.520.000/0001-71',
+    });
+    expect(texto).toContain('***.537.031-**');
+    expect(texto).toContain('**.***.000/0001-**');
+    expect(texto).not.toContain('046.537.031-40');
+    expect(texto).not.toContain('33.520.000/0001-71');
+  });
+
+  it('não estraga campo que não é documento', () => {
+    const texto = formatDetalhesParaTexto({ nome: 'Ana Laura', telefone: '67999552480' });
+    expect(texto).toContain('Ana Laura');
+    expect(texto).toContain('67999552480');
+  });
+
+  it('valorDoDiffParaTexto — a tela usa a mesma decisão do texto/CSV/PDF', () => {
+    expect(valorDoDiffParaTexto('cpf', '046.537.031-40')).toBe('"***.537.031-**"');
+    expect(valorDoDiffParaTexto('nome', 'Ana Laura')).toBe('"Ana Laura"');
+    expect(valorDoDiffParaTexto('cpf', null)).toBe('Vazio');
+    expect(valorDoDiffParaTexto('cpf', undefined)).toBe('Vazio');
   });
 });
