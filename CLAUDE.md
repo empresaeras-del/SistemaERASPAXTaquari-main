@@ -341,6 +341,15 @@ ativo passou de `(tenant_id)` para `(tenant_id, exercicio)`. Duas coisas valem c
   nas de 2026 — e a FK composta `(tenant_id, plano_id, conta_pai_id)` recusaria de qualquer
   forma. O plano do ano fechado continua intacto, com os lançamentos daquele ano nele: é isso
   que faz o relatório de um exercício encerrado continuar batendo depois.
+- **A ação de duplicar fica sempre disponível, e o exercício de destino é digitável.** A
+  primeira versão só mostrava o botão quando `plano.exercicio < ano corrente` — condição que
+  **nunca é verdadeira** enquanto a empresa está no ano em que montou o plano. Na prática o
+  botão só apareceria em 1º de janeiro, exatamente quando já é tarde: os lançamentos do ano
+  novo já teriam começado a cair no plano do ano anterior pela queda de `getPlanoAtivo`, em
+  silêncio. **Preparar o exercício seguinte é trabalho de dezembro** — a ação não pode depender
+  de o problema já ter acontecido. O destino sugerido vem de `proximoExercicioLivre`
+  (`utils/exerciciosContabeis.ts`, puro e testado) e o aviso âmbar de "falta o exercício
+  corrente" virou informativo, não mais o único caminho para a ação.
 
 A primeira migration desta parte **ficou incompleta e a segunda corrige**: soltar a unicidade
 do plano ativo para `(tenant, exercício)` não bastava, porque `planos_contabeis_codigo_uk

@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen, Plus, Pencil, Power, PowerOff, ChevronRight, ChevronDown,
-  Sparkles, Search, TrendingUp, TrendingDown, X, CalendarRange, AlertTriangle,
+  Sparkles, Search, TrendingUp, TrendingDown, X, CalendarRange, AlertTriangle, Copy,
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { usePlanoContabil } from '../hooks/usePlanoContabil';
 import { canEditFinanceiro } from '../utils/permissions';
+import { exercicioValido } from '../utils/exerciciosContabeis';
 import { ContaContabil, ContaContabilNode, NaturezaContabil } from '../types/planoContabil';
 import {
   achatarArvore,
@@ -43,7 +44,7 @@ export const PlanoContabilPage: React.FC = () => {
   const {
     plano, contas, arvore, loading, error,
     salvarConta, desativarConta, reativarConta, semearPlanoPadrao, paisPossiveis,
-    planos, exercicioExibido, exercicioCorrente, faltaExercicioCorrente,
+    planos, exercicioExibido, exercicioCorrente, faltaExercicioCorrente, exercicioSugerido,
     selecionarExercicio, duplicarParaExercicio,
   } = usePlanoContabil();
 
@@ -55,14 +56,27 @@ export const PlanoContabilPage: React.FC = () => {
   const [salvando, setSalvando] = useState(false);
   const [semeando, setSemeando] = useState(false);
   const [duplicando, setDuplicando] = useState(false);
+  // Texto, não número: o campo precisa aceitar ficar vazio enquanto o usuário digita.
+  const [exercicioDestino, setExercicioDestino] = useState('');
 
   const podeEditar = canEditFinanceiro(state.user, state.isOnline);
 
+  // O campo acompanha a sugestão do hook: ao abrir a tela, ao trocar de exercício e depois de
+  // duplicar (quando o ano recém-criado deixa de estar livre e a sugestão anda para o seguinte).
+  useEffect(() => {
+    setExercicioDestino(String(exercicioSugerido));
+  }, [exercicioSugerido]);
+
   const duplicarExercicio = async () => {
+    const destino = Number(exercicioDestino);
+    if (!exercicioValido(destino)) {
+      toast.error('Informe um exercício entre 1900 e 2200.');
+      return;
+    }
     setDuplicando(true);
     try {
-      const { contas: copiadas } = await duplicarParaExercicio(exercicioCorrente);
-      toast.success(`Plano de ${exercicioCorrente} criado com ${copiadas.length} contas copiadas.`);
+      const { contas: copiadas } = await duplicarParaExercicio(destino);
+      toast.success(`Plano de ${destino} criado com ${copiadas.length} contas copiadas.`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Não foi possível copiar o plano.');
     } finally {
@@ -234,25 +248,54 @@ export const PlanoContabilPage: React.FC = () => {
           </div>
 
           {/*
-            O plano de um exercício fechado continua existindo com os lançamentos daquele ano
-            pendurados nele. Por isso duplicar copia, nunca move — e por isso a tela avisa
-            quando o exercício corrente ainda não foi montado, em vez de mostrar em silêncio o
-            plano do ano passado como se fosse o de agora.
+            A duplicação fica SEMPRE disponível, não só quando o exercício corrente está
+            faltando. A primeira versão condicionava a `plano.exercicio < ano atual`, que nunca
+            é verdadeiro enquanto a empresa está no ano em que montou o plano — o botão só
+            apareceria em 1º de janeiro, quando já é tarde: os lançamentos do ano novo já teriam
+            começado a cair no plano do ano anterior, pela queda de `getPlanoAtivo`. Preparar o
+            exercício seguinte é trabalho de dezembro.
+
+            Duplicar copia, nunca move: o plano do ano fechado continua existindo com os
+            lançamentos daquele ano pendurados nele.
           */}
-          {faltaExercicioCorrente && podeEditar && (
-            <div className="flex items-center gap-2 text-xs text-amber-400 sm:ml-auto">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              <span>Ainda não há plano para {exercicioCorrente}.</span>
+          {podeEditar && (
+            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+              <label htmlFor="exercicio-destino" className="text-xs text-text-subtle">
+                Duplicar para
+              </label>
+              <input
+                id="exercicio-destino"
+                type="number"
+                min={1900}
+                max={2200}
+                step={1}
+                value={exercicioDestino}
+                onChange={(e) => setExercicioDestino(e.target.value)}
+                className="w-20 bg-bg-base border border-border-default rounded-lg px-2 py-1 text-sm font-mono text-text-base focus:border-[#3B82F6] outline-none"
+              />
               <button
                 onClick={duplicarExercicio}
                 disabled={duplicando}
-                className="px-2.5 py-1 rounded-lg bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-60 text-white font-bold"
+                className="px-2.5 py-1 rounded-lg bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1.5"
+                title={`Copia as contas do plano de ${exercicioExibido} para o exercício informado`}
               >
-                {duplicando ? 'Copiando…' : `Copiar para ${exercicioCorrente}`}
+                <Copy className="w-3.5 h-3.5" />
+                {duplicando ? 'Copiando…' : 'Duplicar plano'}
               </button>
             </div>
           )}
         </div>
+      )}
+
+      {plano && faltaExercicioCorrente && (
+        <div className="flex items-start gap-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-400">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>
+              O plano em uso é o de <b>{exercicioExibido}</b>, mas o exercício corrente é{' '}
+              <b>{exercicioCorrente}</b>. Os lançamentos novos estão sendo classificados nas contas
+              do exercício anterior — duplique o plano para {exercicioCorrente} acima.
+            </span>
+          </div>
       )}
 
       {loading && <div className="text-sm text-text-subtle">Carregando plano de contas…</div>}
