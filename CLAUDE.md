@@ -154,12 +154,41 @@ migração da coluna antiga:
   `criado_em`/`atualizado_em`. O par canônico em uso pelo código atual é `conteudo` e
   `criado_em`/`atualizado_em`.
 
-**Plano de deprecação** (ainda não iniciado — item de médio prazo, não execute sem planejamento):
-1. Confirmar, consultando o banco real, se as colunas legadas (`logradouro`, `plano_id`,
-   `conteudo_html`, `created_at`/`updated_at`) ainda recebem escrita de algum caminho de código ou
-   de uma integração externa.
-2. Se não recebem, migrar os poucos registros divergentes (`UPDATE ... WHERE canonical IS NULL`)
-   para consolidar no par canônico.
+**Plano de deprecação — passo 1 concluído em 09/09/2026, resultado inverte a suposição inicial**:
+o plano abaixo presumia que as colunas legadas talvez já estivessem paradas, sobrando só migrar
+dado velho. Não é o caso: `associadosService.ts` (`salvarAssociado`, por volta da linha 391) e
+`useDocumentosPadroes.ts` (`criar`/`editar`) gravam as duas colunas de cada par, em todo save,
+deliberadamente — não é uma integração externa, é o próprio código-fonte. Conferido direto na
+produção (`qigytjkgehwxalhmwpdd`, consulta completa às 3 linhas de `associados` e 6 de
+`documentos_padroes` que existem hoje — a base ainda é pequena o bastante pra isso ser exaustivo,
+não amostra):
+
+- `logradouro`/`endereco_logradouro`: **0 divergências** nas 3 linhas — o dual-write mantém os dois
+  idênticos. Continua vivo; não dá pra passar do passo 1 pra esse par sem antes parar de gravar a
+  coluna legada no código (o que é o novo passo 2, não o passo 2 original).
+- `conteudo`/`conteudo_html`, `criado_em`/`created_at`, `atualizado_em`/`updated_at`: mesma coisa —
+  **0 divergências** nas 6 linhas de `documentos_padroes`. Mesma conclusão.
+- `plano_id`: diferente dos outros — **as 3 linhas têm `plano_id IS NULL`**, enquanto
+  `plano_pax_id` tem o valor real. `associadosService.ts:288` só grava `plano_id` quando
+  `rest.plano_id` já chega preenchido do formulário, o que não acontece (o formulário só popula
+  `plano_pax_id`); então a coluna legada é reescrita para `NULL` a cada save, não mantida em
+  sincronia. Na prática já está "vazia" — não há dado pra migrar (o passo 2 original é moot pra
+  esse caso), mas ainda tem um fallback de leitura em `usePlanosPax.ts:377`
+  (`a.plano_pax_id === planoId || a.plano_id === planoId`, contra o cache do IndexedDB) que nunca
+  mais vai casar pelo `plano_id` na prática — candidato a remoção isolada, sem depender do resto do
+  plano.
+- Nenhuma function/view/trigger no schema `public` referencia essas colunas (`pg_proc`/
+  `information_schema.views` varridos), e não há Edge Functions no projeto — descarta o cenário de
+  integração externa escrevendo por fora do app.
+
+Efeito prático: o passo 2 original ("migrar os poucos registros divergentes") não tem o que fazer —
+não há divergência, o problema é o oposto, dado demais sendo escrito nos dois lugares. A ordem que
+faz sentido a partir daqui:
+1. ~~Confirmar se as colunas legadas ainda recebem escrita~~ — feito, ver acima.
+2. Parar o dual-write no código (remover a metade legada dos payloads em `associadosService.ts` e
+   `useDocumentosPadroes.ts`, exceto `plano_id`, que já não recebe valor real e pode ser removido do
+   payload numa PR isolada e pequena). A partir daí a coluna legada passa a valer como só-leitura de
+   verdade, sem mais um segundo escritor.
 3. Manter a coluna legada por um ciclo de release como alias somente-leitura (não remover ainda).
 4. Só então dropar a coluna legada, numa migration própria, depois de confirmar nos logs/advisors
    que nada mais a referencia.
@@ -476,3 +505,36 @@ service já usado por um hook "global", siga esse padrão desde o início.
 Depois de qualquer mudança de bundling, confirme o resultado real (não confie só no tamanho dos
 chunks) — rode `npm run build` e inspecione `dist/index.html`: só bibliotecas realmente necessárias
 no primeiro paint devem aparecer como `modulepreload`.
+
+### Bundle do editor Jodit em `DocumentosPadroesPage` — avaliado em 09/09/2026, não vale a pena mexer
+
+`DocumentosPadroesPage.tsx` já é seu próprio chunk de rota (não entra no `modulepreload` inicial —
+o problema aqui não é o mesmo do `jspdf`/`jspdf-autotable` acima), mas é o maior chunk do build
+(~964&nbsp;KB / ~252&nbsp;KB gzip). A hipótese óbvia era que o array `buttons` do `editorConfig`
+(as ~24 ferramentas de fato mostradas na toolbar) determinasse quais dos ~66 plugins do Jodit entram
+no bundle. **Não determina.** `jodit-react` importa `jodit/esm/plugins/all.js` (todos os plugins)
+dentro do próprio pacote, incondicionalmente — isso está em
+`node_modules/jodit-react/build/esm/chunk-*.mjs`, fora do controle de qualquer config passada pelo
+app. Mudar `buttons` muda só o que aparece na toolbar, não o que é baixado.
+
+Medido com `esbuild` (bundle isolado, fora do build real, só pra comparar): o core do Jodit sozinho
+(sem plugin nenhum) já minifica pra ~618&nbsp;KB — é a maior parte do peso. Um bundle só com os
+~30 plugins que os 24 botões configurados de fato precisam (mapeados um a um: `bold` cobre
+itálico/sublinhado/tachado, `table`+`select-cells`+`resize-cells`+`resizer` pro editor de tabela,
+`image`+`image-processor`+`image-properties` pra imagem, etc., mais os plugins de edição básica que
+não têm botão — `paste`, `clipboard`, `hotkeys`, `enter`, `backspace`...) deu ~732&nbsp;KB minificado
+(~206&nbsp;KB gzip) contra ~817&nbsp;KB (~232&nbsp;KB gzip) do `all.js` — uma economia de ~11%, não
+o corte grande que a suposição inicial sugeria. Os únicos plugins individualmente pesados que sobram
+sem uso são `ai-assistant` (~17&nbsp;KB) e `speech-recognize` (~16&nbsp;KB); o resto (`search`,
+`spellcheck`, `symbols`, `video`, `media`, `file`, `mobile`, `print`, `preview`, `about`, `stat`,
+`iframe`, `powered-by-jodit`) soma pouco.
+
+**Conclusão: não vale o risco.** Pra colher esse ~11% seria preciso abandonar o wrapper
+`jodit-react` (testado, mantido, usado por qualquer app Jodit+React) e escrever um componente
+próprio instanciando `Jodit` do pacote core à mão, cherry-pickando plugins — sem cobertura de teste
+de UI pra esse editor especificamente (é o mesmo módulo do editor de tabelas com bastante superfície
+de casos-limite documentado acima) e sem acesso a login real pra clicar e confirmar que nada quebrou
+(mesma limitação de sempre neste ambiente). O chunk já está fora do carregamento inicial, que era o
+problema que a regra geral desta seção resolve; isso aqui é só o peso de navegar pra essa página
+específica. Não reabra este item sem uma vitória bem maior que ~25&nbsp;KB gzip do outro lado da
+balança, ou sem acesso a um ambiente pra testar o editor de verdade depois da troca.
