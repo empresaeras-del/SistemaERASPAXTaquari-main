@@ -40,6 +40,8 @@ const getSupabaseTableName = (storeName: string): string | null => {
     requisicao_itens: 'requisicao_itens',
     remessas_faturamento: 'remessas_faturamento',
     contas_bancarias: 'contas_bancarias',
+    planos_contabeis: 'planos_contabeis',
+    contas_contabeis: 'contas_contabeis',
     fornecedores: 'fornecedores',
     atendimentos: 'atendimentos',
     atendimento_itens: 'atendimento_itens',

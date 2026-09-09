@@ -1,5 +1,7 @@
 const DB_NAME = 'ERAS_DB';
-const DB_VERSION = 22;
+// Suba a versão sempre que acrescentar um store à lista abaixo: sem isso o
+// `onupgradeneeded` não roda e o store não é criado em quem já tem o banco antigo.
+const DB_VERSION = 23;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -59,6 +61,8 @@ export const initDB = (): Promise<IDBDatabase> => {
         'lotes_caixa',
         'movimentacoes_caixa',
         'documentos_padroes',
+        'planos_contabeis',
+        'contas_contabeis',
         'notificacoes',
         'auditoria',
         'preferencias',

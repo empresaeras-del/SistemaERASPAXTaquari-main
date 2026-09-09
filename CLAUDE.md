@@ -205,6 +205,40 @@ não havia divergência, o problema era o oposto, dado demais sendo escrito nos 
 Não pule direto para o passo 4 — dropar uma coluna que algo ainda escreve quebra silenciosamente
 esse algo mais tarde.
 
+## Plano contábil: a FK que carrega o `tenant_id` dentro dela
+
+`planos_contabeis` e `contas_contabeis` (migration `20260909021132`) são o catálogo de contas
+de receita e despesa de cada empresa — a substituição do `categoria` de texto livre dos
+lançamentos, que até então só existia no IndexedDB do navegador via `useOptions`.
+
+Duas decisões deste módulo valem como referência para tabelas novas:
+
+- **A conta é uma árvore, não duas tabelas.** `contas_contabeis.conta_pai_id` aponta para a
+  própria tabela; `tipo` distingue `sintetica` (grupo, não recebe lançamento) de `analitica`
+  (folha lançável). Isso aceita 3+ níveis sem migration nova, e o relatório por grupo é um
+  `WITH RECURSIVE` sobre uma tabela só.
+- **O isolamento por empresa está na chave, não na revisão de código.** As FKs são compostas
+  e levam o `tenant_id` junto: `contas_contabeis (tenant_id, plano_id) → planos_contabeis
+  (tenant_id, id)`, e a conta pai referencia `(tenant_id, plano_id, id)`. Uma FK simples por
+  `id` garantiria só que a linha existe — apontar para conta de outra empresa passaria no
+  banco em silêncio. Como este schema já teve três incidentes de vazamento entre empresas
+  (PRs #13, #14 e #23), a regra aqui é: **quando uma tabela nova referencia outra tabela
+  multi-tenant, use FK composta com `tenant_id`**, e declare a `unique (tenant_id, id)` do
+  lado referenciado para viabilizá-la. Na fase 2 a mesma técnica impede que uma receita
+  aponte para conta de despesa, incluindo `natureza` na chave.
+
+As sete constraints foram verificadas contra o banco real antes do commit, com um bloco
+`DO $$` que tenta cada violação e aborta no fim (`RAISE EXCEPTION` ⇒ rollback), sem deixar
+dado de teste em produção — vale repetir esse padrão ao criar tabela nova com constraint não
+trivial, em vez de confiar que o DDL faz o que promete.
+
+O plano modelo (`config/planoContabilPadrao.config.ts`) é **constante do frontend copiada**
+para linhas do tenant no momento da semeadura — não é linha com `tenant_id IS NULL`
+compartilhada entre empresas. É o oposto do que causou o incidente `empresa_padrao`: cada
+empresa vira dona das próprias contas. A ordem do array importa (pai antes das filhas, porque
+`semearPlanoPadrao` resolve `conta_pai_id` pelo código do pai já inserido) e está travada por
+teste em `planoContabilTree.test.ts`.
+
 ## Campo opcional com `UNIQUE`: grave `NULL`, nunca string vazia
 
 `credenciados.cnpj_cpf` (opcional desde a migration `20260908182307`) é o primeiro caso disso no

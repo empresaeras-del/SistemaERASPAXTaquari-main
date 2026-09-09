@@ -81,7 +81,7 @@ export const MODULOS_SISTEMA: ModuloInfo[] = [
     descricao: 'Contas a receber, contas a pagar, conciliação bancária e fluxo de caixa',
     categoria: 'Controladoria & Finanças',
     iconName: 'DollarSign',
-    paths: ['/financeiro/contas-a-receber', '/financeiro/contas-a-pagar', '/caixas', '/financeiro/caixas', '/financeiro'],
+    paths: ['/financeiro/contas-a-receber', '/financeiro/contas-a-pagar', '/caixas', '/financeiro/caixas', '/financeiro', '/financeiro/plano-contabil'],
     subModulos: [
       {
         id: 'financeiro_receber',
@@ -103,6 +103,13 @@ export const MODULOS_SISTEMA: ModuloInfo[] = [
         descricao: 'Abertura, fechamento de caixa, sangrias, suprimentos e histórico de movimentações',
         tipo: 'operacional',
         paths: ['/caixas', '/financeiro/caixas']
+      },
+      {
+        id: 'financeiro_plano_contabil',
+        label: 'Plano de Contas Contábeis',
+        descricao: 'Grupos e contas contábeis de receita e despesa usados para classificar os lançamentos',
+        tipo: 'gestao',
+        paths: ['/financeiro/plano-contabil']
       }
     ]
   },
