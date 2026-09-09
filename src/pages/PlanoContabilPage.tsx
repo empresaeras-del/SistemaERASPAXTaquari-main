@@ -2,13 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen, Plus, Pencil, Power, PowerOff, ChevronRight, ChevronDown,
   Sparkles, Search, TrendingUp, TrendingDown, X, CalendarRange, AlertTriangle, Copy,
+  FileBarChart,
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { usePlanoContabil } from '../hooks/usePlanoContabil';
+import { useRealizadoContabil } from '../hooks/useRealizadoContabil';
+import { DemonstracaoContabilModal } from '../components/financeiro/DemonstracaoContabilModal';
 import { canEditFinanceiro } from '../utils/permissions';
 import { exercicioValido } from '../utils/exerciciosContabeis';
-import { ContaContabil, ContaContabilNode, NaturezaContabil } from '../types/planoContabil';
+import { ContaContabil, NaturezaContabil } from '../types/planoContabil';
 import {
   achatarArvore,
   proximoCodigo,
@@ -17,6 +20,9 @@ import {
   codigoDoPai,
 } from '../utils/planoContabilTree';
 import { contemTermo } from '../utils/normalizarTexto';
+import { Empresa, getEmpresaById } from '../services/empresasService';
+import { formatCurrency } from '../utils/formatters';
+import { ContaComValores, ValoresDaConta } from '../utils/demonstracaoContabil';
 
 interface FormState {
   id: string | null;
@@ -56,16 +62,39 @@ export const PlanoContabilPage: React.FC = () => {
   const [salvando, setSalvando] = useState(false);
   const [semeando, setSemeando] = useState(false);
   const [duplicando, setDuplicando] = useState(false);
+  const [mostrarDemonstracao, setMostrarDemonstracao] = useState(false);
+  // Cabeçalho do relatório (nome, CNPJ, logo) — mesmo dado que os relatórios de Contas a
+  // Receber e a Pagar usam. O CNPJ do emitente sai sem máscara de propósito: é a
+  // identificação de quem emite o documento, ver `utils/mascaraDocumento.ts`.
+  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
   // Texto, não número: o campo precisa aceitar ficar vazio enquanto o usuário digita.
   const [exercicioDestino, setExercicioDestino] = useState('');
 
   const podeEditar = canEditFinanceiro(state.user, state.isOnline);
+
+  // Valores do exercício por conta. O hook recebe contas e árvore por parâmetro em vez de
+  // montar um segundo `usePlanoContabil` — ver o comentário do próprio hook.
+  const {
+    arvoreComValores: arvoreValores,
+    resumo,
+    foraDoExercicio,
+    naoClassificado,
+    loading: carregandoValores,
+  } = useRealizadoContabil({ contas, arvore, exercicio: exercicioExibido });
 
   // O campo acompanha a sugestão do hook: ao abrir a tela, ao trocar de exercício e depois de
   // duplicar (quando o ano recém-criado deixa de estar livre e a sugestão anda para o seguinte).
   useEffect(() => {
     setExercicioDestino(String(exercicioSugerido));
   }, [exercicioSugerido]);
+
+  useEffect(() => {
+    let cancelado = false;
+    getEmpresaById(state.empresaSelecionada, state.isOnline)
+      .then((emp) => { if (!cancelado) setEmpresaData(emp); })
+      .catch(() => { if (!cancelado) setEmpresaData(null); });
+    return () => { cancelado = true; };
+  }, [state.empresaSelecionada, state.isOnline]);
 
   const duplicarExercicio = async () => {
     const destino = Number(exercicioDestino);
@@ -85,7 +114,7 @@ export const PlanoContabilPage: React.FC = () => {
   };
 
   const linhas = useMemo(() => {
-    const todas = achatarArvore(arvore);
+    const todas = achatarArvore(arvoreValores);
     const termo = busca.trim();
 
     return todas.filter((n) => {
@@ -104,7 +133,7 @@ export const PlanoContabilPage: React.FC = () => {
       }
       return true;
     });
-  }, [arvore, contas, busca, recolhidas, mostrarInativas]);
+  }, [arvoreValores, contas, busca, recolhidas, mostrarInativas]);
 
   const toggleRecolher = (id: string) => {
     setRecolhidas((atual) => {
@@ -210,13 +239,24 @@ export const PlanoContabilPage: React.FC = () => {
           </p>
         </div>
 
-        {plano && podeEditar && (
-          <button
-            onClick={() => abrirNova()}
-            className="px-4 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20 self-start"
-          >
-            <Plus className="w-4 h-4" /> Nova Conta
-          </button>
+        {plano && (
+          <div className="flex items-center gap-2 self-start">
+            <button
+              onClick={() => setMostrarDemonstracao(true)}
+              className="px-4 py-2 border border-border-default hover:border-[#3B82F6] hover:text-[#3B82F6] text-text-subtle rounded-xl text-sm font-bold flex items-center gap-2"
+              title={`Demonstração contábil do exercício ${exercicioExibido}`}
+            >
+              <FileBarChart className="w-4 h-4" /> Demonstração Contábil
+            </button>
+            {podeEditar && (
+              <button
+                onClick={() => abrirNova()}
+                className="px-4 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20"
+              >
+                <Plus className="w-4 h-4" /> Nova Conta
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -287,6 +327,14 @@ export const PlanoContabilPage: React.FC = () => {
         </div>
       )}
 
+      {plano && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <CartaoResumo titulo="Receitas" valores={resumo.receita} tom="receita" carregando={carregandoValores} />
+          <CartaoResumo titulo="Despesas" valores={resumo.despesa} tom="despesa" carregando={carregandoValores} />
+          <CartaoResumo titulo="Resultado do exercício" valores={resumo.resultado} tom="resultado" carregando={carregandoValores} />
+        </div>
+      )}
+
       {plano && faltaExercicioCorrente && (
         <div className="flex items-start gap-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-400">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -351,13 +399,20 @@ export const PlanoContabilPage: React.FC = () => {
           </div>
 
           <div className="rounded-2xl border border-border-default bg-bg-surface overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border-default bg-bg-base/40 text-[10px] uppercase tracking-wide text-text-muted">
+              <span className="flex-1">Conta</span>
+              <span className="hidden md:block w-28 text-right">Previsto {exercicioExibido}</span>
+              <span className="w-28 text-right">Realizado {exercicioExibido}</span>
+              {podeEditar && <span className="w-[104px] shrink-0" aria-hidden="true" />}
+            </div>
+
             {linhas.length === 0 ? (
               <div className="p-8 text-center text-sm text-text-subtle">
                 Nenhuma conta encontrada para esse filtro.
               </div>
             ) : (
               <ul className="divide-y divide-border-default">
-                {linhas.map((node: ContaContabilNode) => {
+                {linhas.map((node: ContaComValores) => {
                   const temFilhas = node.filhas.length > 0;
                   const recolhida = recolhidas.has(node.id);
                   const indent = Math.min((node.nivel || 1) - 1, 5);
@@ -403,8 +458,32 @@ export const PlanoContabilPage: React.FC = () => {
                         </span>
                       )}
 
+                      {/*
+                        O valor de uma sintética é a soma das descendentes (`total`), não algo
+                        lançado nela — o trigger `valida_conta_lancavel` não deixa lançar em
+                        grupo. Conta zerada mostra o zero em vez de sumir: o plano é a
+                        estrutura, e uma linha faltando faria procurar a conta que se sabe que
+                        existe.
+                      */}
+                      <div className="ml-auto flex items-center gap-2 shrink-0 tabular-nums">
+                        <span className="hidden md:block w-28 text-right text-xs text-text-muted">
+                          {carregandoValores ? '—' : formatCurrency(node.total.previsto)}
+                        </span>
+                        <span
+                          className={`w-28 text-right text-xs font-bold ${
+                            carregandoValores || node.total.realizado === 0
+                              ? 'text-text-muted'
+                              : node.natureza === 'receita'
+                                ? 'text-emerald-400'
+                                : 'text-rose-400'
+                          }`}
+                        >
+                          {carregandoValores ? '—' : formatCurrency(node.total.realizado)}
+                        </span>
+                      </div>
+
                       {podeEditar && (
-                        <div className="ml-auto flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
                           {node.tipo === 'sintetica' && (
                             <button
                               onClick={() => abrirNova(node)}
@@ -437,12 +516,51 @@ export const PlanoContabilPage: React.FC = () => {
             )}
           </div>
 
-          <p className="text-xs text-text-muted">
-            {contas.filter((c) => c.tipo === 'analitica' && c.ativo).length} contas lançáveis ·{' '}
-            {contas.filter((c) => c.tipo === 'sintetica').length} grupos · plano <b>{plano.nome}</b> ·{' '}
-            exercício <b>{plano.exercicio}</b>
-          </p>
+          <div className="space-y-1.5">
+            <p className="text-xs text-text-muted">
+              {contas.filter((c) => c.tipo === 'analitica' && c.ativo).length} contas lançáveis ·{' '}
+              {contas.filter((c) => c.tipo === 'sintetica').length} grupos · plano <b>{plano.nome}</b> ·{' '}
+              exercício <b>{plano.exercicio}</b>
+            </p>
+
+            {/*
+              As duas notas abaixo existem para nada sumir em silêncio. A primeira é o caso
+              real de quem ainda não montou o exercício novo: `getPlanoAtivo` cai para o plano
+              do ano anterior e os lançamentos de janeiro nascem classificados nas contas dele
+              — sem esta linha, o dinheiro simplesmente não apareceria em lugar nenhum.
+            */}
+            {(foraDoExercicio.previsto !== 0 || foraDoExercicio.realizado !== 0) && (
+              <p className="text-xs text-amber-400/90">
+                Fora do exercício {exercicioExibido}, em contas deste plano:{' '}
+                <b>{formatCurrency(foraDoExercicio.realizado)}</b> realizado e{' '}
+                <b>{formatCurrency(foraDoExercicio.previsto)}</b> previsto — parcelas com vencimento
+                ou liquidação em outro ano, tipicamente as prestações seguintes de um parcelamento
+                longo. Não estão somadas acima.
+              </p>
+            )}
+
+            {(naoClassificado.previsto !== 0 || naoClassificado.realizado !== 0) && (
+              <p className="text-xs text-text-muted">
+                Sem conta deste plano (lançamento anterior ao plano de contas, ou classificado em
+                outro exercício): <b>{formatCurrency(naoClassificado.realizado)}</b> realizado e{' '}
+                <b>{formatCurrency(naoClassificado.previsto)}</b> previsto.
+              </p>
+            )}
+          </div>
         </>
+      )}
+
+      {mostrarDemonstracao && plano && (
+        <DemonstracaoContabilModal
+          onClose={() => setMostrarDemonstracao(false)}
+          plano={plano}
+          arvore={arvoreValores}
+          resumo={resumo}
+          foraDoExercicio={foraDoExercicio}
+          naoClassificado={naoClassificado}
+          empresaData={empresaData}
+          userName={state.user?.nome || 'Operador do Sistema'}
+        />
       )}
 
       {form && (
@@ -597,6 +715,39 @@ export const PlanoContabilPage: React.FC = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/**
+ * Cartão de totais do exercício. Realizado em destaque (é o que foi pedido) e previsto ao
+ * lado, porque um número sozinho não diz se R$ 3.742 é muito ou pouco — o par é que responde.
+ */
+const CartaoResumo: React.FC<{
+  titulo: string;
+  valores: ValoresDaConta;
+  tom: 'receita' | 'despesa' | 'resultado';
+  carregando: boolean;
+}> = ({ titulo, valores, tom, carregando }) => {
+  const corRealizado =
+    tom === 'receita'
+      ? 'text-emerald-400'
+      : tom === 'despesa'
+        ? 'text-rose-400'
+        // No resultado o sinal é que decide: déficit é vermelho, superávit é verde.
+        : valores.realizado < 0
+          ? 'text-rose-400'
+          : 'text-emerald-400';
+
+  return (
+    <div className="p-3.5 rounded-xl border border-border-default bg-bg-surface">
+      <p className="text-[11px] uppercase tracking-wide text-text-muted">{titulo}</p>
+      <p className={`text-lg font-bold tabular-nums ${carregando ? 'text-text-muted' : corRealizado}`}>
+        {carregando ? '—' : formatCurrency(valores.realizado)}
+      </p>
+      <p className="text-[11px] text-text-subtle tabular-nums">
+        realizado · previsto {carregando ? '—' : formatCurrency(valores.previsto)}
+      </p>
     </div>
   );
 };
