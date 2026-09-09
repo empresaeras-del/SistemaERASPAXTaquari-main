@@ -89,7 +89,6 @@ export function useDocumentosPadroes() {
         descricao: data.descricao || null,
         tipo: data.tipo,
         conteudo: data.conteudo || '',
-        conteudo_html: data.conteudo || '',
         arquivo_url: data.arquivo_url || null,
         cabecalho_html: data.cabecalho_html || null,
         rodape_html: data.rodape_html || null,
@@ -102,8 +101,6 @@ export function useDocumentosPadroes() {
         ativo: data.ativo !== undefined ? data.ativo : true,
         empresa_id: tenantId,
         tenant_id: tenantId,
-        created_at: now,
-        updated_at: now,
         criado_em: now,
         atualizado_em: now
       };
@@ -171,13 +168,11 @@ export function useDocumentosPadroes() {
         ...data,
         empresa_id: tenantId,
         tenant_id: tenantId,
-        updated_at: now,
         atualizado_em: now
       };
 
       if (data.conteudo !== undefined) {
         updatePayload.conteudo = data.conteudo;
-        updatePayload.conteudo_html = data.conteudo;
       }
 
       if (isOnline) {
