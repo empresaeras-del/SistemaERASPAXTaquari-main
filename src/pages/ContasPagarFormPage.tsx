@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { salvarDespesa, getDespesaCompleta, Despesa, ParcelaPagar } from '../services/financeiroService';
 import { getAllFromIDB } from '../lib/idb';
@@ -15,6 +15,8 @@ import { useConfirm } from '../context/ConfirmContext';
 import { registrarAuditoria } from '../lib/supabase';
 import { getContasBancariasAtivas } from '../services/contasBancariasService';
 import { ContaBancaria } from '../types/contasBancarias';
+import { useCentrosCusto } from '../hooks/useCentrosCusto';
+import { centrosSelecionaveis } from '../utils/centrosCusto';
 import { useOptions } from '../hooks/useOptions';
 import { usePlanoContabil } from '../hooks/usePlanoContabil';
 import { SeletorContaContabil } from '../components/financeiro/SeletorContaContabil';
@@ -73,6 +75,7 @@ const despesaSchema = z.object({
   // e lançamento antigo continua válido. Vira obrigatório na fase 3, depois do backfill.
   conta_contabil_id: z.string().optional(),
   centro_custo: z.string().optional(),
+  centro_custo_id: z.string().optional(),
   data_emissao: z.string().min(1, "Data de emissão obrigatória"),
   data_inicio_pagamento: z.string().min(1, "Data de início obrigatória"),
   valor_total: z.preprocess((v) => (v === '' || v === undefined ? 0 : Number(v)), z.number().min(0.01, "O valor deve ser maior que zero")),
@@ -104,6 +107,11 @@ export const ContasPagarFormPage: React.FC = () => {
 
   // Empresa sem plano de contas montado continua lançando pelo seletor de categoria antigo.
   const { plano: planoContabil, contas: contasContabeis, contasLancaveis, loading: loadingPlano } = usePlanoContabil();
+
+  // Centro de custo virou tabela da empresa na fase 4 — a lista do `useOptions` vivia só no
+  // IndexedDB deste navegador. Empresa que ainda não tem nenhum centro cadastrado continua
+  // vendo o select antigo, pelo mesmo motivo do seletor de categoria.
+  const { centros: centrosCustoTabela, loading: loadingCentros } = useCentrosCusto();
   const contasDespesaLancaveis = contasLancaveis('despesa');
   const temPlanoContabil = !!planoContabil && contasDespesaLancaveis.length > 0;
 
@@ -140,6 +148,7 @@ export const ContasPagarFormPage: React.FC = () => {
       categoria: 'Repasse Credenciados / Prestadores',
       conta_contabil_id: '',
       centro_custo: 'Rede Assistencial',
+      centro_custo_id: '',
       data_emissao: format(new Date(), "yyyy-MM-dd"),
       data_inicio_pagamento: format(new Date(), "yyyy-MM-dd"),
       valor_total: 0,
@@ -149,6 +158,15 @@ export const ContasPagarFormPage: React.FC = () => {
       parcelas: []
     }
   });
+
+  // A conta já gravada continua na lista mesmo desativada, senão abrir a despesa para editar
+  // apagaria o centro de custo dela — mesmo motivo do seletor de conta contábil.
+  const centroCustoSelecionado = form.watch("centro_custo_id");
+  const centrosDisponiveis = useMemo(
+    () => centrosSelecionaveis(centrosCustoTabela, centroCustoSelecionado),
+    [centrosCustoTabela, centroCustoSelecionado],
+  );
+  const temCentrosCadastrados = centrosCustoTabela.length > 0;
 
   const { fields: parcelasFields, replace: replaceParcelas } = useFieldArray({
     control: form.control,
@@ -176,6 +194,7 @@ export const ContasPagarFormPage: React.FC = () => {
               categoria: desp.categoria || 'Repasse Credenciados / Prestadores',
               conta_contabil_id: desp.conta_contabil_id || '',
               centro_custo: desp.centro_custo || 'Rede Assistencial',
+              centro_custo_id: desp.centro_custo_id || '',
               data_emissao: desp.data_emissao || format(new Date(), "yyyy-MM-dd"),
               data_inicio_pagamento: desp.data_inicio_pagamento || format(new Date(), "yyyy-MM-dd"),
               valor_total: Number(desp.valor_total) || 0,
@@ -303,7 +322,10 @@ export const ContasPagarFormPage: React.FC = () => {
         // Snapshot do nome da conta no momento do lançamento — ver CLAUDE.md (regra R7).
         categoria: data.categoria,
         conta_contabil_id: data.conta_contabil_id || null,
+        // `centro_custo` continua como snapshot do nome, ao lado do id — mesmo padrão de
+        // `categoria`/`conta_contabil_id` (ver CLAUDE.md).
         centro_custo: data.centro_custo || 'Rede Assistencial',
+        centro_custo_id: data.centro_custo_id || null,
         data_emissao: data.data_emissao,
         data_inicio_pagamento: data.data_inicio_pagamento,
         valor_total: valorTotalFinal,
@@ -594,23 +616,57 @@ export const ContasPagarFormPage: React.FC = () => {
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="block text-sm font-medium text-text-subtle">Centro de Custo</label>
-                  <button 
-                    type="button" 
-                    onClick={() => setModalOpen('centro_custo')} 
-                    className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors flex items-center gap-1 text-xs" 
-                    title="Gerenciar Centros de Custo"
-                  >
-                    <Settings className="w-3.5 h-3.5" />
-                    <span>Gerenciar</span>
-                  </button>
+                  {temCentrosCadastrados ? (
+                    <Link
+                      to="/financeiro/plano-contabil"
+                      className="text-[#3B82F6] hover:bg-[#3B82F6]/10 px-1.5 py-0.5 rounded-md transition-colors flex items-center gap-1 text-xs"
+                      title="Gerenciar centros de custo"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Gerenciar</span>
+                    </Link>
+                  ) : (
+                    <button 
+                      type="button" 
+                      onClick={() => setModalOpen('centro_custo')} 
+                      className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors flex items-center gap-1 text-xs" 
+                      title="Gerenciar Centros de Custo"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Gerenciar</span>
+                    </button>
+                  )}
                 </div>
-                <select 
-                  {...form.register("centro_custo")}
-                  className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
-                >
-                  <option value="">Selecione o centro de custo...</option>
-                  {centrosCusto.map(cc => <option key={cc} value={cc}>{cc}</option>)}
-                </select>
+                {temCentrosCadastrados ? (
+                  <select
+                    value={form.watch("centro_custo_id") || ''}
+                    onChange={(e) => {
+                      const escolhido = centrosDisponiveis.find(c => c.id === e.target.value);
+                      form.setValue("centro_custo_id", e.target.value, { shouldDirty: true });
+                      // O nome vira o snapshot gravado em `centro_custo`.
+                      form.setValue("centro_custo", escolhido?.nome || '', { shouldDirty: true });
+                    }}
+                    disabled={loadingCentros}
+                    className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none disabled:opacity-60"
+                  >
+                    <option value="">
+                      {loadingCentros ? 'Carregando centros de custo…' : 'Selecione o centro de custo...'}
+                    </option>
+                    {centrosDisponiveis.map(cc => (
+                      <option key={cc.id} value={cc.id}>
+                        {cc.codigo} — {cc.nome}{cc.ativo ? '' : ' (desativado)'}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select 
+                    {...form.register("centro_custo")}
+                    className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
+                  >
+                    <option value="">Selecione o centro de custo...</option>
+                    {centrosCusto.map(cc => <option key={cc} value={cc}>{cc}</option>)}
+                  </select>
+                )}
               </div>
 
               <div>

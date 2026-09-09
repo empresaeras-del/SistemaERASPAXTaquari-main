@@ -532,3 +532,36 @@ describe('estornarPagamento (offline)', () => {
     expect(salvo.observacao_pagamento).toBe('Estornado: engano');
   });
 });
+
+/**
+ * Mesmo risco da fase 2, agora com `centro_custo_id`: o campo entrou na interface `Despesa`
+ * e no formulário, e sem estar na lista de permissão do sanitizer seria descartado a caminho
+ * do Supabase — a despesa salvaria "com sucesso" sem centro de custo nenhum.
+ */
+describe('centro de custo no sanitizer (fase 4)', () => {
+  const UUID = '123e4567-e89b-12d3-a456-426614174000';
+
+  it('leva centro_custo_id da despesa para o payload do Supabase', () => {
+    const out = sanitizeDespesaForSupabase({ ...baseDespesa, centro_custo_id: UUID });
+    expect(out.centro_custo_id).toBe(UUID);
+  });
+
+  it('despesa sem centro de custo vai com null, não com undefined', () => {
+    expect(sanitizeDespesaForSupabase(baseDespesa).centro_custo_id).toBeNull();
+  });
+
+  it('anula centro_custo_id que não é UUID, em vez de mandar lixo para a FK', () => {
+    const out = sanitizeDespesaForSupabase({ ...baseDespesa, centro_custo_id: 'Administrativo' });
+    expect(out.centro_custo_id).toBeNull();
+  });
+
+  it('mantém centro_custo como snapshot do nome, ao lado do id', () => {
+    const out = sanitizeDespesaForSupabase({
+      ...baseDespesa,
+      centro_custo: 'Administrativo',
+      centro_custo_id: UUID,
+    });
+    expect(out.centro_custo).toBe('Administrativo');
+    expect(out.centro_custo_id).toBe(UUID);
+  });
+});

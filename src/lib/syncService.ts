@@ -42,6 +42,7 @@ const getSupabaseTableName = (storeName: string): string | null => {
     contas_bancarias: 'contas_bancarias',
     planos_contabeis: 'planos_contabeis',
     contas_contabeis: 'contas_contabeis',
+    centros_custo: 'centros_custo',
     fornecedores: 'fornecedores',
     atendimentos: 'atendimentos',
     atendimento_itens: 'atendimento_itens',
