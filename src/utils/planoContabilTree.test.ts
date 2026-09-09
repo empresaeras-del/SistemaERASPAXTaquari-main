@@ -11,9 +11,10 @@ import {
   validarConta,
   proximoCodigo,
   agruparContasPorPai,
+  resolverContaPorCodigo,
 } from './planoContabilTree';
 import type { ContaContabil } from '../types/planoContabil';
-import { PLANO_CONTABIL_PADRAO } from '../config/planoContabilPadrao.config';
+import { PLANO_CONTABIL_PADRAO, CODIGO_CONTA_SOBRA } from '../config/planoContabilPadrao.config';
 
 const conta = (over: Partial<ContaContabil> & { id: string; codigo: string }): ContaContabil => ({
   tenant_id: 't1',
@@ -372,5 +373,60 @@ describe('PLANO_CONTABIL_PADRAO (invariantes que a semeadura assume)', () => {
     const analiticas = PLANO_CONTABIL_PADRAO.filter((c) => c.tipo === 'analitica');
     expect(analiticas.some((c) => c.natureza === 'receita')).toBe(true);
     expect(analiticas.some((c) => c.natureza === 'despesa')).toBe(true);
+  });
+});
+
+describe('resolverContaPorCodigo', () => {
+  const plano: ContaContabil[] = [
+    conta({ id: 'g', codigo: '3.1', tipo: 'sintetica' }),
+    conta({ id: 'mens', codigo: '3.1.01', nome: 'Mensalidades de Planos', conta_pai_id: 'g' }),
+    conta({ id: 'extra', codigo: '3.1.03', nome: 'Serviços Extras', conta_pai_id: 'g' }),
+    conta({ id: 'sobra', codigo: '3.2.02', nome: 'Outras Receitas' }),
+    conta({ id: 'desp', codigo: '4.9.01', nome: 'Despesas Diversas', natureza: 'despesa' }),
+  ];
+
+  it('acha a conta pelo código pedido', () => {
+    expect(resolverContaPorCodigo(plano, 'receita', '3.1.01')?.id).toBe('mens');
+  });
+
+  it('cai na conta de sobra da natureza quando o código pedido não existe', () => {
+    expect(resolverContaPorCodigo(plano, 'receita', '3.1.99')?.id).toBe('sobra');
+    expect(CODIGO_CONTA_SOBRA.receita).toBe('3.2.02');
+  });
+
+  it('cai na primeira analítica quando nem a conta de sobra existe', () => {
+    const semSobra = plano.filter((c) => c.id !== 'sobra');
+    expect(resolverContaPorCodigo(semSobra, 'receita', '3.1.99')?.id).toBe('mens');
+  });
+
+  it('nunca atravessa a natureza — sem conta de receita, devolve null', () => {
+    const soDespesa = plano.filter((c) => c.natureza === 'despesa');
+    expect(resolverContaPorCodigo(soDespesa, 'receita', '3.1.01')).toBeNull();
+  });
+
+  it('ignora conta sintética, desativada e excluída', () => {
+    const contas = [
+      conta({ id: 'g2', codigo: '3.1', tipo: 'sintetica' }),
+      conta({ id: 'off', codigo: '3.1.01', ativo: false }),
+      conta({ id: 'del', codigo: '3.1.02', deleted_at: '2026-01-01' }),
+      conta({ id: 'ok', codigo: '3.1.03' }),
+    ];
+    expect(resolverContaPorCodigo(contas, 'receita', '3.1.01')?.id).toBe('ok');
+  });
+
+  it('devolve null quando o plano está vazio (empresa sem plano montado)', () => {
+    expect(resolverContaPorCodigo([], 'despesa', '4.1.01')).toBeNull();
+  });
+
+  it('resolve todos os códigos automáticos contra o plano modelo', () => {
+    const modelo: ContaContabil[] = PLANO_CONTABIL_PADRAO.map((c, i) =>
+      conta({ id: `m${i}`, codigo: c.codigo, nome: c.nome, natureza: c.natureza, tipo: c.tipo }),
+    );
+    for (const [codigo, natureza] of [
+      ['3.1.01', 'receita'], ['3.1.02', 'receita'], ['3.1.03', 'receita'],
+      ['3.1.04', 'receita'], ['4.1.01', 'despesa'],
+    ] as const) {
+      expect(resolverContaPorCodigo(modelo, natureza, codigo)?.codigo).toBe(codigo);
+    }
   });
 });

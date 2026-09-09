@@ -4,6 +4,8 @@ import { useAppContext } from '../../context/AppContext';
 import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { getAssociados, saveAssociado, Associado } from '../../services/associadosService';
 import { salvarReceita } from '../../services/financeiroService';
+import { resolverContaLancamento } from '../../services/planoContabilService';
+import { CODIGO_CONTA_MENSALIDADE } from '../../config/planoContabilPadrao.config';
 import { registrarAuditoria } from '../../lib/supabase';
 import {
   X,
@@ -258,6 +260,11 @@ export const NovoContratoWizard: React.FC<{
         return;
       }
 
+      // Fase 3: mensalidade nasce classificada na conta de mensalidades do plano.
+      const contaContabil = await resolverContaLancamento(
+        state.isOnline, targetTenant, 'receita', CODIGO_CONTA_MENSALIDADE,
+      );
+
       const receitaMestre = {
         id: mestreId,
         tenant_id: targetTenant,
@@ -268,7 +275,8 @@ export const NovoContratoWizard: React.FC<{
         associado_cpf: associadoAtualizado.cpf,
         associado_plano: planoSelecionado?.nome,
         descricao: `Contrato de Plano: ${planoSelecionado?.nome} - ${numeroContrato}`,
-        categoria: 'Mensalidades',
+        categoria: contaContabil?.nome || 'Mensalidades',
+        conta_contabil_id: contaContabil?.id || null,
         data_emissao: format(new Date(), 'yyyy-MM-dd'),
         data_inicio_cobranca: parcelas[0].data_vencimento,
         valor_total: totalReceita,

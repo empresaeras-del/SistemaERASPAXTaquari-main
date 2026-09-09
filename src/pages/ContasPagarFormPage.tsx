@@ -384,6 +384,18 @@ export const ContasPagarFormPage: React.FC = () => {
   };
 
   const onSubmit = async (data: DespesaFormData) => {
+    // Fase 3: com plano de contas montado, a classificação é obrigatória — e é o mesmo que o
+    // trigger `exige_conta_contabil` cobra no banco. A checagem fica aqui, e não no schema Zod,
+    // porque depende de estado de runtime (a empresa ter plano) que o schema não enxerga.
+    if (temPlanoContabil && !data.conta_contabil_id) {
+      form.setError('conta_contabil_id', {
+        type: 'required',
+        message: 'Selecione a conta contábil do lançamento.',
+      });
+      toast.error('Selecione a conta contábil do lançamento.');
+      return;
+    }
+
     // Em modo edição, solicitar confirmação do usuário antes de salvar
     if (isEditing) {
       const parcelasAtuais = data.parcelas || [];
@@ -552,7 +564,7 @@ export const ContasPagarFormPage: React.FC = () => {
                     form.setValue("conta_contabil_id", contaId, { shouldDirty: true });
                     if (contaNome) form.setValue("categoria", contaNome, { shouldDirty: true, shouldValidate: true });
                   }}
-                  erro={errors.categoria?.message}
+                  erro={errors.conta_contabil_id?.message || errors.categoria?.message}
                 />
               ) : (
                 <div>
