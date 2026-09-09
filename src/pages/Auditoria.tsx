@@ -42,13 +42,18 @@ import {
   formatKeyName,
   formatDetalhesParaTexto,
   calcularCamposAlterados,
+  valorDoDiffParaTexto,
   filtrarLogsAuditoria,
   calcularEstatisticasAuditoria,
 } from '../utils/auditoriaHelpers';
+import { mascararValorDeCampo } from '../utils/mascaraDocumento';
 
 // Format value nicely in UI
 const formatValueDisplay = (key: string, val: any): React.ReactNode => {
   if (val === null || val === undefined) return <span className="text-text-subtle italic">Não informado</span>;
+  // Gêmeo de `formatValorParaTexto` (texto/CSV/PDF): os dois precisam mascarar CPF/CNPJ, senão
+  // a tela e o relatório mostram coisas diferentes para o mesmo log.
+  val = mascararValorDeCampo(key, val);
   if (typeof val === 'boolean') {
     return (
       <span className={`px-2 py-0.5 rounded text-xs font-semibold ${val ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 border border-rose-500/20'}`}>
@@ -110,12 +115,17 @@ const DiffViewer: React.FC<{ oldData: any; newData: any }> = ({ oldData, newData
               {formatKeyName(change?.key || '')}:
             </span>
             <div className="flex items-center gap-2 flex-1 overflow-hidden flex-wrap sm:flex-nowrap">
-              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 px-2.5 py-1 rounded-lg line-through truncate max-w-full sm:max-w-[45%]" title={JSON.stringify(change?.oldVal)}>
-                {change?.oldVal !== undefined && change?.oldVal !== null ? JSON.stringify(change.oldVal) : 'Vazio'}
+              {/*
+                O valor passa por `valorDoDiffParaTexto`, a mesma função que o texto/CSV/PDF
+                usa — inclusive no `title`, senão o CPF voltaria inteiro no tooltip. Ver
+                `utils/mascaraDocumento.ts`.
+              */}
+              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 px-2.5 py-1 rounded-lg line-through truncate max-w-full sm:max-w-[45%]" title={valorDoDiffParaTexto(change?.key || '', change?.oldVal)}>
+                {valorDoDiffParaTexto(change?.key || '', change?.oldVal)}
               </div>
               <ArrowRight className="w-3.5 h-3.5 text-text-subtle shrink-0" />
-              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-medium px-2.5 py-1 rounded-lg truncate max-w-full sm:max-w-[45%]" title={JSON.stringify(change?.newVal)}>
-                {change?.newVal !== undefined && change?.newVal !== null ? JSON.stringify(change.newVal) : 'Vazio'}
+              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-medium px-2.5 py-1 rounded-lg truncate max-w-full sm:max-w-[45%]" title={valorDoDiffParaTexto(change?.key || '', change?.newVal)}>
+                {valorDoDiffParaTexto(change?.key || '', change?.newVal)}
               </div>
             </div>
           </div>

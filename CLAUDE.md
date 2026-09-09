@@ -503,6 +503,38 @@ remontar os campos à mão. Foi assim que apareceu um bug do template antigo: o 
 imprimível novo com mais de um formato de saída, vale seguir esse desenho: uma função pura que
 decide **o quê** mostrar, e cada renderizador decide só **como**.
 
+## Máscara de CPF/CNPJ nos relatórios
+
+`utils/mascaraDocumento.ts` mascara documento em **saída impressa** — os relatórios de Contas a
+Receber, Contas a Pagar e Auditoria. A regra é `***.537.031-**` para CPF e
+`**.***.000/0001-**` para CNPJ: some o prefixo e, principalmente, os **dígitos verificadores**,
+que são o que permite validar um palpite. O bloco do meio fica visível para quem lê conseguir
+conferir contra um documento que já tem em mãos.
+
+O ponto de aplicação importa: **mascare onde o item do relatório é montado, não em cada
+renderizador**. Os dois relatórios financeiros têm três saídas (prévia em tela, HTML de
+impressão e PDF) lendo o mesmo campo — `devedorCpfCnpj` e `credorDoc` —, então mascarar na
+montagem cobre as três e não dá para esquecer uma. É a mesma lição da Ficha de Cadastro: uma
+função pura decide **o quê**, cada renderizador decide só **como**.
+
+Três decisões deliberadas:
+
+- **O CNPJ da própria empresa, no cabeçalho, não é mascarado.** É a identificação do emitente
+  no próprio documento e é dado público; mascarar tornaria o relatório inútil como comprovante.
+- **Valor que não é documento volta intacto.** `credor_cpf_cnpj` é texto livre e às vezes
+  guarda um nome ("ASSESSORIA JURIDICA PAX"); sem 11 ou 14 dígitos, `mascararDocumento` devolve
+  o original. Mascarar às cegas embaralharia informação legítima.
+- **Na auditoria a decisão vem do nome do campo**, porque o log guarda o registro inteiro de
+  qualquer tabela (`dados_anteriores`/`dados_novos`). `mascararValorDeCampo(key, val)` mascara
+  quando a chave contém `cpf`/`cnpj` — assim um telefone de 11 dígitos não vira CPF por acaso.
+  A tela e o texto/CSV/PDF usam a **mesma** função (`valorDoDiffParaTexto` e
+  `formatValueDisplay`), inclusive no `title` do tooltip, que é por onde o número voltaria
+  inteiro sem ninguém notar.
+
+**Fora do escopo, de propósito**: o "Ver JSON bruto" e o "Copiar JSON" da tela de Auditoria
+mostram o payload sem máscara. É o que eles existem para fazer, e não entram em relatório
+nenhum — se um dia a regra tiver de valer ali também, é decisão de produto, não de limpeza.
+
 ## Validação (Zod)
 
 Adoção parcial: `FornecedorFormModal.tsx`, `ItemFunerarioForm.tsx`, `PlanoPaxForm.tsx`,
