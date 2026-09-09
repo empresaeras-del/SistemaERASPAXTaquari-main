@@ -16,6 +16,8 @@ import { registrarAuditoria } from '../lib/supabase';
 import { getContasBancariasAtivas } from '../services/contasBancariasService';
 import { ContaBancaria } from '../types/contasBancarias';
 import { useOptions } from '../hooks/useOptions';
+import { usePlanoContabil } from '../hooks/usePlanoContabil';
+import { SeletorContaContabil } from '../components/financeiro/SeletorContaContabil';
 import { OptionsModal } from '../components/OptionsModal';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../components/common/AlertaAlteracoesPendentes';
@@ -67,6 +69,9 @@ const despesaSchema = z.object({
   
   descricao: z.string().min(3, "Descrição muito curta (mínimo 3 caracteres)"),
   categoria: z.string().min(1, "Selecione uma categoria"),
+  // Opcional na fase 2 do plano contábil: empresa sem plano montado ainda lança sem conta,
+  // e lançamento antigo continua válido. Vira obrigatório na fase 3, depois do backfill.
+  conta_contabil_id: z.string().optional(),
   centro_custo: z.string().optional(),
   data_emissao: z.string().min(1, "Data de emissão obrigatória"),
   data_inicio_pagamento: z.string().min(1, "Data de início obrigatória"),
@@ -96,6 +101,11 @@ export const ContasPagarFormPage: React.FC = () => {
   const { options: formasPagamento, addOption: addFormaPagamento, editOption: editFormaPagamento, removeOption: removeFormaPagamento } = useOptions('formas_pagamento', defaultFormasPagamento);
   
   const [modalOpen, setModalOpen] = useState<'categoria' | 'centro_custo' | 'forma_pagamento' | null>(null);
+
+  // Empresa sem plano de contas montado continua lançando pelo seletor de categoria antigo.
+  const { plano: planoContabil, contas: contasContabeis, contasLancaveis, loading: loadingPlano } = usePlanoContabil();
+  const contasDespesaLancaveis = contasLancaveis('despesa');
+  const temPlanoContabil = !!planoContabil && contasDespesaLancaveis.length > 0;
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -128,6 +138,7 @@ export const ContasPagarFormPage: React.FC = () => {
       credor_cpf_cnpj: '',
       descricao: '',
       categoria: 'Repasse Credenciados / Prestadores',
+      conta_contabil_id: '',
       centro_custo: 'Rede Assistencial',
       data_emissao: format(new Date(), "yyyy-MM-dd"),
       data_inicio_pagamento: format(new Date(), "yyyy-MM-dd"),
@@ -163,6 +174,7 @@ export const ContasPagarFormPage: React.FC = () => {
               credor_cpf_cnpj: desp.credor_cpf_cnpj || '',
               descricao: desp.descricao || '',
               categoria: desp.categoria || 'Repasse Credenciados / Prestadores',
+              conta_contabil_id: desp.conta_contabil_id || '',
               centro_custo: desp.centro_custo || 'Rede Assistencial',
               data_emissao: desp.data_emissao || format(new Date(), "yyyy-MM-dd"),
               data_inicio_pagamento: desp.data_inicio_pagamento || format(new Date(), "yyyy-MM-dd"),
@@ -288,7 +300,9 @@ export const ContasPagarFormPage: React.FC = () => {
         credor_nome: data.credor_nome,
         credor_cpf_cnpj: data.credor_cpf_cnpj,
         descricao: data.descricao,
+        // Snapshot do nome da conta no momento do lançamento — ver CLAUDE.md (regra R7).
         categoria: data.categoria,
+        conta_contabil_id: data.conta_contabil_id || null,
         centro_custo: data.centro_custo || 'Rede Assistencial',
         data_emissao: data.data_emissao,
         data_inicio_pagamento: data.data_inicio_pagamento,
@@ -524,28 +538,46 @@ export const ContasPagarFormPage: React.FC = () => {
                 {errors.descricao && <p className="text-rose-500 text-xs mt-1">{errors.descricao.message}</p>}
               </div>
 
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-sm font-medium text-text-subtle">Categoria *</label>
-                  <button 
-                    type="button" 
-                    onClick={() => setModalOpen('categoria')} 
-                    className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors flex items-center gap-1 text-xs" 
-                    title="Gerenciar Categorias"
+              {/* Ver a nota equivalente em ContasReceberFormPage: com plano de contas montado,
+                  a classificação é a conta contábil e `categoria` passa a ser o nome dela. */}
+              {temPlanoContabil ? (
+                <SeletorContaContabil
+                  natureza="despesa"
+                  lancaveis={contasDespesaLancaveis}
+                  contas={contasContabeis}
+                  loading={loadingPlano}
+                  temPlano={!!planoContabil}
+                  value={form.watch("conta_contabil_id") || ''}
+                  onChange={(contaId, contaNome) => {
+                    form.setValue("conta_contabil_id", contaId, { shouldDirty: true });
+                    if (contaNome) form.setValue("categoria", contaNome, { shouldDirty: true, shouldValidate: true });
+                  }}
+                  erro={errors.categoria?.message}
+                />
+              ) : (
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-sm font-medium text-text-subtle">Categoria *</label>
+                    <button
+                      type="button"
+                      onClick={() => setModalOpen('categoria')}
+                      className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors flex items-center gap-1 text-xs"
+                      title="Gerenciar Categorias"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Gerenciar</span>
+                    </button>
+                  </div>
+                  <select
+                    {...form.register("categoria")}
+                    className={`w-full bg-bg-surface border ${errors.categoria ? 'border-rose-500' : 'border-border-default'} rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none`}
                   >
-                    <Settings className="w-3.5 h-3.5" />
-                    <span>Gerenciar</span>
-                  </button>
+                    <option value="">Selecione a categoria...</option>
+                    {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                  {errors.categoria && <p className="text-rose-500 text-xs mt-1">{errors.categoria.message}</p>}
                 </div>
-                <select 
-                  {...form.register("categoria")}
-                  className={`w-full bg-bg-surface border ${errors.categoria ? 'border-rose-500' : 'border-border-default'} rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none`}
-                >
-                  <option value="">Selecione a categoria...</option>
-                  {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-                {errors.categoria && <p className="text-rose-500 text-xs mt-1">{errors.categoria.message}</p>}
-              </div>
+              )}
 
               <div>
                 <div className="flex justify-between items-center mb-1">

@@ -21,7 +21,17 @@ export interface Receita {
   cliente_telefone?: string;
   cliente_email?: string;
   descricao: string;
+  /**
+   * Rótulo da classificação, gravado uma vez no momento do lançamento. Desde a fase 2 do
+   * plano contábil ele é um *snapshot* do nome da conta escolhida — nunca é reescrito nem
+   * re-sincronizado se a conta mudar de nome, e não deve ser usado para agrupar relatório:
+   * para isso existe `conta_contabil_id`. Ver CLAUDE.md.
+   */
   categoria: string;
+  /** Conta contábil analítica. `undefined` em lançamento legado, anterior ao plano de contas. */
+  conta_contabil_id?: string | null;
+  /** Constante `'receita'`. Existe para viajar dentro da FK composta (ver CLAUDE.md). */
+  natureza_contabil?: 'receita';
   data_emissao: string;
   data_inicio_cobranca: string;
   valor_total: number;
@@ -52,7 +62,12 @@ export interface Despesa {
   credor_nome?: string;
   credor_cpf_cnpj?: string;
   descricao: string;
+  /** Snapshot do nome da conta no momento do lançamento — ver a nota em `Receita.categoria`. */
   categoria: string;
+  /** Conta contábil analítica. `undefined` em lançamento legado, anterior ao plano de contas. */
+  conta_contabil_id?: string | null;
+  /** Constante `'despesa'`. Existe para viajar dentro da FK composta (ver CLAUDE.md). */
+  natureza_contabil?: 'despesa';
   data_emissao: string;
   data_inicio_pagamento: string;
   valor_total: number;
@@ -172,6 +187,8 @@ export const sanitizeReceitaForSupabase = (r: Receita, fallbackTenantId?: string
     cliente_email: r.cliente_email ? String(r.cliente_email).trim() : null,
     descricao: r.descricao || 'Receita',
     categoria: r.categoria || 'Geral',
+    conta_contabil_id: r.conta_contabil_id && UUID_REGEX.test(r.conta_contabil_id) ? r.conta_contabil_id : null,
+    natureza_contabil: 'receita',
     data_emissao: (r.data_emissao && String(r.data_emissao).trim() !== '') ? String(r.data_emissao).split('T')[0] : new Date().toISOString().split('T')[0],
     data_inicio_cobranca: (r.data_inicio_cobranca && String(r.data_inicio_cobranca).trim() !== '') ? String(r.data_inicio_cobranca).split('T')[0] : new Date().toISOString().split('T')[0],
     valor_total: Number(r.valor_total) || 0,
@@ -531,6 +548,8 @@ export const sanitizeDespesaForSupabase = (d: Despesa) => {
     credor_cpf_cnpj: d.credor_cpf_cnpj || d.fornecedor_cnpj_cpf || null,
     descricao: d.descricao || 'Despesa',
     categoria: d.categoria || 'Geral',
+    conta_contabil_id: d.conta_contabil_id && UUID_REGEX.test(d.conta_contabil_id) ? d.conta_contabil_id : null,
+    natureza_contabil: 'despesa',
     centro_custo: d.centro_custo || null,
     data_emissao: d.data_emissao ? d.data_emissao.split('T')[0] : new Date().toISOString().split('T')[0],
     data_inicio_pagamento: d.data_inicio_pagamento ? d.data_inicio_pagamento.split('T')[0] : new Date().toISOString().split('T')[0],
