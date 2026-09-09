@@ -26,6 +26,7 @@ import {
   paisPossiveis as filtrarPaisPossiveis,
 } from '../utils/planoContabilTree';
 import { tenantDeEscrita } from '../utils/tenant';
+import { proximoExercicioLivre } from '../utils/exerciciosContabeis';
 
 export function usePlanoContabil() {
   const { state } = useAppContext();
@@ -136,12 +137,22 @@ export function usePlanoContabil() {
   const exercicioExibido = plano?.exercicio ?? exercicioSelecionado ?? exercicioCorrente();
   const faltaExercicioCorrente = !!plano && plano.exercicio < exercicioCorrente();
 
+  // Destino sugerido ao duplicar. Parte do maior entre o exercício exibido e o ano corrente,
+  // para quem está olhando um plano antigo receber a sugestão do futuro, não do passado.
+  // A duplicação em si NÃO depende disto: qualquer exercício livre é aceito — preparar o ano
+  // seguinte é trabalho de dezembro, não de 1º de janeiro (ver `exerciciosContabeis.ts`).
+  const exercicioSugerido = proximoExercicioLivre(
+    planos,
+    Math.max(exercicioExibido, exercicioCorrente()),
+  );
+
   return {
     plano,
     planos,
     exercicioExibido,
     exercicioCorrente: exercicioCorrente(),
     faltaExercicioCorrente,
+    exercicioSugerido,
     selecionarExercicio: setExercicioSelecionado,
     duplicarParaExercicio,
     contas,
