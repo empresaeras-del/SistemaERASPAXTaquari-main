@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { salvarDespesa, getDespesaCompleta, Despesa, ParcelaPagar } from '../services/financeiroService';
 import { getAllFromIDB } from '../lib/idb';
@@ -16,6 +16,7 @@ import { registrarAuditoria } from '../lib/supabase';
 import { getContasBancariasAtivas } from '../services/contasBancariasService';
 import { ContaBancaria } from '../types/contasBancarias';
 import { useCentrosCusto } from '../hooks/useCentrosCusto';
+import { CentrosCustoModal } from '../components/financeiro/CentrosCustoModal';
 import { centrosSelecionaveis } from '../utils/centrosCusto';
 import { useOptions } from '../hooks/useOptions';
 import { usePlanoContabil } from '../hooks/usePlanoContabil';
@@ -100,7 +101,10 @@ export const ContasPagarFormPage: React.FC = () => {
   const { id } = useParams();
 
   const { options: categorias, addOption: addCategoria, editOption: editCategoria, removeOption: removeCategoria } = useOptions('categorias_despesa', defaultCategoriasDespesa);
-  const { options: centrosCusto, addOption: addCentroCusto, editOption: editCentroCusto, removeOption: removeCentroCusto } = useOptions('centros_custo', defaultCentrosCusto);
+  // Só a leitura: o gerenciamento de centro de custo saiu do `useOptions` (por navegador) para
+  // a tabela da empresa. Esta lista sobrevive apenas como fallback do select antigo, para a
+  // empresa que ainda não cadastrou nenhum centro.
+  const { options: centrosCusto } = useOptions('centros_custo', defaultCentrosCusto);
   const { options: formasPagamento, addOption: addFormaPagamento, editOption: editFormaPagamento, removeOption: removeFormaPagamento } = useOptions('formas_pagamento', defaultFormasPagamento);
   
   const [modalOpen, setModalOpen] = useState<'categoria' | 'centro_custo' | 'forma_pagamento' | null>(null);
@@ -111,7 +115,8 @@ export const ContasPagarFormPage: React.FC = () => {
   // Centro de custo virou tabela da empresa na fase 4 — a lista do `useOptions` vivia só no
   // IndexedDB deste navegador. Empresa que ainda não tem nenhum centro cadastrado continua
   // vendo o select antigo, pelo mesmo motivo do seletor de categoria.
-  const { centros: centrosCustoTabela, loading: loadingCentros } = useCentrosCusto();
+  const { centros: centrosCustoTabela, loading: loadingCentros, carregar: recarregarCentros } = useCentrosCusto();
+  const [modalCentrosCusto, setModalCentrosCusto] = useState(false);
   const contasDespesaLancaveis = contasLancaveis('despesa');
   const temPlanoContabil = !!planoContabil && contasDespesaLancaveis.length > 0;
 
@@ -616,26 +621,20 @@ export const ContasPagarFormPage: React.FC = () => {
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="block text-sm font-medium text-text-subtle">Centro de Custo</label>
-                  {temCentrosCadastrados ? (
-                    <Link
-                      to="/financeiro/plano-contabil"
-                      className="text-[#3B82F6] hover:bg-[#3B82F6]/10 px-1.5 py-0.5 rounded-md transition-colors flex items-center gap-1 text-xs"
-                      title="Gerenciar centros de custo"
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                      <span>Gerenciar</span>
-                    </Link>
-                  ) : (
-                    <button 
-                      type="button" 
-                      onClick={() => setModalOpen('centro_custo')} 
-                      className="text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1 rounded-md transition-colors flex items-center gap-1 text-xs" 
-                      title="Gerenciar Centros de Custo"
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                      <span>Gerenciar</span>
-                    </button>
-                  )}
+                  {/*
+                    Sempre o gerenciador da tabela, mesmo quando a empresa ainda não tem nenhum
+                    centro: é por aqui que ela cadastra o primeiro e sai da lista antiga do
+                    `useOptions`, que era por navegador em vez de por empresa.
+                  */}
+                  <button
+                    type="button"
+                    onClick={() => setModalCentrosCusto(true)}
+                    className="text-[#3B82F6] hover:bg-[#3B82F6]/10 px-1.5 py-0.5 rounded-md transition-colors flex items-center gap-1 text-xs"
+                    title="Gerenciar centros de custo"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Gerenciar</span>
+                  </button>
                 </div>
                 {temCentrosCadastrados ? (
                   <select
@@ -874,14 +873,14 @@ export const ContasPagarFormPage: React.FC = () => {
           onClose={() => setModalOpen(null)}
         />
       )}
-      {modalOpen === 'centro_custo' && (
-        <OptionsModal
-          title="Gerenciar Centros de Custo"
-          options={centrosCusto}
-          onAdd={addCentroCusto}
-          onEdit={editCentroCusto}
-          onRemove={removeCentroCusto}
-          onClose={() => setModalOpen(null)}
+      {modalCentrosCusto && (
+        <CentrosCustoModal
+          podeEditar={canEditFinanceiro(state.user, state.isOnline)}
+          onClose={() => {
+            setModalCentrosCusto(false);
+            // A lista do seletor precisa refletir o que acabou de ser cadastrado/desativado.
+            recarregarCentros();
+          }}
         />
       )}
       {modalOpen === 'forma_pagamento' && (

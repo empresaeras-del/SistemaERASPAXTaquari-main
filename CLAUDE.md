@@ -375,6 +375,34 @@ Empresa sem nenhum centro cadastrado continua vendo o select antigo do `useOptio
 mesmo motivo do seletor de categoria: `centro_custo` nunca foi obrigatório, e trocar a lista
 por um seletor vazio tiraria uma opção que a tela tinha.
 
+O **cadastro** dos centros vive em `components/financeiro/CentrosCustoModal.tsx`, aberto pelo
+"Gerenciar" do formulário de despesa. Ele chama `useCentrosCusto` por dentro — ao contrário de
+`SeletorContaContabil`, que recebe por props — porque é um gerenciador aberto sob demanda, uma
+instância por vez, que precisa recarregar a própria lista depois de cada gravação; passar isso
+por props obrigaria a tela a saber de salvar/desativar/reativar, que não é assunto dela. Não há
+excluir: desativar tira do seletor de lançamentos novos sem tocar nas despesas que já usam o
+centro (a FK é `ON DELETE RESTRICT` de qualquer forma).
+
+### Filtrar lançamento por classificação: a parcela não sabe, o pai sabe
+
+As telas de Contas a Receber e a Pagar listam **parcelas**, e a classificação (conta contábil,
+centro de custo) está no **lançamento pai**. As duas telas já carregam `receitas`/`despesas`
+junto das parcelas, então o filtro é uma junção em memória — e ela mora em
+`utils/filtrosClassificacao.ts`, não nas páginas, porque as duas fariam a mesma coisa e porque
+é a única parte disso que dá para testar sem navegador.
+
+Duas decisões que valem para qualquer filtro derivado assim:
+
+- **Índice, não varredura.** `indicePorLancamento` monta um `Map` id → classificação uma vez
+  por render, em vez de cada parcela procurar o pai na lista inteira.
+- **Com filtro ativo, a parcela órfã fica de fora.** Se o pai não for encontrado (não
+  carregado, ou lançamento legado sem classificação), ela não casa. Deixá-la passar faria uma
+  parcela sem classificação nenhuma aparecer em *qualquer* filtro escolhido — o oposto de
+  filtrar. Sem filtro, tudo casa, inclusive ela.
+
+As opções dos seletores incluem conta e centro **desativados** de propósito: um lançamento
+antigo pode apontar para um deles, e sem a opção na lista ele viraria infiltrável.
+
 ## Campo opcional com `UNIQUE`: grave `NULL`, nunca string vazia
 
 `credenciados.cnpj_cpf` (opcional desde a migration `20260908182307`) é o primeiro caso disso no

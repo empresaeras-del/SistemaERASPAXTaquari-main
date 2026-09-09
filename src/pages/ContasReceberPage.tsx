@@ -16,6 +16,8 @@ import {
   Receita
 } from '../services/financeiroService';
 import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
+import { usePlanoContabil } from '../hooks/usePlanoContabil';
+import { indicePorLancamento, parcelaCasaClassificacao } from '../utils/filtrosClassificacao';
 import { getEmpresaById, Empresa } from '../services/empresasService';
 import { getAssociados, Associado } from '../services/associadosService';
 import { RelatorioContasReceberModal } from '../components/financeiro/RelatorioContasReceberModal';
@@ -65,6 +67,7 @@ export const ContasReceberPage: React.FC = () => {
   const [showReciboModal, setShowReciboModal] = useState(false);
   const [reciboModalData, setReciboModalData] = useState<ReciboDados | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [contaContabilFilter, setContaContabilFilter] = useState('');
 
   // Identifica o devedor/associado e recupera seu telefone de contato cadastrado
   const getDevedorContato = useCallback((parcela: ParcelaReceber) => {
@@ -251,6 +254,18 @@ export const ContasReceberPage: React.FC = () => {
     loadData();
   }, [state.isOnline, state.empresaSelecionada]);
 
+  // Conta desativada continua na lista de propósito: um lançamento antigo pode apontar para
+  // ela, e sem a opção no filtro ele viraria infiltrável. Receita não tem centro de custo —
+  // esse campo é só de despesa.
+  const { contas: contasContabeis } = usePlanoContabil();
+  const contasReceita = useMemo(
+    () => contasContabeis.filter((c) => c.tipo === 'analitica' && c.natureza === 'receita'),
+    [contasContabeis],
+  );
+
+  // A parcela não carrega a classificação — quem carrega é a receita.
+  const indiceReceitas = useMemo(() => indicePorLancamento(receitas), [receitas]);
+
   const filteredParcelas = useMemo(() => {
     return parcelas.filter(p => {
       const matchesSearch = (p.devedor_nome || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -298,9 +313,14 @@ export const ContasReceberPage: React.FC = () => {
         }
       }
       
-      return matchesSearch && matchesStatus && matchesForma && matchesData;
+      const matchesClassificacao = parcelaCasaClassificacao(p.receita_id, indiceReceitas, {
+        contaContabilId: contaContabilFilter,
+      });
+
+      return matchesSearch && matchesStatus && matchesForma && matchesData && matchesClassificacao;
     });
-  }, [parcelas, searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal]);
+  }, [parcelas, searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal,
+      indiceReceitas, contaContabilFilter]);
 
   const sortedParcelas = useMemo(() => {
     if (!sortField) return filteredParcelas;
@@ -554,13 +574,14 @@ export const ContasReceberPage: React.FC = () => {
             pageKey="contas-receber"
             showFilters={showFilters}
             setShowFilters={setShowFilters}
-            currentFilters={{ searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal }}
+            currentFilters={{ searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal, contaContabilFilter }}
             onApplyFilters={(filters) => {
               setSearchTerm(filters.searchTerm || '');
               setStatusFilter(filters.statusFilter || '');
               setFormaPagamentoFilter(filters.formaPagamentoFilter || '');
               setDataInicial(filters.dataInicial || '');
               setDataFinal(filters.dataFinal || '');
+              setContaContabilFilter(filters.contaContabilFilter || '');
             }}
             onClearFilters={() => {
               setSearchTerm('');
@@ -568,6 +589,7 @@ export const ContasReceberPage: React.FC = () => {
               setFormaPagamentoFilter('');
               setDataInicial('');
               setDataFinal('');
+              setContaContabilFilter('');
             }}
           >
             <div className="space-y-1">
@@ -609,6 +631,22 @@ export const ContasReceberPage: React.FC = () => {
                 <option value="pix">PIX</option>                <option value="dinheiro">Dinheiro</option>                <option value="cartao_credito">Cartão de Crédito</option>                <option value="cartao_debito">Cartão de Débito</option>                <option value="boleto">Boleto</option>                <option value="transferencia">Transferência</option>              </select>
             </div>
             
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-text-subtle">Conta Contábil</label>
+              <select
+                value={contaContabilFilter}
+                onChange={(e) => setContaContabilFilter(e.target.value)}
+                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+              >
+                <option value="">Todas as Contas</option>
+                {contasReceita.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.codigo} — {c.nome}{c.ativo ? '' : ' (desativada)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="space-y-1">
               <label className="text-xs font-medium text-text-subtle">Período Vencimento (Inicial)</label>
               <input

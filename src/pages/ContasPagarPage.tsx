@@ -38,6 +38,9 @@ import {
   Despesa 
 } from '../services/financeiroService';
 import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
+import { usePlanoContabil } from '../hooks/usePlanoContabil';
+import { useCentrosCusto } from '../hooks/useCentrosCusto';
+import { indicePorLancamento, parcelaCasaClassificacao } from '../utils/filtrosClassificacao';
 import { LoteCaixa } from '../types/caixas';
 import { getContasBancariasAtivas } from '../services/contasBancariasService';
 import { ContaBancaria } from '../types/contasBancarias';
@@ -67,6 +70,8 @@ export const ContasPagarPage: React.FC = () => {
   const [showReciboModal, setShowReciboModal] = useState(false);
   const [reciboModalData, setReciboModalData] = useState<ReciboDados | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [contaContabilFilter, setContaContabilFilter] = useState('');
+  const [centroCustoFilter, setCentroCustoFilter] = useState('');
 
   useEffect(() => {
     if (parcelas.length > 0 && location.state?.openDetails) {
@@ -147,6 +152,20 @@ export const ContasPagarPage: React.FC = () => {
     loadData();
   }, [state.isOnline, state.empresaSelecionada]);
 
+  // Opções dos filtros de classificação. Inclui conta/centro desativados de propósito: um
+  // lançamento antigo pode apontar para um deles, e sem a opção na lista ele viraria
+  // infiltrável.
+  const { contas: contasContabeis } = usePlanoContabil();
+  const { centros: centrosCusto } = useCentrosCusto();
+  const contasDespesa = useMemo(
+    () => contasContabeis.filter((c) => c.tipo === 'analitica' && c.natureza === 'despesa'),
+    [contasContabeis],
+  );
+
+  // A parcela não carrega a classificação — quem carrega é a despesa. O índice resolve o pai
+  // em O(1) por linha, em vez de varrer a lista de despesas a cada parcela filtrada.
+  const indiceDespesas = useMemo(() => indicePorLancamento(despesas), [despesas]);
+
   const filteredParcelas = useMemo(() => {
     return parcelas.filter(p => {
       const matchesSearch = (p.credor_nome || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -194,9 +213,15 @@ export const ContasPagarPage: React.FC = () => {
         }
       }
       
-      return matchesSearch && matchesStatus && matchesForma && matchesData;
+      const matchesClassificacao = parcelaCasaClassificacao(p.despesa_id, indiceDespesas, {
+        contaContabilId: contaContabilFilter,
+        centroCustoId: centroCustoFilter,
+      });
+
+      return matchesSearch && matchesStatus && matchesForma && matchesData && matchesClassificacao;
     });
-  }, [parcelas, searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal]);
+  }, [parcelas, searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal,
+      indiceDespesas, contaContabilFilter, centroCustoFilter]);
 
   const sortedParcelas = useMemo(() => {
     if (!sortField) return filteredParcelas;
@@ -448,13 +473,15 @@ export const ContasPagarPage: React.FC = () => {
             pageKey="contas-pagar"
             showFilters={showFilters}
             setShowFilters={setShowFilters}
-            currentFilters={{ searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal }}
+            currentFilters={{ searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal, contaContabilFilter, centroCustoFilter }}
             onApplyFilters={(filters) => {
               setSearchTerm(filters.searchTerm || '');
               setStatusFilter(filters.statusFilter || '');
               setFormaPagamentoFilter(filters.formaPagamentoFilter || '');
               setDataInicial(filters.dataInicial || '');
               setDataFinal(filters.dataFinal || '');
+              setContaContabilFilter(filters.contaContabilFilter || '');
+              setCentroCustoFilter(filters.centroCustoFilter || '');
             }}
             onClearFilters={() => {
               setSearchTerm('');
@@ -462,6 +489,8 @@ export const ContasPagarPage: React.FC = () => {
               setFormaPagamentoFilter('');
               setDataInicial('');
               setDataFinal('');
+              setContaContabilFilter('');
+              setCentroCustoFilter('');
             }}
           >
             <div className="space-y-1">
@@ -503,6 +532,42 @@ export const ContasPagarPage: React.FC = () => {
                 <option value="pix">PIX</option>                <option value="dinheiro">Dinheiro</option>                <option value="cartao_credito">Cartão de Crédito</option>                <option value="cartao_debito">Cartão de Débito</option>                <option value="boleto">Boleto</option>                <option value="transferencia">Transferência</option>              </select>
             </div>
             
+            {contasDespesa.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-text-subtle">Conta Contábil</label>
+                <select
+                  value={contaContabilFilter}
+                  onChange={(e) => setContaContabilFilter(e.target.value)}
+                  className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                >
+                  <option value="">Todas as Contas</option>
+                  {contasDespesa.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.codigo} — {c.nome}{c.ativo ? '' : ' (desativada)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {centrosCusto.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-text-subtle">Centro de Custo</label>
+                <select
+                  value={centroCustoFilter}
+                  onChange={(e) => setCentroCustoFilter(e.target.value)}
+                  className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
+                >
+                  <option value="">Todos os Centros</option>
+                  {centrosCusto.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.codigo} — {c.nome}{c.ativo ? '' : ' (desativado)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="space-y-1">
               <label className="text-xs font-medium text-text-subtle">Período Vencimento (Inicial)</label>
               <input
