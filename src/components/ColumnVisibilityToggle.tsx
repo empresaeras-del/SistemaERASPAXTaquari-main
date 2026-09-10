@@ -34,6 +34,7 @@ export const ColumnVisibilityToggle: React.FC<ColumnVisibilityToggleProps> = ({ 
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-3 py-2 bg-bg-surface border border-border-default hover:bg-bg-hover text-text-base rounded-xl text-sm font-medium transition-colors shadow-sm no-print"
         title="Colunas Visíveis"
@@ -50,6 +51,7 @@ export const ColumnVisibilityToggle: React.FC<ColumnVisibilityToggleProps> = ({ 
           <div className="max-h-64 overflow-y-auto">
             {columns.map(col => (
               <button
+                type="button"
                 key={col.id}
                 onClick={(e) => {
                   e.preventDefault();

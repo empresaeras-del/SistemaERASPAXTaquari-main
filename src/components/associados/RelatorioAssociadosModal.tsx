@@ -622,6 +622,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
           {/* Tipo de Relatório Toggle */}
           <div className="flex items-center bg-[#13171f] rounded-lg p-1 mr-2 border border-[#2d3544]">
             <button
+              type="button"
               onClick={() => setReportType('titulares')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
                 reportType === 'titulares'
@@ -633,6 +634,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
               <span>Titulares</span>
             </button>
             <button
+              type="button"
               onClick={() => setReportType('dependentes')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
                 reportType === 'dependentes'
@@ -648,6 +650,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
           {/* Orientation Toggle */}
           <div className="flex items-center bg-[#13171f] rounded-lg p-1 mr-2 border border-[#2d3544]">
             <button
+              type="button"
               onClick={() => setOrientation('landscape')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
                 orientation === 'landscape'
@@ -660,6 +663,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
               <span>Paisagem</span>
             </button>
             <button
+              type="button"
               onClick={() => setOrientation('portrait')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
                 orientation === 'portrait'
@@ -676,6 +680,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
           {/* Zoom */}
           <div className="flex items-center gap-1">
             <button
+              type="button"
               onClick={handleZoomOut}
               className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
               title="Reduzir Zoom (-)"
@@ -683,6 +688,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
               <ZoomOut className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={handleZoomReset}
               className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center"
               title="Resetar para 100%"
@@ -690,6 +696,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
               {zoom}%
             </button>
             <button
+              type="button"
               onClick={handleZoomIn}
               className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
               title="Ampliar Zoom (+)"
@@ -702,6 +709,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
         {/* Right Actions */}
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={handleExportPDF}
             disabled={isExportingPDF}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-colors shadow-lg shadow-emerald-600/20"
@@ -710,6 +718,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
             <span>Salvar PDF</span>
           </button>
           <button
+            type="button"
             onClick={handleImprimir}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs transition-colors shadow-lg shadow-blue-600/20"
           >
@@ -718,6 +727,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
           </button>
           <div className="h-6 w-px bg-[#2d3544]" />
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]"
             aria-label="Fechar"

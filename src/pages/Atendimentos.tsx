@@ -328,6 +328,7 @@ export const AtendimentosPage: React.FC = () => {
         {/* PRIMARY ACTIONS */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            type="button"
             onClick={handleExportPDF}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-bg-surface text-text-base border border-border-default rounded-xl text-xs font-semibold hover:bg-bg-hover transition-colors shadow-sm"
             title="Exportar"
@@ -337,6 +338,7 @@ export const AtendimentosPage: React.FC = () => {
           </button>
 
           <button
+            type="button"
             disabled={!state.isOnline}
             onClick={() => setIsWizardOpen(true)}
             title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Atendimento"}
@@ -428,6 +430,7 @@ export const AtendimentosPage: React.FC = () => {
         {/* COMPACT FILTERS & TOGGLES */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
           <button
+            type="button"
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-colors shrink-0 ${showFilters ? 'bg-primary/10 border-primary/20 text-primary' : 'bg-bg-subtle border-border-default text-text-muted hover:text-text-base hover:bg-bg-hover'}`}
           >
@@ -439,6 +442,7 @@ export const AtendimentosPage: React.FC = () => {
 
           <div className="flex items-center bg-bg-subtle border border-border-default rounded-xl p-0.5 shrink-0">
             <button
+              type="button"
               onClick={() => setViewMode('kanban')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'kanban' ? 'bg-bg-surface text-text-base shadow-sm' : 'text-text-subtle hover:text-text-base'}`}
               title="Visualização em Kanban"
@@ -446,6 +450,7 @@ export const AtendimentosPage: React.FC = () => {
               <Kanban className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-bg-surface text-text-base shadow-sm' : 'text-text-subtle hover:text-text-base'}`}
               title="Visualização em Grade"
@@ -453,6 +458,7 @@ export const AtendimentosPage: React.FC = () => {
               <LayoutGrid className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-bg-surface text-text-base shadow-sm' : 'text-text-subtle hover:text-text-base'}`}
               title="Visualização em Lista"
@@ -610,12 +616,14 @@ export const AtendimentosPage: React.FC = () => {
             </div>
             <div className="flex items-center justify-end gap-3">
               <button
+                type="button"
                 onClick={() => setStatusChangeModal({ isOpen: false, atendimento: null, newStatus: null, justificativa: '' })}
                 className="px-4 py-2 rounded-xl text-text-subtle font-medium hover:bg-bg-hover transition-colors"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={confirmStatusChange}
                 disabled={statusChangeModal.justificativa.trim().length < 5}
                 className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-medium transition-colors disabled:opacity-50"

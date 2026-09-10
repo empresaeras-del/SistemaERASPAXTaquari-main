@@ -106,6 +106,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => {
                 setSelectedBeneficiarioId(undefined);
                 setCarteirinhaModalOpen(true);
@@ -117,6 +118,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
               <span>Carteirinha</span>
             </button>
             <button
+              type="button"
               onClick={() => setFichaModalOpen(true)}
               title="Ficha de Cadastro: pré-visualizar, imprimir ou salvar em PDF"
               className="p-2 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors"
@@ -124,6 +126,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
               <Printer className="w-5 h-5" />
             </button>
             <button
+              type="button"
               onClick={() => onEdit?.(associado)}
               className="flex items-center gap-2 px-4 py-2 bg-[#3B82F6]/10 text-[#3B82F6] rounded-xl hover:bg-[#3B82F6]/20 transition-colors font-medium text-xs"
             >
@@ -131,6 +134,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
               Editar
             </button>
             <button
+              type="button"
               onClick={onClose}
               className="p-2 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors"
               aria-label="Fechar"
@@ -182,6 +186,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                       <Phone className="w-4 h-4 text-text-subtle" /> {associado.telefone}
                     </span>
                     <button
+                      type="button"
                       onClick={() => copiarTexto(associado.telefone!, 'Telefone', 'tel')}
                       className="text-text-subtle hover:text-[#3B82F6]"
                     >
@@ -199,6 +204,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
                       <FileText className="w-4 h-4 text-text-subtle" /> {associado.email}
                     </span>
                     <button
+                      type="button"
                       onClick={() => copiarTexto(associado.email!, 'E-mail', 'email')}
                       className="text-text-subtle hover:text-[#3B82F6]"
                     >
@@ -469,6 +475,7 @@ export const AssociadoDetailsModal: React.FC<Props> = ({ associado, onClose, onE
         {/* FOOTER */}
         <div className="p-4 border-t border-border-default bg-bg-surface/50 flex justify-end">
           <button
+            type="button"
             onClick={onClose}
             className="px-5 py-2 bg-bg-hover text-text-base rounded-xl text-sm font-medium hover:bg-bg-hover/80 transition-colors"
           >

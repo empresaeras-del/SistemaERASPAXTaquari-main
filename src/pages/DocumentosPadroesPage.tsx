@@ -617,6 +617,7 @@ export const DocumentosPadroesPage = () => {
           <p className="text-text-subtle text-sm mt-1">Gerencie os modelos de contratos e termos</p>
         </div>
         <button 
+          type="button"
           disabled={!state.isOnline}
           onClick={() => handleOpenForm()}
           title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Modelo"}
@@ -692,6 +693,7 @@ export const DocumentosPadroesPage = () => {
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); setDocToPrint(doc); }}
                             className="p-2 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-lg transition-colors"
                             title="Visualizar Impressão"
@@ -699,6 +701,7 @@ export const DocumentosPadroesPage = () => {
                             <Printer className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); handleOpenForm(doc); }}
                             
                             className="p-2 text-text-subtle hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-lg transition-colors disabled:opacity-50"
@@ -707,6 +710,7 @@ export const DocumentosPadroesPage = () => {
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); handleToggleStatus(doc); }}
                             
                             className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
@@ -719,6 +723,7 @@ export const DocumentosPadroesPage = () => {
                             {doc.ativo ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
                           </button>
                           <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); handleDelete(doc); }}
                             
                             className="p-2 text-text-subtle hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors disabled:opacity-50"
@@ -740,7 +745,7 @@ export const DocumentosPadroesPage = () => {
           <div className="w-full lg:w-[400px] xl:w-[450px] shrink-0 bg-bg-subtle border border-border-default rounded-2xl flex flex-col shadow-sm overflow-hidden">
             <div className="p-6 border-b border-border-default flex items-center justify-between bg-bg-surface/50">
               <h3 className="font-semibold text-text-base">Detalhes do Modelo</h3>
-              <button onClick={() => setPreviewDoc(null)} className="text-text-subtle hover:text-text-base">
+              <button type="button" onClick={() => setPreviewDoc(null)} className="text-text-subtle hover:text-text-base">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -774,6 +779,7 @@ export const DocumentosPadroesPage = () => {
             </div>
             <div className="p-4 border-t border-border-default bg-bg-surface/50 flex gap-2">
               <button 
+                type="button"
                 onClick={() => setDocToPrint(previewDoc)} 
                 className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 shadow-sm shadow-blue-500/20"
               >
@@ -781,6 +787,7 @@ export const DocumentosPadroesPage = () => {
                 Visualizar
               </button>
               <button 
+                type="button"
                 onClick={() => { handleOpenForm(previewDoc); setPreviewDoc(null); }} 
                 className="flex-1 py-2 bg-bg-hover hover:bg-[#64748B] text-text-base rounded-lg text-sm font-medium transition-colors border border-[#64748B] flex items-center justify-center gap-1.5"
               >
@@ -858,6 +865,7 @@ export const DocumentosPadroesPage = () => {
                   {viewMode === 'preview_split' ? 'Ocultar Preview A4' : 'Preview A4'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setIsFullscreen(!isFullscreen)}
                   className="hidden md:flex items-center justify-center p-2 text-text-subtle hover:text-text-base bg-bg-base rounded-lg border border-border-default transition-colors"
                   title={isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
@@ -865,6 +873,7 @@ export const DocumentosPadroesPage = () => {
                   {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setIsFormOpen(false)}
                   className="flex items-center justify-center p-2 text-text-subtle hover:text-red-400 bg-bg-base rounded-lg border border-border-default transition-colors"
                   title="Fechar"
@@ -893,7 +902,7 @@ export const DocumentosPadroesPage = () => {
                       className="w-full pl-8 pr-7 py-1.5 bg-bg-subtle border border-border-default rounded-lg text-xs text-text-base focus:outline-none focus:border-[#3B82F6]"
                     />
                     {varSearch && (
-                      <button onClick={() => setVarSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-subtle hover:text-text-base">
+                      <button type="button" onClick={() => setVarSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-subtle hover:text-text-base">
                         <X className="w-3 h-3" />
                       </button>
                     )}

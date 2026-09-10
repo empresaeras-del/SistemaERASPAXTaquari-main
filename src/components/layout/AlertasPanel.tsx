@@ -56,6 +56,7 @@ export const AlertasPanel: React.FC<AlertasPanelProps> = ({ isCollapsed, onToggl
           </span>
         )}
         <button
+          type="button"
           onClick={onToggle}
           className="p-1.5 rounded-lg bg-bg-hover hover:bg-bg-subtle text-text-subtle hover:text-text-base transition-colors shrink-0"
           title={isCollapsed ? 'Expandir alertas' : 'Recolher alertas'}
@@ -69,6 +70,7 @@ export const AlertasPanel: React.FC<AlertasPanelProps> = ({ isCollapsed, onToggl
         <div className="flex flex-col items-center gap-3 py-4">
           {totalPagar > 0 && (
             <button
+              type="button"
               onClick={onToggle}
               title={`${totalPagar} conta(s) a pagar vencendo`}
               className="relative p-2 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition-colors"
@@ -81,6 +83,7 @@ export const AlertasPanel: React.FC<AlertasPanelProps> = ({ isCollapsed, onToggl
           )}
           {totalReceber > 0 && (
             <button
+              type="button"
               onClick={onToggle}
               title={`${totalReceber} conta(s) a receber vencendo`}
               className="relative p-2 rounded-xl bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
@@ -104,6 +107,7 @@ export const AlertasPanel: React.FC<AlertasPanelProps> = ({ isCollapsed, onToggl
               {/* Section header */}
               <div className="flex items-center justify-between px-3 py-2.5 border-b border-rose-500/10">
                 <button
+                  type="button"
                   onClick={() => setIsPagarExpanded(v => !v)}
                   className="flex items-center gap-2 group/hdr"
                   title={isPagarExpanded ? 'Ocultar itens' : 'Expandir itens'}
@@ -126,6 +130,7 @@ export const AlertasPanel: React.FC<AlertasPanelProps> = ({ isCollapsed, onToggl
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => navigate('/financeiro/contas-a-pagar')}
                   className="text-[10px] font-bold text-rose-500 hover:text-rose-400 flex items-center gap-0.5 px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-all shrink-0"
                 >
@@ -178,6 +183,7 @@ export const AlertasPanel: React.FC<AlertasPanelProps> = ({ isCollapsed, onToggl
                       ))}
                       {totalPagar > 5 && (
                         <button
+                          type="button"
                           onClick={() => navigate('/financeiro/contas-a-pagar')}
                           className="w-full text-center text-[10px] font-semibold text-text-muted hover:text-rose-500 py-1.5 rounded-lg hover:bg-rose-500/5 transition-colors"
                         >
@@ -197,6 +203,7 @@ export const AlertasPanel: React.FC<AlertasPanelProps> = ({ isCollapsed, onToggl
               {/* Section header */}
               <div className="flex items-center justify-between px-3 py-2.5 border-b border-emerald-500/10">
                 <button
+                  type="button"
                   onClick={() => setIsReceberExpanded(v => !v)}
                   className="flex items-center gap-2 group/hdr"
                   title={isReceberExpanded ? 'Ocultar itens' : 'Expandir itens'}
@@ -219,6 +226,7 @@ export const AlertasPanel: React.FC<AlertasPanelProps> = ({ isCollapsed, onToggl
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => navigate('/financeiro/contas-a-receber')}
                   className="text-[10px] font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-0.5 px-2 py-1 rounded-lg hover:bg-emerald-500/10 transition-all shrink-0"
                 >
@@ -271,6 +279,7 @@ export const AlertasPanel: React.FC<AlertasPanelProps> = ({ isCollapsed, onToggl
                       ))}
                       {totalReceber > 5 && (
                         <button
+                          type="button"
                           onClick={() => navigate('/financeiro/contas-a-receber')}
                           className="w-full text-center text-[10px] font-semibold text-text-muted hover:text-emerald-500 py-1.5 rounded-lg hover:bg-emerald-500/5 transition-colors"
                         >

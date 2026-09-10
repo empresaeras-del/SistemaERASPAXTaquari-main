@@ -604,6 +604,7 @@ export const TutorialPage: React.FC = () => {
               />
               {busca && (
                 <button
+                  type="button"
                   onClick={() => setBusca('')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
                 >
@@ -622,6 +623,7 @@ export const TutorialPage: React.FC = () => {
           const isActive = categoriaAtiva === cat.id;
           return (
             <button
+              type="button"
               key={cat.id}
               onClick={() => {
                 setCategoriaAtiva(cat.id);
@@ -664,6 +666,7 @@ export const TutorialPage: React.FC = () => {
                   className="border border-border-default rounded-2xl overflow-hidden transition-all bg-bg-base"
                 >
                   <button
+                    type="button"
                     onClick={() => setFaqAberto(faqAberto === idx ? null : idx)}
                     className="w-full p-4 text-left flex items-center justify-between gap-4 font-semibold text-sm sm:text-base text-text-base hover:text-blue-500 transition-colors"
                   >
@@ -769,6 +772,7 @@ export const TutorialPage: React.FC = () => {
                 <p className="text-[11px] text-text-subtle">Consulte nossa seção de Perguntas Frequentes.</p>
               </div>
               <button
+                type="button"
                 onClick={() => setCategoriaAtiva('faq')}
                 className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shrink-0 shadow-sm transition-all"
               >
@@ -816,6 +820,7 @@ export const TutorialPage: React.FC = () => {
                   {/* Ações Rápidas no Header */}
                   <div className="flex items-center gap-2 shrink-0">
                     <button
+                      type="button"
                       onClick={() => toggleConcluido(topicoSelecionado.id)}
                       className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border ${
                         topicosConcluidos.includes(topicoSelecionado.id)
@@ -832,6 +837,7 @@ export const TutorialPage: React.FC = () => {
 
                     {topicoSelecionado.rotaPrincipal && (
                       <button
+                        type="button"
                         onClick={() => navigate(topicoSelecionado.rotaPrincipal!)}
                         className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all active:scale-95"
                       >
@@ -937,6 +943,7 @@ export const TutorialPage: React.FC = () => {
 
                   {topicoSelecionado.rotaPrincipal && (
                     <button
+                      type="button"
                       onClick={() => navigate(topicoSelecionado.rotaPrincipal!)}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20 transition-all active:scale-95 ml-auto"
                     >

@@ -56,6 +56,7 @@ export const ItemFunerarioDetailsModal: React.FC<Props> = ({ item, onClose, onEd
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={onEdit}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6]/20 border border-[#3B82F6]/30 rounded-xl text-xs font-semibold transition-colors"
             >
@@ -63,6 +64,7 @@ export const ItemFunerarioDetailsModal: React.FC<Props> = ({ item, onClose, onEd
               Editar
             </button>
             <button
+              type="button"
               onClick={onClose}
               className="p-1.5 text-text-subtle hover:text-text-base rounded-xl transition-colors hover:bg-bg-hover"
               aria-label="Fechar"
@@ -196,6 +198,7 @@ export const ItemFunerarioDetailsModal: React.FC<Props> = ({ item, onClose, onEd
         {/* FOOTER */}
         <div className="p-4 border-t border-border-default bg-bg-surface/50 flex justify-end">
           <button
+            type="button"
             onClick={onClose}
             className="px-5 py-2 bg-bg-hover text-text-base rounded-xl text-xs font-medium hover:bg-[#64748B] transition-colors"
           >

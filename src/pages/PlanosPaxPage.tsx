@@ -252,6 +252,7 @@ const PlanoCard = ({
 
         <div className="mt-5 pt-4 border-t border-border-default flex justify-end gap-2 relative z-20" onClick={(e) => e.stopPropagation()}>
           <button
+            type="button"
             onClick={() => handleToggleStatus(plano)}
             className={`p-2 rounded-lg transition-colors ${plano.ativo ? 'text-text-subtle hover:text-red-500 hover:bg-red-500/10' : 'text-text-subtle hover:text-emerald-500 hover:bg-emerald-500/10'}`}
             title={plano.ativo ? 'Desativar' : 'Ativar'}
@@ -259,6 +260,7 @@ const PlanoCard = ({
             {plano.ativo ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
           </button>
           <button
+            type="button"
             onClick={() => handleDelete(plano)}
             className="p-2 text-text-subtle hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
             title="Excluir"
@@ -388,6 +390,7 @@ const AnalyticsSection = ({
     <div className="bg-bg-subtle border border-border-default rounded-2xl overflow-hidden shadow-sm">
       {/* Header colapsável */}
       <button
+        type="button"
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center justify-between px-5 py-4 border-b border-border-default bg-bg-surface/60 hover:bg-bg-surface transition-colors"
       >
@@ -407,6 +410,7 @@ const AnalyticsSection = ({
             <RefreshCw className="w-3.5 h-3.5 text-text-subtle animate-spin" />
           )}
           <button
+            type="button"
             onClick={(e) => { e.stopPropagation(); recarregar(); }}
             className="p-1.5 text-text-subtle hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-lg transition-colors"
             title="Recarregar indicadores"
@@ -819,6 +823,7 @@ export const PlanosPaxPage: React.FC = () => {
           <p className="text-sm text-text-subtle mt-1">Configure os planos e serviços oferecidos aos associados</p>
         </div>
         <button
+          type="button"
           disabled={!state.isOnline}
           onClick={() => handleOpenForm()}
           title={!state.isOnline ? 'Inclusão bloqueada no Modo Offline' : 'Novo Plano'}
@@ -910,6 +915,7 @@ export const PlanosPaxPage: React.FC = () => {
           <div className="flex items-center gap-2 border-l border-border-default pl-4 pr-2">
             <div className="flex items-center bg-bg-subtle border border-border-default rounded-xl p-1">
               <button
+                type="button"
                 onClick={() => setViewMode('grid')}
                 className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
                 title="Visualização em Cards"
@@ -917,6 +923,7 @@ export const PlanosPaxPage: React.FC = () => {
                 <LayoutGrid className="w-4 h-4" />
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode('table')}
                 className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
                 title="Visualização em Tabela"

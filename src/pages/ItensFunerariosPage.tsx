@@ -87,6 +87,7 @@ export const ItensFunerariosPage: React.FC = () => {
         
         <div className="flex items-center gap-3">
           <button
+            type="button"
             disabled={!state.isOnline}
             onClick={() => handleOpenForm()}
             title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Item"}
@@ -188,6 +189,7 @@ export const ItensFunerariosPage: React.FC = () => {
         <div className="flex items-center gap-2 border-l border-border-default pl-4 pr-2">
           <div className="flex items-center bg-bg-subtle border border-border-default rounded-xl p-1">
             <button
+              type="button"
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
               title="Visualização em Cards"
@@ -195,6 +197,7 @@ export const ItensFunerariosPage: React.FC = () => {
               <LayoutGrid className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('table')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
               title="Visualização em Tabela"
@@ -259,6 +262,7 @@ export const ItensFunerariosPage: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-1">
                         <button
+                          type="button"
                           onClick={(e) => { e.stopPropagation(); handleOpenForm(item); }}
                           className="p-2 text-text-subtle hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-lg transition-colors"
                           title="Editar"
@@ -266,6 +270,7 @@ export const ItensFunerariosPage: React.FC = () => {
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
+                          type="button"
                           onClick={(e) => { e.stopPropagation(); handleToggleStatus(item); }}
                           className={`p-2 rounded-lg transition-colors ${
                             item.ativo 
@@ -334,6 +339,7 @@ export const ItensFunerariosPage: React.FC = () => {
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); handleOpenForm(item); }}
                             className="p-2 text-text-subtle hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-lg transition-colors"
                             title="Editar"
@@ -341,6 +347,7 @@ export const ItensFunerariosPage: React.FC = () => {
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); handleToggleStatus(item); }}
                             className={`p-2 rounded-lg transition-colors ${
                               item.ativo 

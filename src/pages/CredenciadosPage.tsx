@@ -362,6 +362,7 @@ export const CredenciadosPage: React.FC = () => {
         {/* PRIMARY ACTIONS */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            type="button"
             onClick={handleExportPDF}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-bg-surface text-text-base border border-border-default rounded-xl text-xs font-semibold hover:bg-bg-hover transition-colors shadow-sm"
             title="Exportar credenciados em PDF"
@@ -370,6 +371,7 @@ export const CredenciadosPage: React.FC = () => {
             <span>Exportar PDF</span>
           </button>
           <button
+            type="button"
             disabled={!state.isOnline}
             onClick={handleOpenCreate}
             title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Credenciado"}
@@ -486,6 +488,7 @@ export const CredenciadosPage: React.FC = () => {
         <div className="flex items-center gap-2 border-l border-border-default pl-4">
           <div className="flex items-center bg-bg-subtle border border-border-default rounded-xl p-1">
             <button
+              type="button"
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
               title="Visualização em Cards"
@@ -493,6 +496,7 @@ export const CredenciadosPage: React.FC = () => {
               <LayoutGrid className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('table')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
               title="Visualização em Tabela"
@@ -517,6 +521,7 @@ export const CredenciadosPage: React.FC = () => {
             Não encontramos nenhum credenciado ou prestador cadastrado com os filtros aplicados.
           </p>
           <button
+            type="button"
             onClick={handleOpenCreate}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[#3B82F6] text-white rounded-xl text-xs font-semibold hover:bg-[#3B82F6]/90 transition-colors mt-2"
           >
@@ -589,6 +594,7 @@ export const CredenciadosPage: React.FC = () => {
               {/* CARD FOOTER ACTIONS */}
               <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border-default">
                 <button
+                  type="button"
                   onClick={() => handleOpenLinkModal(cred)}
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-bg-subtle hover:bg-[#3B82F6]/10 hover:text-[#3B82F6] text-text-base rounded-xl text-xs font-semibold border border-border-default transition-colors"
                 >
@@ -596,6 +602,7 @@ export const CredenciadosPage: React.FC = () => {
                   Planos
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleEdit(cred)}
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-bg-subtle hover:bg-emerald-500/10 hover:text-emerald-500 text-text-base rounded-xl text-xs font-semibold border border-border-default transition-colors"
                 >
@@ -655,6 +662,7 @@ export const CredenciadosPage: React.FC = () => {
                     <td className="px-5 py-4 text-right">
                       <div className="flex justify-end gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <button
+                          type="button"
                           onClick={() => handleOpenLinkModal(cred)}
                           className="p-2 text-text-subtle hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-lg transition-colors"
                           title="Vincular Planos"
@@ -662,6 +670,7 @@ export const CredenciadosPage: React.FC = () => {
                           <Link className="w-4 h-4" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleEdit(cred)}
                           className="p-2 text-text-subtle hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
                           title="Editar/Ver Procedimentos"
@@ -702,18 +711,21 @@ export const CredenciadosPage: React.FC = () => {
                 {editingId && (
                   <div className="flex bg-bg-surface rounded-xl p-1 border border-border-default w-full md:w-auto overflow-x-auto custom-scrollbar">
                     <button
+                      type="button"
                       onClick={() => setActiveTab('dados')}
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap flex-1 md:flex-none ${activeTab === 'dados' ? 'bg-bg-hover text-text-base shadow-sm border border-border-default' : 'text-text-subtle hover:text-text-base'}`}
                     >
                       Dados Básicos
                     </button>
                     <button
+                      type="button"
                       onClick={() => setActiveTab('procedimentos')}
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap flex-1 md:flex-none ${activeTab === 'procedimentos' ? 'bg-bg-hover text-[#3B82F6] shadow-sm border border-[#3B82F6]/20' : 'text-text-subtle hover:text-[#3B82F6]'}`}
                     >
                       Tabela de Valores
                     </button>
                     <button
+                      type="button"
                       onClick={() => setActiveTab('faturamentos')}
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap flex-1 md:flex-none ${activeTab === 'faturamentos' ? 'bg-bg-hover text-[#3B82F6] shadow-sm border border-[#3B82F6]/20' : 'text-text-subtle hover:text-[#3B82F6]'}`}
                     >
@@ -1051,6 +1063,7 @@ export const CredenciadosPage: React.FC = () => {
                 Vincular Planos - {selectedCredenciado?.nome_fantasia || selectedCredenciado?.razao_social}
               </h3>
               <button 
+                type="button"
                 onClick={() => setIsLinkOpen(false)}
                 className="p-2 text-text-subtle hover:text-text-base bg-bg-surface rounded-lg border border-border-default transition-colors"
               >

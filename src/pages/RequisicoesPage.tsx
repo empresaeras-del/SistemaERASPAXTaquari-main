@@ -558,6 +558,7 @@ export const RequisicoesPage: React.FC = () => {
         </div>
 
         <button
+          type="button"
           disabled={!state.isOnline}
           onClick={() => {
             resetForm();
@@ -756,6 +757,7 @@ export const RequisicoesPage: React.FC = () => {
                     <td className="px-6 py-3.5 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2">
                         <button
+                          type="button"
                           onClick={() => setModalDetalhes(req)}
                           className="p-1.5 text-text-subtle hover:text-text-base bg-bg-surface hover:bg-bg-hover rounded-lg border border-border-default transition-colors"
                           title="Ver detalhes da guia"
@@ -765,6 +767,7 @@ export const RequisicoesPage: React.FC = () => {
                         
                         {(req.status === 'emitida' || (req.status as any) === 'pendente') && (
                           <button
+                            type="button"
                             onClick={() => handleEditRequisicao(req)}
                             className="p-1.5 text-amber-500 hover:text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg border border-amber-500/20 transition-colors"
                             title="Editar Guia"
@@ -774,6 +777,7 @@ export const RequisicoesPage: React.FC = () => {
                         )}
 
                         <button
+                          type="button"
                           onClick={() => setRequisicaoParaVisualizar(req)}
                           className="p-1.5 text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg border border-blue-500/20 transition-colors"
                           title="Imprimir Guia em PDF"
@@ -784,6 +788,7 @@ export const RequisicoesPage: React.FC = () => {
                         {(req.status === 'emitida' || (req.status as any) === 'pendente') && (
                           <>
                             <button
+                              type="button"
                               onClick={() => handleAlterarStatus(req.id, 'autorizada')}
                               className="px-2.5 py-1 text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/30 rounded-lg transition-colors flex items-center gap-1"
                               title="Autorizar Atendimento"
@@ -792,6 +797,7 @@ export const RequisicoesPage: React.FC = () => {
                               Autorizar
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleAlterarStatus(req.id, 'realizada')}
                               className="px-2.5 py-1 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg transition-colors flex items-center gap-1"
                               title="Marcar como Realizada"
@@ -805,6 +811,7 @@ export const RequisicoesPage: React.FC = () => {
                         {req.status === 'autorizada' && (
                           <>
                             <button
+                              type="button"
                               onClick={() => handleAlterarStatus(req.id, 'realizada')}
                               className="px-2.5 py-1 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg transition-colors flex items-center gap-1"
                               title="Confirmar Realização do Procedimento"
@@ -813,6 +820,7 @@ export const RequisicoesPage: React.FC = () => {
                               Realizada
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleAbrirModalReabrir(req, 'emitida')}
                               className="px-2.5 py-1 text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded-lg transition-colors"
                               title="Reabrir para EMITIDA"
@@ -824,6 +832,7 @@ export const RequisicoesPage: React.FC = () => {
 
                         {req.status === 'realizada' && (
                           <button
+                            type="button"
                             onClick={() => handleAbrirModalReabrir(req, 'autorizada')}
                             className="px-2.5 py-1 text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded-lg transition-colors"
                             title="Reabrir para AUTORIZADA"
@@ -834,6 +843,7 @@ export const RequisicoesPage: React.FC = () => {
 
                         {req.status !== 'cancelada' && req.status !== 'realizada' && (
                           <button
+                            type="button"
                             onClick={() => setModalCancelar(req)}
                             className="p-1.5 text-amber-500 hover:text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg border border-amber-500/20 transition-colors"
                             title="Cancelar Guia (Inativar)"
@@ -843,6 +853,7 @@ export const RequisicoesPage: React.FC = () => {
                         )}
 
                         <button
+                          type="button"
                           onClick={() => handleExcluirGuia(req)}
                           className="p-1.5 text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg border border-rose-500/20 transition-colors"
                           title="Excluir Guia Definitivamente"
@@ -875,7 +886,7 @@ export const RequisicoesPage: React.FC = () => {
                   <p className="text-xs text-text-subtle">Selecione o associado, o paciente e os exames desejados</p>
                 </div>
               </div>
-              <button onClick={() => setModalNovaGuia(false)} className="text-text-subtle hover:text-text-base p-1 rounded-lg">
+              <button type="button" onClick={() => setModalNovaGuia(false)} className="text-text-subtle hover:text-text-base p-1 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1271,7 +1282,7 @@ export const RequisicoesPage: React.FC = () => {
                   Emitida em {formatLocalDateTime(modalDetalhes.data_emissao)}
                 </p>
               </div>
-              <button onClick={() => setModalDetalhes(null)} className="text-text-subtle hover:text-text-base">
+              <button type="button" onClick={() => setModalDetalhes(null)} className="text-text-subtle hover:text-text-base">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1315,12 +1326,14 @@ export const RequisicoesPage: React.FC = () => {
 
             <div className="flex justify-end gap-3 pt-6 border-t border-border-default mt-6">
               <button
+                type="button"
                 onClick={() => setModalDetalhes(null)}
                 className="px-4 py-2 bg-bg-subtle text-text-subtle hover:text-text-base rounded-xl text-xs font-medium"
               >
                 Fechar
               </button>
               <button
+                type="button"
                 onClick={async () => {
                   setRequisicaoParaVisualizar(modalDetalhes);
                   setModalDetalhes(null);
@@ -1430,12 +1443,14 @@ export const RequisicoesPage: React.FC = () => {
 
             <div className="flex justify-end gap-3 pt-3 border-t border-border-default">
               <button
+                type="button"
                 onClick={() => setModalCancelar(null)}
                 className="px-4 py-2 bg-bg-subtle text-text-subtle hover:text-text-base rounded-xl text-xs font-medium"
               >
                 Voltar
               </button>
               <button
+                type="button"
                 onClick={handleConfirmarCancelamento}
                 className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-medium transition-colors"
               >

@@ -84,6 +84,7 @@ export const AssociadosListTable: React.FC<AssociadosListTableProps> = ({
                 {isVisible('acoes') && <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <button
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); handleWhatsAppMenu(associado); }}
                       className="p-1 text-emerald-500/70 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
                       title="WhatsApp Automático"
@@ -91,6 +92,7 @@ export const AssociadosListTable: React.FC<AssociadosListTableProps> = ({
                       <MessageCircle className="w-4 h-4" />
                     </button>
                     <button
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); handleOpenModal(associado); }}
                       className="p-1 text-text-subtle hover:text-text-base hover:bg-white/5 rounded-lg transition-colors"
                       title="Editar Associado"
@@ -98,6 +100,7 @@ export const AssociadosListTable: React.FC<AssociadosListTableProps> = ({
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); handleDelete(associado.id || ''); }}
                       className="p-1 text-text-subtle hover:text-rose-400 hover:bg-white/5 rounded-lg transition-colors"
                       title="Excluir Associado"

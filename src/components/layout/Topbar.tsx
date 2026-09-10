@@ -196,6 +196,7 @@ export const Topbar: React.FC = () => {
               </span>
             ) : (
               <button
+                type="button"
                 onClick={handleManualSync}
                 className="flex items-center gap-1.5 text-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/20 px-2.5 py-1 rounded-full border border-emerald-400/20 text-xs transition-colors cursor-pointer group"
                 title={`Última sincronização completa: ${lastSyncFormatted}. Clique para forçar nova atualização local.`}
@@ -218,18 +219,20 @@ export const Topbar: React.FC = () => {
         </div>
 
         <button 
+          type="button"
           onClick={() => dispatch({ type: 'SET_THEME', payload: state.theme === 'dark' ? 'light' : 'dark' })} 
           className="text-text-subtle hover:text-text-base transition-colors" 
           title="Alternar Tema"
         >
           {state.theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
-        <button onClick={toggleFullscreen} className="text-text-subtle hover:text-text-base transition-colors" title="Tela Cheia">
+        <button type="button" onClick={toggleFullscreen} className="text-text-subtle hover:text-text-base transition-colors" title="Tela Cheia">
           {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
         </button>
 
         <div className="relative">
           <button 
+            type="button"
             onClick={() => setIsNotificationOpen(!isNotificationOpen)}
             className={`transition-colors relative p-2 rounded-xl hover:bg-bg-subtle ${isNotificationOpen ? 'text-[#3B82F6]' : 'text-text-subtle hover:text-text-base'}`}
             title="Central de Notificações e Alertas"
@@ -249,6 +252,7 @@ export const Topbar: React.FC = () => {
         </div>
 
         <button 
+          type="button"
           onClick={handleLogout}
           className="flex items-center gap-3 pl-6 border-l border-border-default hover:opacity-80 transition-opacity cursor-pointer group"
           title="Sair do sistema"

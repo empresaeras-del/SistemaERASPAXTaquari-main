@@ -281,6 +281,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
             />
             {canvasSearch && (
               <button 
+                type="button"
                 onClick={() => setCanvasSearch('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-subtle hover:text-text-base"
               >
@@ -297,6 +298,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
               Níveis:
             </span>
             <button
+              type="button"
               onClick={() => setNivelExpansao(1)}
               className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-bg-subtle text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors border border-border-default/50"
               title="Mostrar apenas os Planos"
@@ -304,6 +306,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
               1 · Planos
             </button>
             <button
+              type="button"
               onClick={() => setNivelExpansao(2)}
               className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-bg-subtle text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors border border-border-default/50"
               title="Expandir até Contratos"
@@ -311,6 +314,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
               2 · Contratos
             </button>
             <button
+              type="button"
               onClick={() => setNivelExpansao(3)}
               className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#3B82F6]/15 text-[#3B82F6] hover:bg-[#3B82F6]/25 transition-colors border border-[#3B82F6]/30 font-bold"
               title="Expandir Todos os Dependentes"
@@ -318,6 +322,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
               3 · Tudo
             </button>
             <button
+              type="button"
               onClick={recolherTudo}
               className="p-1 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
               title="Recolher Tudo"
@@ -333,6 +338,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
             {Math.round(zoom * 100)}%
           </span>
           <button
+            type="button"
             onClick={zoomIn}
             className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
             title="Aumentar Zoom (+)"
@@ -340,6 +346,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
             <ZoomIn className="w-4 h-4" />
           </button>
           <button
+            type="button"
             onClick={zoomOut}
             className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
             title="Diminuir Zoom (-)"
@@ -347,6 +354,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
             <ZoomOut className="w-4 h-4" />
           </button>
           <button
+            type="button"
             onClick={fitView}
             className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
             title="Enquadrar na Tela"
@@ -354,6 +362,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
             <Layers className="w-4 h-4" />
           </button>
           <button
+            type="button"
             onClick={resetView}
             className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
             title="Resetar Posição e Zoom (100%)"
@@ -362,6 +371,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
           </button>
           <div className="h-4 w-px bg-border-default/80 mx-1" />
           <button
+            type="button"
             onClick={toggleFullscreen}
             className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
             title={isFullscreen ? "Sair da Tela Cheia" : "Modo Tela Cheia"}
@@ -414,6 +424,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
 
                 {/* Botão de Toggle da Raiz */}
                 <button
+                  type="button"
                   onClick={(e) => toggleNode('root', e)}
                   className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-amber-400 border border-amber-500/20 transition-transform"
                   title={expandedNodes['root'] ? "Recolher Planos" : "Expandir Planos"}
@@ -496,6 +507,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
 
                         {/* Botão de Toggle do Plano */}
                         <button
+                          type="button"
                           onClick={(e) => toggleNode(`plano_${plano.id}`, e)}
                           className={`p-1.5 rounded-lg bg-black/40 hover:bg-black/60 border ${plano.estilo.border} ${plano.estilo.text} transition-transform flex items-center gap-1`}
                           title={isPlanoExpanded ? "Recolher Contratos" : "Expandir Contratos"}
@@ -572,6 +584,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
                                   {/* Botão de Toggle dos Dependentes */}
                                   {totalDependentes > 0 ? (
                                     <button
+                                      type="button"
                                       onClick={(e) => toggleNode(`assoc_${assoc.id}`, e)}
                                       className="p-1 rounded-md bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-[10px] font-semibold flex items-center gap-1 shrink-0"
                                       title={isAssocExpanded ? "Recolher Dependentes" : "Expandir Dependentes"}
@@ -676,6 +689,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
                 </span>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedNode(null)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
               >
@@ -790,6 +804,7 @@ export const OrganogramaContratosCanvas: React.FC<OrganogramaContratosCanvasProp
           {selectedNode.type === 'associado' && onSelectAssociado && (
             <div className="pt-4 border-t border-white/10">
               <button
+                type="button"
                 onClick={() => onSelectAssociado(selectedNode.data)}
                 className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white font-bold text-xs hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
               >

@@ -126,7 +126,7 @@ export const EmpresaFormModal: React.FC<EmpresaFormModalProps> = ({ empresaInici
           <h3 className="text-xl font-bold text-white tracking-tight">
             {editingEmpresa.razao_social ? "Editar Empresa" : "Nova Empresa"}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>

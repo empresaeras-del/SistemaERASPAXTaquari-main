@@ -967,6 +967,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => handlePrint(viewMode === 'all' ? 'all' : 'current')}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-surface hover:bg-bg-hover text-text-base border border-border-default rounded-xl text-xs font-semibold transition-all shadow-sm"
               title="Imprimir Carteirinha"
@@ -976,6 +977,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
             </button>
 
             <button
+              type="button"
               disabled={isExporting}
               onClick={() => handleExportPDF(viewMode === 'all' ? 'all' : 'current')}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20 transition-all disabled:opacity-50"
@@ -986,6 +988,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
             </button>
 
             <button
+              type="button"
               onClick={onClose}
               className="p-1.5 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors ml-1"
               aria-label="Fechar"
@@ -1000,6 +1003,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
           {/* SELETOR DE BENEFICIÁRIOS */}
           <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1 max-w-full">
             <button
+              type="button"
               onClick={() => {
                 setSelectedBeneficiario('titular');
                 if (viewMode === 'all') setViewMode('both');
@@ -1016,6 +1020,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
 
             {dependentesCardsData.map((dep) => (
               <button
+                type="button"
                 key={dep.id}
                 onClick={() => {
                   setSelectedBeneficiario(dep.id);
@@ -1036,6 +1041,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
 
             {dependentesCardsData.length > 0 && (
               <button
+                type="button"
                 onClick={() => setViewMode('all')}
                 className={`px-3 py-1.5 rounded-xl font-medium transition-all shrink-0 flex items-center gap-1.5 ${
                   viewMode === 'all'
@@ -1056,6 +1062,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
               <Palette className="w-3.5 h-3.5 text-text-subtle ml-1.5" />
               {THEMES.map((theme) => (
                 <button
+                  type="button"
                   key={theme.id}
                   onClick={() => setSelectedTheme(theme.id)}
                   title={theme.label}
@@ -1084,6 +1091,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
             {viewMode !== 'all' && (
               <div className="flex items-center bg-bg-subtle rounded-xl p-1 border border-border-default">
                 <button
+                  type="button"
                   onClick={() => setViewMode('both')}
                   className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                     viewMode === 'both'
@@ -1094,6 +1102,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                   Lado a Lado
                 </button>
                 <button
+                  type="button"
                   onClick={() => setViewMode('flip')}
                   className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
                     viewMode === 'flip'
@@ -1125,6 +1134,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => handlePrint('all')}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-xs font-semibold transition-all"
                 >
@@ -1197,6 +1207,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
 
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setIsFlipped(!isFlipped)}
                   className="flex items-center gap-1.5 px-4 py-2 bg-bg-surface hover:bg-bg-hover text-text-base border border-border-default rounded-xl text-xs font-semibold transition-all shadow-sm"
                 >
@@ -1248,6 +1259,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
+                    type="button"
                     onClick={() => handlePrint('current')}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-hover hover:bg-bg-hover/80 text-text-base rounded-xl font-medium transition-colors"
                   >
@@ -1255,6 +1267,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
                     Imprimir Esta
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleExportPDF('current')}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-colors shadow-sm"
                   >
@@ -1280,6 +1293,7 @@ export const CarteirinhaAssociadoModal: React.FC<CarteirinhaAssociadoModalProps>
             </span>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="px-5 py-2 bg-bg-hover hover:bg-bg-hover/80 text-text-base rounded-xl font-medium transition-colors"
           >

@@ -303,6 +303,7 @@ export const WelcomeModal = () => {
             <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-purple-600/5 to-transparent pointer-events-none" />
             
             <button
+              type="button"
               onClick={handleAbrirTutorial}
               className="absolute left-4 top-4 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all z-20 shadow-sm"
               title="Abrir Tutorial do Sistema"
@@ -312,6 +313,7 @@ export const WelcomeModal = () => {
             </button>
 
             <button
+              type="button"
               onClick={() => setIsOpen(false)}
               className="absolute right-4 top-4 p-2 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors z-20"
               title="Fechar"
@@ -352,6 +354,7 @@ export const WelcomeModal = () => {
           {/* Navigation Tabs */}
           <div className="flex border-b border-border-default px-6 bg-bg-surface shrink-0">
             <button
+              type="button"
               onClick={() => setActiveTab('operacao')}
               className={`px-4 py-3 font-semibold text-sm border-b-2 transition-all flex items-center gap-2 ${
                 activeTab === 'operacao'
@@ -364,6 +367,7 @@ export const WelcomeModal = () => {
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveTab('aniversariantes')}
               className={`px-4 py-3 font-semibold text-sm border-b-2 transition-all flex items-center gap-2 relative ${
                 activeTab === 'aniversariantes'

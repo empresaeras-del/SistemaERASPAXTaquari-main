@@ -340,6 +340,7 @@ export const NovoContratoWizard: React.FC<{
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 text-text-subtle hover:bg-bg-subtle rounded-lg transition-colors"
             aria-label="Fechar"
@@ -447,6 +448,7 @@ export const NovoContratoWizard: React.FC<{
                   <p className="text-xl font-mono font-bold text-text-base">{numeroContrato}</p>
                 </div>
                 <button
+                  type="button"
                   onClick={() =>
                     setNumeroContrato(
                       'CTR-' + Math.random().toString(36).substring(2, 10).toUpperCase(),
@@ -702,6 +704,7 @@ export const NovoContratoWizard: React.FC<{
         {/* Footer Actions */}
         <div className="p-6 border-t border-border-default flex justify-between items-center bg-bg-subtle/30 rounded-b-2xl">
           <button
+            type="button"
             onClick={step === 1 ? onClose : () => setStep(step - 1)}
             className="px-6 py-2.5 rounded-xl font-semibold text-text-subtle hover:text-text-base hover:bg-bg-subtle transition-colors"
           >
@@ -710,6 +713,7 @@ export const NovoContratoWizard: React.FC<{
 
           {step < 4 ? (
             <button
+              type="button"
               disabled={(step === 1 && !selectedAssociado) || (step === 2 && !planoId)}
               onClick={() => {
                 if (step === 1 && selectedAssociado?.plano_pax_id) {

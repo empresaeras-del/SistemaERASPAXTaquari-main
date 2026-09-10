@@ -281,6 +281,7 @@ export const ItemFunerarioForm: React.FC<Props> = ({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="text-text-subtle hover:text-text-base transition-colors p-1 rounded-lg hover:bg-bg-hover"
             aria-label="Fechar"

@@ -539,6 +539,7 @@ export const ContasReceberPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => setShowRelatorioModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors shadow-sm cursor-pointer"
             title="Visualizar e Exportar Relatório Profissional em PDF"
@@ -547,6 +548,7 @@ export const ContasReceberPage: React.FC = () => {
             <span>Exportar PDF</span>
           </button>
           <button 
+            type="button"
             disabled={!state.isOnline}
             onClick={() => navigate('/financeiro/contas-a-receber/nova')} 
             title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Nova Receita"}
@@ -772,6 +774,7 @@ export const ContasReceberPage: React.FC = () => {
                         
                         {/* Ver Detalhes */}
                         <button
+                          type="button"
                           onClick={() => openDetalhes(parcela)}
                           title="Ver Detalhes"
                           className="p-1.5 rounded-lg bg-bg-surface hover:bg-bg-hover text-text-subtle hover:text-text-base border border-border-default transition-colors"
@@ -781,6 +784,7 @@ export const ContasReceberPage: React.FC = () => {
 
                         {/* Editar */}
                         <button
+                          type="button"
                           onClick={() => {
                             if (!canEditFinanceiro(state.user, state.isOnline)) {
                               alertPermissionRestriction('Financeiro (Contas a Receber)', 'editar parcelas ou receitas existentes');
@@ -797,6 +801,7 @@ export const ContasReceberPage: React.FC = () => {
 
                         {/* Excluir Parcela */}
                         <button
+                          type="button"
                           onClick={() => handleExcluirParcela(parcela)}
                           title="Excluir Parcela"
                           disabled={parcela.status === 'recebido'}
@@ -808,6 +813,7 @@ export const ContasReceberPage: React.FC = () => {
                         {/* Botão Receber */}
                         {(parcela.status === 'pendente' || parcela.status === 'atrasado') && (
                           <button
+                            type="button"
                             onClick={() => openBaixaModal(parcela)}
                             className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ml-1"
                           >
@@ -840,6 +846,7 @@ export const ContasReceberPage: React.FC = () => {
                     Registrar Recebimento
                   </h3>
                   <button
+                    type="button"
                     onClick={() => setShowBaixaModal(false)}
                     className="text-text-subtle hover:text-text-base transition-colors"
                   >
@@ -962,6 +969,7 @@ export const ContasReceberPage: React.FC = () => {
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setShowBaixaModal(false)}
                     className="text-text-subtle hover:text-text-base transition-colors"
                   >
@@ -1029,6 +1037,7 @@ export const ContasReceberPage: React.FC = () => {
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setShowBaixaModal(false)}
                     className="text-text-subtle hover:text-text-base transition-colors"
                   >
@@ -1146,6 +1155,7 @@ export const ContasReceberPage: React.FC = () => {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowDetalhesModal(false)}
                 className="p-2 rounded-xl text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
               >
@@ -1303,6 +1313,7 @@ export const ContasReceberPage: React.FC = () => {
             <div className="p-6 border-t border-border-default bg-bg-surface/50 flex flex-wrap items-center justify-between gap-3 print:hidden">
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => {
                     if (!canEditFinanceiro(state.user, state.isOnline)) {
                       alertPermissionRestriction('Financeiro (Contas a Receber)', 'editar receitas ou parcelas existentes');
@@ -1318,6 +1329,7 @@ export const ContasReceberPage: React.FC = () => {
                   Editar Receita
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     if (parcelaDetalhes.receita_id) {
                       handleExcluirReceitaCompleta(parcelaDetalhes.receita_id, parcelaDetalhes.descricao || '');
@@ -1348,6 +1360,7 @@ export const ContasReceberPage: React.FC = () => {
                 )}
                 {(parcelaDetalhes.status === 'pendente' || parcelaDetalhes.status === 'atrasado') && (
                   <button
+                    type="button"
                     onClick={() => {
                       setShowDetalhesModal(false);
                       openBaixaModal(parcelaDetalhes);
@@ -1360,6 +1373,7 @@ export const ContasReceberPage: React.FC = () => {
                 )}
                 {parcelaDetalhes.status === 'recebido' && (
                   <button
+                    type="button"
                     onClick={() => handleImprimirRecibo(parcelaDetalhes)}
                     className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-500/20"
                   >
@@ -1368,6 +1382,7 @@ export const ContasReceberPage: React.FC = () => {
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => setShowDetalhesModal(false)}
                   className="px-5 py-2 rounded-xl bg-bg-surface border border-border-default text-text-muted hover:text-text-base transition-colors font-medium text-sm"
                 >

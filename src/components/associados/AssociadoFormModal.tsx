@@ -68,6 +68,7 @@ export const AssociadoFormModal = (props: any) => {
                 )}
               </div>
               <button
+                type="button"
                 onClick={handleCloseModal}
                 className="text-text-subtle hover:text-text-base transition-colors"
               >
@@ -1627,6 +1628,7 @@ export const AssociadoFormModal = (props: any) => {
                 <h3 className="text-lg font-bold text-text-base">Lista de Dependentes</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowDependentesModal(false)}
                 className="p-2 text-text-subtle hover:bg-bg-subtle rounded-full transition-colors"
               >
@@ -1706,6 +1708,7 @@ export const AssociadoFormModal = (props: any) => {
             
             <div className="p-4 border-t border-border-default flex justify-between bg-bg-subtle/50">
               <button
+                type="button"
                 onClick={handleExportDependentesPDF}
                 className="flex items-center gap-2 px-6 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors"
                 title="Gerar relatório em PDF"
@@ -1714,6 +1717,7 @@ export const AssociadoFormModal = (props: any) => {
                 <span>Gerar Relatório</span>
               </button>
               <button
+                type="button"
                 onClick={() => setShowDependentesModal(false)}
                 className="px-6 py-2 bg-bg-hover border border-[#64748B] text-text-muted rounded-xl font-medium hover:bg-[#64748B] hover:text-text-base transition-colors"
               >
@@ -1735,6 +1739,7 @@ export const AssociadoFormModal = (props: any) => {
                 <h3 className="text-lg font-bold text-text-base">Modificar Plano</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowModificarPlanoModal(false)}
                 className="p-2 text-text-subtle hover:bg-bg-subtle rounded-full transition-colors"
               >
@@ -1756,12 +1761,14 @@ export const AssociadoFormModal = (props: any) => {
                   
                   <div className="flex justify-center gap-4 pt-4">
                     <button
+                      type="button"
                       onClick={() => setShowModificarPlanoModal(false)}
                       className="px-6 py-2.5 bg-bg-subtle border border-border-default text-text-base rounded-xl font-medium hover:bg-bg-hover transition-colors"
                     >
                       Cancelar
                     </button>
                     <button
+                      type="button"
                       onClick={() => setModificarPlanoStep("justificativa")}
                       className="px-6 py-2.5 bg-[#3B82F6] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#3B82F6]/25"
                     >
@@ -1790,12 +1797,14 @@ export const AssociadoFormModal = (props: any) => {
                   
                   <div className="flex justify-end gap-4 pt-4">
                     <button
+                      type="button"
                       onClick={() => setModificarPlanoStep("confirmar")}
                       className="px-6 py-2.5 bg-bg-subtle border border-border-default text-text-base rounded-xl font-medium hover:bg-bg-hover transition-colors"
                     >
                       Voltar
                     </button>
                     <button
+                      type="button"
                       disabled={!justificativaModificacao.trim()}
                       onClick={() => setModificarPlanoStep("selecionar")}
                       className="px-6 py-2.5 bg-[#3B82F6] text-white rounded-xl font-medium hover:opacity-90 transition-opacity shadow-lg shadow-[#3B82F6]/25 disabled:opacity-50"
@@ -1832,12 +1841,14 @@ export const AssociadoFormModal = (props: any) => {
                   
                   <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-border-default">
                     <button
+                      type="button"
                       onClick={() => setModificarPlanoStep("justificativa")}
                       className="px-6 py-2.5 bg-bg-subtle border border-border-default text-text-base rounded-xl font-medium hover:bg-bg-hover transition-colors"
                     >
                       Voltar
                     </button>
                     <button
+                      type="button"
                       disabled={!novoPlanoSelecionado}
                       onClick={() => {
                         if (editingAssociado) {

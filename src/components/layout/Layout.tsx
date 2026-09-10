@@ -70,6 +70,7 @@ export const Layout: React.FC = () => {
                   Seu perfil de usuário não possui permissão para visualizar ou operar este módulo / formulário. Caso necessite de acesso, solicite ao Administrador ou Super Admin da sua empresa.
                 </p>
                 <button
+                  type="button"
                   onClick={() => navigate('/')}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#222542] hover:bg-[#2A2D48] text-white rounded-xl text-sm font-medium transition-colors border border-[#2A2D48]"
                 >

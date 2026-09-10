@@ -31,6 +31,7 @@ export const AssociadosToolbar: React.FC<AssociadosToolbarProps> = ({
       
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={handleExportPDF}
           className="flex items-center gap-2 px-4 py-2.5 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors"
           title="Gerar relatório em PDF"
@@ -39,6 +40,7 @@ export const AssociadosToolbar: React.FC<AssociadosToolbarProps> = ({
           <span>Gerar Relatório</span>
         </button>
         <button
+          type="button"
           disabled={!isOnline}
           onClick={() => handleOpenModal()}
           title={!isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Associado"}

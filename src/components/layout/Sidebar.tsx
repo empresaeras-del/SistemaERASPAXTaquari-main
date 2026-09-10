@@ -224,6 +224,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
             <div className="flex items-center gap-2 min-w-0">
               <h1 className="text-xl font-bold text-text-base tracking-tight">ERAS<span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3B82F6] to-[#60A5FA]">.</span></h1>
               <button
+                type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent('open-welcome-modal'))}
                 className="text-text-subtle hover:text-[#3B82F6] transition-colors"
                 title="Informações do Sistema"
@@ -232,6 +233,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
               </button>
             </div>
             <button
+              type="button"
               onClick={onToggle}
               title="Recolher menu"
               className="ml-auto p-1.5 rounded-lg text-text-subtle hover:bg-bg-hover hover:text-text-base transition-colors"
@@ -242,6 +244,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
         )}
         {isCollapsed && (
           <button
+            type="button"
             onClick={onToggle}
             title="Expandir menu"
             className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#3B82F6] to-[#60A5FA] text-white font-bold text-sm flex items-center justify-center shadow-lg shadow-[#3B82F6]/20 hover:opacity-90 transition-opacity"

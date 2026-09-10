@@ -64,6 +64,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             Se o problema persistir, entre em contato com o suporte.
           </p>
           <button
+            type="button"
             onClick={() => window.location.reload()}
             style={{
               background: '#3b82f6',

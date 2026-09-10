@@ -92,6 +92,7 @@ export const AssociadosListGrid: React.FC<AssociadosListGridProps> = ({
           
           <div className="pt-4 border-t border-border-default flex items-center justify-between mt-auto">
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); setPreviewAssociado(associado); }}
               className="text-xs font-medium text-[#3B82F6] hover:text-[#60A5FA] flex items-center gap-1 transition-colors"
             >
@@ -99,6 +100,7 @@ export const AssociadosListGrid: React.FC<AssociadosListGridProps> = ({
             </button>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); handleWhatsAppMenu(associado); }}
                 className="p-1.5 text-emerald-500/70 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
                 title="WhatsApp Automático"
@@ -106,6 +108,7 @@ export const AssociadosListGrid: React.FC<AssociadosListGridProps> = ({
                 <MessageCircle className="w-4 h-4" />
               </button>
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); handleOpenModal(associado); }}
                 className="p-1.5 text-text-subtle hover:text-text-base hover:bg-white/5 rounded-lg transition-colors"
                 title="Editar Associado"
@@ -113,6 +116,7 @@ export const AssociadosListGrid: React.FC<AssociadosListGridProps> = ({
                 <Edit2 className="w-4 h-4" />
               </button>
               <button
+                type="button"
                 disabled={!isOnline}
                 onClick={(e) => { e.stopPropagation(); handleDelete(associado.id || ''); }}
                 className="p-1.5 text-text-subtle hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"

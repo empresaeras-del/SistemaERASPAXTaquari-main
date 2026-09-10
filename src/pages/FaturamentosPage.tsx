@@ -430,6 +430,7 @@ export const FaturamentosPage: React.FC = () => {
 
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={() => setIsPreviewPrint(!isPreviewPrint)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors shadow-sm shrink-0 preview-toggle ${isPreviewPrint ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-bg-surface border border-border-default hover:bg-bg-hover text-text-base'}`}
             title={isPreviewPrint ? 'Sair da Visualização' : 'Visualizar Impressão'}
@@ -439,6 +440,7 @@ export const FaturamentosPage: React.FC = () => {
           </button>
           
           <button
+            type="button"
             disabled={!state.isOnline}
             onClick={() => {
               resetNovaRemessaForm();
@@ -630,6 +632,7 @@ export const FaturamentosPage: React.FC = () => {
                     <td className="px-6 py-3.5 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2">                        {rem.status === 'fechada' && (
                           <button
+                            type="button"
                             onClick={() => setModalReabrirRemessa(rem)}
                             title="Reabrir Remessa"
                             className="p-1.5 text-amber-500 hover:text-white bg-bg-surface hover:bg-amber-600 rounded-lg border border-border-default transition-colors"
@@ -638,6 +641,7 @@ export const FaturamentosPage: React.FC = () => {
                           </button>
                         )}
                         <button
+                          type="button"
                           onClick={() => setModalDetalhes(rem)}
                           className="p-1.5 text-text-subtle hover:text-text-base bg-bg-surface hover:bg-bg-hover rounded-lg border border-border-default transition-colors"
                           title="Ver detalhes da remessa"
@@ -646,6 +650,7 @@ export const FaturamentosPage: React.FC = () => {
                         </button>
 
                         <button
+                          type="button"
                           onClick={async () => {
                             const reqsInclusas = todasRequisicoes.filter(r => rem.requisicao_ids.includes(r.id));
                             const tenantId = state.empresaSelecionada || 'default_tenant';
@@ -660,6 +665,7 @@ export const FaturamentosPage: React.FC = () => {
 
                         {rem.status === 'em_aberto' && (
                           <button
+                            type="button"
                             onClick={() => {
                               setDataVencimentoFinanceiro(format(addDays(new Date(), 15), 'yyyy-MM-dd'));
                               setModalFecharRemessa(rem);
@@ -672,6 +678,7 @@ export const FaturamentosPage: React.FC = () => {
                         )}
 
                         <button
+                          type="button"
                           onClick={() => handleExcluirRemessa(rem)}
                           className="p-1.5 text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg border border-rose-500/20 transition-colors"
                           title="Excluir Remessa"
@@ -704,7 +711,7 @@ export const FaturamentosPage: React.FC = () => {
                   <p className="text-xs text-text-subtle">Selecione o prestador e selecione as guias/requisições a incluir no lote</p>
                 </div>
               </div>
-              <button onClick={() => { setModalNovaRemessa(false); resetNovaRemessaForm(); }} className="text-text-subtle hover:text-text-base p-1 rounded-lg">
+              <button type="button" onClick={() => { setModalNovaRemessa(false); resetNovaRemessaForm(); }} className="text-text-subtle hover:text-text-base p-1 rounded-lg">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
@@ -992,12 +999,14 @@ export const FaturamentosPage: React.FC = () => {
 
             <div className="flex justify-end gap-3 pt-4 border-t border-border-default">
               <button 
+                type="button"
                 onClick={() => setModalReabrirRemessa(null)}
                 className="px-4 py-2 bg-bg-subtle text-text-subtle hover:text-text-base rounded-xl font-medium"
               >
                 Cancelar
               </button>
               <button 
+                type="button"
                 onClick={handleConfirmarReabertura}
                 disabled={submitting}
                 className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-medium disabled:opacity-50 flex items-center gap-2"
@@ -1023,7 +1032,7 @@ export const FaturamentosPage: React.FC = () => {
                   <p className="text-xs text-text-subtle">Gerar lançamento no Contas a Pagar</p>
                 </div>
               </div>
-              <button onClick={() => setModalFecharRemessa(null)} className="text-text-subtle hover:text-text-base">
+              <button type="button" onClick={() => setModalFecharRemessa(null)} className="text-text-subtle hover:text-text-base">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
@@ -1116,7 +1125,7 @@ export const FaturamentosPage: React.FC = () => {
                   Criada em {formatLocalDateTime(modalDetalhes.data_criacao)}
                 </p>
               </div>
-              <button onClick={() => setModalDetalhes(null)} className="text-text-subtle hover:text-text-base">
+              <button type="button" onClick={() => setModalDetalhes(null)} className="text-text-subtle hover:text-text-base">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
@@ -1176,6 +1185,7 @@ export const FaturamentosPage: React.FC = () => {
             <div className="flex justify-end gap-3 pt-3 border-t border-border-default">
               {modalDetalhes.status === 'em_aberto' && (
                 <button
+                  type="button"
                   onClick={() => {
                     setEditingRemessa(modalDetalhes);
                     setTipoPrestador(modalDetalhes.tipo_prestador);
@@ -1199,12 +1209,14 @@ export const FaturamentosPage: React.FC = () => {
               )}
 
               <button
+                type="button"
                 onClick={() => setModalDetalhes(null)}
                 className="px-4 py-2 bg-bg-subtle text-text-subtle hover:text-text-base rounded-xl text-xs font-medium"
               >
                 Fechar
               </button>
               <button
+                type="button"
                 onClick={async () => {
                   const reqsInclusas = todasRequisicoes.filter(r => modalDetalhes.requisicao_ids.includes(r.id));
                   const tenantId = state.empresaSelecionada || 'default_tenant';

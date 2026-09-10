@@ -899,6 +899,7 @@ export const AuditoriaPage: React.FC = () => {
                   />
                   {searchTerm && (
                     <button 
+                      type="button"
                       onClick={() => setSearchTerm('')}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-bg-hover text-text-subtle hover:text-text-base"
                     >
@@ -916,6 +917,7 @@ export const AuditoriaPage: React.FC = () => {
                   </span>
                   {usuarioFiltro !== 'todos' && (
                     <button
+                      type="button"
                       onClick={() => setUsuarioFiltro('todos')}
                       className="text-blue-500 hover:text-blue-600 text-[10px] lowercase font-normal"
                     >

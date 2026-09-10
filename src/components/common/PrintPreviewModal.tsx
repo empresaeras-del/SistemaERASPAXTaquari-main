@@ -37,6 +37,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
           </div>
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={handlePrint}
               className="flex items-center gap-2 px-5 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl transition-all font-bold text-sm"
             >
@@ -44,6 +45,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
               Imprimir
             </button>
             <button
+              type="button"
               onClick={onClose}
               className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white transition-colors"
               aria-label="Fechar"

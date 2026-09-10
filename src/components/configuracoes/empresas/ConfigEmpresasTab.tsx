@@ -62,6 +62,7 @@ export const ConfigEmpresasTab: React.FC<ConfigEmpresasTabProps> = ({ empresas, 
         </div>
         {canCreateEmpresa(state.user, state.isOnline) && (
           <button
+            type="button"
             onClick={() => handleOpenModal({ status: 'ativo' })}
             className="px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center gap-2 shadow-lg shadow-[#7E4CF3]/25"
           >
@@ -85,12 +86,12 @@ export const ConfigEmpresasTab: React.FC<ConfigEmpresasTabProps> = ({ empresas, 
             <div key={empresa.id} className="bg-[#101223] rounded-2xl p-6 border border-[#262A45] hover:border-[#3B82F6]/50 transition-colors group relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 bg-gradient-to-l from-[#101223] to-transparent">
                 {canEditEmpresa(state.user, empresa.id, state.isOnline) && (
-                  <button onClick={() => handleOpenModal(empresa)} className="p-2 text-slate-400 hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-xl transition-colors">
+                  <button type="button" onClick={() => handleOpenModal(empresa)} className="p-2 text-slate-400 hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-xl transition-colors">
                     <Edit2 className="w-4 h-4" />
                   </button>
                 )}
                 {canDelete(state.user) && (
-                  <button onClick={() => handleDelete(empresa.id!, empresa.razao_social)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-colors">
+                  <button type="button" onClick={() => handleDelete(empresa.id!, empresa.razao_social)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-colors">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}

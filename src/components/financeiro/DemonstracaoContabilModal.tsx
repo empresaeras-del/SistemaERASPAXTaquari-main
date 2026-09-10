@@ -237,6 +237,7 @@ export const DemonstracaoContabilModal: React.FC<Props> = ({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1 rounded-lg text-text-muted hover:text-text-base hover:bg-bg-hover"
             aria-label="Fechar"
@@ -259,12 +260,14 @@ export const DemonstracaoContabilModal: React.FC<Props> = ({
 
           <div className="ml-auto flex items-center gap-2">
             <button
+              type="button"
               onClick={imprimir}
               className="px-3 py-1.5 rounded-lg border border-border-default text-text-subtle hover:border-[#3B82F6] hover:text-[#3B82F6] text-xs font-bold flex items-center gap-1.5"
             >
               <Printer className="w-3.5 h-3.5" /> Imprimir
             </button>
             <button
+              type="button"
               onClick={exportarPDF}
               disabled={gerandoPDF}
               className="px-3 py-1.5 rounded-lg bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1.5"

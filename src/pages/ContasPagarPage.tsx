@@ -439,6 +439,7 @@ export const ContasPagarPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => setShowRelatorioModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors"
             title="Exportar listagem para PDF"
@@ -447,6 +448,7 @@ export const ContasPagarPage: React.FC = () => {
             <span>Exportar PDF</span>
           </button>
           <button 
+            type="button"
             disabled={!state.isOnline}
             onClick={() => navigate('/financeiro/contas-a-pagar/nova')} 
             title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Nova Despesa"}
@@ -675,6 +677,7 @@ export const ContasPagarPage: React.FC = () => {
                       <div className="flex items-center justify-center gap-2">
                         {/* Ver Detalhes */}
                         <button
+                          type="button"
                           onClick={() => openDetalhes(parcela)}
                           title="Ver Detalhes"
                           className="p-1.5 rounded-lg bg-bg-surface hover:bg-bg-hover text-text-subtle hover:text-text-base border border-border-default transition-colors"
@@ -684,6 +687,7 @@ export const ContasPagarPage: React.FC = () => {
 
                         {/* Editar */}
                         <button
+                          type="button"
                           onClick={() => {
                             if (!canEditFinanceiro(state.user, state.isOnline)) {
                               alertPermissionRestriction('Financeiro (Contas a Pagar)', 'editar despesas ou parcelas existentes');
@@ -700,6 +704,7 @@ export const ContasPagarPage: React.FC = () => {
 
                         {/* Excluir Parcela */}
                         <button
+                          type="button"
                           onClick={() => handleExcluirParcela(parcela)}
                           title="Excluir Parcela"
                           disabled={parcela.status === 'pago'}
@@ -711,6 +716,7 @@ export const ContasPagarPage: React.FC = () => {
                         {/* Botão Pagar */}
                         {(parcela.status === 'pendente' || parcela.status === 'atrasado') && (
                           <button
+                            type="button"
                             onClick={() => openBaixaModal(parcela)}
                             className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ml-1"
                           >
@@ -742,6 +748,7 @@ export const ContasPagarPage: React.FC = () => {
                     Registrar Pagamento
                   </h3>
                   <button
+                    type="button"
                     onClick={() => setShowBaixaModal(false)}
                     className="text-text-subtle hover:text-text-base transition-colors"
                   >
@@ -864,6 +871,7 @@ export const ContasPagarPage: React.FC = () => {
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setShowBaixaModal(false)}
                     className="text-text-subtle hover:text-text-base transition-colors"
                   >
@@ -931,6 +939,7 @@ export const ContasPagarPage: React.FC = () => {
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setShowBaixaModal(false)}
                     className="text-text-subtle hover:text-text-base transition-colors"
                   >
@@ -1048,6 +1057,7 @@ export const ContasPagarPage: React.FC = () => {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowDetalhesModal(false)}
                 className="p-2 rounded-xl text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
               >
@@ -1190,6 +1200,7 @@ export const ContasPagarPage: React.FC = () => {
             <div className="p-6 border-t border-border-default bg-bg-surface/50 flex flex-wrap items-center justify-between gap-3 print:hidden">
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => {
                     if (!canEditFinanceiro(state.user, state.isOnline)) {
                       alertPermissionRestriction('Financeiro (Contas a Pagar)', 'editar despesas ou parcelas existentes');
@@ -1205,6 +1216,7 @@ export const ContasPagarPage: React.FC = () => {
                   Editar Despesa
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     if (parcelaDetalhes.despesa_id) {
                       handleExcluirDespesaCompleta(parcelaDetalhes.despesa_id, parcelaDetalhes.descricao || '');
@@ -1224,6 +1236,7 @@ export const ContasPagarPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 {(parcelaDetalhes.status === 'pendente' || parcelaDetalhes.status === 'atrasado') && (
                   <button
+                    type="button"
                     onClick={() => {
                       setShowDetalhesModal(false);
                       openBaixaModal(parcelaDetalhes);
@@ -1236,6 +1249,7 @@ export const ContasPagarPage: React.FC = () => {
                 )}
                 {parcelaDetalhes.status === 'pago' && (
                   <button
+                    type="button"
                     onClick={() => handleImprimirComprovante(parcelaDetalhes)}
                     className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-500/20"
                   >
@@ -1244,6 +1258,7 @@ export const ContasPagarPage: React.FC = () => {
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => setShowDetalhesModal(false)}
                   className="px-5 py-2 rounded-xl bg-bg-surface border border-border-default text-text-muted hover:text-text-base transition-colors font-medium text-sm"
                 >

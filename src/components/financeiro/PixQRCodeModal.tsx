@@ -55,6 +55,7 @@ export const PixQRCodeModal: React.FC<PixQRCodeModalProps> = ({
         <div className="p-4 border-b border-border-default flex items-center justify-between">
           <h3 className="text-lg font-bold text-text-base">Pagamento via Pix</h3>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 text-text-subtle hover:bg-bg-subtle rounded-full transition-colors"
             aria-label="Fechar"
@@ -87,6 +88,7 @@ export const PixQRCodeModal: React.FC<PixQRCodeModalProps> = ({
                 className="flex-1 bg-bg-subtle border border-border-default rounded-xl px-3 py-2 text-xs text-text-subtle font-mono truncate"
               />
               <button
+                type="button"
                 onClick={handleCopy}
                 className="flex items-center justify-center w-10 h-10 shrink-0 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500/20 transition-colors"
               >

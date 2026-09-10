@@ -80,6 +80,7 @@ export const ConfigUsuariosTab: React.FC<ConfigUsuariosTabProps> = ({ usuarios, 
           <p className="text-sm text-slate-400">Gerencie os acessos ao sistema</p>
         </div>
         <button
+          type="button"
           onClick={() => handleOpenUsuarioModal({ status: 'ativo' })}
           className="px-4 py-2 bg-gradient-to-r from-[#7E4CF3] to-[#4A88E9] text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center gap-2 shadow-lg shadow-[#7E4CF3]/25"
         >
@@ -97,6 +98,7 @@ export const ConfigUsuariosTab: React.FC<ConfigUsuariosTabProps> = ({ usuarios, 
             </div>
             <div className="flex items-center gap-1 bg-[#0D0F20] p-1 rounded-xl border border-[#262A45]">
               <button
+                type="button"
                 onClick={() => setUsuarioSubTab('lista')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   usuarioSubTab === 'lista'
@@ -108,6 +110,7 @@ export const ConfigUsuariosTab: React.FC<ConfigUsuariosTabProps> = ({ usuarios, 
                 Lista
               </button>
               <button
+                type="button"
                 onClick={() => setUsuarioSubTab('organograma')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   usuarioSubTab === 'organograma'
@@ -244,6 +247,7 @@ export const ConfigUsuariosTab: React.FC<ConfigUsuariosTabProps> = ({ usuarios, 
                         <div className="flex items-center justify-end gap-2">
                           {canEditUser(state.user, usuario) && (
                             <button
+                              type="button"
                               onClick={(e) => { e.stopPropagation(); handleOpenUsuarioModal(usuario); }}
                               className="p-1 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
                               title="Editar Usuário"
@@ -253,6 +257,7 @@ export const ConfigUsuariosTab: React.FC<ConfigUsuariosTabProps> = ({ usuarios, 
                           )}
                           {canDeleteUser(state.user, usuario) && (
                             <button
+                              type="button"
                               disabled={!state.isOnline}
                               onClick={(e) => { e.stopPropagation(); handleDeleteUsuario(usuario.id!); }}
                               className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
