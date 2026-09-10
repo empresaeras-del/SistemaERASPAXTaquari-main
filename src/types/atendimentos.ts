@@ -29,6 +29,25 @@ export interface Atendimento {
   inicio_tanato?: string;
   termino_tanato?: string;
 
+  /**
+   * Dados de quem responde pelo falecido (migration 20260910183445). Todos opcionais no
+   * tipo porque a coluna é nullable: atendimento anterior a 10/09/2026 não tem nenhum
+   * deles, e a obrigatoriedade de cliente externo vive no `responsavelExternoSchema`,
+   * no ponto de escrita — não no tipo nem na coluna.
+   *
+   * `| null` não é ruído: é o que o Postgres devolve para a coluna vazia e o que a
+   * gravação envia para limpá-la (ver `responsavelParaGravacao`). Sem isso, apagar um
+   * campo na tela de edição não apagaria nada no banco.
+   */
+  responsavel_nome?: string | null;
+  responsavel_cpf?: string | null;
+  responsavel_rg?: string | null;
+  responsavel_parentesco?: string | null;
+  responsavel_endereco?: string | null;
+  responsavel_contato?: string | null;
+  responsavel_nacionalidade?: string | null;
+  responsavel_observacoes?: string | null;
+
   status: 'aberto' | 'em_andamento' | 'concluido' | 'cancelado';
   valor_total: number;
   
