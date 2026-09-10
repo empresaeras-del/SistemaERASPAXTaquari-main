@@ -222,10 +222,8 @@ não amostra):
   `rest.plano_id` já chega preenchido do formulário, o que não acontece (o formulário só popula
   `plano_pax_id`); então a coluna legada é reescrita para `NULL` a cada save, não mantida em
   sincronia. Na prática já está "vazia" — não há dado pra migrar (o passo 2 original é moot pra
-  esse caso), mas ainda tem um fallback de leitura em `usePlanosPax.ts:377`
-  (`a.plano_pax_id === planoId || a.plano_id === planoId`, contra o cache do IndexedDB) que nunca
-  mais vai casar pelo `plano_id` na prática — candidato a remoção isolada, sem depender do resto do
-  plano.
+  esse caso). **As leituras de `plano_id` foram removidas numa passada isolada** — ver
+  "As três leituras de `plano_id`" abaixo.
 - Nenhuma function/view/trigger no schema `public` referencia essas colunas (`pg_proc`/
   `information_schema.views` varridos), e não há Edge Functions no projeto — descarta o cenário de
   integração externa escrevendo por fora do app.
@@ -253,6 +251,51 @@ não havia divergência, o problema era o oposto, dado demais sendo escrito nos 
 
 Não pule direto para o passo 4 — dropar uma coluna que algo ainda escreve quebra silenciosamente
 esse algo mais tarde.
+
+### O passo 3 não deixa a coluna legada como alias — deixa como fotografia
+
+Parar o dual-write não congela os dois lados juntos: congela **só o legado**, e o canônico segue.
+Conferido em produção em 10/09, e a primeira divergência já existe: em `documentos_padroes`, a
+linha "Ata de Tanatopraxia" — a **única das 6 salva depois da PR #30** — tem `conteudo` com 15.581
+caracteres contra 16.969 em `conteudo_html`, e `atualizado_em` de 09/09 contra `updated_at` de
+24/08. As outras 5 continuam idênticas só porque ninguém as tocou desde então. Em `associados` a
+divergência ainda não apareceu porque a única linha salva depois da PR #30 não teve o endereço
+alterado.
+
+Isso não é defeito — é a prova de que o passo 2 funcionou. Mas reclassifica as leituras com
+fallback que o passo 3 mantém de propósito: `item.conteudo || item.conteudo_html` deixou de ser
+"o mesmo texto por outro nome". Se o lado canônico vier vazio, o que a tela mostra é a versão de
+**antes** de a escrita parar. Ao manter um fallback assim, saiba que ele serve dado velho, não um
+sinônimo — e prefira `?? ` a `||` se string vazia for um valor legítimo do campo.
+
+### As três leituras de `plano_id`, e por que só duas eram bloqueantes
+
+O passo 4 desse par estava descrito como "esperar um ciclo de release sem nada referenciar a
+coluna". A precondição não estava cumprida: **duas consultas iam ao Postgres pedindo `plano_id`**,
+e um `drop` as quebraria na hora com `42703 column does not exist`, não em silêncio meses depois:
+
+- `hooks/usePlanosPax.ts` (`verificarVinculosPlano`) — `.or('plano_pax_id.eq.X,plano_id.eq.X')`;
+- `hooks/usePlanosAnalytics.ts` — `plano_id` na lista do `.select(...)`.
+
+A terceira era o filtro do cache do IndexedDB, na mesma função da primeira
+(`a.plano_pax_id === planoId || a.plano_id === planoId`). Essa **não** quebraria: acessar
+propriedade inexistente em JavaScript devolve `undefined`, sem erro. As três saíram juntas mesmo
+assim, porque as duas da `verificarVinculosPlano` são o mesmo predicado escrito em dois lugares —
+deixar metade tornaria a função incoerente consigo mesma.
+
+**A regra que vale para a próxima**: ao varrer o que ainda referencia uma coluna a ser dropada,
+separe o que **quebra** (qualquer nome de coluna que viaja para o servidor — `select`, `or`, `eq`,
+`order`) do que **degrada em silêncio** (acesso a propriedade em objeto já carregado). Só o
+primeiro grupo bloqueia o `drop`; e é o segundo que uma varredura por `grep` tende a misturar com
+ele.
+
+`verificarVinculosPlano` é a guarda que impede excluir um plano com associado vinculado, então
+estreitá-la é mudança de comportamento — e foi por isso que a remoção só valeu depois de conferir
+que o ramo legado não podia casar nada: as 3 linhas de `associados` têm `plano_id IS NULL`, e
+`plano_id.eq.<uuid>` nunca casa `NULL` de qualquer forma. `lib/syncService.ts` continua
+destruturando `plano_id` para fora do payload de escrita, e isso **não** sai: é o que impede um
+registro antigo na fila de mandar a coluna legada num insert — e passa a ser o que impede um erro
+de coluna inexistente depois do `drop`.
 
 ## Plano contábil: a FK que carrega o `tenant_id` dentro dela
 

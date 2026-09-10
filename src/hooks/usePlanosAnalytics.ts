@@ -99,7 +99,7 @@ export function usePlanosAnalytics(planos: PlanoPaxCompleto[]) {
         try {
           let q = supabase
             .from('associados')
-            .select('id, plano_pax_id, plano_id, status, valor_plano, n_vidas, dependentes')
+            .select('id, plano_pax_id, status, valor_plano, n_vidas, dependentes')
             .is('deleted_at', null)
             .not('plano_pax_id', 'is', null);
 
