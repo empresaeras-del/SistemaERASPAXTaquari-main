@@ -2,20 +2,35 @@ import React, { useMemo } from 'react';
 import { Layers, Plus, FileText } from 'lucide-react';
 import { MargensConfig } from './DocumentoMargensModal';
 import { sanitizeDocumentoHtml } from '../../utils/sanitizeHtml';
+import { alturaPapelMm, larguraPapelMm } from '../../utils/assinaturaPosicao';
+import { OrientacaoPapel } from '../../types/documentos';
 
 export interface DocumentoMiniaturasPreviewProps {
   htmlContent: string;
   margens: MargensConfig;
+  orientacao?: OrientacaoPapel;
   onInsertPageBreak?: () => void;
   onSelectPage?: (pageIndex: number) => void;
 }
 
+const PX_POR_MM = 96 / 25.4;
+/** Largura da miniatura na coluna lateral, em px (equivale ao antigo `w-48`). */
+const LARGURA_MINIATURA_PX = 192;
+
 export const DocumentoMiniaturasPreview: React.FC<DocumentoMiniaturasPreviewProps> = ({
   htmlContent,
   margens,
+  orientacao = 'retrato',
   onInsertPageBreak,
   onSelectPage
 }) => {
+  // A miniatura acompanha a orientação do documento: em vez de escala fixa, a folha
+  // é reduzida até caber na largura da coluna, e a altura sai da proporção do papel.
+  const larguraFolhaMm = larguraPapelMm(orientacao);
+  const alturaFolhaMm = alturaPapelMm(orientacao);
+  const escala = LARGURA_MINIATURA_PX / (larguraFolhaMm * PX_POR_MM);
+  const alturaMiniaturaPx = Math.round(alturaFolhaMm * PX_POR_MM * escala);
+
   // Separa o conteúdo em páginas através das tags de quebra de página
   const paginas = useMemo(() => {
     if (!htmlContent || !htmlContent.trim()) {
@@ -66,23 +81,31 @@ export const DocumentoMiniaturasPreview: React.FC<DocumentoMiniaturasPreviewProp
             className="flex flex-col items-center group cursor-pointer"
           >
             {/* Tag da página */}
-            <div className="flex items-center justify-between w-48 mb-1.5 px-1">
+            <div
+              className="flex items-center justify-between mb-1.5 px-1"
+              style={{ width: LARGURA_MINIATURA_PX }}
+            >
               <span className="text-[11px] font-bold text-slate-400 group-hover:text-blue-400 transition-colors flex items-center gap-1">
                 <FileText className="w-3 h-3 text-blue-400" />
                 Página {index + 1}
               </span>
               <span className="text-[9px] text-slate-500 bg-[#1e2533] px-1.5 py-0.5 rounded border border-[#2d3544]">
-                A4
+                A4 {larguraFolhaMm}×{alturaFolhaMm}
               </span>
             </div>
 
             {/* Folha A4 em Miniatura */}
-            <div className="w-48 h-68 bg-white rounded-xl shadow-xl border border-slate-300 group-hover:border-blue-500 group-hover:ring-2 group-hover:ring-blue-500/40 transition-all overflow-hidden relative select-none">
+            <div
+              className="bg-white rounded-xl shadow-xl border border-slate-300 group-hover:border-blue-500 group-hover:ring-2 group-hover:ring-blue-500/40 transition-all overflow-hidden relative select-none"
+              style={{ width: LARGURA_MINIATURA_PX, height: alturaMiniaturaPx }}
+            >
               {/* Conteúdo escalado */}
               <div
-                className="w-[210mm] min-h-[297mm] origin-top-left pointer-events-none text-slate-900 leading-normal"
+                className="origin-top-left pointer-events-none text-slate-900 leading-normal"
                 style={{
-                  transform: 'scale(0.24)',
+                  width: `${larguraFolhaMm}mm`,
+                  minHeight: `${alturaFolhaMm}mm`,
+                  transform: `scale(${escala})`,
                   transformOrigin: '0 0',
                   padding: `${margens.top}mm ${margens.right}mm ${margens.bottom}mm ${margens.left}mm`,
                   fontFamily: 'Arial, Helvetica, sans-serif',

@@ -593,8 +593,38 @@ PRs #16 e #17):
    visualizador, 180mm na impressão), o texto refluía entre as etapas e a paginação da tela não
    correspondia à impressa. Use sempre `margensOu(documento?.margens)` de `utils/assinaturaPosicao.ts`
    para normalizar — a coluna é jsonb livre e pode vir nula ou parcial.
-   **Lacuna conhecida**: o editor Jodit ainda desenha a própria folha com paddings no `iframeStyle`
-   e é a única etapa fora desse alinhamento.
+   O editor Jodit entrou nesse alinhamento junto com o resto (as margens já vinham do documento
+   pelo `iframeStyle`; a **orientação** era o que faltava) — ver a seção seguinte.
+
+### O editor também é uma etapa do enquadramento — inclusive a orientação
+
+Por um tempo o editor foi descrito aqui como "a única etapa fora do alinhamento, com paddings
+próprios no `iframeStyle`". Metade disso já não era verdade: as margens do documento alimentavam
+o `iframeStyle` desde a PR #17. **O que continuava fixo era o papel**: `210mm × 297mm` cravado em
+quatro lugares do caminho de edição (o `style` e o `iframeStyle` do `editorConfig`, o painel
+"Pré-visualização A4" e as miniaturas), além das réguas (21 cm / 29,7 cm) e da regra
+`.a4-simulated` no `index.css`. Um documento em paisagem — orientação que o visualizador já
+gravava — era editado numa folha retrato e só mostrava o enquadramento certo depois de salvo e
+reaberto no visualizador. Três coisas dessa correção valem como regra:
+
+- **`orientacao` é propriedade do documento, como `margens`** — e por isso é lida no
+  `handleOpenForm` e vai no payload do save, do mesmo jeito. O editor ganhou o mesmo seletor
+  Retrato/Paisagem que o visualizador já tinha: sem ele, um documento novo nasceria sempre retrato
+  e não haveria como ver o enquadramento correto enquanto se escreve.
+- **O que entra nas dependências do `editorConfig` tem de ser primitivo.** Trocar a identidade do
+  objeto `config` remonta o Jodit (perdendo cursor e histórico), então as deps são
+  `larguraFolhaMm`/`alturaFolhaMm` — números derivados de `larguraPapelMm`/`alturaPapelMm` — e
+  nunca o objeto do documento.
+- **`.a4-simulated` passou a receber as medidas por variáveis CSS** (`--a4-largura`,
+  `--a4-altura`, `--a4-margem-topo`, `--a4-margem-base`), com os valores antigos como padrão. O
+  gradiente que simula as faixas de margem e a quebra a cada folha era `297mm` cravado; em
+  paisagem ele desenharia a quebra no lugar errado. Quem não passa nada (`PrintPreviewModal`)
+  continua exatamente como antes.
+
+A miniatura deixou de usar escala fixa (`scale(0.24)`): a folha é reduzida até caber na largura da
+coluna (192px, a antiga `w-48`) e a altura da caixa sai da proporção do papel. Em retrato isso dá
+os mesmos 192×272px de antes — a mudança é que paisagem também fecha, em vez de ser cortada.
+`DocumentoMiniaturasPreview.test.tsx` trava esses números.
 
 **Coordenadas da assinatura** (`utils/assinaturaPosicao.ts`): são milímetros a partir do canto
 superior esquerdo da área útil **de uma página**, mais o índice da página (`AssinaturaConfigV2`).

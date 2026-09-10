@@ -5,10 +5,10 @@ import JoditEditor from 'jodit-react';
 import toast from 'react-hot-toast';
 import { useDocumentosPadroes } from '../hooks/useDocumentosPadroes';
 import { useAppContext } from '../context/AppContext';
-import { DocumentoPadrao, TipoDocumento } from '../types/documentos';
+import { DocumentoPadrao, OrientacaoPapel, TipoDocumento } from '../types/documentos';
 import { canDelete } from '../utils/permissions';
 import { formatLocalDate } from '../utils/dateUtils';
-import { FileText, Plus, Search, Pencil, Power, PowerOff, X, Download, Eye, Maximize, Minimize, Trash2, Printer, ChevronDown, ChevronRight, Copy, Tag, Info, Layout, Table as TableIcon, Image as ImageIcon, Scissors, Layers, SlidersHorizontal, Sparkles, Grid3x3 } from 'lucide-react';
+import { FileText, Plus, Search, Pencil, Power, PowerOff, X, Download, Eye, Maximize, Minimize, Trash2, Printer, ChevronDown, ChevronRight, Copy, Tag, Info, Layout, Table as TableIcon, Image as ImageIcon, Scissors, Layers, SlidersHorizontal, Sparkles, Grid3x3, RotateCw } from 'lucide-react';
 import { VisualizadorDocumentoPadraoModal } from '../components/documentos/VisualizadorDocumentoPadraoModal';
 import { DocumentoMargensModal, MargensConfig } from '../components/documentos/DocumentoMargensModal';
 import { DocumentoTableModal } from '../components/documentos/DocumentoTableModal';
@@ -16,7 +16,7 @@ import { DocumentoTableEditModal } from '../components/documentos/DocumentoTable
 import { DocumentoImageModal } from '../components/documentos/DocumentoImageModal';
 import { DocumentoMiniaturasPreview } from '../components/documentos/DocumentoMiniaturasPreview';
 import { resolverVariaveisAssociado, resolverVariaveisContrato, resolverVariaveisEmpresa } from '../utils/documentoVariaveis';
-import { margensOu } from '../utils/assinaturaPosicao';
+import { alturaPapelMm, larguraPapelMm, margensOu } from '../utils/assinaturaPosicao';
 import { sanitizeDocumentoHtml } from '../utils/sanitizeHtml';
 import { MODULOS_VARIAVEIS as MODULOS, VariavelInfo, ModuloInfo } from '../config/documentoVariaveis.config';
 import { BotaoSalvar } from '../components/common/BotaoSalvar';
@@ -82,9 +82,11 @@ const VariavelButton: React.FC<VariavelButtonProps> = ({ v, cor, onInsert, onCop
 };
 
 /* ─── Régua Horizontal (topo do editor) ─── */
-const RulerHorizontal: React.FC = () => {
-  // A4 = 21 cm de largura; exibimos marcas a cada cm e meia-marca a cada 5mm
-  const cms = Array.from({ length: 22 }, (_, i) => i);
+const RulerHorizontal: React.FC<{ larguraMm: number }> = ({ larguraMm }) => {
+  // A régua cobre a largura do papel do documento (21 cm em retrato, 29,7 cm em
+  // paisagem); marcas a cada cm e meia-marca a cada 5mm.
+  const larguraCm = larguraMm / 10;
+  const cms = Array.from({ length: Math.floor(larguraCm) + 1 }, (_, i) => i);
   return (
     <div
       style={{
@@ -104,7 +106,7 @@ const RulerHorizontal: React.FC = () => {
             {/* Marca maior (cm) */}
             <div style={{
               position: 'absolute',
-              left: `${(c / 21) * 100}%`,
+              left: `${(c / larguraCm) * 100}%`,
               bottom: 0,
               width: 1,
               height: 11,
@@ -114,7 +116,7 @@ const RulerHorizontal: React.FC = () => {
             {c > 0 && c % 2 === 0 && (
               <span style={{
                 position: 'absolute',
-                left: `calc(${(c / 21) * 100}% + 2px)`,
+                left: `calc(${(c / larguraCm) * 100}% + 2px)`,
                 bottom: 10,
                 fontSize: 7,
                 color: '#64748b',
@@ -125,7 +127,7 @@ const RulerHorizontal: React.FC = () => {
             {/* Meia marca (5mm) */}
             <div style={{
               position: 'absolute',
-              left: `calc(${(c / 21) * 100}% + ${(0.5 / 21) * 100}%)`,
+              left: `calc(${(c / larguraCm) * 100}% + ${(0.5 / larguraCm) * 100}%)`,
               bottom: 0,
               width: 1,
               height: 6,
@@ -139,9 +141,11 @@ const RulerHorizontal: React.FC = () => {
 };
 
 /* ─── Régua Vertical (lateral do editor) ─── */
-const RulerVertical: React.FC = () => {
-  // A4 = ~29.7 cm de altura; exibimos marcas a cada cm
-  const cms = Array.from({ length: 30 }, (_, i) => i);
+const RulerVertical: React.FC<{ alturaMm: number }> = ({ alturaMm }) => {
+  // A régua cobre a altura do papel do documento (29,7 cm em retrato, 21 cm em
+  // paisagem); marcas a cada cm.
+  const alturaCm = alturaMm / 10;
+  const cms = Array.from({ length: Math.floor(alturaCm) + 1 }, (_, i) => i);
   return (
     <div
       style={{
@@ -158,7 +162,7 @@ const RulerVertical: React.FC = () => {
         <React.Fragment key={c}>
           <div style={{
             position: 'absolute',
-            top: `${(c / 29.7) * 100}%`,
+            top: `${(c / alturaCm) * 100}%`,
             right: 0,
             height: 1,
             width: c % 5 === 0 ? 11 : 5,
@@ -167,7 +171,7 @@ const RulerVertical: React.FC = () => {
           {c > 0 && c % 2 === 0 && (
             <span style={{
               position: 'absolute',
-              top: `calc(${(c / 29.7) * 100}% + 2px)`,
+              top: `calc(${(c / alturaCm) * 100}% + 2px)`,
               right: 11,
               fontSize: 7,
               color: '#64748b',
@@ -217,6 +221,9 @@ export const DocumentosPadroesPage = () => {
 
   // Novos estados para Margens, Tabelas, Imagens e Miniaturas
   const [margens, setMargens] = useState<MargensConfig>({ top: 20, bottom: 20, left: 25, right: 25 });
+  // Orientação é propriedade do documento, como as margens. O editor precisa dela para
+  // desenhar a folha no mesmo enquadramento do visualizador, das miniaturas e da impressão.
+  const [orientacao, setOrientacao] = useState<OrientacaoPapel>('retrato');
   const [isMargensModalOpen, setIsMargensModalOpen] = useState(false);
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
   const [isTableEditModalOpen, setIsTableEditModalOpen] = useState(false);
@@ -238,6 +245,9 @@ export const DocumentosPadroesPage = () => {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorRef = useRef<any>(null);
+
+  const larguraFolhaMm = larguraPapelMm(orientacao);
+  const alturaFolhaMm = alturaPapelMm(orientacao);
 
   const editorConfig = useMemo(() => ({
     readonly: false,
@@ -265,8 +275,8 @@ export const DocumentosPadroesPage = () => {
       background: '#ffffff',
       color: '#1a1a1a',
       padding: `${margens.top}mm ${margens.right}mm ${margens.bottom}mm ${margens.left}mm`,
-      width: '210mm',
-      minHeight: '297mm',
+      width: `${larguraFolhaMm}mm`,
+      minHeight: `${alturaFolhaMm}mm`,
       margin: '0 auto',
       boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
       fontFamily: 'Arial, Helvetica, sans-serif',
@@ -281,8 +291,8 @@ export const DocumentosPadroesPage = () => {
         min-height: 100%;
       }
       body {
-        width: 210mm !important;
-        min-height: 297mm !important;
+        width: ${larguraFolhaMm}mm !important;
+        min-height: ${alturaFolhaMm}mm !important;
         padding: ${margens.top}mm ${margens.right}mm ${margens.bottom}mm ${margens.left}mm !important;
         margin: 0 auto !important;
         background: #ffffff !important;
@@ -336,7 +346,7 @@ export const DocumentosPadroesPage = () => {
       h1, h2, h3, h4 { color: #0f172a !important; margin-top: 0.8em; }
       p { margin-bottom: 0.6em; }
     `,
-  }), [isFullscreen, margens]);
+  }), [isFullscreen, margens, larguraFolhaMm, alturaFolhaMm]);
 
 
   React.useEffect(() => {
@@ -465,6 +475,7 @@ export const DocumentosPadroesPage = () => {
     // As margens são propriedade do documento: sem ler daqui, o valor gravado era
     // ignorado ao reabrir e o editor voltava sempre ao preset padrão.
     setMargens(margensOu(doc?.margens));
+    setOrientacao(doc?.orientacao === 'paisagem' ? 'paisagem' : 'retrato');
     setInitialDocJson(JSON.stringify(initialObj));
     setIsSaving(false);
     setIsSaved(false);
@@ -513,7 +524,7 @@ export const DocumentosPadroesPage = () => {
     try {
       // `margens` vive num estado separado do formulário; sem juntá-la aqui, o
       // que o usuário escolhia na ferramenta de margens nunca era persistido.
-      const payload = { ...editingDoc, margens };
+      const payload = { ...editingDoc, margens, orientacao };
       if (editingDoc?.id) {
         await editar(editingDoc.id, payload);
       } else {
@@ -1082,7 +1093,9 @@ export const DocumentosPadroesPage = () => {
                       </div>
                       <div className="flex items-center gap-1.5 text-[10px] text-text-subtle bg-bg-base border border-border-default rounded-lg px-2.5 py-1">
                         <Info className="w-3.5 h-3.5 text-[#3B82F6]" />
-                        <span>Formato A4 · 210mm × 297mm</span>
+                        <span>
+                          Formato A4 {orientacao === 'paisagem' ? 'paisagem' : 'retrato'} · {larguraFolhaMm}mm × {alturaFolhaMm}mm
+                        </span>
                       </div>
                     </div>
 
@@ -1102,6 +1115,37 @@ export const DocumentosPadroesPage = () => {
                             {margens.left}mm × {margens.top}mm
                           </span>
                         </button>
+
+                        {/* Seletor de Orientação — mesma propriedade do documento que o
+                            visualizador grava; aqui ela também decide o desenho da folha. */}
+                        <div className="flex items-center gap-1 bg-[#0f1219] p-1 rounded-xl border border-[#2d3544]">
+                          <button
+                            type="button"
+                            onClick={() => setOrientacao('retrato')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                              orientacao === 'retrato'
+                                ? 'bg-blue-600 text-white shadow'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                            title="Modo Retrato (Vertical - A4 210x297mm)"
+                          >
+                            <RotateCw className="w-3.5 h-3.5" />
+                            Retrato
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setOrientacao('paisagem')}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                              orientacao === 'paisagem'
+                                ? 'bg-blue-600 text-white shadow'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                            title="Modo Paisagem (Horizontal - A4 297x210mm)"
+                          >
+                            <RotateCw className="w-3.5 h-3.5" />
+                            Paisagem
+                          </button>
+                        </div>
 
                         {/* Botão Tabelas Profissionais */}
                         <button
@@ -1197,11 +1241,11 @@ export const DocumentosPadroesPage = () => {
                       style={{ background: '#1c2232' }}
                     >
                       {/* Régua horizontal superior */}
-                      <RulerHorizontal />
+                      <RulerHorizontal larguraMm={larguraFolhaMm} />
 
                       {/* Corpo: régua vertical + área de edição */}
                       <div className="flex overflow-hidden" style={{ height: isFullscreen ? 560 : 440 }}>
-                        <RulerVertical />
+                        <RulerVertical alturaMm={alturaFolhaMm} />
                         <div className="flex-1 min-w-0 overflow-hidden">
                           <JoditEditor
                             ref={editorRef}
@@ -1223,6 +1267,7 @@ export const DocumentosPadroesPage = () => {
                 <DocumentoMiniaturasPreview
                   htmlContent={editingDoc?.conteudo || ''}
                   margens={margens}
+                  orientacao={orientacao}
                   onInsertPageBreak={handleInsertPageBreak}
                 />
               )}
@@ -1233,7 +1278,7 @@ export const DocumentosPadroesPage = () => {
                   <div className="p-3 border-b border-border-default bg-bg-subtle flex items-center justify-between shrink-0 shadow-md z-10">
                     <span className="text-sm font-semibold text-text-subtle flex items-center gap-2">
                       <Eye className="w-4 h-4 text-blue-400" />
-                      Pré-visualização (A4)
+                      Pré-visualização (A4 {orientacao === 'paisagem' ? 'paisagem' : 'retrato'})
                     </span>
                     <span className="text-xs text-text-subtle">
                       Margens: {margens.left}mm / {margens.top}mm
@@ -1245,10 +1290,16 @@ export const DocumentosPadroesPage = () => {
                       style={{
                         padding: `${margens.top}mm ${margens.right}mm ${margens.bottom}mm ${margens.left}mm`,
                         background: '#ffffff',
-                        width: '210mm',
-                        minHeight: '297mm',
-                        boxSizing: 'border-box'
-                      }}
+                        width: `${larguraFolhaMm}mm`,
+                        minHeight: `${alturaFolhaMm}mm`,
+                        boxSizing: 'border-box',
+                        // Alimenta o gradiente de `.a4-simulated`, que simula as faixas de
+                        // margem e a quebra de página a cada folha.
+                        ['--a4-largura' as string]: `${larguraFolhaMm}mm`,
+                        ['--a4-altura' as string]: `${alturaFolhaMm}mm`,
+                        ['--a4-margem-topo' as string]: `${margens.top}mm`,
+                        ['--a4-margem-base' as string]: `${margens.bottom}mm`,
+                      } as React.CSSProperties}
                     >
                       <div 
                         className="document-preview-content prose max-w-none h-full"
