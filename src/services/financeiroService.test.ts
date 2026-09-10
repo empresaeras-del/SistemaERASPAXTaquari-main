@@ -9,6 +9,7 @@ vi.mock('../lib/idb', () => ({
 
 vi.mock('../lib/syncService', () => ({
   addToSyncQueue: vi.fn(),
+  getSyncQueue: vi.fn(async () => []),
 }));
 
 vi.mock('../lib/supabase', () => ({
@@ -17,7 +18,7 @@ vi.mock('../lib/supabase', () => ({
 }));
 
 import { getFromIDB, saveToIDB, getAllFromIDB } from '../lib/idb';
-import { addToSyncQueue } from '../lib/syncService';
+import { addToSyncQueue, getSyncQueue } from '../lib/syncService';
 import {
   sanitizeReceitaForSupabase,
   sanitizeParcelaReceberForSupabase,
@@ -25,6 +26,7 @@ import {
   sanitizeDespesaForSupabase,
   getParcelasReceber,
   getParcelasPagar,
+  getReceitas,
   registrarRecebimento,
   registrarPagamento,
   estornarRecebimento,
@@ -39,6 +41,7 @@ const mockGetFromIDB = vi.mocked(getFromIDB);
 const mockSaveToIDB = vi.mocked(saveToIDB);
 const mockGetAllFromIDB = vi.mocked(getAllFromIDB);
 const mockAddToSyncQueue = vi.mocked(addToSyncQueue);
+const mockGetSyncQueue = vi.mocked(getSyncQueue);
 
 const baseReceita: Receita = {
   id: 'nao-e-um-uuid',
@@ -563,5 +566,92 @@ describe('centro de custo no sanitizer (fase 4)', () => {
     });
     expect(out.centro_custo).toBe('Administrativo');
     expect(out.centro_custo_id).toBe(UUID);
+  });
+});
+
+/**
+ * Caminho ONLINE de `getReceitas` — o que o resto deste arquivo não cobre, e onde o bug de
+ * 10/09/2026 vivia: a receita `50be9316` foi excluída pelo app e continuou aparecendo em toda
+ * sessão cujo IndexedDB ainda a tinha, porque o merge preservava todo local ausente no remoto.
+ */
+describe('getReceitas (online) — cache que sobrevive à exclusão em outra sessão', () => {
+  const viva = { id: 'viva', tenant_id: 'emp-1', descricao: 'existe no servidor' } as unknown as Receita;
+  const fantasma = { id: 'fantasma', tenant_id: 'emp-1', descricao: 'excluida em outra sessao' } as unknown as Receita;
+
+  /** Builder awaitable que imita `supabase.from(...).select(...).or(...)`. */
+  const respostaSupabase = (resultado: { data: unknown; error: unknown }) => {
+    const builder: Record<string, unknown> = {};
+    builder.select = () => builder;
+    builder.or = () => builder;
+    builder.then = (resolve: (v: unknown) => unknown) => resolve(resultado);
+    return builder;
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockGetSyncQueue.mockResolvedValue([]);
+    const { supabase } = await import('../lib/supabase');
+    vi.mocked(supabase.from).mockReturnValue(
+      respostaSupabase({ data: [viva], error: null }) as never,
+    );
+  });
+
+  it('remove da lista a receita que o servidor não tem e que não está na fila de sync', async () => {
+    mockGetAllFromIDB.mockResolvedValue([viva, fantasma] as never);
+    const receitas = await getReceitas(true, 'emp-1');
+    expect(receitas.map((r) => r.id)).toEqual(['viva']);
+  });
+
+  it('e limpa o IndexedDB, para o cache se curar sozinho', async () => {
+    mockGetAllFromIDB.mockResolvedValue([viva, fantasma] as never);
+    await getReceitas(true, 'emp-1');
+    const { deleteFromIDB } = await import('../lib/idb');
+    expect(vi.mocked(deleteFromIDB)).toHaveBeenCalledWith('receitas', 'fantasma');
+    expect(vi.mocked(deleteFromIDB)).not.toHaveBeenCalledWith('receitas', 'viva');
+  });
+
+  it('mas PRESERVA o que foi criado offline e ainda está na fila de sync', async () => {
+    mockGetAllFromIDB.mockResolvedValue([viva, fantasma] as never);
+    mockGetSyncQueue.mockResolvedValue([
+      { id: 't1', storeName: 'receitas', action: 'update', data: { id: 'fantasma' }, createdAt: '' },
+    ] as never);
+
+    const receitas = await getReceitas(true, 'emp-1');
+    expect(receitas.map((r) => r.id).sort()).toEqual(['fantasma', 'viva']);
+    const { deleteFromIDB } = await import('../lib/idb');
+    expect(vi.mocked(deleteFromIDB)).not.toHaveBeenCalled();
+  });
+
+  it('servidor sem nenhuma receita é resposta válida, não falha de rede: o cache é podado', async () => {
+    // Antes exigia-se `data.length > 0`, então excluir a última receita da empresa fazia o
+    // código tratar o resultado vazio como erro e devolver o cache inteiro.
+    const { supabase } = await import('../lib/supabase');
+    vi.mocked(supabase.from).mockReturnValue(respostaSupabase({ data: [], error: null }) as never);
+    mockGetAllFromIDB.mockResolvedValue([fantasma] as never);
+
+    expect(await getReceitas(true, 'emp-1')).toEqual([]);
+  });
+
+  it('erro do Supabase NÃO poda nada — sem resposta confiável, o cache é o que sobra', async () => {
+    const { supabase } = await import('../lib/supabase');
+    vi.mocked(supabase.from).mockReturnValue(
+      respostaSupabase({ data: null, error: { message: 'rede caiu' } }) as never,
+    );
+    mockGetAllFromIDB.mockResolvedValue([viva, fantasma] as never);
+
+    const receitas = await getReceitas(true, 'emp-1');
+    expect(receitas.map((r) => r.id).sort()).toEqual(['fantasma', 'viva']);
+    const { deleteFromIDB } = await import('../lib/idb');
+    expect(vi.mocked(deleteFromIDB)).not.toHaveBeenCalled();
+  });
+
+  it('registro de OUTRA empresa no cache não é podado nem devolvido no filtro final', async () => {
+    const deOutra = { id: 'outra', tenant_id: 'emp-2' } as unknown as Receita;
+    mockGetAllFromIDB.mockResolvedValue([viva, deOutra] as never);
+
+    const receitas = await getReceitas(true, 'emp-1');
+    expect(receitas.map((r) => r.id)).toEqual(['viva']);
+    const { deleteFromIDB } = await import('../lib/idb');
+    expect(vi.mocked(deleteFromIDB)).not.toHaveBeenCalled();
   });
 });

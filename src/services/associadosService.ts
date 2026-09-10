@@ -1,7 +1,8 @@
 import { supabase, registrarAuditoria } from '../lib/supabase';
 import { registroPertenceAoTenant, tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
+import { mesclarComCacheLocal, idsPendentesDeSync } from '../utils/mesclagemOfflineFirst';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
-import { addToSyncQueue } from '../lib/syncService';
+import { addToSyncQueue, getSyncQueue } from '../lib/syncService';
 
 export interface Associado {
   id: string;
@@ -132,23 +133,24 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
           await saveToIDB(STORE_NAME, item);
         }
         
-        // Merge dados do Supabase com os locais (preservando cadastros locais mais recentes)
-        const remoteMap = new Map<string, Associado>();
-        data.forEach((item: any) => {
-          remoteMap.set(item.id, {
-            ...item,
-            dependentes: Array.isArray(item.dependentes) ? item.dependentes : []
-          });
-        });
+        // Preserva o local ausente no servidor SÓ quando a fila de sync justifica; o resto
+        // foi excluído em outra sessão e é removido do cache (ver mesclagemOfflineFirst.ts).
+        const normalizados: Associado[] = (data as any[]).map((item: any) => ({
+          ...item,
+          dependentes: Array.isArray(item.dependentes) ? item.dependentes : []
+        }));
 
-        // Adiciona itens locais que ainda não estão no remoto
-        localAssociados.forEach(localItem => {
-          if (!remoteMap.has(localItem.id) && !localItem.deleted_at) {
-            remoteMap.set(localItem.id, localItem);
-          }
+        const mesclagem = mesclarComCacheLocal<Associado>({
+          remotos: normalizados,
+          locais: localAssociados || [],
+          pendentesDeSync: idsPendentesDeSync(await getSyncQueue(), STORE_NAME),
+          tenantDaConsulta: tenantId,
         });
+        for (const orfaoId of mesclagem.orfaosParaRemover) {
+          await deleteFromIDB(STORE_NAME, orfaoId);
+        }
 
-        associados = Array.from(remoteMap.values());
+        associados = mesclagem.registros;
       } else {
         // Se Supabase retornou vazio ou erro silencioso por RLS, usa IDB local
         associados = localAssociados;

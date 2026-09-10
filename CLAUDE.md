@@ -81,6 +81,55 @@ export const getX = async (isOnline: boolean, tenantId?: string) => {
 
 Ao adicionar um service novo, siga esse mesmo formato em vez de inventar um novo padrão.
 
+### O registro excluído que voltava: "ausente no servidor" ≠ "criado offline"
+
+Incidente real de 10/09/2026, relatado da UI: uma receita excluída pelo app (`50be9316`, às
+01:16) continuava aparecendo — com as 12 parcelas dela — na tela de Mensalidades de **outras
+sessões**. O banco estava certo; o cliente é que ressuscitava.
+
+O merge de todo `getX` fazia:
+
+```ts
+if (!remoteMap.has(localItem.id) && !localItem.deleted_at) remoteMap.set(localItem.id, localItem);
+```
+
+A intenção estava certa — registro criado offline não pode sumir da tela só porque o servidor
+ainda não o conhece. Mas **"ausente na resposta remota" é indistinguível de "excluído no
+servidor"**, e as exclusões aqui são *hard delete* (`excluirReceita` faz `.delete()`), sem
+deixar lápide. O navegador que excluiu limpou o próprio IndexedDB; os outros nunca souberam, e
+IndexedDB é persistente — recarregar a página não resolvia.
+
+**Pior que exibir errado**: `atualizarReceita` e a fila de sync fazem `upsert`, e upsert de
+linha inexistente é **INSERT**. Uma sessão com cache velho podia **reinserir no banco** o
+registro excluído — e aí ele voltava para todo mundo. Não chegou a acontecer, mas o caminho
+estava aberto.
+
+A correção (`utils/mesclagemOfflineFirst.ts`, puro e testado): **a fila de sync é quem sabe a
+diferença**. Um registro local ausente no remoto só é preservado se tiver tarefa pendente na
+fila — que existe exatamente para guardar o que ainda não subiu. Sem tarefa pendente, foi
+excluído em outro lugar: sai da lista **e sai do IndexedDB**, então o cache se cura sozinho no
+próximo carregamento online, sem ninguém limpar nada à mão.
+
+Duas salvaguardas, e elas são o que impede a correção de virar perda de dado:
+
+- **Só pode podar quando a busca remota deu certo.** Se o Supabase falhou, "ausente" não
+  significa nada e podar apagaria o cache inteiro. Por isso a poda vive dentro do
+  `if (!error && data)`.
+- **A poda respeita o tenant da consulta.** A consulta filtra por empresa, então registro de
+  **outra** empresa está legitimamente fora da resposta — podá-lo apagaria o cache da outra
+  empresa a cada troca de empresa na tela.
+
+De passagem, o guard `if (!error && data && data.length > 0)` virou `if (!error && data)` nos
+quatro getters de `financeiroService`: **zero linhas é resposta válida, não falha de rede**.
+Exigir `length > 0` fazia "a empresa não tem mais nenhum lançamento" cair no ramo de erro e
+devolver o cache — exatamente onde o registro excluído sobrevivia.
+
+**Lacuna conhecida, deixada de fora de propósito**: `getAssociados` tem duas tentativas de
+busca (com e sem join) e usa `data === null` como sinal de "tentar a próxima", então lá o
+resultado vazio legítimo ainda cai no cache local. A mesclagem nova já está aplicada e cobre o
+caso comum (empresa com ao menos um associado); reestruturar aquele encadeamento é mudança de
+risco próprio e merece passada separada.
+
 ## Supabase: migrations e o cuidado com o histórico de rastreamento
 
 **Contexto histórico (resolvido em 04/09/2026)**: até essa data, os 28 arquivos de migration
