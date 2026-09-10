@@ -57,6 +57,7 @@ export const AssociadoRequisicoesTab: React.FC<AssociadoRequisicoesTabProps> = (
         </div>
         
         <button
+          type="button"
           onClick={() => {
              // Navigation will be done via useNavigate hook
              navigate(`/requisicoes?associadoId=${associado.id}&action=new`);
@@ -117,6 +118,7 @@ export const AssociadoRequisicoesTab: React.FC<AssociadoRequisicoesTabProps> = (
                 
                 <div className="flex flex-col items-end justify-between">
                   <button
+                    type="button"
                     onClick={() => setRequisicaoParaVisualizar(req)}
                     className="p-2 text-text-subtle hover:text-primary hover:bg-primary/10 rounded-lg transition-colors self-end mb-2"
                     title="Imprimir Guia"

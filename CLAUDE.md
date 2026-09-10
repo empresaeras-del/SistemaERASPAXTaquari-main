@@ -865,6 +865,62 @@ tanto em `AssociadosListTable.tsx` quanto em `AssociadosListGrid.tsx`, porque é
 `useAssociadosState.ts` de fato expõe) — um mismatch aqui só aparece no `tsc`, não no lint nem em
 runtime.
 
+## Modal dentro de `<form>`: botão sem `type` é `submit`, e isso salva a tela de fora
+
+Relato da UI em 10/09/2026: abrir um documento — recibo ou documento padrão — dentro do
+cadastro do associado **fechava o cadastro e salvava**. Não era o abrir: era o primeiro clique
+dentro do visualizador, inclusive no **X de fechar**.
+
+O mecanismo é do HTML, não do React: `<button>` sem atributo `type` dentro de um `<form>` vale
+`type="submit"`. `AssociadoFormModal` tem um `<form onSubmit={handleSave}>` que embrulha todas as
+abas, e os visualizadores são renderizados **dentro** dele — `AssociadoMensalidadesTab` →
+`VisualizadorReciboModal`, `ContratoDocumentosGenerator` → `VisualizadorDocumentoPadraoModal`.
+Ser `position: fixed` e parecer uma janela à parte não muda nada: o que importa é a posição no
+DOM. Cada botão de zoom, orientação e fechar submetia o formulário do associado.
+
+Reproduzido antes de corrigir, em jsdom: montar `<form onSubmit={spy}>` com o visualizador
+dentro e clicar nos botões da barra dispara o `onSubmit` **6 vezes**. Os testes
+(`VisualizadorReciboModal.test.tsx`, `VisualizadorDocumentoPadraoModal.test.tsx`) ficaram nesse
+formato — eles montam a aninhagem real, não uma simulação dela.
+
+**A regra**: em componente que possa ser renderizado dentro de um formulário — e um modal
+reaproveitável sempre pode —, **todo `<button>` declara `type` explicitamente**. `type="button"`
+para ação, `type="submit"` só para o botão que de fato envia aquele formulário.
+
+Duas coisas que valem saber antes da próxima passada:
+
+- **Isto é uma classe, não um caso.** No `main` de hoje há ~250 `<button>` sem `type` no `src/`, e
+  9 arquivos que têm ao mesmo tempo um `<form>` e vários deles (`CaixasPage`, `RequisicoesPage`,
+  `ContasReceberPage`, `ContasPagarPage`, `FaturamentosPage`, `CredenciadosPage`,
+  `DocumentosPadroesPage`, `ProcedimentosPage`, `AssociadoFormModal`). Só o caminho do cadastro do
+  associado foi corrigido nesta rodada, que é o que foi relatado; os outros são risco latente e
+  dependem de o botão estar mesmo dentro do `<form>`. Arquivo com **um** botão sem `type` costuma
+  ser o submit legítimo.
+- **`createPortal` também resolveria**, e de forma mais definitiva: portal tira o modal do DOM do
+  formulário, então nenhum botão dentro dele consegue submeter (o borbulhar de evento do React
+  atravessa a árvore de componentes, mas `submit` é comportamento nativo do DOM e não atravessa).
+  Não foi o caminho escolhido aqui porque muda a montagem de modais usados em várias telas, sem UI
+  logada para conferir. Se um dia a classe inteira for atacada, é a correção estrutural.
+
+### Mensalidades do associado saem em ordem de vencimento
+
+A lista chegava na ordem em que o Postgres devolveu as linhas — que não é ordem nenhuma — e a
+tela mostrava 6/12, 11/12, 1/12, 5/12. `ordenarParcelasPorVencimento`
+(`utils/mensalidadesAssociadoHelpers.ts`, pura e testada) ordena por `data_vencimento` e desempata
+por `numero_parcela`; `filtrarParcelasTabela` passou a devolver ordenado, e o organograma recebe a
+mesma lista já ordenada.
+
+**Compara o texto da data, não `new Date()`** — para `YYYY-MM-DD` a ordem lexicográfica é a
+cronológica, e comparar texto evita de saída a armadilha que este arquivo já documenta em
+`anoDaData()`: `new Date('2027-01-01')` é meia-noite UTC, que em UTC-3 é 31/12/2026. Aqui isso não
+inverteria a ordem (todas as datas deslocam junto), mas o hábito é o que impede o próximo cálculo
+de derrapar. Parcela sem vencimento vai para o fim: é dado quebrado, não deve encabeçar a lista.
+
+A ordenação **não** usa `useMemo`, e isso é deliberado: o trecho fica depois de um `return`
+condicional no componente, e um hook ali quebraria a ordem dos hooks entre renders (o
+`react-hooks/rules-of-hooks` do eslint pega — foi assim que a primeira versão foi corrigida antes
+do commit).
+
 ## Menu lateral (`components/layout/Sidebar.tsx`)
 
 O menu passou por um redesenho em três entregas (setembro/2026). Nenhuma funcionalidade mudou —

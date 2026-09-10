@@ -37,6 +37,7 @@ import {
   filtrarParcelasDoAssociado,
   agruparParcelasPorStatusComTotais,
   filtrarParcelasTabela,
+  ordenarParcelasPorVencimento,
 } from '../../utils/mensalidadesAssociadoHelpers';
 import { MensalidadesGeracaoWizard } from './MensalidadesGeracaoWizard';
 import { ParcelaRecebimentoModal } from './ParcelaRecebimentoModal';
@@ -370,6 +371,13 @@ export const AssociadoMensalidadesTab: React.FC<{
     agruparParcelasPorStatusComTotais(parcelas);
 
   // Filtragem para tabela
+  // A ordem em que o banco devolve as parcelas não é ordem nenhuma — as duas telas
+  // (organograma e tabela) precisam da cronológica. Sem `useMemo` de propósito: este
+  // trecho vem depois de um `return` condicional acima, e hook aqui quebraria a ordem
+  // dos hooks entre renders. A ordenação é barata e roda ao lado do filtro, que também
+  // não é memoizado.
+  const parcelasOrdenadas = ordenarParcelasPorVencimento(parcelas);
+
   const filtradasTabela = filtrarParcelasTabela(parcelas, { filtroStatus, filtroPeriodoInicio, filtroPeriodoFim });
 
   return (
@@ -491,7 +499,7 @@ export const AssociadoMensalidadesTab: React.FC<{
         <OrganogramaMensalidadesCanvas
           associado={associado}
           receitas={receitas}
-          parcelas={parcelas}
+          parcelas={parcelasOrdenadas}
           isAdmin={isAdmin}
           isOnline={state.isOnline}
           onEditReceita={(rec) => setEditingReceita({ ...rec })}

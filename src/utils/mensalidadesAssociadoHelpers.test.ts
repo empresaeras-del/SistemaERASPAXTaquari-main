@@ -8,6 +8,7 @@ import {
   filtrarParcelasDoAssociado,
   agruparParcelasPorStatusComTotais,
   filtrarParcelasTabela,
+  ordenarParcelasPorVencimento,
 } from './mensalidadesAssociadoHelpers';
 import { Receita, ParcelaReceber } from '../services/financeiroService';
 
@@ -263,5 +264,75 @@ describe('filtrarParcelasTabela', () => {
   it('combina status e período', () => {
     const r = filtrarParcelasTabela(parcelas, { filtroStatus: 'pendente', filtroPeriodoInicio: '2026-03-01', filtroPeriodoFim: '' });
     expect(r.map(p => p.id)).toEqual(['p3']);
+  });
+});
+
+describe('ordenarParcelasPorVencimento', () => {
+  it('ordena da mais antiga para a mais recente', () => {
+    // A ordem de entrada é a que o banco devolvia e que a tela exibia: 6/12, 11/12,
+    // 1/12, 5/12 — exatamente o print do relato.
+    const parcelas = [
+      mkParcela({ id: 'p6', numero_parcela: 6, data_vencimento: '2027-02-10' }),
+      mkParcela({ id: 'p11', numero_parcela: 11, data_vencimento: '2027-07-10' }),
+      mkParcela({ id: 'p1', numero_parcela: 1, data_vencimento: '2026-09-10' }),
+      mkParcela({ id: 'p5', numero_parcela: 5, data_vencimento: '2027-01-10' }),
+    ];
+    expect(ordenarParcelasPorVencimento(parcelas).map((p) => p.id)).toEqual([
+      'p1',
+      'p5',
+      'p6',
+      'p11',
+    ]);
+  });
+
+  it('desempata pelo número da parcela quando o vencimento é o mesmo', () => {
+    const parcelas = [
+      mkParcela({ id: 'b', numero_parcela: 2, data_vencimento: '2026-09-10' }),
+      mkParcela({ id: 'a', numero_parcela: 1, data_vencimento: '2026-09-10' }),
+    ];
+    expect(ordenarParcelasPorVencimento(parcelas).map((p) => p.id)).toEqual(['a', 'b']);
+  });
+
+  it('joga parcela sem vencimento para o fim', () => {
+    const parcelas = [
+      mkParcela({ id: 'sem', data_vencimento: '' }),
+      mkParcela({ id: 'com', data_vencimento: '2026-09-10' }),
+    ];
+    expect(ordenarParcelasPorVencimento(parcelas).map((p) => p.id)).toEqual(['com', 'sem']);
+  });
+
+  it('não muta o array recebido', () => {
+    const parcelas = [
+      mkParcela({ id: 'b', data_vencimento: '2027-01-10' }),
+      mkParcela({ id: 'a', data_vencimento: '2026-01-10' }),
+    ];
+    ordenarParcelasPorVencimento(parcelas);
+    expect(parcelas.map((p) => p.id)).toEqual(['b', 'a']);
+  });
+
+  it('a virada de ano ordena certo — a comparação é de texto, não de fuso', () => {
+    // `new Date('2027-01-01')` é meia-noite UTC (31/12 em UTC-3). Comparando texto,
+    // 31/12/2026 vem antes de 01/01/2027 sem depender de fuso nenhum.
+    const parcelas = [
+      mkParcela({ id: 'jan', data_vencimento: '2027-01-01' }),
+      mkParcela({ id: 'dez', data_vencimento: '2026-12-31' }),
+    ];
+    expect(ordenarParcelasPorVencimento(parcelas).map((p) => p.id)).toEqual(['dez', 'jan']);
+  });
+});
+
+describe('filtrarParcelasTabela devolve ordenado', () => {
+  it('a tabela sai em ordem de vencimento mesmo sem filtro', () => {
+    const parcelas = [
+      mkParcela({ id: 'p3', numero_parcela: 3, data_vencimento: '2026-11-10' }),
+      mkParcela({ id: 'p1', numero_parcela: 1, data_vencimento: '2026-09-10' }),
+      mkParcela({ id: 'p2', numero_parcela: 2, data_vencimento: '2026-10-10' }),
+    ];
+    const r = filtrarParcelasTabela(parcelas, {
+      filtroStatus: 'all',
+      filtroPeriodoInicio: '',
+      filtroPeriodoFim: '',
+    });
+    expect(r.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
   });
 });
