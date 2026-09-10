@@ -1,8 +1,9 @@
 import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
-import { addToSyncQueue } from '../lib/syncService';
+import { addToSyncQueue, getSyncQueue } from '../lib/syncService';
 import { generateUUID } from '../utils/uuid';
 import { tenantDeEscrita, registroPertenceAoTenant, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
+import { mesclarComCacheLocal, idsPendentesDeSync } from '../utils/mesclagemOfflineFirst';
 
 export type FormaPagamento = string;
 
@@ -465,20 +466,27 @@ export const getParcelasReceber = async (isOnline: boolean, tenantId: string): P
         query = query.or(`tenant_id.eq.${tenantId}`);
       }
       const { data, error } = await query;
-      if (!error && data && data.length > 0) {
+      // `!error && data` já é sucesso, mesmo com zero linhas. Exigir `length > 0` tratava
+      // "a empresa não tem mais nenhum registro" como falha de rede e caía no cache — que é
+      // exatamente onde o registro excluído sobrevive. Ver mesclagemOfflineFirst.ts.
+      if (!error && data) {
         for (const item of data) {
           await saveToIDB('parcelas_receber', item);
         }
 
         // Merge Supabase com os locais
-        const remoteMap = new Map<string, ParcelaReceber>();
-        data.forEach((item: any) => remoteMap.set(item.id, item));
-        (localParcelas || []).forEach(localItem => {
-          if (!remoteMap.has(localItem.id) && !localItem.deleted_at) {
-            remoteMap.set(localItem.id, localItem);
-          }
+        // Preserva o local ausente no servidor SÓ quando a fila de sync justifica; o resto
+        // foi excluído em outra sessão e é removido do cache (ver mesclagemOfflineFirst.ts).
+        const mesclagem = mesclarComCacheLocal<ParcelaReceber>({
+          remotos: data as ParcelaReceber[],
+          locais: localParcelas || [],
+          pendentesDeSync: idsPendentesDeSync(await getSyncQueue(), 'parcelas_receber'),
+          tenantDaConsulta: tenantId,
         });
-        parcelas = Array.from(remoteMap.values());
+        for (const orfaoId of mesclagem.orfaosParaRemover) {
+          await deleteFromIDB('parcelas_receber', orfaoId);
+        }
+        parcelas = mesclagem.registros;
       } else {
         parcelas = localParcelas || [];
       }
@@ -649,20 +657,27 @@ export const getParcelasPagar = async (isOnline: boolean, tenantId: string): Pro
         query = query.or(`tenant_id.eq.${tenantId}`);
       }
       const { data, error } = await query;
-      if (!error && data && data.length > 0) {
+      // `!error && data` já é sucesso, mesmo com zero linhas. Exigir `length > 0` tratava
+      // "a empresa não tem mais nenhum registro" como falha de rede e caía no cache — que é
+      // exatamente onde o registro excluído sobrevive. Ver mesclagemOfflineFirst.ts.
+      if (!error && data) {
         for (const item of data) {
           await saveToIDB('parcelas_pagar', item);
         }
         
         // Merge Supabase com os locais
-        const remoteMap = new Map<string, ParcelaPagar>();
-        data.forEach((item: any) => remoteMap.set(item.id, item));
-        (localParcelas || []).forEach(localItem => {
-          if (!remoteMap.has(localItem.id) && !localItem.deleted_at) {
-            remoteMap.set(localItem.id, localItem);
-          }
+        // Preserva o local ausente no servidor SÓ quando a fila de sync justifica; o resto
+        // foi excluído em outra sessão e é removido do cache (ver mesclagemOfflineFirst.ts).
+        const mesclagem = mesclarComCacheLocal<ParcelaPagar>({
+          remotos: data as ParcelaPagar[],
+          locais: localParcelas || [],
+          pendentesDeSync: idsPendentesDeSync(await getSyncQueue(), 'parcelas_pagar'),
+          tenantDaConsulta: tenantId,
         });
-        parcelas = Array.from(remoteMap.values());
+        for (const orfaoId of mesclagem.orfaosParaRemover) {
+          await deleteFromIDB('parcelas_pagar', orfaoId);
+        }
+        parcelas = mesclagem.registros;
       } else {
         parcelas = localParcelas || [];
       }
@@ -1659,18 +1674,25 @@ export const getDespesas = async (isOnline: boolean, tenantId: string): Promise<
         query = query.or(`tenant_id.eq.${tenantId}`);
       }
       const { data, error } = await query;
-      if (!error && data && data.length > 0) {
+      // `!error && data` já é sucesso, mesmo com zero linhas. Exigir `length > 0` tratava
+      // "a empresa não tem mais nenhum registro" como falha de rede e caía no cache — que é
+      // exatamente onde o registro excluído sobrevive. Ver mesclagemOfflineFirst.ts.
+      if (!error && data) {
         for (const item of data) {
           await saveToIDB('despesas', item);
         }
-        const remoteMap = new Map<string, Despesa>();
-        data.forEach((item: any) => remoteMap.set(item.id, item));
-        (localDespesas || []).forEach(localItem => {
-          if (!remoteMap.has(localItem.id) && !localItem.deleted_at) {
-            remoteMap.set(localItem.id, localItem);
-          }
+        // Preserva o local ausente no servidor SÓ quando a fila de sync justifica; o resto
+        // foi excluído em outra sessão e é removido do cache (ver mesclagemOfflineFirst.ts).
+        const mesclagem = mesclarComCacheLocal<Despesa>({
+          remotos: data as Despesa[],
+          locais: localDespesas || [],
+          pendentesDeSync: idsPendentesDeSync(await getSyncQueue(), 'despesas'),
+          tenantDaConsulta: tenantId,
         });
-        despesas = Array.from(remoteMap.values());
+        for (const orfaoId of mesclagem.orfaosParaRemover) {
+          await deleteFromIDB('despesas', orfaoId);
+        }
+        despesas = mesclagem.registros;
       } else {
         despesas = localDespesas || [];
       }
@@ -1703,18 +1725,25 @@ export const getReceitas = async (isOnline: boolean, tenantId: string): Promise<
         query = query.or(`tenant_id.eq.${tenantId}`);
       }
       const { data, error } = await query;
-      if (!error && data && data.length > 0) {
+      // `!error && data` já é sucesso, mesmo com zero linhas. Exigir `length > 0` tratava
+      // "a empresa não tem mais nenhum registro" como falha de rede e caía no cache — que é
+      // exatamente onde o registro excluído sobrevive. Ver mesclagemOfflineFirst.ts.
+      if (!error && data) {
         for (const item of data) {
           await saveToIDB('receitas', item);
         }
-        const remoteMap = new Map<string, Receita>();
-        data.forEach((item: any) => remoteMap.set(item.id, item));
-        (localReceitas || []).forEach(localItem => {
-          if (!remoteMap.has(localItem.id) && !localItem.deleted_at) {
-            remoteMap.set(localItem.id, localItem);
-          }
+        // Preserva o local ausente no servidor SÓ quando a fila de sync justifica; o resto
+        // foi excluído em outra sessão e é removido do cache (ver mesclagemOfflineFirst.ts).
+        const mesclagem = mesclarComCacheLocal<Receita>({
+          remotos: data as Receita[],
+          locais: localReceitas || [],
+          pendentesDeSync: idsPendentesDeSync(await getSyncQueue(), 'receitas'),
+          tenantDaConsulta: tenantId,
         });
-        receitas = Array.from(remoteMap.values());
+        for (const orfaoId of mesclagem.orfaosParaRemover) {
+          await deleteFromIDB('receitas', orfaoId);
+        }
+        receitas = mesclagem.registros;
       } else {
         receitas = localReceitas || [];
       }
