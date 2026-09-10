@@ -374,7 +374,7 @@ export function usePlanosPax() {
     try {
       const localAssocs = await getAllFromIDB<any>('associados');
       const assocsVinculados = (localAssocs || []).filter(a => 
-        a && !a.deleted_at && (a.plano_pax_id === planoId || a.plano_id === planoId) && a.status !== 'inativo' && a.status !== 'encerrado'
+        a && !a.deleted_at && a.plano_pax_id === planoId && a.status !== 'inativo' && a.status !== 'encerrado'
       );
       totalAssoc += assocsVinculados.length;
     } catch (e) {}
@@ -393,7 +393,7 @@ export function usePlanosPax() {
         const { count: countAssoc } = await supabase
           .from('associados')
           .select('id', { count: 'exact', head: true })
-          .or(`plano_pax_id.eq.${planoId},plano_id.eq.${planoId}`)
+          .eq('plano_pax_id', planoId)
           .is('deleted_at', null)
           .neq('status', 'inativo');
         
