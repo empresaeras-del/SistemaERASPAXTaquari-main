@@ -146,6 +146,7 @@ export const ExcluirAtendimentoModal: React.FC<ExcluirAtendimentoModalProps> = (
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             disabled={excluindo}
             className="p-2 text-text-subtle hover:text-text-base hover:bg-bg-hover rounded-xl transition-colors disabled:opacity-50"

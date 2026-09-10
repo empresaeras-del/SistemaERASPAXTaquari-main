@@ -51,6 +51,7 @@ export const MensagensConfigTab: React.FC = () => {
           <h3 className="font-semibold text-white">Templates de WhatsApp</h3>
         </div>
         <button
+          type="button"
           onClick={handleSave}
           disabled={saving}
           className="flex items-center gap-2 px-4 py-2 bg-[#7E4CF3] text-white rounded-xl text-sm font-medium hover:bg-[#6A3DE8] transition-colors disabled:opacity-50"

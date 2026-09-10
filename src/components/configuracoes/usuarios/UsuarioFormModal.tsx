@@ -92,6 +92,7 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="text-slate-400 hover:text-white transition-colors"
           >

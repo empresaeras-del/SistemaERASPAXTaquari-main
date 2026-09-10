@@ -324,9 +324,9 @@ export const CaixasPage: React.FC = () => {
       </div>
       
       <div className="flex gap-4 border-b border-border-default pb-4 overflow-x-auto print:hidden">
-        <button onClick={() => setActiveTab('fluxo')} className={`px-4 py-2 whitespace-nowrap ${activeTab === 'fluxo' ? 'border-b-2 border-primary text-primary font-medium' : 'text-text-subtle hover:text-text-base'}`}>Fluxo de Caixa</button>
-        <button onClick={() => setActiveTab('lotes')} className={`px-4 py-2 whitespace-nowrap ${activeTab === 'lotes' ? 'border-b-2 border-primary text-primary font-medium' : 'text-text-subtle hover:text-text-base'}`}>Lotes de Caixa</button>
-        <button onClick={() => setActiveTab('conciliacao')} className={`px-4 py-2 whitespace-nowrap ${activeTab === 'conciliacao' ? 'border-b-2 border-primary text-primary font-medium' : 'text-text-subtle hover:text-text-base'}`}>Conciliação Financeira</button>
+        <button type="button" onClick={() => setActiveTab('fluxo')} className={`px-4 py-2 whitespace-nowrap ${activeTab === 'fluxo' ? 'border-b-2 border-primary text-primary font-medium' : 'text-text-subtle hover:text-text-base'}`}>Fluxo de Caixa</button>
+        <button type="button" onClick={() => setActiveTab('lotes')} className={`px-4 py-2 whitespace-nowrap ${activeTab === 'lotes' ? 'border-b-2 border-primary text-primary font-medium' : 'text-text-subtle hover:text-text-base'}`}>Lotes de Caixa</button>
+        <button type="button" onClick={() => setActiveTab('conciliacao')} className={`px-4 py-2 whitespace-nowrap ${activeTab === 'conciliacao' ? 'border-b-2 border-primary text-primary font-medium' : 'text-text-subtle hover:text-text-base'}`}>Conciliação Financeira</button>
       </div>
 
       {activeTab === 'fluxo' && (
@@ -336,6 +336,7 @@ export const CaixasPage: React.FC = () => {
             <div className="flex gap-2">
               {!loteAberto ? (
                 <button 
+                  type="button"
                   disabled={!state.isOnline}
                   onClick={() => setModalAbrirLote(true)} 
                   title={!state.isOnline ? "Abertura bloqueada no Modo Offline" : "Abrir Caixa"}
@@ -346,6 +347,7 @@ export const CaixasPage: React.FC = () => {
               ) : (
                 <>
                   <button 
+                    type="button"
                     disabled={!state.isOnline}
                     onClick={() => setModalSuprimento(true)} 
                     title={!state.isOnline ? "Operação bloqueada no Modo Offline" : "Suprimento"}
@@ -354,6 +356,7 @@ export const CaixasPage: React.FC = () => {
                     <ArrowUpRight className="w-4 h-4" /> Suprimento
                   </button>
                   <button 
+                    type="button"
                     disabled={!state.isOnline}
                     onClick={() => setModalSangria(true)} 
                     title={!state.isOnline ? "Operação bloqueada no Modo Offline" : "Sangria"}
@@ -362,6 +365,7 @@ export const CaixasPage: React.FC = () => {
                     <ArrowDownRight className="w-4 h-4" /> Sangria
                   </button>
                   <button 
+                    type="button"
                     disabled={!state.isOnline}
                     onClick={() => setModalFecharLote(true)} 
                     title={!state.isOnline ? "Fechamento bloqueado no Modo Offline" : "Fechar Caixa"}
@@ -423,6 +427,7 @@ export const CaixasPage: React.FC = () => {
                        <td className="p-3 text-right">
                          {!mov.estornado && (
                            <button
+                             type="button"
                              onClick={() => setModalEstorno({ isOpen: true, mov })}
                              className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 rounded text-xs font-medium transition-colors"
                            >
@@ -443,7 +448,7 @@ export const CaixasPage: React.FC = () => {
         <div className="space-y-4 print:hidden">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Histórico de Lotes</h2>
-            <button onClick={loadData} className="flex items-center gap-2 text-sm bg-bg-subtle px-3 py-1.5 rounded-xl border border-border-default hover:bg-bg-hover transition-colors">
+            <button type="button" onClick={loadData} className="flex items-center gap-2 text-sm bg-bg-subtle px-3 py-1.5 rounded-xl border border-border-default hover:bg-bg-hover transition-colors">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
             </button>
           </div>
@@ -478,6 +483,7 @@ export const CaixasPage: React.FC = () => {
                     
                     <div className="flex gap-2 mt-2">
                       <button 
+                        type="button"
                         onClick={() => handleViewLoteDetails(lote)}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-base hover:bg-bg-hover text-text-base border border-border-default rounded-lg text-xs font-medium transition-colors"
                       >
@@ -486,6 +492,7 @@ export const CaixasPage: React.FC = () => {
 
                       {lote.status === 'fechado' && (
                         <button 
+                          type="button"
                           onClick={() => handlePrintLote(lote)}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-base hover:bg-bg-hover text-text-base border border-border-default rounded-lg text-xs font-medium transition-colors"
                         >
@@ -495,6 +502,7 @@ export const CaixasPage: React.FC = () => {
 
                       {lote.status === 'fechado' && (
                         <button 
+                          type="button"
                           onClick={() => {
                             setJustificativaReabertura('');
                             setModalReabrirLote({ isOpen: true, lote });
@@ -528,6 +536,7 @@ export const CaixasPage: React.FC = () => {
               </p>
             </div>
             <button
+              type="button"
               onClick={handleSyncFinancials}
               disabled={syncing}
               className="flex items-center gap-2 px-4 py-2.5 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl font-medium text-sm transition-colors shadow-sm disabled:opacity-50"
@@ -584,6 +593,7 @@ export const CaixasPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button 
+                  type="button"
                   onClick={() => {
                     window.print();
                   }}
@@ -591,7 +601,7 @@ export const CaixasPage: React.FC = () => {
                 >
                   <Printer className="w-4 h-4" /> Imprimir
                 </button>
-                <button onClick={() => setModalLoteDetalhes({ isOpen: false, lote: null, movimentacoes: [], loading: false })} className="text-text-muted hover:text-text-base transition-colors print:hidden">
+                <button type="button" onClick={() => setModalLoteDetalhes({ isOpen: false, lote: null, movimentacoes: [], loading: false })} className="text-text-muted hover:text-text-base transition-colors print:hidden">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -725,7 +735,7 @@ export const CaixasPage: React.FC = () => {
                   Valor: {formatCurrency(modalEstorno.mov.valor)}
                 </p>
               </div>
-              <button onClick={() => { setModalEstorno({ isOpen: false, mov: null }); setMotivoEstorno(''); }} className="text-text-muted hover:text-text-base transition-colors">
+              <button type="button" onClick={() => { setModalEstorno({ isOpen: false, mov: null }); setMotivoEstorno(''); }} className="text-text-muted hover:text-text-base transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -768,7 +778,7 @@ export const CaixasPage: React.FC = () => {
                 </h3>
                 <p className="text-sm text-text-subtle">Lote: {modalReabrirLote.lote.codigo_lote}</p>
               </div>
-              <button onClick={() => setModalReabrirLote({ isOpen: false, lote: null })} className="text-text-muted hover:text-text-base transition-colors">
+              <button type="button" onClick={() => setModalReabrirLote({ isOpen: false, lote: null })} className="text-text-muted hover:text-text-base transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -804,7 +814,7 @@ export const CaixasPage: React.FC = () => {
           <div className="bg-bg-surface w-full max-w-md rounded-2xl shadow-2xl border border-border-default overflow-hidden">
             <div className="p-6 border-b border-border-default flex justify-between items-center">
               <h3 className="text-xl font-bold text-text-base flex items-center gap-2">Abrir Lote de Caixa</h3>
-              <button onClick={() => setModalAbrirLote(false)} className="text-text-muted hover:text-text-base transition-colors">
+              <button type="button" onClick={() => setModalAbrirLote(false)} className="text-text-muted hover:text-text-base transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -849,7 +859,7 @@ export const CaixasPage: React.FC = () => {
               <h3 className="text-xl font-bold text-text-base flex items-center gap-2">
                 {modalSuprimento ? 'Novo Suprimento' : 'Nova Sangria'}
               </h3>
-              <button onClick={() => { setModalSuprimento(false); setModalSangria(false); }} className="text-text-muted hover:text-text-base transition-colors">
+              <button type="button" onClick={() => { setModalSuprimento(false); setModalSangria(false); }} className="text-text-muted hover:text-text-base transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -902,7 +912,7 @@ export const CaixasPage: React.FC = () => {
                   Lote: {loteAberto.codigo_lote}
                 </p>
               </div>
-              <button onClick={() => setModalFecharLote(false)} className="text-text-muted hover:text-text-base transition-colors">
+              <button type="button" onClick={() => setModalFecharLote(false)} className="text-text-muted hover:text-text-base transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>

@@ -508,6 +508,7 @@ export const SistemaBackupPanel: React.FC<SistemaBackupPanelProps> = ({
           )}
 
           <button
+            type="button"
             onClick={handleBackup}
             disabled={isExporting || isRestoring}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] hover:opacity-90 text-white rounded-xl font-medium transition-all shadow-lg shadow-[#3B82F6]/25 disabled:opacity-50 mt-4"
@@ -549,6 +550,7 @@ export const SistemaBackupPanel: React.FC<SistemaBackupPanelProps> = ({
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">1. Pasta de Destino</label>
                 <div className="flex items-center gap-2">
                   <button
+                    type="button"
                     onClick={handleSelectFolder}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#181B34] border border-[#262A45] text-white rounded-xl hover:bg-[#262A45] transition-colors text-sm"
                   >
@@ -579,6 +581,7 @@ export const SistemaBackupPanel: React.FC<SistemaBackupPanelProps> = ({
           <div className="mt-4 pt-3 border-t border-[#262A45]">
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={handleSaveSchedule}
                 className="flex-1 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-colors text-sm shadow-md shadow-emerald-500/20"
               >
@@ -586,6 +589,7 @@ export const SistemaBackupPanel: React.FC<SistemaBackupPanelProps> = ({
               </button>
               {isScheduled && (
                 <button
+                  type="button"
                   onClick={handleDisableSchedule}
                   className="px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl font-medium transition-colors text-sm"
                 >

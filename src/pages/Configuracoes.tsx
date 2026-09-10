@@ -91,6 +91,7 @@ export const ConfiguracoesPage: React.FC = () => {
       <div className="flex border-b border-[#262A45] overflow-x-auto">
         {state.user?.nivel === 'super_admin' && (
           <button 
+            type="button"
             onClick={() => setActiveTab("empresas")}
             className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${
               activeTab === "empresas"
@@ -103,6 +104,7 @@ export const ConfiguracoesPage: React.FC = () => {
           </button>
         )}
         <button
+          type="button"
           onClick={() => setActiveTab("usuarios")}
           className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${
             activeTab === "usuarios"
@@ -115,6 +117,7 @@ export const ConfiguracoesPage: React.FC = () => {
         </button>
         {state.user?.nivel === 'super_admin' && (
           <button
+            type="button"
             onClick={() => setActiveTab("sistema")}
             className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${
               activeTab === "sistema"
@@ -128,6 +131,7 @@ export const ConfiguracoesPage: React.FC = () => {
         )}
         {(state.user?.nivel === 'admin' || state.user?.nivel === 'super_admin') && (
           <button
+            type="button"
             onClick={() => setActiveTab("mensagens")}
             className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${
               activeTab === "mensagens"

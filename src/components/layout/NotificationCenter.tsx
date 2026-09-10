@@ -127,6 +127,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
         </div>
 
         <button
+          type="button"
           onClick={onClose}
           className="text-text-subtle hover:text-text-base p-1.5 rounded-lg hover:bg-bg-hover transition-colors"
           aria-label="Fechar"
@@ -138,6 +139,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
       {/* TABS NAVIGATION */}
       <div className="flex items-center border-b border-border-default bg-bg-subtle/50 px-2 pt-2 gap-1 overflow-x-auto text-xs font-semibold">
         <button
+          type="button"
           onClick={() => setActiveTab('geral')}
           className={`flex items-center gap-1.5 px-3 py-2 rounded-t-xl border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'geral'
@@ -155,6 +157,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('requisicoes')}
           className={`flex items-center gap-1.5 px-3 py-2 rounded-t-xl border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'requisicoes'
@@ -172,6 +175,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('remessas')}
           className={`flex items-center gap-1.5 px-3 py-2 rounded-t-xl border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'remessas'
@@ -205,6 +209,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
               <span className="text-text-subtle font-medium">Notificações gerais do sistema</span>
               {unreadCount > 0 && (
                 <button
+                  type="button"
                   onClick={handleMarkAllAsRead}
                   className="text-xs font-medium text-[#3B82F6] hover:underline flex items-center gap-1"
                 >
@@ -268,6 +273,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                   <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-bg-surface p-1 rounded-lg shadow-md border border-border-default">
                     {!notif.lida && (
                       <button
+                        type="button"
                         onClick={() => handleMarkAsRead(notif.id)}
                         className="p-1 text-text-subtle hover:text-emerald-500 rounded transition-colors"
                         title="Marcar como lida"
@@ -276,6 +282,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                       </button>
                     )}
                     <button
+                      type="button"
                       onClick={() => handleDelete(notif.id)}
                       className="p-1 text-text-subtle hover:text-rose-500 rounded transition-colors"
                       title="Excluir notificação"
@@ -368,6 +375,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
                     </Link>
 
                     <button
+                      type="button"
                       onClick={() => handleAutorizarRequisicaoRapida(req.id)}
                       className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors flex items-center gap-1 shadow-sm"
                     >
@@ -466,6 +474,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
       <div className="p-3 border-t border-border-default bg-bg-subtle flex items-center justify-between text-xs">
         <span className="text-text-subtle font-medium">Sincronização em tempo real</span>
         <button
+          type="button"
           onClick={handleMarkAllAsRead}
           className="text-[#3B82F6] hover:underline font-semibold"
         >

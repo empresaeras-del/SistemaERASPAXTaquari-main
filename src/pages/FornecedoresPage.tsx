@@ -230,6 +230,7 @@ export const FornecedoresPage: React.FC = () => {
         {/* PRIMARY ACTIONS */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            type="button"
             onClick={exportarCSV}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-bg-surface text-text-base border border-border-default rounded-xl text-xs font-semibold hover:bg-bg-hover transition-colors shadow-sm"
             title="Exportar fornecedores filtrados em CSV"
@@ -239,6 +240,7 @@ export const FornecedoresPage: React.FC = () => {
           </button>
 
           <button
+            type="button"
             onClick={restaurarDadosExemplo}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-bg-surface text-text-subtle border border-border-default rounded-xl text-xs font-medium hover:text-text-base hover:bg-bg-hover transition-colors"
             title="Restaurar lista de fornecedores de demonstração"
@@ -248,6 +250,7 @@ export const FornecedoresPage: React.FC = () => {
           </button>
 
           <button
+            type="button"
             disabled={!state.isOnline}
             onClick={handleOpenCreate}
             title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Fornecedor"}
@@ -360,6 +363,7 @@ export const FornecedoresPage: React.FC = () => {
           {/* VIEW SWITCHER */}
           <div className="flex items-center bg-bg-subtle border border-border-default p-1 rounded-xl ml-auto md:ml-0">
             <button
+              type="button"
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
               title="Visualização em Cards"
@@ -367,6 +371,7 @@ export const FornecedoresPage: React.FC = () => {
               <LayoutGrid className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('table')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
               title="Visualização em Tabela"
@@ -391,6 +396,7 @@ export const FornecedoresPage: React.FC = () => {
             Não encontramos nenhum fornecedor ou prestador cadastrado com os filtros aplicados.
           </p>
           <button
+            type="button"
             onClick={handleOpenCreate}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[#3B82F6] text-white rounded-xl text-xs font-semibold hover:bg-[#3B82F6]/90 transition-colors mt-2"
           >
@@ -481,6 +487,7 @@ export const FornecedoresPage: React.FC = () => {
               {/* CARD FOOTER ACTIONS */}
               <div className="flex items-center justify-between pt-3 border-t border-border-default/60 mt-2 gap-2">
                 <button
+                  type="button"
                   onClick={() => setSelectedFornecedor(fornecedor)}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-bg-subtle text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors text-xs font-semibold"
                 >
@@ -490,6 +497,7 @@ export const FornecedoresPage: React.FC = () => {
 
                 <div className="flex items-center gap-1">
                   <button
+                    type="button"
                     onClick={() => handleOpenEdit(fornecedor)}
                     className="p-1.5 rounded-lg text-text-subtle hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 transition-colors"
                     title="Editar fornecedor"
@@ -497,6 +505,7 @@ export const FornecedoresPage: React.FC = () => {
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleExcluir(fornecedor)}
                     className="p-1.5 rounded-lg text-text-subtle hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                     title="Excluir fornecedor"
@@ -544,6 +553,7 @@ export const FornecedoresPage: React.FC = () => {
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          type="button"
                           onClick={() => setSelectedFornecedor(fornecedor)}
                           className="p-1.5 rounded-lg text-text-subtle hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 transition-colors"
                           title="Visualizar Detalhes"
@@ -551,6 +561,7 @@ export const FornecedoresPage: React.FC = () => {
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleOpenEdit(fornecedor)}
                           className="p-1.5 rounded-lg text-text-subtle hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 transition-colors"
                           title="Editar"
@@ -558,6 +569,7 @@ export const FornecedoresPage: React.FC = () => {
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleExcluir(fornecedor)}
                           className="p-1.5 rounded-lg text-text-subtle hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                           title="Excluir"

@@ -114,6 +114,7 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={onEdit}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6]/20 border border-[#3B82F6]/30 rounded-xl text-xs font-semibold transition-colors"
             >
@@ -121,6 +122,7 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
               Editar
             </button>
             <button
+              type="button"
               onClick={onClose}
               className="p-2 text-text-subtle hover:text-text-base rounded-xl transition-colors hover:bg-bg-hover"
               aria-label="Fechar"
@@ -141,6 +143,7 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
               <p className="text-sm font-bold text-text-base font-mono mt-1 flex items-center justify-between">
                 <span>{fornecedor.cnpj_cpf}</span>
                 <button
+                  type="button"
                   onClick={() => copiarTexto(fornecedor.cnpj_cpf, 'Documento')}
                   className="text-text-subtle hover:text-[#3B82F6] p-1"
                   title="Copiar"
@@ -198,6 +201,7 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
                       <strong className="text-text-subtle">E-mail:</strong> {fornecedor.email}
                     </span>
                     <button
+                      type="button"
                       onClick={() => copiarTexto(fornecedor.email!, 'E-mail')}
                       className="text-text-subtle hover:text-[#3B82F6] p-0.5"
                       title="Copiar e-mail"
@@ -301,6 +305,7 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
                     </span>
                     {fornecedor.dados_bancarios.chave_pix && (
                       <button
+                        type="button"
                         onClick={() =>
                           copiarTexto(fornecedor.dados_bancarios!.chave_pix!, 'Chave PIX')
                         }
@@ -336,6 +341,7 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
             <span className="text-xs text-text-subtle font-medium">Alterar Status Rápido:</span>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => onStatusChange(fornecedor.id, 'ativo')}
                 disabled={fornecedor.status === 'ativo'}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
@@ -347,6 +353,7 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
                 Ativar
               </button>
               <button
+                type="button"
                 onClick={() => onStatusChange(fornecedor.id, 'inativo')}
                 disabled={fornecedor.status === 'inativo'}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
@@ -358,6 +365,7 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
                 Inativar
               </button>
               <button
+                type="button"
                 onClick={() => onStatusChange(fornecedor.id, 'bloqueado')}
                 disabled={fornecedor.status === 'bloqueado'}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
@@ -375,6 +383,7 @@ export const FornecedorDetailsModal: React.FC<Props> = ({
         {/* FOOTER */}
         <div className="p-4 border-t border-border-default bg-bg-surface/50 flex justify-end">
           <button
+            type="button"
             onClick={onClose}
             className="px-5 py-2 bg-bg-hover text-text-base rounded-xl text-xs font-medium hover:bg-[#64748B] transition-colors"
           >

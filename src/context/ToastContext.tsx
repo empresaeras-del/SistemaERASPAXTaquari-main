@@ -89,6 +89,7 @@ const ToastItem = ({ toast, onDismiss }: { toast: Toast, onDismiss: () => void }
       <Icon className="w-5 h-5 shrink-0" />
       <p className="text-sm font-medium text-text-base flex-1">{message}</p>
       <button 
+        type="button"
         onClick={onDismiss}
         className="p-1 text-text-subtle hover:text-text-base transition-colors rounded-full hover:bg-white/10"
       >

@@ -403,6 +403,7 @@ export const PlanoPaxForm: React.FC<Props> = ({ isOpen, onClose, onSave, initial
                 </div>
               )}
               <button
+                type="button"
                 onClick={onClose}
                 className="p-2 text-text-subtle hover:bg-bg-subtle hover:text-text-base rounded-full transition-colors"
                 title="Fechar"

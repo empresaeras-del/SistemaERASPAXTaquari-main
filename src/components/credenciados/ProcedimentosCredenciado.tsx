@@ -153,6 +153,7 @@ export const ProcedimentosCredenciado: React.FC<ProcedimentosCredenciadoProps> =
         </div>
         {!isLinking && (
           <button
+            type="button"
             onClick={() => setIsLinking(true)}
             
             className="inline-flex items-center gap-2 px-4 py-2 bg-bg-hover hover:bg-[#64748B] text-text-base rounded-xl font-medium transition-colors border border-[#64748B] disabled:opacity-50 text-sm"
@@ -172,6 +173,7 @@ export const ProcedimentosCredenciado: React.FC<ProcedimentosCredenciadoProps> =
             </div>
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={() => {
                   setIsLinking(false);
                   setSelectedProcIds(new Set());
@@ -182,6 +184,7 @@ export const ProcedimentosCredenciado: React.FC<ProcedimentosCredenciadoProps> =
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={handleVincular}
                 disabled={selectedProcIds.size === 0}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-colors disabled:opacity-50 text-sm"
@@ -334,12 +337,14 @@ export const ProcedimentosCredenciado: React.FC<ProcedimentosCredenciadoProps> =
                       {editingId === v.id ? (
                         <>
                           <button
+                            type="button"
                             onClick={() => handleUpdate(v.id)}
                             className="p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10 rounded transition-colors"
                           >
                             <Check className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => setEditingId(null)}
                             className="p-1 text-text-subtle hover:text-text-base hover:bg-white/10 rounded transition-colors"
                           >
@@ -349,6 +354,7 @@ export const ProcedimentosCredenciado: React.FC<ProcedimentosCredenciadoProps> =
                       ) : (
                         <>
                           <button
+                            type="button"
                             onClick={() => {
                               setEditingId(v.id);
                               setEditValue(v.valor_exclusivo || v.procedimentos?.valor_padrao || 0);
@@ -360,6 +366,7 @@ export const ProcedimentosCredenciado: React.FC<ProcedimentosCredenciadoProps> =
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleRemove(v.id)}
                             className="p-1.5 text-text-subtle hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
                             title="Desvincular"

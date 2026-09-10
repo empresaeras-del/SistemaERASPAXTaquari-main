@@ -250,6 +250,7 @@ export const ContratosPage: React.FC = () => {
         {/* PRIMARY ACTIONS */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            type="button"
             onClick={() => setShowRelatorioContratos(true)}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-bg-surface text-text-base border border-border-default rounded-xl text-xs font-semibold hover:bg-bg-hover transition-colors shadow-sm"
             title="Gerar Relatório de Contratos em PDF"
@@ -258,6 +259,7 @@ export const ContratosPage: React.FC = () => {
             <span>Gerar Relatório</span>
           </button>
           <button
+            type="button"
             onClick={exportarCSV}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-bg-surface text-text-base border border-border-default rounded-xl text-xs font-semibold hover:bg-bg-hover transition-colors shadow-sm"
             title="Exportar contratos filtrados em CSV"
@@ -266,6 +268,7 @@ export const ContratosPage: React.FC = () => {
             <span>Exportar CSV</span>
           </button>
           <button
+            type="button"
             onClick={() => {
               if (!canEditContratos(state.user, state.isOnline)) {
                 alertPermissionRestriction('Contratos', 'criar ou emitir novos contratos PAX');
@@ -369,6 +372,7 @@ export const ContratosPage: React.FC = () => {
           {/* VIEW SWITCHER */}
           <div className="flex items-center bg-bg-subtle border border-border-default p-1 rounded-xl ml-auto md:ml-0 gap-1">
             <button
+              type="button"
               onClick={() => setViewMode('organograma')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === 'organograma'
@@ -381,6 +385,7 @@ export const ContratosPage: React.FC = () => {
               <span>Organograma</span>
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('table')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base hover:bg-bg-hover'}`}
               title="Visualização em Tabela"
@@ -388,6 +393,7 @@ export const ContratosPage: React.FC = () => {
               <List className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base hover:bg-bg-hover'}`}
               title="Visualização em Cards"
@@ -499,6 +505,7 @@ export const ContratosPage: React.FC = () => {
               {/* CARD FOOTER ACTIONS */}
               <div className="flex items-center justify-end pt-3 border-t border-border-default/60 mt-2">
                 <button
+                  type="button"
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6]/20 transition-colors text-xs font-semibold"
                   onClick={() => setSelectedAssociadoDetails(a)}
                   title="Ver Ficha Completa do Associado"
@@ -568,6 +575,7 @@ export const ContratosPage: React.FC = () => {
                     </td>
                     <td className="px-5 py-3 text-center">
                       <button
+                        type="button"
                         onClick={() => setSelectedAssociadoDetails(a)}
                         className="p-1.5 rounded-lg text-text-subtle hover:text-[#3B82F6] hover:bg-bg-hover transition-colors"
                         title="Ver Detalhes do Associado"
@@ -912,6 +920,7 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
         <div className="flex items-center gap-2 bg-[#1c222e] p-1.5 rounded-xl border border-[#2d3544]">
           <div className="flex items-center bg-[#13171f] rounded-lg p-1 mr-2 border border-[#2d3544]">
             <button
+              type="button"
               onClick={() => setOrientation('landscape')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
                 orientation === 'landscape'
@@ -924,6 +933,7 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
               <span>Paisagem</span>
             </button>
             <button
+              type="button"
               onClick={() => setOrientation('portrait')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
                 orientation === 'portrait'
@@ -938,6 +948,7 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
           </div>
           <div className="flex items-center gap-1">
             <button
+              type="button"
               onClick={() => setZoom((z) => Math.max(z - 10, 40))}
               className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
               title="Reduzir Zoom"
@@ -945,12 +956,14 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
               <ZoomOut className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => setZoom(100)}
               className="px-2.5 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg min-w-[54px] text-center"
             >
               {zoom}%
             </button>
             <button
+              type="button"
               onClick={() => setZoom((z) => Math.min(z + 10, 200))}
               className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544]"
               title="Ampliar Zoom"
@@ -962,6 +975,7 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
 
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={handleExportPDF}
             disabled={isExportingPDF}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-colors shadow-lg shadow-emerald-600/20"
@@ -970,6 +984,7 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
             <span>Salvar PDF</span>
           </button>
           <button
+            type="button"
             onClick={handleImprimir}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs transition-colors shadow-lg shadow-blue-600/20"
           >
@@ -978,6 +993,7 @@ const RelatorioContratosModal: React.FC<RelatorioContratosModalProps> = ({
           </button>
           <div className="h-6 w-px bg-[#2d3544]" />
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544]"
             aria-label="Fechar"

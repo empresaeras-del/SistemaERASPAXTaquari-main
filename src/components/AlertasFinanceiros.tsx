@@ -49,6 +49,7 @@ export const AlertasFinanceiros: React.FC = () => {
               </div>
             </div>
             <button 
+              type="button"
               onClick={() => navigate('/financeiro/contas-a-pagar')}
               className="flex items-center gap-1.5 text-xs font-bold text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 py-1.5 px-3 rounded-lg transition-all"
             >
@@ -120,6 +121,7 @@ export const AlertasFinanceiros: React.FC = () => {
               </div>
             </div>
             <button 
+              type="button"
               onClick={() => navigate('/financeiro/contas-a-receber')}
               className="flex items-center gap-1.5 text-xs font-bold text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 py-1.5 px-3 rounded-lg transition-all"
             >

@@ -72,6 +72,7 @@ export const SystemAlertProvider: React.FC = () => {
           >
             {/* Botão de Fechar no Topo */}
             <button
+              type="button"
               onClick={close}
               className="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
               title="Fechar"

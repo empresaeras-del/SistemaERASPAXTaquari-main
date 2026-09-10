@@ -77,6 +77,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
         <div className="flex items-center justify-between p-6 border-b border-border-default">
           <h2 className="text-xl font-bold text-text-base">{title}</h2>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 text-text-subtle hover:bg-bg-subtle hover:text-text-base rounded-full transition-colors"
             aria-label="Fechar"
@@ -95,6 +96,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
               className="flex-1 bg-bg-subtle border border-border-default rounded-xl px-4 py-2 text-text-base focus:border-[#3B82F6] outline-none text-sm"
             />
             <button
+              type="button"
               onClick={handleAdd}
               className="bg-[#3B82F6] hover:bg-blue-600 text-white px-3.5 py-2 rounded-xl transition-colors flex items-center justify-center gap-1 text-sm font-medium"
             >
@@ -122,6 +124,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                       className="flex-1 bg-bg-surface border border-[#3B82F6] rounded-lg px-2.5 py-1 text-sm text-text-base outline-none"
                     />
                     <button
+                      type="button"
                       onClick={() => saveEdit(opt)}
                       className="text-emerald-500 hover:bg-emerald-500/10 p-1.5 rounded-lg transition-colors"
                       title="Salvar alteração"
@@ -129,6 +132,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                       <Check className="w-4 h-4" />
                     </button>
                     <button
+                      type="button"
                       onClick={cancelEdit}
                       className="text-text-subtle hover:bg-bg-base p-1.5 rounded-lg transition-colors"
                       title="Cancelar"
@@ -144,6 +148,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                     <div className="flex items-center gap-1 shrink-0">
                       {onEdit && (
                         <button
+                          type="button"
                           onClick={() => startEdit(index, opt)}
                           className="text-text-subtle hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 p-1.5 rounded-lg transition-colors"
                           title="Editar opção"
@@ -152,6 +157,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                         </button>
                       )}
                       <button
+                        type="button"
                         onClick={() => handleRemove(opt)}
                         className="text-rose-500 hover:bg-rose-500/10 p-1.5 rounded-lg transition-colors"
                         title="Excluir opção"

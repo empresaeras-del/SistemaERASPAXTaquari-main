@@ -175,6 +175,7 @@ export const ProcedimentosPage = () => {
         
         {activeTab === 'lista' && (
           <button 
+            type="button"
             onClick={() => handleOpenForm()}
             disabled={!empresaSelecionada || !state.isOnline}
             title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Novo Procedimento"}
@@ -188,6 +189,7 @@ export const ProcedimentosPage = () => {
       
       <div className="flex border-b border-border-default">
         <button
+          type="button"
           onClick={() => setActiveTab("lista")}
           className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
             activeTab === "lista"
@@ -199,6 +201,7 @@ export const ProcedimentosPage = () => {
           Lista de Procedimentos
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab("upload")}
           className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors border-b-2 ${
             activeTab === "upload"
@@ -224,7 +227,7 @@ export const ProcedimentosPage = () => {
               className="w-full bg-bg-surface border border-border-default rounded-xl pl-10 pr-4 py-2 text-text-base focus:outline-none focus:border-[#3B82F6]"
             />
           </div>
-          <button className="inline-flex items-center gap-2 px-4 py-2 border border-border-default rounded-lg text-text-muted font-medium hover:bg-white/5 transition-colors">
+          <button type="button" className="inline-flex items-center gap-2 px-4 py-2 border border-border-default rounded-lg text-text-muted font-medium hover:bg-white/5 transition-colors">
             <Filter className="w-4 h-4" />
             Filtros
           </button>
@@ -294,6 +297,7 @@ export const ProcedimentosPage = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          type="button"
                           onClick={() => handleOpenForm(proc)}
                           className="p-2 text-text-subtle hover:text-[#3B82F6] hover:bg-[#3B82F6]/10 rounded-lg transition-colors disabled:opacity-50"
                           title="Editar"
@@ -301,6 +305,7 @@ export const ProcedimentosPage = () => {
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleToggleStatus(proc)}
                           className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
                             proc.ativo 
@@ -312,6 +317,7 @@ export const ProcedimentosPage = () => {
                           {proc.ativo ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(proc)}
                           className="p-2 text-text-subtle hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors disabled:opacity-50"
                           title="Excluir"
@@ -519,7 +525,7 @@ export const ProcedimentosPage = () => {
               <h3 className="text-xl font-bold text-text-base">
                 Tipos de Procedimento
               </h3>
-              <button onClick={() => setIsCategoryModalOpen(false)} className="p-2 text-text-subtle hover:text-text-base bg-bg-surface rounded-lg border border-border-default">
+              <button type="button" onClick={() => setIsCategoryModalOpen(false)} className="p-2 text-text-subtle hover:text-text-base bg-bg-surface rounded-lg border border-border-default">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -547,6 +553,7 @@ export const ProcedimentosPage = () => {
                   <li key={cat} className="flex items-center justify-between p-3 bg-bg-surface border border-border-default rounded-xl">
                     <span className="text-text-base text-sm font-medium">{cat}</span>
                     <button
+                      type="button"
                       onClick={() => handleRemoveCategory(cat)}
                       className="text-text-subtle hover:text-red-400 transition-colors p-1"
                     >

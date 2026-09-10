@@ -242,6 +242,7 @@ export const PlanoContabilPage: React.FC = () => {
         {plano && (
           <div className="flex items-center gap-2 self-start">
             <button
+              type="button"
               onClick={() => setMostrarDemonstracao(true)}
               className="px-4 py-2 border border-border-default hover:border-[#3B82F6] hover:text-[#3B82F6] text-text-subtle rounded-xl text-sm font-bold flex items-center gap-2"
               title={`Demonstração contábil do exercício ${exercicioExibido}`}
@@ -250,6 +251,7 @@ export const PlanoContabilPage: React.FC = () => {
             </button>
             {podeEditar && (
               <button
+                type="button"
                 onClick={() => abrirNova()}
                 className="px-4 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20"
               >
@@ -314,6 +316,7 @@ export const PlanoContabilPage: React.FC = () => {
                 className="w-20 bg-bg-base border border-border-default rounded-lg px-2 py-1 text-sm font-mono text-text-base focus:border-[#3B82F6] outline-none"
               />
               <button
+                type="button"
                 onClick={duplicarExercicio}
                 disabled={duplicando}
                 className="px-2.5 py-1 rounded-lg bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1.5"
@@ -359,6 +362,7 @@ export const PlanoContabilPage: React.FC = () => {
           </p>
           {podeEditar ? (
             <button
+              type="button"
               onClick={handleSemear}
               disabled={semeando}
               className="px-5 py-2.5 bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-60 text-white rounded-xl text-sm font-bold inline-flex items-center gap-2"
@@ -424,6 +428,7 @@ export const PlanoContabilPage: React.FC = () => {
                       style={{ paddingLeft: `${12 + indent * 20}px` }}
                     >
                       <button
+                        type="button"
                         onClick={() => temFilhas && toggleRecolher(node.id)}
                         className={`p-0.5 rounded ${temFilhas ? 'text-text-muted hover:text-text-base' : 'invisible'}`}
                         aria-label={recolhida ? 'Expandir' : 'Recolher'}
@@ -486,6 +491,7 @@ export const PlanoContabilPage: React.FC = () => {
                         <div className="flex items-center gap-1 shrink-0">
                           {node.tipo === 'sintetica' && (
                             <button
+                              type="button"
                               onClick={() => abrirNova(node)}
                               className="p-1.5 rounded-lg text-text-muted hover:text-[#3B82F6] hover:bg-[#3B82F6]/10"
                               title="Adicionar conta dentro deste grupo"
@@ -494,6 +500,7 @@ export const PlanoContabilPage: React.FC = () => {
                             </button>
                           )}
                           <button
+                            type="button"
                             onClick={() => abrirEdicao(node)}
                             className="p-1.5 rounded-lg text-text-muted hover:text-[#3B82F6] hover:bg-[#3B82F6]/10"
                             title="Editar conta"
@@ -501,6 +508,7 @@ export const PlanoContabilPage: React.FC = () => {
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleAlternarAtiva(node)}
                             className="p-1.5 rounded-lg text-text-muted hover:text-amber-400 hover:bg-amber-500/10"
                             title={node.ativo ? 'Desativar conta' : 'Reativar conta'}
@@ -571,6 +579,7 @@ export const PlanoContabilPage: React.FC = () => {
                 {form.id ? 'Editar Conta Contábil' : 'Nova Conta Contábil'}
               </h2>
               <button
+                type="button"
                 onClick={() => setForm(null)}
                 className="p-1 rounded-lg text-text-muted hover:text-text-base hover:bg-bg-hover"
                 aria-label="Fechar"
@@ -699,12 +708,14 @@ export const PlanoContabilPage: React.FC = () => {
 
             <div className="flex justify-end gap-2 px-6 py-4 border-t border-border-default">
               <button
+                type="button"
                 onClick={() => setForm(null)}
                 className="px-4 py-2 rounded-xl text-sm text-text-subtle hover:bg-bg-hover"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={handleSalvar}
                 disabled={salvando}
                 className="px-5 py-2 bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-60 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20"

@@ -209,6 +209,7 @@ export const UploadProcedimentos = () => {
             </p>
           </div>
           <button 
+            type="button"
             onClick={downloadTemplate}
             className="inline-flex items-center gap-2 px-4 py-2 bg-bg-hover border border-[#64748B] text-text-muted hover:text-text-base hover:bg-[#64748B] rounded-xl font-medium transition-colors text-sm"
           >
@@ -319,6 +320,7 @@ export const UploadProcedimentos = () => {
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border-default">
              <button 
+                type="button"
                 onClick={() => {
                   setIsMapping(false);
                   setRawData([]);
@@ -330,6 +332,7 @@ export const UploadProcedimentos = () => {
                 Cancelar
               </button>
               <button 
+                type="button"
                 onClick={processMappedData}
                 disabled={!mapping.codigo_tuss || !mapping.descricao || !mapping.tipo_procedimento || !mapping.valor_padrao}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
@@ -360,6 +363,7 @@ export const UploadProcedimentos = () => {
             </div>
             <div className="flex items-center gap-2">
               <button 
+                type="button"
                 onClick={() => {
                   setIsMapping(true);
                   setData([]);
@@ -369,6 +373,7 @@ export const UploadProcedimentos = () => {
                 Ajustar Mapeamento
               </button>
               <button 
+                type="button"
                 onClick={() => {
                   setData([]);
                   setRawData([]);
@@ -381,6 +386,7 @@ export const UploadProcedimentos = () => {
                 <Trash2 className="w-5 h-5" />
               </button>
               <button
+                type="button"
                 onClick={handleSalvar}
                 disabled={!isOnline || validCount === 0 || isProcessing}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] text-white rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50 shadow-lg shadow-[#3B82F6]/25"

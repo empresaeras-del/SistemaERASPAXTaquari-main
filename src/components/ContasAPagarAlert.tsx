@@ -29,6 +29,7 @@ export const ContasAPagarAlert: React.FC = () => {
           </div>
         </div>
         <button 
+          type="button"
           onClick={() => navigate('/financeiro/contas-a-pagar')}
           className="flex items-center gap-2 text-sm font-bold bg-rose-500 hover:bg-rose-600 text-white py-2.5 px-6 rounded-xl transition-all hover:scale-[1.02] active:scale-95 whitespace-nowrap shadow-lg shadow-rose-500/25"
         >

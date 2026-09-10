@@ -97,6 +97,7 @@ export const CentrosCustoModal: React.FC<CentrosCustoModalProps> = ({ onClose, p
             Centros de Custo
           </h2>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-bg-base text-text-subtle transition-colors"
             title="Fechar"
@@ -147,6 +148,7 @@ export const CentrosCustoModal: React.FC<CentrosCustoModalProps> = ({ onClose, p
                   {podeEditar && (
                     <div className="flex items-center gap-1 shrink-0">
                       <button
+                        type="button"
                         onClick={() => abrirEdicao(c)}
                         className="p-1.5 rounded-lg hover:bg-bg-surface text-text-subtle transition-colors"
                         title="Editar"
@@ -154,6 +156,7 @@ export const CentrosCustoModal: React.FC<CentrosCustoModalProps> = ({ onClose, p
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => alternarAtivo(c)}
                         className="p-1.5 rounded-lg hover:bg-bg-surface text-text-subtle transition-colors"
                         title={c.ativo ? 'Desativar' : 'Reativar'}
@@ -229,6 +232,7 @@ export const CentrosCustoModal: React.FC<CentrosCustoModalProps> = ({ onClose, p
 
               <div className="flex items-center gap-2 pt-1">
                 <button
+                  type="button"
                   onClick={handleSalvar}
                   disabled={salvando || nomeJaExiste}
                   className="px-3 py-1.5 rounded-lg bg-[#3B82F6] hover:bg-blue-600 disabled:opacity-60 text-white text-sm font-bold flex items-center gap-1.5"
@@ -237,6 +241,7 @@ export const CentrosCustoModal: React.FC<CentrosCustoModalProps> = ({ onClose, p
                   {salvando ? 'Salvando…' : 'Salvar'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setForm(null)}
                   className="px-3 py-1.5 rounded-lg border border-border-default text-text-subtle hover:bg-bg-base text-sm"
                 >
@@ -250,6 +255,7 @@ export const CentrosCustoModal: React.FC<CentrosCustoModalProps> = ({ onClose, p
         <div className="flex items-center justify-between px-6 py-4 border-t border-border-default shrink-0">
           {podeEditar && !form ? (
             <button
+              type="button"
               onClick={abrirNovo}
               className="px-3 py-2 rounded-xl bg-[#3B82F6] hover:bg-blue-600 text-white text-sm font-bold flex items-center gap-1.5"
             >
@@ -259,6 +265,7 @@ export const CentrosCustoModal: React.FC<CentrosCustoModalProps> = ({ onClose, p
             <span />
           )}
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 rounded-xl border border-border-default text-text-subtle hover:bg-bg-base text-sm"
           >

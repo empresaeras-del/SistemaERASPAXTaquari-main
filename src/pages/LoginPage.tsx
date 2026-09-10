@@ -512,7 +512,7 @@ export const LoginPage: React.FC = () => {
               {mode === 'forgot' && (
                 <>
                   <div className="ch">
-                    <button className="lnk" style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '5px', justifyContent: 'center', width: '100%' }} onClick={() => { setMode('login'); setError(null); setForgotSent(false); }}>
+                    <button type="button" className="lnk" style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '5px', justifyContent: 'center', width: '100%' }} onClick={() => { setMode('login'); setError(null); setForgotSent(false); }}>
                       <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                       </svg>
@@ -532,6 +532,7 @@ export const LoginPage: React.FC = () => {
                       <h3>Email enviado!</h3>
                       <p>Verifique sua caixa de entrada em <strong>{email}</strong> e clique no link para redefinir sua senha.</p>
                       <button
+                        type="button"
                         className="btn"
                         onClick={() => { setMode('login'); setForgotSent(false); }}
                       >

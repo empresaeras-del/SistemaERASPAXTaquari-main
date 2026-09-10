@@ -887,20 +887,31 @@ formato — eles montam a aninhagem real, não uma simulação dela.
 reaproveitável sempre pode —, **todo `<button>` declara `type` explicitamente**. `type="button"`
 para ação, `type="submit"` só para o botão que de fato envia aquele formulário.
 
-Duas coisas que valem saber antes da próxima passada:
+**A classe inteira foi varrida em seguida** (PR seguinte à #48): 447 botões em 75 arquivos
+ganharam `type` explícito, e `src/test/botoesDeclaramType.test.ts` passou a falhar se algum
+`<button>` do `src/` ficar sem ele — nomeando arquivo e linha. É o guarda que faz esta seção valer
+para o código que ainda não foi escrito.
 
-- **Isto é uma classe, não um caso.** No `main` de hoje há ~250 `<button>` sem `type` no `src/`, e
-  9 arquivos que têm ao mesmo tempo um `<form>` e vários deles (`CaixasPage`, `RequisicoesPage`,
-  `ContasReceberPage`, `ContasPagarPage`, `FaturamentosPage`, `CredenciadosPage`,
-  `DocumentosPadroesPage`, `ProcedimentosPage`, `AssociadoFormModal`). Só o caminho do cadastro do
-  associado foi corrigido nesta rodada, que é o que foi relatado; os outros são risco latente e
-  dependem de o botão estar mesmo dentro do `<form>`. Arquivo com **um** botão sem `type` costuma
-  ser o submit legítimo.
-- **`createPortal` também resolveria**, e de forma mais definitiva: portal tira o modal do DOM do
-  formulário, então nenhum botão dentro dele consegue submeter (o borbulhar de evento do React
-  atravessa a árvore de componentes, mas `submit` é comportamento nativo do DOM e não atravessa).
-  Não foi o caminho escolhido aqui porque muda a montagem de modais usados em várias telas, sem UI
-  logada para conferir. Se um dia a classe inteira for atacada, é a correção estrutural.
+Três coisas dessa varredura valem como método para a próxima mudança mecânica em massa:
+
+- **A checagem que autorizou o `type="button"` cego foi a de risco inverso.** O perigo não era
+  deixar de corrigir: era marcar como `button` algum que **devia** submeter. Classificando os 447,
+  **nenhum** estava dentro de um `<form>` do próprio arquivo (todo submit existente já declarava
+  `type="submit"`) e só **um** não tinha `onClick` — um botão "Filtros" inerte em
+  `ProcedimentosPage`, fora de qualquer formulário. Sem essa contagem, a alternativa seria revisar
+  447 botões a olho.
+- **A transformação foi provada antes de ser aplicada.** Um `difflib` sobre cada arquivo cobrou que
+  toda mudança fosse inserção de uma linha `type="button"` ou troca 1:1 cujo único delta é
+  ` type="button"` — qualquer deleção reprovava. Foi assim que a **primeira** versão do script foi
+  pega: quando a tag de abertura não fechava dentro da janela de 40 linhas, ela pulava uma linha e
+  **apagava** código. O caso que disparou isso foi um `<button>` citado dentro de um comentário
+  JSDoc, que o detector ingênuo tratou como JSX. Ao varrer JSX com regex, **comentário não é código
+  e tag que não fecha se deixa em paz**.
+- **`createPortal` continua sendo a correção estrutural**, e agora é a única que falta: portal tira
+  o modal do DOM do formulário, então nem um botão sem `type` conseguiria submeter (o borbulhar de
+  evento do React atravessa a árvore de componentes, mas `submit` é comportamento nativo do DOM e
+  não atravessa). Não foi feito porque muda a montagem de modais usados em várias telas, sem UI
+  logada para conferir — e, com o guarda de teste no lugar, deixou de ser urgente.
 
 ### Mensalidades do associado saem em ordem de vencimento
 

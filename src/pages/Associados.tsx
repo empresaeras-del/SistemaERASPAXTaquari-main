@@ -197,6 +197,7 @@ export const AssociadosPage: React.FC = () => {
             
             <div className="flex items-center bg-bg-subtle border border-border-default p-1 rounded-xl shrink-0">
               <button
+                type="button"
                 onClick={() => setViewMode('grid')}
                 className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
                 title="Visualização em Cards"
@@ -204,6 +205,7 @@ export const AssociadosPage: React.FC = () => {
                 <LayoutGrid className="w-4 h-4" />
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode('table')}
                 className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-[#3B82F6] text-white' : 'text-text-subtle hover:text-text-base'}`}
                 title="Visualização em Tabela"

@@ -460,6 +460,7 @@ export const NovoAtendimentoWizard: React.FC<{
             <p className="text-sm text-text-subtle">Siga as etapas para criar um novo registro</p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="text-text-subtle hover:text-text-base transition-colors"
             aria-label="Fechar"
@@ -572,6 +573,7 @@ export const NovoAtendimentoWizard: React.FC<{
                           </p>
                         </div>
                         <button
+                          type="button"
                           onClick={() => setSelectedAssociado(null)}
                           className="text-xs text-primary hover:underline"
                         >
@@ -1135,6 +1137,7 @@ export const NovoAtendimentoWizard: React.FC<{
         {/* FOOTER */}
         <div className="p-4 border-t border-border-default bg-bg-surface flex justify-between items-center shrink-0">
           <button
+            type="button"
             onClick={() => (step > 1 ? setStep((s) => s - 1) : onClose())}
             className="px-5 py-2.5 bg-bg-hover text-text-base rounded-xl font-semibold border border-[#64748B] hover:bg-[#64748B] transition-colors"
           >
@@ -1143,6 +1146,7 @@ export const NovoAtendimentoWizard: React.FC<{
 
           {step < 4 ? (
             <button
+              type="button"
               onClick={handleNext}
               className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-primary to-blue-400 text-white rounded-xl font-bold shadow-lg shadow-primary/25 hover:opacity-90 transition-opacity"
             >

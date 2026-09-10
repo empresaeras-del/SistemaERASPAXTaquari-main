@@ -76,6 +76,7 @@ const ListManageModal = ({
         <div className="flex items-center justify-between p-6 border-b border-border-default">
           <h3 className="text-xl font-bold text-text-base">{title}</h3>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 text-text-muted hover:text-text-base hover:bg-bg-hover rounded-full transition-colors"
             aria-label="Fechar"

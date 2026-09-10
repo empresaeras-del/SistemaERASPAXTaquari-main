@@ -280,12 +280,14 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
         {/* TABS */}
         <div className="flex border-b border-border-default px-6 bg-bg-surface shrink-0">
           <button
+            type="button"
             onClick={() => setActiveTab('detalhes')}
             className={`px-4 py-3 font-semibold border-b-2 transition-colors ${activeTab === 'detalhes' ? 'border-primary text-primary' : 'border-transparent text-text-subtle hover:text-text-base'}`}
           >
             Detalhes do Atendimento
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('documentos')}
             className={`px-4 py-3 font-semibold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'documentos' ? 'border-primary text-primary' : 'border-transparent text-text-subtle hover:text-text-base'}`}
           >

@@ -204,6 +204,7 @@ export const OrganogramaCanvas: React.FC<OrganogramaCanvasProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => zoom(1.2)}
             className="p-1.5 rounded-lg bg-bg-subtle border border-border-default text-text-subtle hover:text-text-base transition-colors"
             title="Zoom In"
@@ -211,6 +212,7 @@ export const OrganogramaCanvas: React.FC<OrganogramaCanvasProps> = ({
             <ZoomIn className="w-4 h-4" />
           </button>
           <button
+            type="button"
             onClick={() => zoom(0.8)}
             className="p-1.5 rounded-lg bg-bg-subtle border border-border-default text-text-subtle hover:text-text-base transition-colors"
             title="Zoom Out"
@@ -218,6 +220,7 @@ export const OrganogramaCanvas: React.FC<OrganogramaCanvasProps> = ({
             <ZoomOut className="w-4 h-4" />
           </button>
           <button
+            type="button"
             onClick={resetLayout}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-bg-subtle border border-border-default text-text-subtle hover:text-text-base text-xs font-medium transition-colors"
             title="Resetar Layout"

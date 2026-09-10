@@ -146,6 +146,7 @@ export const ResetPasswordPage = () => {
 
           <div className="mt-6">
             <button
+              type="button"
               onClick={() => navigate('/login')}
               className="w-full flex justify-center items-center gap-2 text-sm text-blue-600 hover:text-blue-500"
             >

@@ -558,6 +558,7 @@ export const ContasReceberFormPage: React.FC = () => {
       <div className="flex items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
           <button 
+            type="button"
             onClick={() => navigate(-1)}
             className="p-2 rounded-xl bg-bg-subtle border border-border-default text-text-subtle hover:text-text-base transition-colors"
           >

@@ -125,6 +125,7 @@ export const DashboardSettingsModal: React.FC<Props> = ({ isOpen, onClose, layou
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="relative z-10 p-2 text-text-subtle hover:text-text-base bg-bg-subtle rounded-lg transition-colors border border-border-subtle"
             aria-label="Fechar"
@@ -168,6 +169,7 @@ export const DashboardSettingsModal: React.FC<Props> = ({ isOpen, onClose, layou
 
         <div className="p-5 border-t border-border-subtle bg-bg-surface shrink-0">
           <button
+            type="button"
             onClick={() => {
               onSave(widgets);
               onClose();

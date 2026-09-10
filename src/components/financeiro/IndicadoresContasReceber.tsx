@@ -558,6 +558,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
             {/* Filtro de Período */}
             <div className="flex items-center bg-bg-base border border-border-default rounded-xl p-1 text-xs">
               <button
+                type="button"
                 onClick={() => setPeriodo('todos')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   periodo === 'todos' ? 'bg-emerald-500 text-white shadow-sm' : 'text-text-subtle hover:text-text-base'
@@ -566,6 +567,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
                 Tudo
               </button>
               <button
+                type="button"
                 onClick={() => setPeriodo('mes_atual')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   periodo === 'mes_atual' ? 'bg-emerald-500 text-white shadow-sm' : 'text-text-subtle hover:text-text-base'
@@ -574,6 +576,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
                 Este Mês
               </button>
               <button
+                type="button"
                 onClick={() => setPeriodo('proximo_mes')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   periodo === 'proximo_mes' ? 'bg-emerald-500 text-white shadow-sm' : 'text-text-subtle hover:text-text-base'
@@ -582,6 +585,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
                 Próximo Mês
               </button>
               <button
+                type="button"
                 onClick={() => setPeriodo('ultimos_3_meses')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   periodo === 'ultimos_3_meses' ? 'bg-emerald-500 text-white shadow-sm' : 'text-text-subtle hover:text-text-base'
@@ -590,6 +594,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
                 3 Meses
               </button>
               <button
+                type="button"
                 onClick={() => setPeriodo('ano_atual')}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   periodo === 'ano_atual' ? 'bg-emerald-500 text-white shadow-sm' : 'text-text-subtle hover:text-text-base'
@@ -601,6 +606,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
 
             {/* Toggle Recolher/Expandir */}
             <button
+              type="button"
               onClick={() => setIsExpanded(!isExpanded)}
               className="p-1.5 text-text-subtle hover:text-text-base bg-bg-base border border-border-default rounded-xl transition-colors"
               title={isExpanded ? 'Minimizar Painel' : 'Expandir Painel'}
@@ -616,6 +622,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
             {/* Abas de Navegação Analítica */}
             <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle pb-3">
               <button
+                type="button"
                 onClick={() => setAbaAtiva('categorias')}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                   abaAtiva === 'categorias'
@@ -631,6 +638,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
               </button>
 
               <button
+                type="button"
                 onClick={() => setAbaAtiva('planos')}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                   abaAtiva === 'planos'
@@ -646,6 +654,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
               </button>
 
               <button
+                type="button"
                 onClick={() => setAbaAtiva('mensal')}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                   abaAtiva === 'mensal'
@@ -661,6 +670,7 @@ export const IndicadoresContasReceber: React.FC<IndicadoresContasReceberProps> =
               </button>
 
               <button
+                type="button"
                 onClick={() => setAbaAtiva('formas_recebimento')}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                   abaAtiva === 'formas_recebimento'

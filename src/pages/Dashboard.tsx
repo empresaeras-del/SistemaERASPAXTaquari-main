@@ -706,6 +706,7 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center bg-bg-subtle border border-border-subtle rounded-xl p-1 shadow-sm">
             {(['mensal', 'trimestral', 'anual'] as DashboardPeriod[]).map((p) => (
               <button
+                type="button"
                 key={p}
                 onClick={() => setPeriod(p)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 capitalize ${
@@ -720,6 +721,7 @@ export const Dashboard: React.FC = () => {
           </div>
 
           <button
+            type="button"
             onClick={() => setIsSettingsOpen(true)}
             className="p-2 h-[38px] w-[38px] flex items-center justify-center bg-bg-subtle border border-border-subtle text-text-subtle hover:text-[#3B82F6] hover:border-[#3B82F6]/40 hover:rotate-[28deg] rounded-xl shadow-sm transition-all duration-200"
             title="Personalizar Dashboard"
