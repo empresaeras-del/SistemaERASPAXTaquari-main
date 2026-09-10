@@ -149,6 +149,14 @@ export const MODULOS_VARIAVEIS: ModuloInfo[] = [
       { variavel: '{{atendimento_tipo}}',         label: 'Tipo de cliente',       descricao: 'Associado ou Cliente Externo' },
       { variavel: '{{atendimento_itens_lista}}',  label: 'Itens do atendimento',  descricao: 'Lista dos itens/serviços incluídos no atendimento' },
       { variavel: '{{atendimento_parcelas_lista}}', label: 'Parcelas do atendimento', descricao: 'Lista das parcelas financeiras vinculadas ao atendimento' },
+      { variavel: '{{responsavel_nome}}',          label: 'Nome do responsável',   descricao: 'Nome completo de quem responde pelo falecido' },
+      { variavel: '{{responsavel_cpf}}',           label: 'CPF do responsável',    descricao: 'CPF do responsável pelo falecido' },
+      { variavel: '{{responsavel_rg}}',            label: 'RG do responsável',     descricao: 'Registro Geral do responsável pelo falecido' },
+      { variavel: '{{responsavel_parentesco}}',    label: 'Parentesco / vínculo',  descricao: 'Parentesco ou vínculo do responsável com o falecido' },
+      { variavel: '{{responsavel_endereco}}',      label: 'Endereço do responsável', descricao: 'Endereço completo do responsável, em uma linha' },
+      { variavel: '{{responsavel_contato}}',       label: 'Contato do responsável', descricao: 'Telefone, celular ou e-mail do responsável' },
+      { variavel: '{{responsavel_nacionalidade}}', label: 'Nacionalidade',         descricao: 'Nacionalidade do responsável pelo falecido' },
+      { variavel: '{{responsavel_observacoes}}',   label: 'Obs. do responsável',   descricao: 'Observações livres sobre o responsável' },
     ]
   },
   {

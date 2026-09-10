@@ -581,6 +581,43 @@ registro sem valor falha com uma violação de `UNIQUE` que parece dizer "já ex
 quando não existe nenhum de verdade — só o valor vazio duplicado. Normalize no ponto de escrita
 (`valor.trim() || null`), não na coluna.
 
+## Atendimentos: os dados do responsável pelo falecido
+
+`atendimentos` ganhou oito colunas de responsável (migration `20260910183445`):
+`responsavel_nome`/`cpf`/`rg`/`parentesco`/`endereco`/`contato`/`nacionalidade`/`observacoes`.
+Quatro decisões deste bloco valem como regra:
+
+- **A obrigatoriedade é do formulário, não da coluna.** As oito são `nullable`. A regra pedida é
+  "cliente externo precisa preencher", e um `NOT NULL` vale para a linha, não para o tipo de
+  cliente nem para o instante em que ela nasceu — quebraria todo atendimento anterior a 10/09/2026
+  no primeiro `UPDATE`. A exigência vive em `responsavelExternoSchema`
+  (`schemas/atendimentoSchema.ts`), checado no `handleNext` da etapa 1. É a mesma escolha da fase 3
+  do plano contábil, e pelo mesmo motivo.
+- **O titular não pode ser responsável por si mesmo.** Quando o atendimento é de associado, o bloco
+  vem preenchido do cadastro do titular — **exceto** quando o falecido é o próprio titular. Aí
+  `dadosResponsavelDoAssociado` (`utils/responsavelAtendimento.ts`, pura e testada) devolve tudo em
+  branco e a tela mostra um aviso pedindo quem responde. Preencher ali produziria um documento
+  afirmando que o morto assinou como responsável pelo próprio velório — errado, e **errado em
+  silêncio**, porque todos os campos apareceriam preenchidos e ninguém teria motivo para conferir.
+  Ao preencher um formulário a partir de outro cadastro, pergunte antes se existe um caso em que a
+  origem não pode ser o destino.
+- **Campo apagado grava `null`, nunca `undefined`.** `responsavelParaGravacao` normaliza vazio para
+  `null` — e isso não é preciosismo com o `''` (a lição de `credenciados.cnpj_cpf`), é o caminho de
+  **edição**: `JSON.stringify` descarta chave `undefined`, então o `upsert` chegaria ao Postgres sem
+  a coluna e o valor antigo continuaria lá. O operador apagaria o campo na tela, salvaria, e o dado
+  velho seguiria no banco sem nenhum erro. `null` é o que de fato limpa; no insert equivale a
+  omitir. **Vale para qualquer campo opcional editável deste schema** — e o caminho de
+  `falecido_cpf` em `AtendimentoDetailsModal` ainda tem o defeito antigo, não corrigido aqui por ser
+  outro campo e outra decisão.
+- **`nacionalidade` nunca é preenchida automaticamente**: não existe essa coluna em `associados`.
+  Carimbar "BRASILEIRA" seria escrever no documento um dado que ninguém afirmou.
+
+As tags `{{responsavel_*}}` entraram no resolver e no catálogo, com os aliases
+`{{atendimento_responsavel_*}}` seguindo a convenção que o resolver já usava. E o par ganhou o
+guarda que faltava: `documentoVariaveis.test.ts` agora falha se alguma tag do módulo Atendimento
+existir no catálogo sem resolver — o sintoma dessa divergência é mudo (a tag aparece no painel, o
+operador a usa no modelo, e ela nunca preenche), e este arquivo já registra duas ocorrências dela.
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do

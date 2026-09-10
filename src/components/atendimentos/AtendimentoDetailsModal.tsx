@@ -13,6 +13,7 @@ import {
   Trash2,
   Plus,
   DollarSign,
+  UserCheck,
 } from 'lucide-react';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
 import { saveAtendimento } from '../../services/atendimentosService';
@@ -28,6 +29,7 @@ import { useItensFunerarios } from '../../hooks/useItensFunerarios';
 import { AtendimentoDocumentosGenerator } from './AtendimentoDocumentosGenerator';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { maskCPFOrCNPJ } from '../../utils/validators';
+import { responsavelParaGravacao } from '../../utils/responsavelAtendimento';
 import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 import {
@@ -111,15 +113,20 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
     ]);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+  ) => {
     const { name, value } = e.target;
     let finalValue = value;
-    if (name === 'falecido_cpf') {
+    if (name === 'falecido_cpf' || name === 'responsavel_cpf') {
       finalValue = maskCPFOrCNPJ(value, false);
     } else if (
       name === 'falecido_nome' ||
       name === 'local_velorio' ||
-      name === 'local_sepultamento'
+      name === 'local_sepultamento' ||
+      name === 'responsavel_nome' ||
+      name === 'responsavel_parentesco' ||
+      name === 'responsavel_nacionalidade'
     ) {
       finalValue = value.toUpperCase();
     }
@@ -137,6 +144,17 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
 
       const newAtendimento = {
         ...formData,
+        // Campo do responsável apagado na tela precisa virar NULL, não sumir do payload.
+        ...responsavelParaGravacao({
+          responsavel_nome: formData.responsavel_nome || '',
+          responsavel_cpf: formData.responsavel_cpf || '',
+          responsavel_rg: formData.responsavel_rg || '',
+          responsavel_parentesco: formData.responsavel_parentesco || '',
+          responsavel_endereco: formData.responsavel_endereco || '',
+          responsavel_contato: formData.responsavel_contato || '',
+          responsavel_nacionalidade: formData.responsavel_nacionalidade || '',
+          responsavel_observacoes: formData.responsavel_observacoes || '',
+        }),
         falecido_nome: (formData.falecido_nome || '').trim().toUpperCase(),
         falecido_cpf: formData.falecido_cpf ? formData.falecido_cpf.trim() : undefined,
         local_velorio: (formData.local_velorio || '').trim().toUpperCase(),
@@ -681,6 +699,163 @@ export const AtendimentoDetailsModal: React.FC<Props> = ({ atendimento, onClose,
                     ) : (
                       <p className="text-sm text-text-base font-medium">
                         {formData.termino_tanato || '-'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+
+              {/* DADOS DO RESPONSÁVEL PELO FALECIDO */}
+              <div className="bg-bg-surface rounded-xl border border-border-default p-5 shadow-sm">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-text-base mb-4 uppercase tracking-wider border-b border-border-default pb-2">
+                  <UserCheck className="w-4 h-4 text-primary" /> Dados do Responsável pelo Falecido
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-subtle mb-1">
+                      Nome Completo
+                    </label>
+                    {isEditing ? (
+                      <input
+                        name="responsavel_nome"
+                        value={formData.responsavel_nome || ''}
+                        onChange={handleChange}
+                        placeholder="Nome completo do responsável"
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50 uppercase"
+                      />
+                    ) : (
+                      <p className="text-sm text-text-base font-medium">
+                        {formData.responsavel_nome || '-'}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-subtle mb-1">
+                      Parentesco / Vínculo
+                    </label>
+                    {isEditing ? (
+                      <input
+                        name="responsavel_parentesco"
+                        value={formData.responsavel_parentesco || ''}
+                        onChange={handleChange}
+                        placeholder="Ex.: FILHO, CONJUGE"
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50 uppercase"
+                      />
+                    ) : (
+                      <p className="text-sm text-text-base font-medium">
+                        {formData.responsavel_parentesco || '-'}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-subtle mb-1">
+                      CPF
+                    </label>
+                    {isEditing ? (
+                      <input
+                        name="responsavel_cpf"
+                        value={formData.responsavel_cpf || ''}
+                        onChange={handleChange}
+                        placeholder="000.000.000-00"
+                        maxLength={14}
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50"
+                      />
+                    ) : (
+                      <p className="text-sm text-text-base font-medium">
+                        {formData.responsavel_cpf || '-'}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-subtle mb-1">
+                      RG
+                    </label>
+                    {isEditing ? (
+                      <input
+                        name="responsavel_rg"
+                        value={formData.responsavel_rg || ''}
+                        onChange={handleChange}
+                        placeholder="Ex.: 1234567 SSP/MS"
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50"
+                      />
+                    ) : (
+                      <p className="text-sm text-text-base font-medium">
+                        {formData.responsavel_rg || '-'}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-subtle mb-1">
+                      Nacionalidade
+                    </label>
+                    {isEditing ? (
+                      <input
+                        name="responsavel_nacionalidade"
+                        value={formData.responsavel_nacionalidade || ''}
+                        onChange={handleChange}
+                        placeholder="Ex.: BRASILEIRA"
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50 uppercase"
+                      />
+                    ) : (
+                      <p className="text-sm text-text-base font-medium">
+                        {formData.responsavel_nacionalidade || '-'}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-subtle mb-1">
+                      Contato
+                    </label>
+                    {isEditing ? (
+                      <input
+                        name="responsavel_contato"
+                        value={formData.responsavel_contato || ''}
+                        onChange={handleChange}
+                        placeholder="Telefone, celular ou e-mail"
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50"
+                      />
+                    ) : (
+                      <p className="text-sm text-text-base font-medium">
+                        {formData.responsavel_contato || '-'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-text-subtle mb-1">
+                      Endereço Completo
+                    </label>
+                    {isEditing ? (
+                      <input
+                        name="responsavel_endereco"
+                        value={formData.responsavel_endereco || ''}
+                        onChange={handleChange}
+                        placeholder="Rua, nº, bairro, cidade - UF, CEP"
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50"
+                      />
+                    ) : (
+                      <p className="text-sm text-text-base font-medium">
+                        {formData.responsavel_endereco || '-'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-text-subtle mb-1">
+                      Observações sobre o Responsável
+                    </label>
+                    {isEditing ? (
+                      <textarea
+                        name="responsavel_observacoes"
+                        rows={2}
+                        value={formData.responsavel_observacoes || ''}
+                        onChange={handleChange}
+                        placeholder="Anotações livres (opcional)"
+                        className="w-full px-3 py-2 bg-bg-subtle border border-border-default rounded-lg text-sm focus:ring-2 focus:ring-primary/50"
+                      />
+                    ) : (
+                      <p className="text-sm text-text-base font-medium whitespace-pre-wrap">
+                        {formData.responsavel_observacoes || '-'}
                       </p>
                     )}
                   </div>

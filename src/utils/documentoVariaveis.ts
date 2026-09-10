@@ -152,6 +152,26 @@ export function resolverVariaveisAtendimento(atd: Atendimento): Record<string, s
     '{{rqe_medico}}': atd.rqe_medico || '',
     '{{inicio_tanato}}': atd.inicio_tanato || '',
     '{{termino_tanato}}': atd.termino_tanato || '',
+    // Responsável pelo falecido (migration 20260910183445). As tags nuas são as que o
+    // catálogo oferece; as prefixadas com `atendimento_` seguem a convenção que este
+    // resolver já usa para falecido/local/data, e existem para o modelo antigo que já
+    // as escrevia assim não quebrar.
+    '{{responsavel_nome}}': atd.responsavel_nome || '',
+    '{{atendimento_responsavel_nome}}': atd.responsavel_nome || '',
+    '{{responsavel_cpf}}': atd.responsavel_cpf || '',
+    '{{atendimento_responsavel_cpf}}': atd.responsavel_cpf || '',
+    '{{responsavel_rg}}': atd.responsavel_rg || '',
+    '{{atendimento_responsavel_rg}}': atd.responsavel_rg || '',
+    '{{responsavel_parentesco}}': atd.responsavel_parentesco || '',
+    '{{atendimento_responsavel_parentesco}}': atd.responsavel_parentesco || '',
+    '{{responsavel_endereco}}': atd.responsavel_endereco || '',
+    '{{atendimento_responsavel_endereco}}': atd.responsavel_endereco || '',
+    '{{responsavel_contato}}': atd.responsavel_contato || '',
+    '{{atendimento_responsavel_contato}}': atd.responsavel_contato || '',
+    '{{responsavel_nacionalidade}}': atd.responsavel_nacionalidade || '',
+    '{{atendimento_responsavel_nacionalidade}}': atd.responsavel_nacionalidade || '',
+    '{{responsavel_observacoes}}': atd.responsavel_observacoes || '',
+    '{{atendimento_responsavel_observacoes}}': atd.responsavel_observacoes || '',
     '{{atendimento_itens_lista}}':
       atd.itens && atd.itens.length > 0
         ? atd.itens.map((i) => `${i.quantidade}x ${i.item_nome || 'Item'} (${formatBRL(i.valor_unitario * i.quantidade)})`).join(', ')

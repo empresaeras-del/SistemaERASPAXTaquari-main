@@ -27,6 +27,7 @@ import {
   Trash2,
   UserX,
   UserMinus,
+  UserCheck,
   HelpCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -34,7 +35,13 @@ import { useToast } from '../../context/ToastContext';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
-import { falecidoExternoSchema } from '../../schemas/atendimentoSchema';
+import { falecidoExternoSchema, responsavelExternoSchema } from '../../schemas/atendimentoSchema';
+import {
+  DadosResponsavel,
+  RESPONSAVEL_VAZIO,
+  dadosResponsavelDoAssociado,
+  responsavelParaGravacao,
+} from '../../utils/responsavelAtendimento';
 import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 
@@ -97,6 +104,10 @@ export const NovoAtendimentoWizard: React.FC<{
   const [terminoTanato, setTerminoTanato] = useState('');
 
   // Itens Funerários
+  // Dados do responsável pelo falecido — um objeto só, porque os 8 campos entram e saem
+  // juntos (preenchimento a partir do associado, validação, payload).
+  const [responsavel, setResponsavel] = useState<DadosResponsavel>({ ...RESPONSAVEL_VAZIO });
+
   const [selectedItens, setSelectedItens] = useState<{ id: string; quantidade: number }[]>([]);
 
   // Funções Utilitárias
@@ -129,6 +140,30 @@ export const NovoAtendimentoWizard: React.FC<{
     }
     return null;
   }, [tipoCliente, selectedAssociado, planos]);
+
+  const falecidoEhTitular = falecidoId === 'associado';
+
+  const inputResponsavel =
+    'w-full px-4 py-2 bg-bg-surface border border-border-default rounded-xl text-text-base focus:ring-2 focus:ring-primary/50';
+
+  const setResp = (campo: keyof DadosResponsavel, valor: string) =>
+    setResponsavel((prev) => ({ ...prev, [campo]: valor }));
+
+  /**
+   * Preenche o bloco do responsável a partir do associado escolhido.
+   *
+   * Depende de quem é o falecido, não só de quem é o associado: se o falecido for o
+   * próprio titular, a função pura devolve tudo em branco de propósito (ver
+   * `utils/responsavelAtendimento.ts`) e a tela passa a pedir os dados.
+   *
+   * Reexecutar isto sobrescreve o que o operador tenha digitado — e é o comportamento
+   * certo, porque as duas dependências só mudam quando ele troca o associado ou troca
+   * quem morreu, e nos dois casos o responsável anterior deixou de fazer sentido.
+   */
+  useEffect(() => {
+    if (tipoCliente !== 'associado') return;
+    setResponsavel(dadosResponsavelDoAssociado({ associado: selectedAssociado, falecidoEhTitular }));
+  }, [tipoCliente, selectedAssociado, falecidoEhTitular]);
 
   // Análise Financeira
   const financeiro = useMemo(() => {
@@ -179,6 +214,11 @@ export const NovoAtendimentoWizard: React.FC<{
           falecido_data_nascimento: falecidoDataNascimento,
         });
         if (!parsed.success) return toast.error(parsed.error.issues[0].message);
+
+        // Sem associado, este formulário é a única porta por onde os dados do
+        // responsável entram no sistema — por isso aqui eles são obrigatórios.
+        const parsedResp = responsavelExternoSchema.safeParse(responsavel);
+        if (!parsedResp.success) return toast.error(parsedResp.error.issues[0].message);
       }
     }
     if (step === 2) {
@@ -240,6 +280,8 @@ export const NovoAtendimentoWizard: React.FC<{
         rqe_medico: rqeMedico || undefined,
         inicio_tanato: inicioTanato || undefined,
         termino_tanato: terminoTanato || undefined,
+        // `''` vira `undefined`: campo em branco é ausência, e ausência se grava NULL.
+        ...responsavelParaGravacao(responsavel),
         status: 'aberto',
         valor_total: financeiro.totalUncovered,
         created_at: new Date().toISOString(),
@@ -631,6 +673,138 @@ export const NovoAtendimentoWizard: React.FC<{
                   </div>
                 </div>
               )}
+
+              {/* ── Dados do Responsável pelo Falecido ── */}
+              <div className="pt-5 border-t border-border-default">
+                <h4 className="flex items-center gap-2 text-sm font-bold text-text-base mb-1 uppercase tracking-wider">
+                  <UserCheck className="w-4 h-4 text-primary" /> Dados do Responsável pelo Falecido
+                </h4>
+
+                {tipoCliente === 'externo' ? (
+                  <p className="text-xs text-text-subtle mb-4">
+                    Cliente externo não tem cadastro de onde puxar esses dados — preencha todos os
+                    campos abaixo. Só as observações são opcionais.
+                  </p>
+                ) : falecidoEhTitular ? (
+                  <div className="flex items-start gap-2 mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-text-base">
+                      O falecido é o próprio titular do plano, então o cadastro dele não pode ser
+                      usado como responsável. Informe quem responde pelo falecido.
+                    </p>
+                  </div>
+                ) : selectedAssociado ? (
+                  <p className="text-xs text-text-subtle mb-4">
+                    Preenchido a partir do cadastro do titular{' '}
+                    <span className="font-semibold text-text-base">{selectedAssociado.nome}</span> —
+                    edite se quem responde for outra pessoa.
+                  </p>
+                ) : (
+                  <p className="text-xs text-text-subtle mb-4">
+                    Selecione o associado acima para preencher automaticamente.
+                  </p>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="block text-sm font-semibold text-text-subtle mb-1">
+                      Nome Completo do Responsável {tipoCliente === 'externo' && '*'}
+                    </label>
+                    <input
+                      type="text"
+                      value={responsavel.responsavel_nome}
+                      onChange={(e) => setResp('responsavel_nome', e.target.value.toUpperCase())}
+                      placeholder="Digite o nome completo"
+                      className={`${inputResponsavel} uppercase`}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-semibold text-text-subtle mb-1">
+                      CPF do Responsável {tipoCliente === 'externo' && '*'}
+                    </label>
+                    <input
+                      type="text"
+                      value={responsavel.responsavel_cpf}
+                      onChange={(e) => setResp('responsavel_cpf', maskCPFOrCNPJ(e.target.value, false))}
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                      className={inputResponsavel}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-semibold text-text-subtle mb-1">
+                      RG do Responsável {tipoCliente === 'externo' && '*'}
+                    </label>
+                    <input
+                      type="text"
+                      value={responsavel.responsavel_rg}
+                      onChange={(e) => setResp('responsavel_rg', e.target.value)}
+                      placeholder="Ex.: 1234567 SSP/MS"
+                      className={inputResponsavel}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-semibold text-text-subtle mb-1">
+                      Parentesco / Vínculo {tipoCliente === 'externo' && '*'}
+                    </label>
+                    <input
+                      type="text"
+                      value={responsavel.responsavel_parentesco}
+                      onChange={(e) => setResp('responsavel_parentesco', e.target.value.toUpperCase())}
+                      placeholder="Ex.: FILHO, CONJUGE, IRMAO"
+                      className={`${inputResponsavel} uppercase`}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-sm font-semibold text-text-subtle mb-1">
+                      Nacionalidade {tipoCliente === 'externo' && '*'}
+                    </label>
+                    <input
+                      type="text"
+                      value={responsavel.responsavel_nacionalidade}
+                      onChange={(e) => setResp('responsavel_nacionalidade', e.target.value.toUpperCase())}
+                      placeholder="Ex.: BRASILEIRA"
+                      className={`${inputResponsavel} uppercase`}
+                    />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="block text-sm font-semibold text-text-subtle mb-1">
+                      Endereço Completo do Responsável {tipoCliente === 'externo' && '*'}
+                    </label>
+                    <input
+                      type="text"
+                      value={responsavel.responsavel_endereco}
+                      onChange={(e) => setResp('responsavel_endereco', e.target.value)}
+                      placeholder="Rua, nº, bairro, cidade - UF, CEP"
+                      className={inputResponsavel}
+                    />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="block text-sm font-semibold text-text-subtle mb-1">
+                      Contato do Responsável {tipoCliente === 'externo' && '*'}
+                    </label>
+                    <input
+                      type="text"
+                      value={responsavel.responsavel_contato}
+                      onChange={(e) => setResp('responsavel_contato', e.target.value)}
+                      placeholder="Telefone, celular ou e-mail"
+                      className={inputResponsavel}
+                    />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="block text-sm font-semibold text-text-subtle mb-1">
+                      Observações sobre o Responsável
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={responsavel.responsavel_observacoes}
+                      onChange={(e) => setResp('responsavel_observacoes', e.target.value)}
+                      placeholder="Anotações livres (opcional)"
+                      className={inputResponsavel}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

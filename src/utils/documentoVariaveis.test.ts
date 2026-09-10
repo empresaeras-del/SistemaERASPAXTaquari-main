@@ -9,6 +9,7 @@ import {
   resolverVariaveisUsuario,
   resolverVariaveisSistema,
 } from './documentoVariaveis';
+import { MODULOS_VARIAVEIS } from '../config/documentoVariaveis.config';
 import { Empresa } from '../services/empresasService';
 import { Associado, Dependente } from '../services/associadosService';
 import { Atendimento } from '../types/atendimentos';
@@ -141,6 +142,64 @@ describe('resolverVariaveisAtendimento', () => {
     const vars = resolverVariaveisAtendimento(atendimento);
     expect(vars['{{atendimento_falecido_nome}}']).toBe(vars['{{falecido_nome}}']);
     expect(vars['{{atendimento_local_velorio}}']).toBe(vars['{{local_velorio}}']);
+  });
+
+  it('resolve os dados do responsável pelo falecido', () => {
+    const vars = resolverVariaveisAtendimento({
+      ...atendimento,
+      responsavel_nome: 'MARIA DA SILVA',
+      responsavel_cpf: '046.537.031-40',
+      responsavel_rg: '1234567 SSP/MS',
+      responsavel_parentesco: 'FILHA',
+      responsavel_endereco: 'RUA CAMPO GRANDE, nº 150, CENTRO, COXIM - MS',
+      responsavel_contato: '(67) 99999-1111',
+      responsavel_nacionalidade: 'BRASILEIRA',
+      responsavel_observacoes: 'Retorna após as 18h',
+    });
+    expect(vars['{{responsavel_nome}}']).toBe('MARIA DA SILVA');
+    expect(vars['{{responsavel_cpf}}']).toBe('046.537.031-40');
+    expect(vars['{{responsavel_rg}}']).toBe('1234567 SSP/MS');
+    expect(vars['{{responsavel_parentesco}}']).toBe('FILHA');
+    expect(vars['{{responsavel_endereco}}']).toContain('RUA CAMPO GRANDE');
+    expect(vars['{{responsavel_contato}}']).toBe('(67) 99999-1111');
+    expect(vars['{{responsavel_nacionalidade}}']).toBe('BRASILEIRA');
+    expect(vars['{{responsavel_observacoes}}']).toBe('Retorna após as 18h');
+    expect(vars['{{atendimento_responsavel_nome}}']).toBe(vars['{{responsavel_nome}}']);
+  });
+
+  it('devolve string vazia — nunca "null" — para responsável não preenchido', () => {
+    // A coluna é nullable, então o valor que chega do Postgres é `null`; sem o `|| ''`
+    // o documento sairia com a palavra "null" impressa no lugar do nome.
+    const vars = resolverVariaveisAtendimento({ ...atendimento, responsavel_nome: null });
+    expect(vars['{{responsavel_nome}}']).toBe('');
+    expect(vars['{{responsavel_cpf}}']).toBe('');
+  });
+});
+
+describe('catálogo × resolver do módulo Atendimento', () => {
+  // O CLAUDE.md registra que as duas fontes já divergiram antes (requisição e
+  // financeiro), e o sintoma é mudo: a tag aparece no painel de inserção, o operador a
+  // usa no modelo, e ela nunca preenche. Este teste é o que impede a terceira vez.
+  it('toda tag do catálogo é resolvida pelo resolver', () => {
+    const modulo = MODULOS_VARIAVEIS.find((m) => m.id === 'atendimento');
+    expect(modulo).toBeDefined();
+
+    const resolvidas = new Set(
+      Object.keys({
+        ...resolverVariaveisAtendimento({
+          id: 'a',
+          tenant_id: 't',
+          tipo_cliente: 'externo',
+          falecido_nome: 'X',
+          status: 'aberto',
+          valor_total: 0,
+        }),
+        ...resolverVariaveisAtendimentoParcelas([]),
+      }),
+    );
+
+    const semResolver = modulo!.variaveis.map((v) => v.variavel).filter((tag) => !resolvidas.has(tag));
+    expect(semResolver).toEqual([]);
   });
 });
 
