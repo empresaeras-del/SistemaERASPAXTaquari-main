@@ -735,6 +735,21 @@ estética; ficou fora das entregas de redesenho.
   real, antes e depois). Revogue de `PUBLIC` **e** dos dois papéis: aqui coexistiam o grant
   implícito de PUBLIC e grants explícitos, então revogar de um lado só não resolve — é a lição do
   par `revoke_anon`/`revoke_public` valendo nas duas direções.
+- **Uma função `SECURITY DEFINER` que ESCREVE não pode ter `EXECUTE` para `anon`.** É diferente
+  do caso das funções de trigger acima, que não são exploráveis: `registrar_audit(user_id, acao,
+  detalhes)` era chamável de verdade por quem não fez login, via `/rest/v1/rpc/`, com os três
+  parâmetros vindo inteiros do chamador — e, por ser `SECURITY DEFINER`, gravando por cima da RLS
+  de `auditoria`. Revogado na migration `20260910005709`. Duas lições:
+  - **Verifique gravando, não chamando.** A função lê `auth.uid()`, que sem login é nulo, e era
+    plausível que ela desistisse em silêncio. Não desistia: contagem antes/depois em transação
+    revertida mostrou 484 → 485 linhas. "A chamada foi aceita" e "a linha entrou" são perguntas
+    diferentes.
+  - **Cuidado com o rótulo "esperado".** Este achado ficou meses escondido atrás da conclusão
+    (correta) de que as auxiliares de RLS não podem perder o `EXECUTE`. Aquela conclusão foi
+    registrada como "os advisors restantes", no plural amplo, e o bloco inteiro passou a ser lido
+    como resolvido — só que das 8 funções que o advisor lista como chamáveis por `anon`, **4** são
+    auxiliares de RLS, 2 são de trigger e 2 não são nem uma coisa nem outra. Ao classificar um
+    alerta como esperado, **diga exatamente quais linhas** ele cobre.
 - **Não revogue `EXECUTE` das funções usadas pelas policies de RLS** (`has_tenant_access`,
   `current_tenant_id`, `current_user_nivel`, `is_super_admin`), mesmo que os advisors as apontem.
   A expressão de uma policy é avaliada com as permissões de quem consulta: sem `EXECUTE` em
