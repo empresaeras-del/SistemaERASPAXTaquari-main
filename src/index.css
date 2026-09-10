@@ -214,14 +214,29 @@
 }
 
 @layer utilities {
+  /* As medidas do papel e das margens vêm do documento; os valores abaixo são só o
+     padrão de quem não passa nada (ex.: PrintPreviewModal). Quem conhece a orientação
+     e as margens reais sobrescreve as variáveis no style inline. */
   .a4-simulated {
-    width: 210mm;
-    min-height: 297mm;
+    --a4-largura: 210mm;
+    --a4-altura: 297mm;
+    --a4-margem-topo: 25mm;
+    --a4-margem-base: 25mm;
+    width: var(--a4-largura);
+    min-height: var(--a4-altura);
     padding: 25mm;
     background-color: #ffffff;
     color: #000000;
-    background-image: linear-gradient(to bottom, #f3f4f6 0mm, #f3f4f6 25mm, transparent 25mm, transparent 272mm, #f3f4f6 272mm, #f3f4f6 297mm);
-    background-size: 100% 297mm;
+    background-image: linear-gradient(
+      to bottom,
+      #f3f4f6 0mm,
+      #f3f4f6 var(--a4-margem-topo),
+      transparent var(--a4-margem-topo),
+      transparent calc(var(--a4-altura) - var(--a4-margem-base)),
+      #f3f4f6 calc(var(--a4-altura) - var(--a4-margem-base)),
+      #f3f4f6 var(--a4-altura)
+    );
+    background-size: 100% var(--a4-altura);
     box-sizing: border-box;
   }
   
