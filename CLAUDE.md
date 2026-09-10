@@ -734,7 +734,18 @@ estética; ficou fora das entregas de redesenho.
   na chamada direta, nunca na invocação pelo trigger** (verificado como `authenticated`, com JWT
   real, antes e depois). Revogue de `PUBLIC` **e** dos dois papéis: aqui coexistiam o grant
   implícito de PUBLIC e grants explícitos, então revogar de um lado só não resolve — é a lição do
-  par `revoke_anon`/`revoke_public` valendo nas duas direções.
+  par `revoke_anon`/`revoke_public` valendo nas duas direções. As duas últimas do schema
+  (`handle_new_user`, o trigger de cadastro em `auth.users`, e `rls_auto_enable`, o event trigger
+  que habilita RLS em toda tabela nova) foram fechadas na migration `20260910010924`.
+  **Nessas duas o risco da correção era maior que o da exposição** — não são do módulo contábil:
+  sem `handle_new_user` o usuário novo entra em `auth.users` e nunca ganha linha em
+  `public.users` (cadastra e não consegue usar o sistema); sem `rls_auto_enable` toda tabela
+  criada dali em diante nasce sem RLS. Por isso a revogação foi **exercitada antes de ser
+  aplicada**, numa transação revertida que revoga e então dispara os dois gatilhos de verdade —
+  `insert` em `auth.users` (⇒ `public.users` foi de 4 para 5) e `create table` (⇒
+  `relrowsecurity = true`). **Ao revogar permissão de algo cujo caminho de falha é silencioso,
+  teste a revogação dentro do rollback antes de aplicá-la** — é mais barato que descobrir pelo
+  primeiro cadastro que não funcionou.
 - **Uma função `SECURITY DEFINER` que ESCREVE não pode ter `EXECUTE` para `anon`.** É diferente
   do caso das funções de trigger acima, que não são exploráveis: `registrar_audit(user_id, acao,
   detalhes)` era chamável de verdade por quem não fez login, via `/rest/v1/rpc/`, com os três
