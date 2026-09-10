@@ -456,6 +456,28 @@ Duas decisões que valem para qualquer filtro derivado assim:
 As opções dos seletores incluem conta e centro **desativados** de propósito: um lançamento
 antigo pode apontar para um deles, e sem a opção na lista ele viraria infiltrável.
 
+## Índice novo em tabela que já existe: procure por definição, não por nome
+
+Nove tabelas ficaram meses com **dois índices byte a byte idênticos** sobre `tenant_id`
+(`idx_<tabela>_tenant`, do schema original de 17/08, e `idx_<tabela>_tenant_id`, das migrations de
+correção de RLS de 31/08, 03/09 e 05/09). Removidos na migration `20260910012513`.
+
+A causa é uma armadilha que vale para qualquer índice futuro: **`CREATE INDEX IF NOT EXISTS` casa
+pelo nome, nunca pela definição.** As migrations de RLS acrescentaram "um índice de cobertura para
+o predicado da policy" com o nome que lhes pareceu natural; o `IF NOT EXISTS` não viu conflito
+algum, porque o nome era mesmo novo — e o índice equivalente que já existia continuou lá. Cada
+cópia extra custa escrita e espaço sem devolver nada em leitura.
+
+Antes de adicionar índice a uma tabela que já existe, consulte `pg_indexes`/`pg_get_indexdef` e
+compare a **definição**. E ao desempatar um par assim, três sinais decidem qual fica, de
+preferência apontando para o mesmo lado: qual é o original, qual o planner realmente usa
+(`pg_stat_user_indexes.idx_scan` — nos 9 pares o curto ganhava em todos, e em quatro deles o longo
+estava zerado) e qual é a convenção majoritária do schema.
+
+Confira também, antes de dropar, que nenhum dos dois é `UNIQUE`/`PRIMARY` nem tem constraint
+dependente (`pg_constraint.conindid`) — aí não seria um duplicado descartável, seria a estrutura
+que sustenta a constraint.
+
 ## Campo opcional com `UNIQUE`: grave `NULL`, nunca string vazia
 
 `credenciados.cnpj_cpf` (opcional desde a migration `20260908182307`) é o primeiro caso disso no
