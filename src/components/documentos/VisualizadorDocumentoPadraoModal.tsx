@@ -800,6 +800,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
         {/* Centro: Controles de Orientação, Zoom e Sidebar */}
         <div className="hidden md:flex items-center gap-3 bg-[#181d27] px-3 py-1.5 rounded-xl border border-[#2d3544]">
           <button
+            type="button"
             onClick={() => setShowSidebar(!showSidebar)}
             className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
               showSidebar
@@ -817,6 +818,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
           {/* Seletor de Orientação */}
           <div className="flex items-center gap-1 bg-[#13171f] p-0.5 rounded-lg border border-[#2d3544]">
             <button
+              type="button"
               onClick={() => handleTrocarOrientacao('portrait')}
               className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md transition-all ${
                 orientation === 'portrait'
@@ -829,6 +831,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
               <span className="hidden sm:inline">Retrato</span>
             </button>
             <button
+              type="button"
               onClick={() => handleTrocarOrientacao('landscape')}
               className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md transition-all ${
                 orientation === 'landscape'
@@ -847,6 +850,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
           {/* Controles de Zoom */}
           <div className="flex items-center gap-0.5">
             <button
+              type="button"
               onClick={handleZoomOut}
               className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544] transition-colors"
               title="Reduzir Zoom (-)"
@@ -855,6 +859,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
             </button>
 
             <button
+              type="button"
               onClick={handleZoomReset}
               className="px-2 py-1 text-xs font-bold text-slate-200 hover:bg-[#2d3544] rounded-lg transition-colors min-w-[48px] text-center"
               title="Resetar para 100%"
@@ -863,6 +868,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
             </button>
 
             <button
+              type="button"
               onClick={handleZoomIn}
               className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544] transition-colors"
               title="Ampliar Zoom (+)"
@@ -876,6 +882,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
               <div className="h-4 w-px bg-[#2d3544]" />
               {!isPosicionandoAssinatura ? (
                 <button
+                  type="button"
                   onClick={handleIniciarPosicionamentoAssinatura}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-300 hover:text-white hover:bg-[#2d3544] transition-colors"
                   title="Escolher livremente onde a assinatura da empresa aparece no documento"
@@ -890,6 +897,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                   </span>
                   {assinaturaConfig && (
                     <button
+                      type="button"
                       onClick={handleRemoverPosicaoPersonalizada}
                       className="p-1.5 rounded-lg text-slate-300 hover:text-rose-300 hover:bg-[#2d3544] transition-colors"
                       title="Remover posicionamento personalizado (voltar ao rodapé padrão)"
@@ -898,6 +906,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                     </button>
                   )}
                   <button
+                    type="button"
                     onClick={handleSalvarPosicaoAssinatura}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 bg-fuchsia-600 hover:bg-fuchsia-500 text-white rounded-lg text-xs font-bold transition-colors"
                     title="Concluir e salvar a posição da assinatura"
@@ -914,6 +923,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
         {/* Lado Direito: Ações (Salvar PDF, Imprimir, Fechar) */}
         <div className="flex items-center gap-2 sm:gap-3">
           <button
+            type="button"
             onClick={handleExportPDF}
             disabled={isExportingPDF || isPosicionandoAssinatura}
             className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-colors shadow-lg shadow-emerald-600/20 active:scale-95"
@@ -928,6 +938,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
           </button>
 
           <button
+            type="button"
             onClick={handleImprimir}
             disabled={isPosicionandoAssinatura}
             className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-bold text-xs transition-colors shadow-lg shadow-blue-600/20 active:scale-95"
@@ -944,6 +955,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
           <div className="h-6 w-px bg-[#2d3544]" />
 
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#2d3544] transition-colors"
             title="Fechar Visualizador (ESC)"
@@ -1572,6 +1584,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
                   />
                   {searchVar && (
                     <button
+                      type="button"
                       onClick={() => setSearchVar('')}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                     >
@@ -1665,6 +1678,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
             {/* Rodapé da Sidebar */}
             <div className="p-3 border-t border-[#2d3544] bg-[#181d27] flex items-center justify-between text-xs text-slate-400">
               <button
+                type="button"
                 onClick={() => {
                   const now = new Date();
                   setPlaceholderValues((prev) => ({
@@ -1686,6 +1700,7 @@ export const VisualizadorDocumentoPadraoModal: React.FC<VisualizadorDocumentoPad
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   if (window.confirm('Deseja limpar todos os campos de variáveis preenchidos?')) {
                     const emptyVals: Record<string, string> = {};

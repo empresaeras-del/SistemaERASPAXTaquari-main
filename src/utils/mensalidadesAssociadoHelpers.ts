@@ -180,11 +180,40 @@ export interface FiltrosParcelasTabela {
 }
 
 /** Filtra a lista de parcelas para a tabela detalhada, por status e por período de vencimento. */
+/**
+ * Ordena parcelas por data de vencimento, da mais antiga para a mais recente.
+ *
+ * A lista chegava na ordem em que o Postgres devolveu as linhas — que não é ordem
+ * nenhuma —, então a tela de Mensalidades mostrava 6/12, 11/12, 1/12, 5/12... e o
+ * operador não conseguia ver qual vence primeiro nem conferir a sequência.
+ *
+ * **Compara o texto da data, não `new Date()`.** Para `YYYY-MM-DD` a ordem
+ * lexicográfica é a cronológica, e comparar texto evita de saída a armadilha que o
+ * CLAUDE.md documenta: `new Date('2026-01-01')` é meia-noite UTC, que em UTC-3 é o dia
+ * anterior. Aqui isso não inverteria a ordem (todas as datas deslocam junto), mas o
+ * hábito é o que impede o próximo cálculo de derrapar.
+ *
+ * Desempate por `numero_parcela`: duas receitas do mesmo associado podem ter parcelas
+ * no mesmo vencimento, e sem desempate a ordem entre elas voltaria a ser a do banco.
+ * Parcela sem vencimento vai para o fim — é dado quebrado, não deve encabeçar a lista.
+ */
+export const ordenarParcelasPorVencimento = (parcelas: ParcelaReceber[]): ParcelaReceber[] =>
+  [...parcelas].sort((a, b) => {
+    const va = a.data_vencimento || '';
+    const vb = b.data_vencimento || '';
+    if (va !== vb) {
+      if (!va) return 1;
+      if (!vb) return -1;
+      return va < vb ? -1 : 1;
+    }
+    return (a.numero_parcela || 0) - (b.numero_parcela || 0);
+  });
+
 export const filtrarParcelasTabela = (
   parcelas: ParcelaReceber[],
   { filtroStatus, filtroPeriodoInicio, filtroPeriodoFim }: FiltrosParcelasTabela
 ): ParcelaReceber[] => {
-  return parcelas.filter(p => {
+  return ordenarParcelasPorVencimento(parcelas).filter(p => {
     const matchStatus = filtroStatus === 'all' || p.status === filtroStatus;
     let matchPeriodo = true;
     if (filtroPeriodoInicio) {
