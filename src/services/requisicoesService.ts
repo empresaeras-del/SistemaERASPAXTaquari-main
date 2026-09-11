@@ -187,15 +187,16 @@ export const criarRequisicao = async (
         updated_at: novaReq.updated_at
       };
 
-      let insertResult = await supabase.from('requisicoes').insert([dbPayload]);
-      if (insertResult.error) {
-        console.warn('Erro na inserção padrão de requisição:', insertResult.error);
-        const fallbackPayload = { ...dbPayload, status: 'pendente' };
-        insertResult = await supabase.from('requisicoes').insert([fallbackPayload]);
-      }
+      // O reinsert com `status: 'pendente'` que existia aqui foi removido na migration
+      // 20260911132855: ele só existia porque o CHECK da tabela não conhecia 'emitida' e
+      // recusava toda guia. O "fallback" não era resiliência — gravava a guia com um
+      // status que o operador não escolheu, em silêncio, e é por isso que a tela precisou
+      // passar a tratar 'pendente' como 'emitida'. Com o CHECK corrigido, tentar de novo
+      // com outro status só voltaria a esconder o erro seguinte.
+      const insertResult = await supabase.from('requisicoes').insert([dbPayload]);
 
       if (insertResult.error) {
-        console.error('Erro ao salvar requisição no Supabase após fallback:', insertResult.error);
+        console.error('Erro ao salvar requisição no Supabase:', insertResult.error);
         recusa = insertResult.error;
       } else if (itens && itens.length > 0) {
         const itensToInsert = itens.map(item => ({

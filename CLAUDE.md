@@ -730,6 +730,40 @@ descartadas em minutos por um `select` que mostrou a tabela vazia e por dois ins
 transação revertida que devolveram o `SQLSTATE` exato. **Quando o sintoma é "não gravou",
 pergunte ao banco antes de reler o componente.**
 
+### Guia de rede externa nunca foi gravada, e o "fallback" escondia o motivo
+
+Relatado da UI logo depois da correção acima, e só apareceu porque ela parou de engolir a
+recusa: emitir guia com **Rede Externa** dava erro. Duas constraints, e as duas valem como
+lição (migration `20260911132855`):
+
+- **`requisicoes.credenciado_id` era `NOT NULL`.** Guia de rede externa não tem credenciado
+  — o prestador é texto livre em `credenciado_nome`/`credenciado_cnpj_cpf` porque não é
+  cadastro nosso. O insert morria com `23502` e **nenhuma guia de prestador externo jamais
+  foi gravada**. A coluna virou nullable; a FK continua valendo, porque com `MATCH SIMPLE`
+  o `NULL` a satisfaz — guia de credenciado segue amarrada a `credenciados`, e isso foi
+  verificado com uma tentativa de FK inválida na mesma transação revertida.
+- **O `CHECK` de `status` não conhecia `'emitida'`**, que é o status com que o app cria toda
+  guia (`StatusRequisicao = emitida | autorizada | realizada | cancelada`). O insert
+  falhava com `23514`.
+
+**O segundo é o mais instrutivo, porque tinha um remendo que parecia resiliência.**
+`criarRequisicao` reinseria com `status: 'pendente'` quando o primeiro insert falhava. Isso
+não é fallback: é gravar a guia com um estado que o operador não escolheu, em silêncio. E o
+efeito se espalhou — `RequisicoesPage` acabou cheia de
+`r.status === 'emitida' || (r.status as any) === 'pendente'`, com o `as any` denunciando que
+o valor gravado não existe no domínio. O remendo foi removido junto com a migration: com o
+`CHECK` correto, tentar de novo com outro status só esconderia o erro seguinte.
+
+**A regra**: um retry que muda o dado enviado não é tolerância a falha — é corromper o
+registro para conseguir gravá-lo. Se o servidor recusou, ou o payload está errado (corrija
+o payload) ou a constraint está errada (corrija a constraint). Reenviar diferente resolve o
+insert e cria um defeito que só aparece meses depois, do outro lado da tela.
+
+`'pendente'` e `'negada'` ficaram no `CHECK` novo: é o que as linhas antigas têm gravado, e
+tirá-las quebraria o `UPDATE` delas. As duas checagens duplas na tela seguem de propósito
+pelo mesmo motivo — um backfill de `'pendente'` para `'emitida'` é decisão de produto sobre
+dado existente, não limpeza de código.
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do
