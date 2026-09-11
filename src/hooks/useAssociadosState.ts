@@ -394,9 +394,13 @@ export function useAssociadosState() {
           setIsSavingAssociado(false);
           return;
         }
-        const duplicateUser = encontrarAssociadoComCpfDuplicado(associados, editingAssociado.cpf, editingAssociado.id);
+        // O escopo é a empresa do próprio registro: com 'all' selecionado a lista traz
+        // todas as empresas, e o mesmo CPF em outra delas é cadastro legítimo.
+        const duplicateUser = encontrarAssociadoComCpfDuplicado(
+          associados, editingAssociado.cpf, editingAssociado.tenant_id, editingAssociado.id,
+        );
         if (duplicateUser) {
-          toast.error(`Não é possível registrar. Este CPF já está sendo usado pelo associado ativo: ${duplicateUser.nome}`);
+          toast.error(`Não é possível registrar. Este CPF já está sendo usado nesta empresa pelo associado ativo: ${duplicateUser.nome}`);
           setIsSavingAssociado(false);
           return;
         }

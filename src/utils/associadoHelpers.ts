@@ -119,20 +119,39 @@ export const calcularEstatisticasAssociados = (
 };
 
 /**
- * Procura, entre os associados ATIVOS (excluindo o próprio registro sendo
- * salvo), algum com o mesmo CPF já cadastrado. Usado para bloquear duplicidade
- * ao salvar.
+ * Procura, **dentro de uma empresa**, entre os associados ATIVOS (excluindo o próprio
+ * registro sendo salvo), algum com o mesmo CPF já cadastrado. Usado para bloquear
+ * duplicidade ao salvar.
+ *
+ * **`tenantId` é obrigatório de propósito.** A lista que chega aqui vem de
+ * `getAssociados(isOnline, empresaSelecionada)`, que devolve **todas** as empresas quando
+ * a seleção é `'all'` — o caso do super_admin. Sem escopo, a mesma pessoa cadastrada na
+ * Empresa A bloqueava o cadastro dela na Empresa B, e a mensagem citava o nome de um
+ * associado que o operador nem podia abrir. Um parâmetro opcional deixaria um chamador
+ * novo cair no comportamento antigo sem aviso; obrigatório, o `tsc` cobra a decisão.
+ *
+ * **Não reaproveita `registroPertenceAoTenant`**, e isso é deliberado: aquela função vale
+ * para *leitura* e devolve `true` quando o filtro é `'all'`/vazio ("sem filtro") — o que
+ * aqui voltaria a casar todas as empresas. Guarda de escrita precisa do oposto: sem
+ * empresa resolvida não há como afirmar duplicidade, e quem recusa a gravação nesse estado
+ * é o `MENSAGEM_TENANT_INDEFINIDO` no salvar, não esta função.
  */
 export const encontrarAssociadoComCpfDuplicado = (
   associados: Associado[],
   cpf: string,
+  tenantId: string | null | undefined,
   excludeId?: string
 ): Associado | undefined => {
   const cpfLimpo = (cpf || '').replace(/\D/g, '');
   if (cpfLimpo.length === 0) return undefined;
+
+  const escopo = (tenantId || '').trim();
+  if (escopo === '' || escopo === 'all') return undefined;
+
   return associados.find(a =>
     a &&
     a.status === 'ativo' &&
+    (a.tenant_id || '').trim() === escopo &&
     a.cpf?.replace(/\D/g, '') === cpfLimpo &&
     a.id !== excludeId
   );

@@ -120,26 +120,60 @@ describe('calcularEstatisticasAssociados', () => {
 });
 
 describe('encontrarAssociadoComCpfDuplicado', () => {
+  const EMPRESA_A = 'default_tenant';
+  const EMPRESA_B = 'empresa_b';
+
   const associados = [
     mkAssociado({ id: '1', cpf: '111.111.111-11', status: 'ativo' }),
     mkAssociado({ id: '2', cpf: '222.222.222-22', status: 'inativo' }),
   ];
 
   it('encontra associado ativo com mesmo CPF (ignorando pontuação)', () => {
-    const dup = encontrarAssociadoComCpfDuplicado(associados, '11111111111');
+    const dup = encontrarAssociadoComCpfDuplicado(associados, '11111111111', EMPRESA_A);
     expect(dup?.id).toBe('1');
   });
 
   it('ignora associados inativos', () => {
-    expect(encontrarAssociadoComCpfDuplicado(associados, '222.222.222-22')).toBeUndefined();
+    expect(encontrarAssociadoComCpfDuplicado(associados, '222.222.222-22', EMPRESA_A)).toBeUndefined();
   });
 
   it('exclui o próprio registro sendo editado', () => {
-    expect(encontrarAssociadoComCpfDuplicado(associados, '111.111.111-11', '1')).toBeUndefined();
+    expect(encontrarAssociadoComCpfDuplicado(associados, '111.111.111-11', EMPRESA_A, '1')).toBeUndefined();
   });
 
   it('retorna undefined para CPF vazio', () => {
-    expect(encontrarAssociadoComCpfDuplicado(associados, '')).toBeUndefined();
+    expect(encontrarAssociadoComCpfDuplicado(associados, '', EMPRESA_A)).toBeUndefined();
+  });
+
+  // O defeito relatado: a mesma pessoa pode ser associada de duas empresas.
+  it('não acusa duplicidade quando o CPF está em OUTRA empresa', () => {
+    const deOutraEmpresa = [mkAssociado({ id: '9', cpf: '111.111.111-11', status: 'ativo', tenant_id: EMPRESA_A })];
+    expect(encontrarAssociadoComCpfDuplicado(deOutraEmpresa, '111.111.111-11', EMPRESA_B)).toBeUndefined();
+  });
+
+  it('continua acusando duplicidade dentro da MESMA empresa', () => {
+    const daMesmaEmpresa = [mkAssociado({ id: '9', cpf: '111.111.111-11', status: 'ativo', tenant_id: EMPRESA_B })];
+    expect(encontrarAssociadoComCpfDuplicado(daMesmaEmpresa, '111.111.111-11', EMPRESA_B)?.id).toBe('9');
+  });
+
+  it('com a lista de todas as empresas, só casa a do escopo', () => {
+    // É exatamente o estado do super_admin com 'all' selecionado: `getAssociados`
+    // devolve todo mundo, e sem escopo a empresa errada bloqueava o cadastro.
+    const todas = [
+      mkAssociado({ id: 'a', cpf: '111.111.111-11', status: 'ativo', tenant_id: EMPRESA_A }),
+      mkAssociado({ id: 'b', cpf: '111.111.111-11', status: 'ativo', tenant_id: EMPRESA_B }),
+    ];
+    expect(encontrarAssociadoComCpfDuplicado(todas, '111.111.111-11', EMPRESA_A)?.id).toBe('a');
+    expect(encontrarAssociadoComCpfDuplicado(todas, '111.111.111-11', EMPRESA_B)?.id).toBe('b');
+  });
+
+  it('sem empresa resolvida não afirma duplicidade — quem recusa é o salvar', () => {
+    // 'all' e vazio não são escopo: aqui devolver "duplicado" casaria todas as empresas,
+    // que é o bug de origem. A recusa da gravação vive no MENSAGEM_TENANT_INDEFINIDO.
+    expect(encontrarAssociadoComCpfDuplicado(associados, '111.111.111-11', 'all')).toBeUndefined();
+    expect(encontrarAssociadoComCpfDuplicado(associados, '111.111.111-11', '')).toBeUndefined();
+    expect(encontrarAssociadoComCpfDuplicado(associados, '111.111.111-11', null)).toBeUndefined();
+    expect(encontrarAssociadoComCpfDuplicado(associados, '111.111.111-11', undefined)).toBeUndefined();
   });
 });
 
