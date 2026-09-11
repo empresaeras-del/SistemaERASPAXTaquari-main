@@ -42,6 +42,12 @@ export interface Receita {
   observacoes?: string;
   status: 'ativo' | 'rascunho' | 'cancelado' | 'quitado';
   atendimento_id?: string;
+  /**
+   * Guia que originou esta receita de co-participação (migration 20260911124654).
+   * `null` para receita de qualquer outra origem — é o que permite avisar, ao reeditar
+   * a guia, que ela já tem cobrança.
+   */
+  requisicao_id?: string | null;
   criado_em?: string;
   criado_por?: string;
   deleted_at?: string | null;
@@ -205,6 +211,7 @@ export const sanitizeReceitaForSupabase = (r: Receita, fallbackTenantId?: string
     observacoes: r.observacoes || null,
     status: r.status || 'ativo',
     atendimento_id: r.atendimento_id && UUID_REGEX.test(r.atendimento_id) ? r.atendimento_id : null,
+    requisicao_id: r.requisicao_id && UUID_REGEX.test(r.requisicao_id) ? r.requisicao_id : null,
     criado_em: r.criado_em || new Date().toISOString(),
     criado_por: r.criado_por && UUID_REGEX.test(r.criado_por) ? r.criado_por : null,
     updated_at: new Date().toISOString()
@@ -1712,6 +1719,48 @@ export const getDespesas = async (isOnline: boolean, tenantId: string): Promise<
     }
     return true;
   });
+};
+
+/**
+ * Receitas já geradas a partir de uma guia de requisição.
+ *
+ * Existe para responder, antes de oferecer cobrança na reedição de uma guia, se ela já
+ * gerou receita. Ao contrário de `getReceitasPorAtendimento`, **não** tem fallback por
+ * texto da descrição: o vínculo é a coluna `requisicao_id`, e casar descrição aqui
+ * produziria falso positivo em qualquer receita que mencionasse o código da guia.
+ *
+ * Devolve `[]` em caso de falha — quem chama usa isso só para enriquecer um aviso, e um
+ * aviso incompleto é melhor que travar a emissão da guia.
+ */
+export const getReceitasPorRequisicao = async (
+  requisicaoId: string,
+  isOnline: boolean,
+  tenantId?: string,
+): Promise<Receita[]> => {
+  if (isOnline) {
+    try {
+      let query = supabase.from('receitas').select('*').eq('requisicao_id', requisicaoId);
+      if (tenantId && tenantId !== 'all') query = query.eq('tenant_id', tenantId);
+      const { data, error } = await query;
+      // `data` vazio é resposta válida, não falha de rede — ver CLAUDE.md.
+      if (!error && data) return data as Receita[];
+    } catch (e) {
+      console.warn('Erro ao buscar receitas por requisição online:', e);
+    }
+  }
+
+  try {
+    const todas = await getAllFromIDB<Receita>('receitas');
+    return (todas || []).filter(
+      (r) =>
+        r &&
+        r.requisicao_id === requisicaoId &&
+        (!tenantId || tenantId === 'all' || registroPertenceAoTenant(r.tenant_id, tenantId)),
+    );
+  } catch (e) {
+    console.warn('Erro ao buscar receitas por requisição no IDB:', e);
+    return [];
+  }
 };
 
 export const getReceitas = async (isOnline: boolean, tenantId: string): Promise<Receita[]> => {

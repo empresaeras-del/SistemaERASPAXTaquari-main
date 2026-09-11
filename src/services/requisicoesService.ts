@@ -152,6 +152,10 @@ export const criarRequisicao = async (
   };
 
   if (isOnline) {
+    // Recusa do Postgres é registrada aqui e relançada depois do `catch`: lançar de
+    // dentro do `try` cairia no próprio `catch` abaixo, que trata queda de rede.
+    let recusa: { message?: string; code?: string } | null = null;
+
     try {
       const dbPayload: any = {
         id: reqId,
@@ -183,15 +187,17 @@ export const criarRequisicao = async (
         updated_at: novaReq.updated_at
       };
 
-      let insertResult = await supabase.from('requisicoes').insert([dbPayload]);
-      if (insertResult.error) {
-        console.warn('Erro na inserção padrão de requisição:', insertResult.error);
-        const fallbackPayload = { ...dbPayload, status: 'pendente' };
-        insertResult = await supabase.from('requisicoes').insert([fallbackPayload]);
-      }
+      // O reinsert com `status: 'pendente'` que existia aqui foi removido na migration
+      // 20260911132855: ele só existia porque o CHECK da tabela não conhecia 'emitida' e
+      // recusava toda guia. O "fallback" não era resiliência — gravava a guia com um
+      // status que o operador não escolheu, em silêncio, e é por isso que a tela precisou
+      // passar a tratar 'pendente' como 'emitida'. Com o CHECK corrigido, tentar de novo
+      // com outro status só voltaria a esconder o erro seguinte.
+      const insertResult = await supabase.from('requisicoes').insert([dbPayload]);
 
       if (insertResult.error) {
-        console.error('Erro ao salvar requisição no Supabase após fallback:', insertResult.error);
+        console.error('Erro ao salvar requisição no Supabase:', insertResult.error);
+        recusa = insertResult.error;
       } else if (itens && itens.length > 0) {
         const itensToInsert = itens.map(item => ({
           id: UUID_REGEX.test(item.id || '') ? item.id : uuidv4(),
@@ -217,6 +223,17 @@ export const criarRequisicao = async (
     } catch (e) {
       console.warn('Erro geral ao inserir requisição no Supabase:', e);
     }
+
+    // O servidor recusou: emitir a guia falhou. Guardar no IndexedDB e devolver o objeto
+    // como se tivesse dado certo é o que fazia a tela anunciar "Guia emitida com sucesso"
+    // para um registro que não existe — e sumir no recarregamento seguinte.
+    if (recusa) {
+      throw new Error(
+        `O servidor recusou a guia${recusa.code ? ` (${recusa.code})` : ''}: ` +
+        `${recusa.message || 'erro desconhecido'}`,
+      );
+    }
+
     await saveToIDB('requisicoes', novaReq);
     await registrarAuditoria('Emissão de Requisição/Guia', {
       requisicao_id: novaReq.id,
@@ -240,6 +257,8 @@ export const atualizarRequisicao = async (
   const { itens, ...dadosSemItens } = reqAtualizada;
 
   if (isOnline) {
+    let recusa: { message?: string; code?: string } | null = null;
+
     try {
       const dbPayload = {
         ...dadosSemItens,
@@ -250,9 +269,10 @@ export const atualizarRequisicao = async (
       };
 
       const { error } = await supabase.from('requisicoes').update(dbPayload).eq('id', req.id);
-      
+
       if (error) {
         console.error('Erro ao atualizar requisicao no Supabase:', error);
+        recusa = error;
       } else if (itens && itens.length > 0) {
         await supabase.from('requisicao_itens').delete().eq('requisicao_id', req.id);
         const itensToInsert = itens.map(item => ({
@@ -274,6 +294,15 @@ export const atualizarRequisicao = async (
     } catch (e) {
       console.warn('Erro ao atualizar requisicao no Supabase:', e);
     }
+
+    // Mesma regra da emissão: recusa do servidor não pode terminar em sucesso aparente.
+    if (recusa) {
+      throw new Error(
+        `O servidor recusou a alteração da guia${recusa.code ? ` (${recusa.code})` : ''}: ` +
+        `${recusa.message || 'erro desconhecido'}`,
+      );
+    }
+
     await saveToIDB('requisicoes', reqAtualizada);
     await registrarAuditoria('Edição de Requisição/Guia', {
       requisicao_id: reqAtualizada.id,

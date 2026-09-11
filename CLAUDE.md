@@ -618,6 +618,152 @@ guarda que faltava: `documentoVariaveis.test.ts` agora falha se alguma tag do m�
 existir no catálogo sem resolver — o sintoma dessa divergência é mudo (a tag aparece no painel, o
 operador a usa no modelo, e ela nunca preenche), e este arquivo já registra duas ocorrências dela.
 
+## A cobrança automática virou pergunta (atendimento e requisição)
+
+Até 11/09/2026, finalizar um atendimento com item fora da cobertura, ou emitir uma guia com
+co-participação, **criava a conta a receber sozinho**, no meio do salvamento. Não havia como
+registrar um atendimento de cortesia, nem corrigir o endereço de uma guia, sem gerar cobrança —
+e na reedição a guia cobrava **de novo**, em silêncio, a cada save. Agora o operador é perguntado,
+e a resposta "não" finaliza o cadastro sem receita nenhuma.
+
+Cinco decisões deste bloco valem como regra:
+
+- **Montar e gravar são passos separados** (`utils/cobrancaAutomatica.ts`, puro e testado). A
+  pergunta precisa mostrar o valor **antes** de existir registro, e a recusa precisa ser tão
+  barata quanto a confirmação — o que só é possível se montar a proposta não escrever nada. É a
+  mesma divisão da Ficha de Cadastro e da Demonstração Contábil: a função pura decide **o quê**,
+  a tela decide **quando**.
+- **Os dois fluxos tinham a mesma regra escrita duas vezes, com datas diferentes.** Atendimento
+  usava `format(new Date(), 'yyyy-MM-dd')` (data local) e requisição usava `.toISOString()` (UTC):
+  uma guia emitida às 21h em UTC-3 nascia datada de **amanhã**, a do atendimento não. Unificado em
+  `dataLocalISO`. Vale a lição que este arquivo já registra em `anoDaData()`: **o ano e o dia vêm
+  do relógio local, nunca de `toISOString()`**.
+- **A obrigatoriedade é do operador, não da coluna.** Nenhum `NOT NULL`, nenhuma trava: só a
+  pergunta. `deveOferecerCobranca` suprime a pergunta quando não há valor a cobrar — perguntar
+  "deseja cobrar R$ 0,00?" treina a responder sem ler, e é assim que uma pergunta útil vira ruído.
+- **A falha da cobrança não desfaz o cadastro.** O atendimento (ou a guia) já está gravado quando a
+  pergunta aparece; se `salvarReceita` falhar, o `toast` diz exatamente isso — "foi salvo, mas a
+  cobrança não pôde ser gerada" — e aponta Contas a Receber. Um erro genérico faria o operador
+  cadastrar tudo de novo, duplicando o registro que deu certo. O `finally` leva as duas respostas
+  e o erro ao mesmo destino (`finalizarEmissao`/`seguirParaPerguntaDeStatus`): fechar a tela não
+  pode depender do caminho feliz.
+- **`ConfirmContext` ganhou `onCancel`** porque "não" passou a ter trabalho próprio (avisar e
+  finalizar), e não só fechar o diálogo. Ele fecha **antes** de executar o callback — o `onCancel`
+  pode abrir outro diálogo, como abre no wizard de atendimento — e engole a exceção do callback em
+  `console.error`: um erro ali não pode deixar o modal preso na tela.
+
+### O vínculo `receitas.requisicao_id` existe para a pergunta, não para o relatório
+
+Migration `20260911124654`. A guia só sabia que tinha cobrado pelo texto da descrição
+(`Co-participação - Guia X`), o que nenhuma consulta pode usar como chave. Sem o vínculo, a
+pergunta na reedição seria feita às cegas — e é justamente na reedição que o operador precisa
+saber que já cobrou.
+
+- **FK composta com `tenant_id`**, como manda a seção do plano contábil:
+  `(tenant_id, requisicao_id) → requisicoes (tenant_id, id)`, com a `unique (tenant_id, id)` nova
+  do lado referenciado. `receitas.atendimento_id`, mais antigo, **não tem FK nenhuma** — o
+  precedente do arquivo não é o que vale, a regra atual é.
+- **`ON DELETE SET NULL (requisicao_id)`** — a lista de colunas (PG 15+; o servidor é 17.6) é
+  obrigatória aqui: um `SET NULL` sem ela tentaria anular também o `tenant_id`, que é `NOT NULL`,
+  e o delete falharia. E `SET NULL` é a escolha certa contra `CASCADE` porque excluir a guia
+  (que é *hard delete*) não pode levar junto um **registro financeiro** que talvez já tenha sido
+  recebido: a cobrança sobrevive, órfã do vínculo.
+- **Receita cancelada não conta no aviso** (`avisoCobrancaExistente`). Ela existe no banco e não
+  cobra ninguém; avisar sobre ela faria o operador desistir de uma cobrança legítima achando que
+  duplicaria.
+- **O aviso é enriquecimento, não pré-requisito**: a consulta vive em `try/catch` e, se falhar, a
+  pergunta vai sem ele. Bloquear a pergunta por causa do aviso trocaria uma informação a menos por
+  um cadastro travado.
+
+`getReceitasPorRequisicao` segue o padrão offline-first e **de propósito não tem o fallback por
+texto da descrição** que `getReceitasPorAtendimento` tem: aqui existe chave de verdade, e casar
+por texto voltaria a ser o que esta coluna veio substituir.
+
+### A tabela `atendimentos` estava vazia, e ninguém sabia
+
+Relato da UI em 11/09/2026: ao recusar a cobrança, o atendimento também não era
+registrado. A recusa não tinha nada a ver — **nenhum atendimento nunca chegou ao
+Postgres**. A tabela tinha zero linhas em produção. A pergunta nova só deu a alguém motivo
+para olhar.
+
+São dois defeitos empilhados, e o de cima é o que escondia o de baixo:
+
+- **O payload era inválido.** O formulário inicializa cada campo com `''`, e era isso que
+  ia para colunas `date`/`timestamptz` (`falecido_data_nascimento`, `data_obito`,
+  `data_velorio`, `data_sepultamento`) — `22007 invalid input syntax for type date: ""`. O
+  caso mais escondido era o de **cliente externo**: `falecidoId` nunca sai de `''` e ia
+  para `dependente_id`, que é `uuid` — `22P02`. Um campo em branco derrubava o insert
+  inteiro. `sanitizeAtendimentoForSupabase` normaliza `''` para `NULL` no ponto de escrita,
+  como já mandavam as seções de `credenciados.cnpj_cpf` e do responsável — **a regra já
+  estava escrita neste arquivo; o que faltou foi aplicá-la às colunas de data e uuid**.
+- **A recusa virava sucesso.** `saveAtendimento` tratava `error` do Supabase com
+  `console.warn`, seguia para o IndexedDB e devolvia `void`. A tela dizia "Atendimento
+  registrado com sucesso!", e como `getAtendimentos` devolve o que vem do servidor quando a
+  busca funciona, o registro sumia da lista no recarregamento seguinte — sem erro em lugar
+  nenhum. É exatamente a armadilha do `PGRST204` que este arquivo já documentava, com outra
+  causa e sem ninguém para notar.
+
+**A regra que vale daqui para frente: recusa do Postgres e queda de rede não podem terminar
+igual.** São indistinguíveis num `catch` só, e tratá-las juntas é o que produz perda
+silenciosa:
+
+- **Exceção lançada** (rede fora, fetch abortado) é o caso offline-first legítimo: vai para
+  o IndexedDB **e para a fila de sync** — é a fila que distingue "criado offline" de
+  "excluído no servidor", como a seção do registro que voltava já explica.
+- **`error` devolvido pelo cliente** é recusa: constraint, RLS, coluna inexistente. Repetir
+  amanhã dá o mesmo resultado, então enfileirar só adia a perda. A função **lança**, o
+  formulário continua aberto com tudo preenchido, e o operador pode corrigir.
+
+`criarRequisicao` e `atualizarRequisicao` tinham o mesmo `console.error` seguido de
+`saveToIDB` e `registrarAuditoria` — auditando como emitida uma guia que o servidor
+recusara. Passaram a lançar do mesmo jeito. Nos dois módulos o `toast` de erro agora
+carrega a mensagem do servidor: um genérico "Erro ao registrar" não diz se o problema é do
+preenchimento, da permissão ou da rede, e sem isso só resta tentar de novo igual.
+
+Detalhe de implementação que vale lembrar: nos três casos a recusa é guardada numa variável
+e relançada **depois** do `catch`. Lançar de dentro do `try` cairia no próprio `catch` que
+trata rede — e o erro voltaria a ser engolido, agora por um caminho novo.
+
+**O diagnóstico veio do banco, não da leitura do código.** Três hipóteses plausíveis sobre
+o diálogo de confirmação (fechar pelo backdrop, z-index, `onCancel` não disparando) foram
+descartadas em minutos por um `select` que mostrou a tabela vazia e por dois inserts numa
+transação revertida que devolveram o `SQLSTATE` exato. **Quando o sintoma é "não gravou",
+pergunte ao banco antes de reler o componente.**
+
+### Guia de rede externa nunca foi gravada, e o "fallback" escondia o motivo
+
+Relatado da UI logo depois da correção acima, e só apareceu porque ela parou de engolir a
+recusa: emitir guia com **Rede Externa** dava erro. Duas constraints, e as duas valem como
+lição (migration `20260911132855`):
+
+- **`requisicoes.credenciado_id` era `NOT NULL`.** Guia de rede externa não tem credenciado
+  — o prestador é texto livre em `credenciado_nome`/`credenciado_cnpj_cpf` porque não é
+  cadastro nosso. O insert morria com `23502` e **nenhuma guia de prestador externo jamais
+  foi gravada**. A coluna virou nullable; a FK continua valendo, porque com `MATCH SIMPLE`
+  o `NULL` a satisfaz — guia de credenciado segue amarrada a `credenciados`, e isso foi
+  verificado com uma tentativa de FK inválida na mesma transação revertida.
+- **O `CHECK` de `status` não conhecia `'emitida'`**, que é o status com que o app cria toda
+  guia (`StatusRequisicao = emitida | autorizada | realizada | cancelada`). O insert
+  falhava com `23514`.
+
+**O segundo é o mais instrutivo, porque tinha um remendo que parecia resiliência.**
+`criarRequisicao` reinseria com `status: 'pendente'` quando o primeiro insert falhava. Isso
+não é fallback: é gravar a guia com um estado que o operador não escolheu, em silêncio. E o
+efeito se espalhou — `RequisicoesPage` acabou cheia de
+`r.status === 'emitida' || (r.status as any) === 'pendente'`, com o `as any` denunciando que
+o valor gravado não existe no domínio. O remendo foi removido junto com a migration: com o
+`CHECK` correto, tentar de novo com outro status só esconderia o erro seguinte.
+
+**A regra**: um retry que muda o dado enviado não é tolerância a falha — é corromper o
+registro para conseguir gravá-lo. Se o servidor recusou, ou o payload está errado (corrija
+o payload) ou a constraint está errada (corrija a constraint). Reenviar diferente resolve o
+insert e cria um defeito que só aparece meses depois, do outro lado da tela.
+
+`'pendente'` e `'negada'` ficaram no `CHECK` novo: é o que as linhas antigas têm gravado, e
+tirá-las quebraria o `UPDATE` delas. As duas checagens duplas na tela seguem de propósito
+pelo mesmo motivo — um backfill de `'pendente'` para `'emitida'` é decisão de produto sobre
+dado existente, não limpeza de código.
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do
