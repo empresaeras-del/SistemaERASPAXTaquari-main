@@ -8,6 +8,15 @@ interface ConfirmOptions {
   confirmText?: string;
   cancelText?: string;
   onConfirm: () => void | Promise<void>;
+  /**
+   * Chamado quando o usuário responde **não** (botão de cancelar).
+   *
+   * Opcional, e por isso todo chamador anterior segue igual: sem ele, cancelar só fecha
+   * o diálogo. Existe para a pergunta em que as duas respostas precisam continuar o
+   * fluxo — "deseja gerar a cobrança?" é uma pergunta, não uma confirmação de risco: o
+   * "não" também tem de fechar a tela e finalizar o cadastro.
+   */
+  onCancel?: () => void | Promise<void>;
   danger?: boolean;
 }
 
@@ -34,6 +43,18 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLoading(false);
     }, 300);
   }, []);
+
+  const handleCancel = async () => {
+    // Fecha primeiro: o `onCancel` pode abrir outro diálogo, e os dois não podem
+    // disputar a tela. O erro é engolido de propósito — "não" é a resposta segura, e
+    // travar o diálogo aberto deixaria o usuário sem saída.
+    handleClose();
+    try {
+      await options?.onCancel?.();
+    } catch (e) {
+      console.error('Erro ao processar a recusa da confirmação:', e);
+    }
+  };
 
   const handleConfirm = async () => {
     if (!options) return;
@@ -69,7 +90,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 <button
                   type="button"
                   disabled={loading}
-                  onClick={handleClose}
+                  onClick={handleCancel}
                   className="px-4 py-2 bg-bg-hover border border-[#64748B] text-text-muted rounded-xl font-medium hover:bg-[#64748B] hover:text-text-base transition-colors disabled:opacity-50"
                 >
                   {options.cancelText || 'Cancelar'}

@@ -55,7 +55,12 @@ import { ptBR } from 'date-fns/locale';
 import { formatLocalDate, formatLocalDateTime } from '../utils/dateUtils';
 import toast from 'react-hot-toast';
 import { getRemessas } from '../services/faturamentoService';
-import { salvarReceita, Receita, ParcelaReceber } from '../services/financeiroService';
+import { salvarReceita, getReceitasPorRequisicao } from '../services/financeiroService';
+import {
+  avisoCobrancaExistente,
+  deveOferecerCobranca,
+  montarCobrancaCoparticipacao,
+} from '../utils/cobrancaAutomatica';
 import { resolverContaLancamento } from '../services/planoContabilService';
 import { CODIGO_CONTA_SERVICO_EXTRA } from '../config/planoContabilPadrao.config';
 
@@ -373,61 +378,86 @@ export const RequisicoesPage: React.FC = () => {
         reqData.status = 'emitida';
         novaReq = await criarRequisicao(state.isOnline, tenantId, reqData as any);
       }
-      // Gerar Conta a Receber se houver Co-participação
+      toast.success(`Guia ${novaReq.codigo_requisicao} emitida com sucesso!`);
+
+      // Fecha a tela e recarrega — destino das DUAS respostas da pergunta de cobrança.
+      const finalizarEmissao = async () => {
+        setModalNovaGuia(false);
+        resetForm();
+        setRequisicaoParaVisualizar(novaReq);
+        await loadData();
+      };
+
+      // A co-participação deixou de virar conta a receber sozinha: quem decide é o
+      // operador. Sem valor a cobrar não há o que perguntar.
       const valorTotalAssociado = itensGuia.reduce((acc, i) => acc + i.valor_total + (i.valor_coparticipacao || 0), 0);
-      if (valorTotalAssociado > 0) {
-        const dPlus2 = new Date();
-        dPlus2.setDate(dPlus2.getDate() + 2);
-        const dataVencimento = dPlus2.toISOString();
-        const dataEmissao = new Date().toISOString();
-
-        // Fase 3: co-participação nasce classificada como serviço extra.
-        const contaContabil = await resolverContaLancamento(
-          state.isOnline, tenantId, 'receita', CODIGO_CONTA_SERVICO_EXTRA,
-        );
-
-        const novaReceita: Receita = {
-          id: generateUUID(),
-          tenant_id: tenantId,
-          tipo_devedor: 'associado',
-          associado_id: associadoSelecionado.id,
-          associado_nome: associadoSelecionado.nome,
-          associado_cpf: associadoSelecionado.cpf,
-          descricao: `Co-participação - Guia ${novaReq.codigo_requisicao || 'Atualizada'}`,
-          categoria: contaContabil?.nome || 'Serviço Extra',
-          conta_contabil_id: contaContabil?.id || null,
-          data_emissao: dataEmissao,
-          data_inicio_cobranca: dataVencimento,
-          valor_total: valorTotalAssociado,
-          qtd_parcelas: 1,
-          forma_pagamento_padrao: 'pix',
-          status: 'ativo'
-        };
-
-        const parcelaUnica: ParcelaReceber = {
-          id: generateUUID(),
-          tenant_id: tenantId,
-          receita_id: novaReceita.id,
-          numero_parcela: 1,
-          valor: valorTotalAssociado,
-          data_vencimento: dataVencimento,
-          status: 'pendente',
-          forma_pagamento: 'pix',
-          tipo_devedor: 'associado',
-          devedor_nome: associadoSelecionado.nome,
-          devedor_cpf_cnpj: associadoSelecionado.cpf,
-          descricao: `Co-participação - Guia ${novaReq.codigo_requisicao || 'Atualizada'}`
-        };
-
-        await salvarReceita(state.isOnline, novaReceita, [parcelaUnica]);
-        toast.success(`Conta a Receber (Co-part.) gerada com sucesso!`);
+      if (!deveOferecerCobranca(valorTotalAssociado)) {
+        await finalizarEmissao();
+        return;
       }
 
-      toast.success(`Guia ${novaReq.codigo_requisicao} emitida com sucesso!`);
-      setModalNovaGuia(false);
-      resetForm();
-      setRequisicaoParaVisualizar(novaReq);
-      await loadData();
+      // Numa reedição a guia pode já ter cobrado — antes desta mudança ela cobrava de
+      // novo, em silêncio, a cada vez que era salva. O aviso é o que dá ao operador a
+      // informação que faltava para responder.
+      let avisoAnterior: string | null = null;
+      if (editingRequisicao) {
+        try {
+          const jaCobradas = await getReceitasPorRequisicao(novaReq.id, state.isOnline, tenantId);
+          avisoAnterior = avisoCobrancaExistente(jaCobradas, formatCurrency);
+        } catch (e) {
+          // Aviso é enriquecimento, não pré-requisito: a pergunta vai sem ele.
+          console.warn('Não foi possível verificar cobranças anteriores da guia:', e);
+        }
+      }
+
+      confirm({
+        title: 'Gerar cobrança?',
+        message:
+          `Esta guia tem ${formatCurrency(valorTotalAssociado)} de co-participação. ` +
+          `Deseja gerar uma conta a receber para ${associadoSelecionado.nome}?` +
+          (avisoAnterior ? ` ${avisoAnterior}` : ''),
+        confirmText: 'Sim, gerar cobrança',
+        cancelText: 'Não gerar',
+        danger: Boolean(avisoAnterior),
+        onConfirm: async () => {
+          try {
+            // Fase 3: co-participação nasce classificada como serviço extra.
+            const contaContabil = await resolverContaLancamento(
+              state.isOnline, tenantId, 'receita', CODIGO_CONTA_SERVICO_EXTRA,
+            );
+
+            const { receita, parcelas } = montarCobrancaCoparticipacao({
+              novoId: generateUUID,
+              tenantId,
+              hoje: new Date(),
+              valor: valorTotalAssociado,
+              requisicaoId: novaReq.id,
+              codigoGuia: novaReq.codigo_requisicao || 'Atualizada',
+              associadoId: associadoSelecionado.id,
+              associadoNome: associadoSelecionado.nome,
+              associadoCpf: associadoSelecionado.cpf,
+              contaContabil,
+            });
+
+            await salvarReceita(state.isOnline, receita, parcelas);
+            toast.success(
+              `Cobrança de ${formatCurrency(valorTotalAssociado)} gerada — parcela única com ` +
+              `vencimento em ${formatLocalDate(parcelas[0].data_vencimento)}.`,
+            );
+          } catch (err) {
+            // A guia já está emitida; só a cobrança falhou. Dizer isso evita que o
+            // operador emita a guia de novo achando que se perdeu.
+            console.error('Erro ao gerar a cobrança da guia:', err);
+            toast.error('A guia foi emitida, mas a cobrança não pôde ser gerada. Lance-a em Contas a Receber.');
+          } finally {
+            await finalizarEmissao();
+          }
+        },
+        onCancel: async () => {
+          toast.success('Guia emitida sem cobrança de co-participação.');
+          await finalizarEmissao();
+        },
+      });
 
     } catch (err: any) {
       console.error(err);

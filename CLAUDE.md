@@ -618,6 +618,67 @@ guarda que faltava: `documentoVariaveis.test.ts` agora falha se alguma tag do m�
 existir no catálogo sem resolver — o sintoma dessa divergência é mudo (a tag aparece no painel, o
 operador a usa no modelo, e ela nunca preenche), e este arquivo já registra duas ocorrências dela.
 
+## A cobrança automática virou pergunta (atendimento e requisição)
+
+Até 11/09/2026, finalizar um atendimento com item fora da cobertura, ou emitir uma guia com
+co-participação, **criava a conta a receber sozinho**, no meio do salvamento. Não havia como
+registrar um atendimento de cortesia, nem corrigir o endereço de uma guia, sem gerar cobrança —
+e na reedição a guia cobrava **de novo**, em silêncio, a cada save. Agora o operador é perguntado,
+e a resposta "não" finaliza o cadastro sem receita nenhuma.
+
+Cinco decisões deste bloco valem como regra:
+
+- **Montar e gravar são passos separados** (`utils/cobrancaAutomatica.ts`, puro e testado). A
+  pergunta precisa mostrar o valor **antes** de existir registro, e a recusa precisa ser tão
+  barata quanto a confirmação — o que só é possível se montar a proposta não escrever nada. É a
+  mesma divisão da Ficha de Cadastro e da Demonstração Contábil: a função pura decide **o quê**,
+  a tela decide **quando**.
+- **Os dois fluxos tinham a mesma regra escrita duas vezes, com datas diferentes.** Atendimento
+  usava `format(new Date(), 'yyyy-MM-dd')` (data local) e requisição usava `.toISOString()` (UTC):
+  uma guia emitida às 21h em UTC-3 nascia datada de **amanhã**, a do atendimento não. Unificado em
+  `dataLocalISO`. Vale a lição que este arquivo já registra em `anoDaData()`: **o ano e o dia vêm
+  do relógio local, nunca de `toISOString()`**.
+- **A obrigatoriedade é do operador, não da coluna.** Nenhum `NOT NULL`, nenhuma trava: só a
+  pergunta. `deveOferecerCobranca` suprime a pergunta quando não há valor a cobrar — perguntar
+  "deseja cobrar R$ 0,00?" treina a responder sem ler, e é assim que uma pergunta útil vira ruído.
+- **A falha da cobrança não desfaz o cadastro.** O atendimento (ou a guia) já está gravado quando a
+  pergunta aparece; se `salvarReceita` falhar, o `toast` diz exatamente isso — "foi salvo, mas a
+  cobrança não pôde ser gerada" — e aponta Contas a Receber. Um erro genérico faria o operador
+  cadastrar tudo de novo, duplicando o registro que deu certo. O `finally` leva as duas respostas
+  e o erro ao mesmo destino (`finalizarEmissao`/`seguirParaPerguntaDeStatus`): fechar a tela não
+  pode depender do caminho feliz.
+- **`ConfirmContext` ganhou `onCancel`** porque "não" passou a ter trabalho próprio (avisar e
+  finalizar), e não só fechar o diálogo. Ele fecha **antes** de executar o callback — o `onCancel`
+  pode abrir outro diálogo, como abre no wizard de atendimento — e engole a exceção do callback em
+  `console.error`: um erro ali não pode deixar o modal preso na tela.
+
+### O vínculo `receitas.requisicao_id` existe para a pergunta, não para o relatório
+
+Migration `20260911124654`. A guia só sabia que tinha cobrado pelo texto da descrição
+(`Co-participação - Guia X`), o que nenhuma consulta pode usar como chave. Sem o vínculo, a
+pergunta na reedição seria feita às cegas — e é justamente na reedição que o operador precisa
+saber que já cobrou.
+
+- **FK composta com `tenant_id`**, como manda a seção do plano contábil:
+  `(tenant_id, requisicao_id) → requisicoes (tenant_id, id)`, com a `unique (tenant_id, id)` nova
+  do lado referenciado. `receitas.atendimento_id`, mais antigo, **não tem FK nenhuma** — o
+  precedente do arquivo não é o que vale, a regra atual é.
+- **`ON DELETE SET NULL (requisicao_id)`** — a lista de colunas (PG 15+; o servidor é 17.6) é
+  obrigatória aqui: um `SET NULL` sem ela tentaria anular também o `tenant_id`, que é `NOT NULL`,
+  e o delete falharia. E `SET NULL` é a escolha certa contra `CASCADE` porque excluir a guia
+  (que é *hard delete*) não pode levar junto um **registro financeiro** que talvez já tenha sido
+  recebido: a cobrança sobrevive, órfã do vínculo.
+- **Receita cancelada não conta no aviso** (`avisoCobrancaExistente`). Ela existe no banco e não
+  cobra ninguém; avisar sobre ela faria o operador desistir de uma cobrança legítima achando que
+  duplicaria.
+- **O aviso é enriquecimento, não pré-requisito**: a consulta vive em `try/catch` e, se falhar, a
+  pergunta vai sem ele. Bloquear a pergunta por causa do aviso trocaria uma informação a menos por
+  um cadastro travado.
+
+`getReceitasPorRequisicao` segue o padrão offline-first e **de propósito não tem o fallback por
+texto da descrição** que `getReceitasPorAtendimento` tem: aqui existe chave de verdade, e casar
+por texto voltaria a ser o que esta coluna veio substituir.
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do

@@ -33,6 +33,9 @@ import {
 import { format } from 'date-fns';
 import { useToast } from '../../context/ToastContext';
 import { formatLocalDate } from '../../utils/dateUtils';
+import { formatCurrency } from '../../utils/formatters';
+import { useConfirm } from '../../context/ConfirmContext';
+import { deveOferecerCobranca, montarCobrancaAtendimento } from '../../utils/cobrancaAutomatica';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
 import { falecidoExternoSchema, responsavelExternoSchema } from '../../schemas/atendimentoSchema';
@@ -51,6 +54,7 @@ export const NovoAtendimentoWizard: React.FC<{
 }> = ({ onClose, onSuccess }) => {
   const { state } = useAppContext();
   const toast = useToast();
+  const { confirm } = useConfirm();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [inactivating, setInactivating] = useState(false);
@@ -299,80 +303,85 @@ export const NovoAtendimentoWizard: React.FC<{
 
       await saveAtendimento(newAtendimento, state.isOnline);
 
-      // Gerar contas a receber se tiver valor descoberto
-      if (financeiro.totalUncovered > 0) {
-        const receitaId = generateUUID();
-        const tipoDev = tipoCliente === 'associado' ? 'associado' : 'cliente_pf';
-        const devNome = tipoCliente === 'associado' ? selectedAssociado?.nome : fNome;
-        const devCpf = tipoCliente === 'associado' ? selectedAssociado?.cpf : fCpf;
-
-        // Fase 3: o lançamento nasce classificado mesmo sem passar por formulário.
-        const contaContabil = await resolverContaLancamento(
-          state.isOnline, tenantId, 'receita', CODIGO_CONTA_SERVICO_EXTRA,
-        );
-
-        const dataHojeStr = format(new Date(), 'yyyy-MM-dd');
-        const dataVencimento = new Date();
-        dataVencimento.setDate(dataVencimento.getDate() + 2);
-        const dataVencimentoStr = format(dataVencimento, 'yyyy-MM-dd');
-
-        await salvarReceita(
-          state.isOnline,
-          {
-            id: receitaId,
-            tenant_id: tenantId,
-            tipo_devedor: tipoDev,
-            associado_id: tipoCliente === 'associado' ? selectedAssociado?.id : undefined,
-            associado_nome: tipoCliente === 'associado' ? selectedAssociado?.nome : undefined,
-            cliente_tipo: 'pf',
-            cliente_nome: fNome,
-            cliente_cpf_cnpj: fCpf,
-            descricao: `Serviços Adicionais - Atendimento: ${fNome}`,
-            categoria: contaContabil?.nome || 'Serviço Extra',
-            conta_contabil_id: contaContabil?.id || null,
-            data_emissao: dataHojeStr,
-            data_inicio_cobranca: dataHojeStr,
-            valor_total: financeiro.totalUncovered,
-            qtd_parcelas: 1,
-            forma_pagamento_padrao: 'Dinheiro',
-            status: 'ativo',
-            atendimento_id: newAtendimento.id,
-          },
-          [
-            {
-              id: generateUUID(),
-              tenant_id: tenantId,
-              receita_id: receitaId,
-              numero_parcela: 1,
-              descricao: `Parcela Única - Serviços Adicionais: ${fNome}`,
-              valor: financeiro.totalUncovered,
-              data_vencimento: dataVencimentoStr,
-              status: 'pendente',
-              tipo_devedor: tipoDev,
-              devedor_nome: devNome,
-              devedor_cpf_cnpj: devCpf,
-              forma_pagamento: 'Dinheiro',
-            },
-          ],
-        );
-      }
-
       toast.success('Atendimento registrado com sucesso!');
 
-      // Regra Global: Questionamento sobre status do associado ou dependente atendido
-      if (tipoCliente === 'associado' && selectedAssociado) {
-        const isTitular = falecidoId === 'associado';
-        const dep = !isTitular
-          ? selectedAssociado.dependentes?.find((d) => d.id === falecidoId)
-          : undefined;
-        setStatusQuestionData({
-          associado: selectedAssociado,
-          isTitular,
-          dependente: dep,
-        });
-      } else {
-        onSuccess();
+      // Regra Global: Questionamento sobre status do associado ou dependente atendido.
+      // Vira função porque agora ela é o destino das DUAS respostas da pergunta de
+      // cobrança — antes era o único caminho depois do salvamento.
+      const seguirParaPerguntaDeStatus = () => {
+        if (tipoCliente === 'associado' && selectedAssociado) {
+          const isTitular = falecidoId === 'associado';
+          const dep = !isTitular
+            ? selectedAssociado.dependentes?.find((d) => d.id === falecidoId)
+            : undefined;
+          setStatusQuestionData({
+            associado: selectedAssociado,
+            isTitular,
+            dependente: dep,
+          });
+        } else {
+          onSuccess();
+        }
+      };
+
+      // A cobrança dos itens não cobertos deixou de ser automática: quem decide é o
+      // operador. Sem valor descoberto não há o que perguntar.
+      if (!deveOferecerCobranca(financeiro.totalUncovered)) {
+        seguirParaPerguntaDeStatus();
+        return;
       }
+
+      const valorACobrar = financeiro.totalUncovered;
+      const quemPaga = tipoCliente === 'associado' ? selectedAssociado?.nome : fNome;
+
+      confirm({
+        title: 'Gerar cobrança?',
+        message:
+          `Este atendimento tem ${formatCurrency(valorACobrar)} não coberto pelo plano. ` +
+          `Deseja gerar uma conta a receber para ${quemPaga || 'o cliente'}?`,
+        confirmText: 'Sim, gerar cobrança',
+        cancelText: 'Não gerar',
+        onConfirm: async () => {
+          try {
+            // Fase 3: o lançamento nasce classificado mesmo sem passar por formulário.
+            const contaContabil = await resolverContaLancamento(
+              state.isOnline, tenantId, 'receita', CODIGO_CONTA_SERVICO_EXTRA,
+            );
+
+            const { receita, parcelas } = montarCobrancaAtendimento({
+              novoId: generateUUID,
+              tenantId,
+              hoje: new Date(),
+              valor: valorACobrar,
+              atendimentoId: newAtendimento.id,
+              falecidoNome: fNome,
+              falecidoCpf: fCpf,
+              ehAssociado: tipoCliente === 'associado',
+              associadoId: selectedAssociado?.id,
+              associadoNome: selectedAssociado?.nome,
+              associadoCpf: selectedAssociado?.cpf,
+              contaContabil,
+            });
+
+            await salvarReceita(state.isOnline, receita, parcelas);
+            toast.success(
+              `Cobrança de ${formatCurrency(valorACobrar)} gerada — parcela única com ` +
+              `vencimento em ${formatLocalDate(parcelas[0].data_vencimento)}.`,
+            );
+          } catch (err) {
+            // O atendimento já está salvo; só a cobrança falhou. Dizer isso é o que
+            // impede o operador de cadastrar tudo de novo achando que se perdeu.
+            console.error('Erro ao gerar a cobrança do atendimento:', err);
+            toast.error('O atendimento foi salvo, mas a cobrança não pôde ser gerada. Lance-a em Contas a Receber.');
+          } finally {
+            seguirParaPerguntaDeStatus();
+          }
+        },
+        onCancel: () => {
+          toast.success('Atendimento finalizado sem cobrança.');
+          seguirParaPerguntaDeStatus();
+        },
+      });
     } catch (e) {
       console.error(e);
       toast.error('Erro ao registrar atendimento');
