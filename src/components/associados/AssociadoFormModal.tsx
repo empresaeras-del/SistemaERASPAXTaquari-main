@@ -13,6 +13,7 @@ import { DependenteFormModal } from './DependenteFormModal';
 import { ContratoDocumentosGenerator } from './ContratoDocumentosGenerator';
 import { NovoContratoWizard } from '../contratos/NovoContratoWizard';
 import { validarDadosAssociado } from '../../utils/associadoValidation';
+import { encontrarAssociadoComCpfDuplicado } from '../../utils/associadoHelpers';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { formatDateSafe } from '../../utils/dateUtils';
 import { formatPhone } from '../../utils/formatters';
@@ -431,9 +432,14 @@ export const AssociadoFormModal = (props: any) => {
                                 handleFieldChange("cpf", formatted);
                                 const cpfLimpo = formatted.replace(/\D/g, '');
                                 if (cpfLimpo.length === 11) {
-                                  const duplicateUser = associados.find((a: any) => a.status === 'ativo' && a.cpf?.replace(/\D/g, '') === cpfLimpo && a.id !== editingAssociado.id);
+                                  // Mesmo predicado do salvar, e por isso a mesma função:
+                                  // escrito à mão aqui, este aviso ignorava a empresa e
+                                  // acusava duplicidade de outra companhia.
+                                  const duplicateUser = encontrarAssociadoComCpfDuplicado(
+                                    associados, formatted, editingAssociado.tenant_id, editingAssociado.id,
+                                  );
                                   if (duplicateUser) {
-                                    toast.error(`ATENÇÃO: CPF já cadastrado no associado ativo: ${duplicateUser.nome}`);
+                                    toast.error(`ATENÇÃO: CPF já cadastrado nesta empresa no associado ativo: ${duplicateUser.nome}`);
                                   }
                                 }
                               }}

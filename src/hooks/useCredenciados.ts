@@ -112,7 +112,7 @@ export function useCredenciados() {
       await carregarCredenciados();
     } catch (err: any) {
       console.error("Criar error:", JSON.stringify(err));
-      if (err.code === "23505") throw new Error("Já existe um credenciado com este CNPJ/CPF.");
+      if (err.code === "23505") throw new Error("Já existe um credenciado com este CNPJ/CPF nesta empresa.");
       throw new Error(err.message ? err.message : JSON.stringify(err));
     }
   };
@@ -149,7 +149,7 @@ export function useCredenciados() {
       await carregarCredenciados();
     } catch (err: any) {
       console.error("Editar error:", JSON.stringify(err));
-      if (err.code === "23505") throw new Error("Já existe um credenciado com este CNPJ/CPF.");
+      if (err.code === "23505") throw new Error("Já existe um credenciado com este CNPJ/CPF nesta empresa.");
       throw new Error(err.message ? err.message : JSON.stringify(err));
     }
   };

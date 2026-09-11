@@ -581,6 +581,51 @@ registro sem valor falha com uma violação de `UNIQUE` que parece dizer "já ex
 quando não existe nenhum de verdade — só o valor vazio duplicado. Normalize no ponto de escrita
 (`valor.trim() || null`), não na coluna.
 
+## Unicidade de documento é por empresa — a mesma pessoa pode estar em duas
+
+Relato da UI em 11/09/2026: uma empresa não conseguia cadastrar CPF/CNPJ que outra já
+tinha. É vazamento entre empresas na direção oposta à dos incidentes anteriores — não
+expunha dado de ninguém, mas deixava uma empresa **bloquear o cadastro da outra**, citando
+um registro que o operador nem podia abrir (a RLS esconde o de outra empresa). Duas causas
+independentes, uma em cada módulo:
+
+- **`credenciados`**: `credenciados_cnpj_cpf_key UNIQUE (cnpj_cpf)` era **global**
+  (migration `20260911135652`). Credenciar o mesmo hospital em duas empresas é o caso
+  normal, não duplicidade. Virou o índice parcial
+  `credenciados_tenant_documento_uk (tenant_id, cnpj_cpf) nulls not distinct where cnpj_cpf is not null`.
+- **`associados`**: não há constraint no banco — a guarda é `encontrarAssociadoComCpfDuplicado`,
+  e ela varria a lista inteira. A lista vem de `getAssociados(isOnline, empresaSelecionada)`,
+  que devolve **todas** as empresas quando a seleção é `'all'` — o estado do super_admin.
+
+Três decisões valem como regra:
+
+- **Índice parcial em vez de constraint de tabela, por duas coisas que a constraint não
+  alcança.** `where cnpj_cpf is not null` preserva a regra de "campo opcional grava `NULL`"
+  (vários credenciados sem documento na mesma empresa). E `nulls not distinct` fecha o
+  buraco do tenant: `credenciados.tenant_id` é **nullable**, e no padrão `NULLS DISTINCT`
+  dois registros com tenant nulo e o mesmo documento não colidiriam — a unicidade
+  simplesmente não valeria para eles. Como o predicado já exclui documento nulo, o
+  `nulls not distinct` age só sobre `tenant_id`. **Ao escopar uma unicidade por
+  `tenant_id`, confira se essa coluna é nullable** — senão o escopo tem um fundo falso.
+- **Guarda de escrita não reaproveita filtro de leitura.** A tentação era usar
+  `registroPertenceAoTenant`, mas ela devolve `true` quando o filtro é `'all'`/vazio ("sem
+  filtro"), o que aqui voltaria a casar todas as empresas — reintroduzindo o bug pela porta
+  da frente. Sem empresa resolvida, `encontrarAssociadoComCpfDuplicado` **não afirma
+  duplicidade**; quem recusa a gravação nesse estado é o `MENSAGEM_TENANT_INDEFINIDO` no
+  salvar. As duas funções parecem a mesma pergunta e não são.
+- **O `tenantId` é parâmetro obrigatório, não opcional com padrão.** Opcional, um chamador
+  novo cairia no comportamento antigo sem nenhum aviso — e foi o `tsc` cobrando os três
+  call sites que revelou que o `AssociadoFormModal` tinha o predicado **escrito de novo à
+  mão**, no `onChange` do campo de CPF, com o mesmo defeito. É a lição das três leituras de
+  `plano_id` valendo de novo: predicado repetido em dois lugares só é corrigido uma vez.
+
+Fora do escopo de propósito: **não foi criada unicidade de CPF de associado no banco**. A
+guarda atual só considera associado **ativo** (um CPF pode reaparecer num cadastro
+encerrado e reaberto), e um índice único não sabe disso — imporia uma regra mais dura que a
+de negócio, quebrando gravação de dado que hoje é legítimo. O `existingCpfs` do
+`DependenteFormModal` não entrou porque já é escopado por construção: a lista é a dos
+dependentes daquele titular.
+
 ## Atendimentos: os dados do responsável pelo falecido
 
 `atendimentos` ganhou oito colunas de responsável (migration `20260910183445`):
