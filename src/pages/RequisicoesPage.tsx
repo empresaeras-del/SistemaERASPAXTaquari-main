@@ -460,8 +460,10 @@ export const RequisicoesPage: React.FC = () => {
       });
 
     } catch (err: any) {
+      // Idem ao wizard de atendimento: a causa do servidor aparece na tela.
       console.error(err);
-      toast.error('Erro ao emitir guia de requisição.');
+      const detalhe = err instanceof Error ? err.message : '';
+      toast.error(detalhe ? `Erro ao emitir guia. ${detalhe}` : 'Erro ao emitir guia de requisição.');
     } finally {
       setIsSalvandoGuia(false);
     }

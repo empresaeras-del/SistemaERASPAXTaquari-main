@@ -679,6 +679,57 @@ saber que já cobrou.
 texto da descrição** que `getReceitasPorAtendimento` tem: aqui existe chave de verdade, e casar
 por texto voltaria a ser o que esta coluna veio substituir.
 
+### A tabela `atendimentos` estava vazia, e ninguém sabia
+
+Relato da UI em 11/09/2026: ao recusar a cobrança, o atendimento também não era
+registrado. A recusa não tinha nada a ver — **nenhum atendimento nunca chegou ao
+Postgres**. A tabela tinha zero linhas em produção. A pergunta nova só deu a alguém motivo
+para olhar.
+
+São dois defeitos empilhados, e o de cima é o que escondia o de baixo:
+
+- **O payload era inválido.** O formulário inicializa cada campo com `''`, e era isso que
+  ia para colunas `date`/`timestamptz` (`falecido_data_nascimento`, `data_obito`,
+  `data_velorio`, `data_sepultamento`) — `22007 invalid input syntax for type date: ""`. O
+  caso mais escondido era o de **cliente externo**: `falecidoId` nunca sai de `''` e ia
+  para `dependente_id`, que é `uuid` — `22P02`. Um campo em branco derrubava o insert
+  inteiro. `sanitizeAtendimentoForSupabase` normaliza `''` para `NULL` no ponto de escrita,
+  como já mandavam as seções de `credenciados.cnpj_cpf` e do responsável — **a regra já
+  estava escrita neste arquivo; o que faltou foi aplicá-la às colunas de data e uuid**.
+- **A recusa virava sucesso.** `saveAtendimento` tratava `error` do Supabase com
+  `console.warn`, seguia para o IndexedDB e devolvia `void`. A tela dizia "Atendimento
+  registrado com sucesso!", e como `getAtendimentos` devolve o que vem do servidor quando a
+  busca funciona, o registro sumia da lista no recarregamento seguinte — sem erro em lugar
+  nenhum. É exatamente a armadilha do `PGRST204` que este arquivo já documentava, com outra
+  causa e sem ninguém para notar.
+
+**A regra que vale daqui para frente: recusa do Postgres e queda de rede não podem terminar
+igual.** São indistinguíveis num `catch` só, e tratá-las juntas é o que produz perda
+silenciosa:
+
+- **Exceção lançada** (rede fora, fetch abortado) é o caso offline-first legítimo: vai para
+  o IndexedDB **e para a fila de sync** — é a fila que distingue "criado offline" de
+  "excluído no servidor", como a seção do registro que voltava já explica.
+- **`error` devolvido pelo cliente** é recusa: constraint, RLS, coluna inexistente. Repetir
+  amanhã dá o mesmo resultado, então enfileirar só adia a perda. A função **lança**, o
+  formulário continua aberto com tudo preenchido, e o operador pode corrigir.
+
+`criarRequisicao` e `atualizarRequisicao` tinham o mesmo `console.error` seguido de
+`saveToIDB` e `registrarAuditoria` — auditando como emitida uma guia que o servidor
+recusara. Passaram a lançar do mesmo jeito. Nos dois módulos o `toast` de erro agora
+carrega a mensagem do servidor: um genérico "Erro ao registrar" não diz se o problema é do
+preenchimento, da permissão ou da rede, e sem isso só resta tentar de novo igual.
+
+Detalhe de implementação que vale lembrar: nos três casos a recusa é guardada numa variável
+e relançada **depois** do `catch`. Lançar de dentro do `try` cairia no próprio `catch` que
+trata rede — e o erro voltaria a ser engolido, agora por um caminho novo.
+
+**O diagnóstico veio do banco, não da leitura do código.** Três hipóteses plausíveis sobre
+o diálogo de confirmação (fechar pelo backdrop, z-index, `onCancel` não disparando) foram
+descartadas em minutos por um `select` que mostrou a tabela vazia e por dois inserts numa
+transação revertida que devolveram o `SQLSTATE` exato. **Quando o sintoma é "não gravou",
+pergunte ao banco antes de reler o componente.**
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do

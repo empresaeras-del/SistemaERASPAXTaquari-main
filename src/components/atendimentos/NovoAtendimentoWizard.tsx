@@ -383,8 +383,12 @@ export const NovoAtendimentoWizard: React.FC<{
         },
       });
     } catch (e) {
+      // A mensagem do servidor vai junto: um genérico "Erro ao registrar" não diz se o
+      // problema é do preenchimento, da permissão ou da rede — e sem isso o operador só
+      // pode tentar de novo, do mesmo jeito. O formulário continua aberto e preenchido.
       console.error(e);
-      toast.error('Erro ao registrar atendimento');
+      const detalhe = e instanceof Error ? e.message : '';
+      toast.error(detalhe ? `Erro ao registrar atendimento. ${detalhe}` : 'Erro ao registrar atendimento');
     } finally {
       setLoading(false);
     }
