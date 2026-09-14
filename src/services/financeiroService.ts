@@ -3,6 +3,7 @@ import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb'
 import { addToSyncQueue, getSyncQueue } from '../lib/syncService';
 import { generateUUID } from '../utils/uuid';
 import { tenantDeEscrita, registroPertenceAoTenant, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
+import { MENSAGEM_PARCELA_LIQUIDADA, parcelaLiquidada } from '../utils/statusParcela';
 import { mesclarComCacheLocal, idsPendentesDeSync } from '../utils/mesclagemOfflineFirst';
 
 export type FormaPagamento = string;
@@ -397,6 +398,14 @@ export const atualizarParcelaReceber = async (isOnline: boolean, parcela: Partia
     } catch (e) {
       console.warn('Erro ao buscar parcela existente para atualizar:', e);
     }
+  }
+
+  // Parcela liquidada não se edita. A checagem usa o status **gravado**, nunca o que
+  // veio no payload: o formulário de edição tem um seletor de status, então aceitar o
+  // valor enviado deixaria qualquer um destravar a parcela mudando o próprio campo que
+  // a protege. Esconder o botão na tela é conveniência; a recusa mora aqui.
+  if (parcelaLiquidada(existente?.status)) {
+    throw new Error(MENSAGEM_PARCELA_LIQUIDADA);
   }
 
   const mesclada: ParcelaReceber = {
@@ -924,7 +933,24 @@ export const estornarPagamento = async (isOnline: boolean, parcelaId: string, ob
 
 export const excluirParcelaReceber = async (isOnline: boolean, parcelaId: string): Promise<void> => {
   // Buscar a parcela antes de excluir para pegar o receita_id e tenant_id
-  const parcela = await getFromIDB<ParcelaReceber>('parcelas_receber', parcelaId);
+  let parcela = await getFromIDB<ParcelaReceber>('parcelas_receber', parcelaId);
+  if (!parcela && isOnline) {
+    // Sem a linha não dá para saber se ela foi recebida, e o IndexedDB pode não tê-la
+    // (outro navegador, cache limpo). Buscar no servidor é o que faz a guarda abaixo
+    // valer de verdade, em vez de passar batido justamente onde falta informação.
+    try {
+      const { data } = await supabase.from('parcelas_receber').select('*').eq('id', parcelaId).maybeSingle();
+      if (data) parcela = data;
+    } catch (e) {
+      console.warn('Erro ao buscar parcela antes de excluir:', e);
+    }
+  }
+
+  // Mesma regra da edição: estorne o recebimento antes de excluir.
+  if (parcelaLiquidada(parcela?.status)) {
+    throw new Error(MENSAGEM_PARCELA_LIQUIDADA);
+  }
+
   const receitaId = parcela?.receita_id;
   const tenantId = parcela?.tenant_id;
 

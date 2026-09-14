@@ -31,6 +31,8 @@ import {
   registrarPagamento,
   estornarRecebimento,
   estornarPagamento,
+  atualizarParcelaReceber,
+  excluirParcelaReceber,
   Receita,
   ParcelaReceber,
   ParcelaPagar,
@@ -653,5 +655,50 @@ describe('getReceitas (online) — cache que sobrevive à exclusão em outra ses
     expect(receitas.map((r) => r.id)).toEqual(['viva']);
     const { deleteFromIDB } = await import('../lib/idb');
     expect(vi.mocked(deleteFromIDB)).not.toHaveBeenCalled();
+  });
+});
+
+describe('parcela liquidada é intocável no ponto de escrita (offline)', () => {
+  beforeEach(() => {
+    mockGetFromIDB.mockReset();
+    mockSaveToIDB.mockReset();
+    mockAddToSyncQueue.mockReset();
+  });
+
+  it('recusa editar parcela recebida', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p1', status: 'recebido' });
+    await expect(
+      atualizarParcelaReceber(false, { id: 'p1', valor: 1 }),
+    ).rejects.toThrow(/já foi recebida/);
+    expect(mockSaveToIDB).not.toHaveBeenCalled();
+  });
+
+  it('recusa editar parcela paga — o outro nome do mesmo estado', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p1', status: 'pago' });
+    await expect(atualizarParcelaReceber(false, { id: 'p1', valor: 1 })).rejects.toThrow();
+  });
+
+  it('o status do payload não destrava a parcela', async () => {
+    // O formulário de edição tem seletor de status: aceitar o valor enviado deixaria
+    // qualquer um liberar a parcela mudando o próprio campo que a protege.
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p1', status: 'recebido' });
+    await expect(
+      atualizarParcelaReceber(false, { id: 'p1', status: 'pendente', valor: 1 }),
+    ).rejects.toThrow(/já foi recebida/);
+  });
+
+  it('recusa excluir parcela recebida', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p1', status: 'recebido' });
+    await expect(excluirParcelaReceber(false, 'p1')).rejects.toThrow(/já foi recebida/);
+    const { deleteFromIDB } = await import('../lib/idb');
+    expect(vi.mocked(deleteFromIDB)).not.toHaveBeenCalledWith('parcelas_receber', 'p1');
+  });
+
+  it('parcela pendente continua editável e excluível', async () => {
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p1', status: 'pendente' });
+    await expect(atualizarParcelaReceber(false, { id: 'p1', valor: 1 })).resolves.toBeUndefined();
+
+    mockGetFromIDB.mockResolvedValue({ ...baseParcelaReceber, id: 'p2', status: 'pendente' });
+    await expect(excluirParcelaReceber(false, 'p2')).resolves.toBeUndefined();
   });
 });

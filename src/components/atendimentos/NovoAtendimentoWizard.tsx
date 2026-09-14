@@ -35,7 +35,7 @@ import { useToast } from '../../context/ToastContext';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatters';
 import { useConfirm } from '../../context/ConfirmContext';
-import { deveOferecerCobranca, montarCobrancaAtendimento } from '../../utils/cobrancaAutomatica';
+import { deveOferecerCobranca, montarCobrancaAtendimento, vencimentoPadrao } from '../../utils/cobrancaAutomatica';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
 import { falecidoExternoSchema, responsavelExternoSchema } from '../../schemas/atendimentoSchema';
@@ -333,12 +333,23 @@ export const NovoAtendimentoWizard: React.FC<{
 
       const valorACobrar = financeiro.totalUncovered;
       const quemPaga = tipoCliente === 'associado' ? selectedAssociado?.nome : fNome;
+      // `hoje` é calculado uma vez e usado no resumo E na montagem: o vencimento que o
+      // operador lê na pergunta é literalmente o que será gravado, não uma segunda conta
+      // feita com outro relógio.
+      const hoje = new Date();
 
       confirm({
         title: 'Gerar cobrança?',
         message:
-          `Este atendimento tem ${formatCurrency(valorACobrar)} não coberto pelo plano. ` +
-          `Deseja gerar uma conta a receber para ${quemPaga || 'o cliente'}?`,
+          `Este atendimento tem itens não cobertos pelo plano. ` +
+          `Deseja gerar a conta a receber abaixo?`,
+        resumo: [
+          { rotulo: 'Valor', valor: formatCurrency(valorACobrar), destaque: true },
+          { rotulo: 'Vencimento', valor: formatLocalDate(vencimentoPadrao(hoje)) },
+          { rotulo: 'Devedor', valor: quemPaga || 'Cliente' },
+          { rotulo: 'Parcelas', valor: 'Parcela única' },
+          { rotulo: 'Forma', valor: 'Dinheiro' },
+        ],
         confirmText: 'Sim, gerar cobrança',
         cancelText: 'Não gerar',
         onConfirm: async () => {
@@ -351,7 +362,7 @@ export const NovoAtendimentoWizard: React.FC<{
             const { receita, parcelas } = montarCobrancaAtendimento({
               novoId: generateUUID,
               tenantId,
-              hoje: new Date(),
+              hoje,
               valor: valorACobrar,
               atendimentoId: newAtendimento.id,
               falecidoNome: fNome,

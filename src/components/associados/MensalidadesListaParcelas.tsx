@@ -1,5 +1,6 @@
 import React from 'react';
-import { Trash2, DollarSign, Printer, Edit3 } from 'lucide-react';
+import { Trash2, DollarSign, Printer, Edit3, Lock } from 'lucide-react';
+import { MENSAGEM_PARCELA_LIQUIDADA, parcelaLiquidada } from '../../utils/statusParcela';
 import { ParcelaReceber } from '../../services/financeiroService';
 import { formatCurrency } from '../../utils/formatters';
 import { formatLocalDate } from '../../utils/dateUtils';
@@ -209,7 +210,10 @@ export const MensalidadesListaParcelas: React.FC<MensalidadesListaParcelasProps>
                             Recibo
                           </button>
                         )}
-                        {isAdmin && (
+                        {/* Parcela liquidada não se edita nem se exclui: ela já tem
+                            recibo, movimentação de caixa e entrou no realizado do Plano
+                            de Contas. O caminho é estornar primeiro. */}
+                        {isAdmin && !parcelaLiquidada(p.status) && (
                           <>
                             <button
                               type="button"
@@ -228,6 +232,14 @@ export const MensalidadesListaParcelas: React.FC<MensalidadesListaParcelasProps>
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </>
+                        )}
+                        {isAdmin && parcelaLiquidada(p.status) && (
+                          <span
+                            title={MENSAGEM_PARCELA_LIQUIDADA}
+                            className="p-1 text-text-subtle/60"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
                         )}
                       </div>
                     </td>

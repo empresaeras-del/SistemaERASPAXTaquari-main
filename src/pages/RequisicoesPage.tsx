@@ -60,6 +60,7 @@ import {
   avisoCobrancaExistente,
   deveOferecerCobranca,
   montarCobrancaCoparticipacao,
+  vencimentoPadrao,
 } from '../utils/cobrancaAutomatica';
 import { resolverContaLancamento } from '../services/planoContabilService';
 import { CODIGO_CONTA_SERVICO_EXTRA } from '../config/planoContabilPadrao.config';
@@ -410,12 +411,23 @@ export const RequisicoesPage: React.FC = () => {
         }
       }
 
+      // Mesma data para o que se mostra e para o que se grava (ver wizard de atendimento).
+      const hoje = new Date();
+
       confirm({
         title: 'Gerar cobrança?',
         message:
-          `Esta guia tem ${formatCurrency(valorTotalAssociado)} de co-participação. ` +
-          `Deseja gerar uma conta a receber para ${associadoSelecionado.nome}?` +
-          (avisoAnterior ? ` ${avisoAnterior}` : ''),
+          `Esta guia tem co-participação do associado. ` +
+          `Deseja gerar a conta a receber abaixo?`,
+        resumo: [
+          { rotulo: 'Valor', valor: formatCurrency(valorTotalAssociado), destaque: true },
+          { rotulo: 'Vencimento', valor: formatLocalDate(vencimentoPadrao(hoje)) },
+          { rotulo: 'Devedor', valor: associadoSelecionado.nome },
+          { rotulo: 'Guia', valor: novaReq.codigo_requisicao || 'Atualizada' },
+          { rotulo: 'Parcelas', valor: 'Parcela única' },
+          { rotulo: 'Forma', valor: 'PIX' },
+        ],
+        aviso: avisoAnterior,
         confirmText: 'Sim, gerar cobrança',
         cancelText: 'Não gerar',
         danger: Boolean(avisoAnterior),
@@ -429,7 +441,7 @@ export const RequisicoesPage: React.FC = () => {
             const { receita, parcelas } = montarCobrancaCoparticipacao({
               novoId: generateUUID,
               tenantId,
-              hoje: new Date(),
+              hoje,
               valor: valorTotalAssociado,
               requisicaoId: novaReq.id,
               codigoGuia: novaReq.codigo_requisicao || 'Atualizada',

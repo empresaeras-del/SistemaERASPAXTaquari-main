@@ -809,6 +809,63 @@ tirá-las quebraria o `UPDATE` delas. As duas checagens duplas na tela seguem de
 pelo mesmo motivo — um backfill de `'pendente'` para `'emitida'` é decisão de produto sobre
 dado existente, não limpeza de código.
 
+### Parcela liquidada é intocável, e a guarda não pode viver só na tela
+
+Pedido de 14/09/2026. Uma parcela recebida não é mais uma previsão: ela tem recibo
+impresso, gerou movimentação de caixa e é a **fonte do realizado** no Plano de Contas
+(ver "Valores realizados no plano"). Editar o valor ou apagar a linha depois disso desfaz
+um número que já foi somado em relatório e entregue ao associado — sem desfazer nada do
+resto. O caminho de correção é **estornar** e só então editar ou excluir.
+
+`utils/statusParcela.ts` (puro e testado) concentra a regra, e três coisas valem como
+regra geral:
+
+- **Esconder o botão é conveniência; a recusa mora no ponto de escrita.**
+  `atualizarParcelaReceber` e `excluirParcelaReceber` lançam
+  `MENSAGEM_PARCELA_LIQUIDADA`. Sem isso a "segurança" seria só o botão sumido — e o
+  caminho de escrita continua alcançável pela fila de sync, por outra tela e por qualquer
+  chamador novo.
+- **A checagem usa o status GRAVADO, nunca o que veio no payload.** O formulário de
+  edição de parcela tem um **seletor de status**: aceitar o valor enviado deixaria
+  qualquer um destravar a parcela mudando exatamente o campo que a protege. Por isso o
+  guard lê `existente?.status`, já buscado pela própria função. **Vale para qualquer
+  guarda sobre um campo que o próprio formulário edita.**
+- **`'recebido'` e `'pago'` são o mesmo estado com dois nomes.** As telas de associado já
+  tratavam os dois juntos; a de Contas a Receber olhava só `'recebido'`, então uma parcela
+  `'pago'` seguia editável e excluível lá. Quem checa um só deixa metade do caso de fora —
+  é o que a função única resolve.
+
+Em Contas a Receber os botões eram `disabled`, não ausentes. Passaram a sumir, com um
+cadeado e o motivo no `title`: um botão desabilitado convida ao clique e não explica nada.
+A exclusão em massa da aba de mensalidades já estava correta por outro caminho
+(`isSelectable` só aceita `pendente`/`vencido`) e não precisou mudar.
+
+**Limite conhecido**: se a parcela não estiver no IndexedDB e o app estiver offline, não há
+como ler o status gravado e a guarda deixa passar. `excluirParcelaReceber` ganhou busca
+remota quando o cache não tem a linha — é justamente onde falta informação que a guarda
+precisava valer.
+
+### O diálogo de confirmação mostra o que será criado
+
+"Deseja gerar a cobrança?" não é confirmação de risco, é **decisão**: para responder, o
+operador precisa ver o que vai nascer. `ConfirmOptions` ganhou `resumo`
+(linhas `rótulo`/`valor`, com `destaque` para o número que decide) e `aviso` (o bloco
+âmbar de cobrança anterior, que antes era concatenado na `message`). Com resumo o diálogo
+abre mais largo e troca o ícone de alerta pelo de documento.
+
+Duas decisões:
+
+- **`hoje` é calculado uma vez e usado no resumo E na montagem da cobrança.** O vencimento
+  que o operador lê é literalmente o que será gravado, não uma segunda conta feita com
+  outro relógio — que perto da meia-noite daria datas diferentes.
+- **O `aviso` só renderiza junto do resumo.** Ele vive dentro daquele bloco; deixar isso
+  implícito faria um chamador mandar um aviso que some sem erro. Há teste travando os dois
+  comportamentos, mais o caso sem `resumo` — todos os outros chamadores do projeto passam
+  só `title`/`message` e não podem mudar de aparência.
+
+`ConfirmContext.test.tsx` é o segundo teste de render do projeto e verifica o diálogo
+montado de verdade, não uma simulação dele.
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do

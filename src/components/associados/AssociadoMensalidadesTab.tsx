@@ -255,8 +255,11 @@ export const AssociadoMensalidadesTab: React.FC<{
       setEditingParcela(null);
       carregarDadosFinanceiros();
     } catch (err: any) {
+      // A recusa de parcela liquidada chega por aqui: dizer o motivo é o que evita o
+      // operador tentar de novo do mesmo jeito.
       console.error('Erro ao atualizar parcela:', err);
-      toast.error('Erro ao salvar alterações da parcela');
+      const detalhe = err instanceof Error ? err.message : '';
+      toast.error(detalhe || 'Erro ao salvar alterações da parcela');
     } finally {
       setLoading(false);
     }
@@ -289,7 +292,8 @@ export const AssociadoMensalidadesTab: React.FC<{
       carregarDadosFinanceiros();
     } catch (err) {
       console.error('Erro ao excluir parcela:', err);
-      toast.error('Erro ao excluir parcela');
+      const detalhe = err instanceof Error ? err.message : '';
+      toast.error(detalhe || 'Erro ao excluir parcela');
     } finally {
       setLoading(false);
     }
