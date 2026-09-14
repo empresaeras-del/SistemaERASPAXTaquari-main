@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Receita, ParcelaReceber } from '../../services/financeiroService';
 import { MENSAGEM_PARCELA_LIQUIDADA, parcelaLiquidada } from '../../utils/statusParcela';
+import { MENSAGEM_CADASTRO_INATIVO } from '../../utils/selecaoCadastro';
 import { formatLocalDate } from '../../utils/dateUtils';
 
 interface OrganogramaMensalidadesCanvasProps {
@@ -23,6 +24,8 @@ interface OrganogramaMensalidadesCanvasProps {
   onReceberParcela: (parcela: ParcelaReceber) => void;
   onImprimirRecibo: (parcela: ParcelaReceber) => void;
   onOpenGerarModal: () => void;
+  /** Associado inativo: os botões de gerar aparecem travados, com o motivo no `title`. */
+  geracaoBloqueada?: boolean;
 }
 
 // Cores temáticas para as receitas pai
@@ -48,6 +51,7 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
   onReceberParcela,
   onImprimirRecibo,
   onOpenGerarModal,
+  geracaoBloqueada = false,
 }) => {
   // Canvas Viewport States (Pan & Zoom)
   const [zoom, setZoom] = useState(0.95);
@@ -396,9 +400,15 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
           <button
             type="button"
             onClick={onOpenGerarModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3B82F6] hover:bg-[#2563EB] text-white text-xs font-bold rounded-xl shadow-lg shadow-[#3B82F6]/20 transition-all cursor-pointer"
+            disabled={geracaoBloqueada}
+            title={geracaoBloqueada ? MENSAGEM_CADASTRO_INATIVO : undefined}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+              geracaoBloqueada
+                ? 'bg-bg-hover text-text-subtle cursor-not-allowed'
+                : 'bg-[#3B82F6] hover:bg-[#2563EB] text-white shadow-lg shadow-[#3B82F6]/20 cursor-pointer'
+            }`}
           >
-            <Plus className="w-3.5 h-3.5" />
+            {geracaoBloqueada ? <Lock className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
             <span>Gerar Mensalidades</span>
           </button>
 
@@ -827,7 +837,13 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
               <button
                 type="button"
                 onClick={onOpenGerarModal}
-                className="px-4 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/20"
+                disabled={geracaoBloqueada}
+                title={geracaoBloqueada ? MENSAGEM_CADASTRO_INATIVO : undefined}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  geracaoBloqueada
+                    ? 'bg-bg-hover text-text-subtle cursor-not-allowed'
+                    : 'bg-[#3B82F6] hover:bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                }`}
               >
                 Gerar Mensalidades Agora
               </button>

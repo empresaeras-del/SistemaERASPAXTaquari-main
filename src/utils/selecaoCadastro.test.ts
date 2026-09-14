@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { associadoSelecionavel, dependenteSelecionavel } from './selecaoCadastro';
+import {
+  associadoSelecionavel,
+  cadastroForaDeCirculacao,
+  dependenteSelecionavel,
+} from './selecaoCadastro';
 
 const ativo = { id: 'a1', status: 'ativo' };
 const inativo = { id: 'a2', status: 'inativo' };
@@ -67,5 +71,27 @@ describe('dependenteSelecionavel', () => {
 
   it('o já selecionado vence as duas checagens', () => {
     expect(dependenteSelecionavel({ id: 'd4', status: 'inativo' }, inativo, 'd4')).toBe(true);
+  });
+});
+
+describe('cadastroForaDeCirculacao', () => {
+  it('é o espelho de associadoSelecionavel, não uma segunda lista de status', () => {
+    // Se algum dia divergirem, é aqui que aparece.
+    for (const cadastro of [ativo, inativo, encerrado, inadimplente]) {
+      expect(cadastroForaDeCirculacao(cadastro)).toBe(!associadoSelecionavel(cadastro));
+    }
+  });
+
+  it('bloqueia inativo e encerrado, libera ativo e inadimplente', () => {
+    expect(cadastroForaDeCirculacao(inativo)).toBe(true);
+    expect(cadastroForaDeCirculacao(encerrado)).toBe(true);
+    expect(cadastroForaDeCirculacao(ativo)).toBe(false);
+    expect(cadastroForaDeCirculacao(inadimplente)).toBe(false);
+  });
+
+  it('cadastro ausente não bloqueia nada', () => {
+    // Um formulário ainda sem associado carregado não pode aparecer travado.
+    expect(cadastroForaDeCirculacao(null)).toBe(false);
+    expect(cadastroForaDeCirculacao(undefined)).toBe(false);
   });
 });

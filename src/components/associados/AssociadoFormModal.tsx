@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, User, Users, Activity, FileText, FolderOpen, ClipboardList, DollarSign, ChevronRight, CheckCircle, Save, AlertCircle, Phone, MapPin, Search, ShieldCheck, Edit2, Trash2, Plus, UploadCloud, ImageIcon, AlertTriangle, Eye, Download, Heart, Printer } from 'lucide-react';
+import { X, User, Users, Activity, FileText, FolderOpen, ClipboardList, DollarSign, ChevronRight, CheckCircle, Save, AlertCircle, Phone, MapPin, Search, ShieldCheck, Edit2, Trash2, Plus, UploadCloud, ImageIcon, AlertTriangle, Eye, Download, Heart, Printer, Lock } from 'lucide-react';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 import { AssociadoRequisicoesTab } from './AssociadoRequisicoesTab';
 import { AssociadoAtendimentosTab } from './AssociadoAtendimentosTab';
@@ -13,6 +13,9 @@ import { DependenteFormModal } from './DependenteFormModal';
 import { ContratoDocumentosGenerator } from './ContratoDocumentosGenerator';
 import { NovoContratoWizard } from '../contratos/NovoContratoWizard';
 import { validarDadosAssociado } from '../../utils/associadoValidation';
+import { AssociadoResumoCabecalho } from './AssociadoResumoCabecalho';
+import { montarResumoAssociado } from '../../utils/resumoAssociado';
+import { MENSAGEM_CADASTRO_INATIVO, cadastroForaDeCirculacao } from '../../utils/selecaoCadastro';
 import { encontrarAssociadoComCpfDuplicado } from '../../utils/associadoHelpers';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { formatDateSafe } from '../../utils/dateUtils';
@@ -51,6 +54,10 @@ export const AssociadoFormModal = (props: any) => {
     totalTitulares, totalDependentes, vidasProtegidas, inadimplentes, qtdAssociadosAtivosSemParcelas
   } = props;
 
+  // Derivados do associado aberto: o cabeçalho e o bloqueio por status inativo.
+  const resumoAssociado = montarResumoAssociado(editingAssociado);
+  const bloqueadoPorInatividade = cadastroForaDeCirculacao(editingAssociado);
+
   return (
     <>
       {isModalOpen && editingAssociado && (
@@ -76,6 +83,10 @@ export const AssociadoFormModal = (props: any) => {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Identidade do associado, visível em todas as abas — e o aviso de inativo,
+                que explica por que as ações estão bloqueadas adiante. */}
+            <AssociadoResumoCabecalho resumo={resumoAssociado} mensagemInativo={MENSAGEM_CADASTRO_INATIVO} />
 
             {hasUnsavedChanges && (
               <div className="px-6 pt-3 shrink-0">
@@ -858,15 +869,24 @@ export const AssociadoFormModal = (props: any) => {
                               </button>
                             )}
                           </div>
+                          {/* Associado inativo não ganha dependente novo: a cobertura
+                              do dependente vem do plano do titular, que parou. */}
                           <button
                             type="button"
+                            disabled={bloqueadoPorInatividade}
+                            title={bloqueadoPorInatividade ? MENSAGEM_CADASTRO_INATIVO : undefined}
                             onClick={() => {
+                              if (bloqueadoPorInatividade) return;
                               setDependenteEmEdicao(null);
                               setDependenteFormModalOpen(true);
                             }}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-500/20 shrink-0 active:scale-95"
+                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 ${
+                              bloqueadoPorInatividade
+                                ? 'bg-bg-hover text-text-subtle cursor-not-allowed'
+                                : 'bg-[#3B82F6] hover:bg-blue-600 text-white shadow-lg shadow-blue-500/20 active:scale-95'
+                            }`}
                           >
-                            <Plus className="w-4 h-4" />
+                            {bloqueadoPorInatividade ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                             Novo Dependente
                           </button>
                         </div>
@@ -1156,7 +1176,15 @@ export const AssociadoFormModal = (props: any) => {
                               </div>
                             </div>
                             
-                            {!editingAssociado.plano_pax_id ? (
+                            {/* Contrato de associado inativo não se cria nem se altera:
+                                a inativação já o pôs em `inativo` e mexer aqui o
+                                reativaria pela porta dos fundos. */}
+                            {bloqueadoPorInatividade ? (
+                              <div className="w-full px-4 py-3 bg-bg-hover border border-border-default rounded-xl text-sm text-text-subtle flex items-center justify-center gap-2">
+                                <Lock className="w-4 h-4 shrink-0" />
+                                Contrato bloqueado — associado inativo
+                              </div>
+                            ) : !editingAssociado.plano_pax_id ? (
                               <button
                                 type="button"
                                 onClick={() => setShowNovoContrato(true)}
