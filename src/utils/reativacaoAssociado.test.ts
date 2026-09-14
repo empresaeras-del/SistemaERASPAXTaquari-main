@@ -1,11 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { Associado, Dependente } from '../services/associadosService';
 import {
+  acrescentarDependente,
   aplicarSelecaoDeDependentes,
   dependentesMarcadosPorPadrao,
   dependentesParaReativacao,
   gerarNumeroContratoReativacao,
   montarAssociadoReativado,
+  podeRemoverDependente,
+  removerDependenteNovo,
   vidasDaReativacao,
 } from './reativacaoAssociado';
 
@@ -53,6 +56,62 @@ describe('dependentesParaReativacao', () => {
     expect(dependentesParaReativacao(null, hoje)).toEqual([]);
     expect(dependentesParaReativacao({ dependentes: [] }, hoje)).toEqual([]);
   });
+
+  it('marca como novo quem não estava na lista de ids do banco', () => {
+    const comNovo = {
+      dependentes: [...associadoBase.dependentes, dep({ id: 'novo-1', nome: 'NETO' })],
+    };
+    const lista = dependentesParaReativacao(comNovo, hoje, ['d1', 'd2', 'd3']);
+    expect(lista.map((d) => d.novo)).toEqual([false, false, false, true]);
+  });
+
+  it('sem a lista de ids, ninguém é novo — é o estado de quem só confere', () => {
+    expect(dependentesParaReativacao(associadoBase, hoje).every((d) => d.novo === false)).toBe(true);
+  });
+});
+
+describe('acrescentarDependente', () => {
+  const novoDep = dep({ id: 'n1', nome: 'NETO', parentesco: 'NETO(A)' });
+
+  it('acrescenta ao fim, sem tocar nos que já estavam', () => {
+    const r = acrescentarDependente(associadoBase, novoDep);
+    expect(r.dependentes.map((d) => d.id)).toEqual(['d1', 'd2', 'd3', 'n1']);
+    expect(r.dependentes[0]).toEqual(associadoBase.dependentes[0]);
+  });
+
+  it('mesmo id substitui em vez de duplicar — é o caminho de corrigir o que foi digitado', () => {
+    const comNovo = acrescentarDependente(associadoBase, novoDep);
+    const corrigido = acrescentarDependente(comNovo, { ...novoDep, nome: 'NETO CORRIGIDO' });
+    expect(corrigido.dependentes).toHaveLength(4);
+    expect(corrigido.dependentes[3].nome).toBe('NETO CORRIGIDO');
+  });
+
+  it('cadastro sem lista de dependentes aceita o primeiro', () => {
+    expect(acrescentarDependente({ dependentes: undefined }, novoDep).dependentes).toEqual([novoDep]);
+  });
+});
+
+describe('podeRemoverDependente', () => {
+  it('só o acrescentado nesta tela sai da lista', () => {
+    // O já cadastrado pode ter atendimento apontando para a linha dele: removê-lo faria
+    // `saveAssociado` apagá-lo do Postgres. Para esse, o caminho é desmarcar.
+    expect(podeRemoverDependente({ novo: true })).toBe(true);
+    expect(podeRemoverDependente({ novo: false })).toBe(false);
+    expect(podeRemoverDependente(null)).toBe(false);
+    expect(podeRemoverDependente(undefined)).toBe(false);
+  });
+});
+
+describe('removerDependenteNovo', () => {
+  it('tira só o id pedido', () => {
+    const comNovo = acrescentarDependente(associadoBase, dep({ id: 'n1', nome: 'NETO' }));
+    const r = removerDependenteNovo(comNovo, 'n1');
+    expect(r.dependentes.map((d) => d.id)).toEqual(['d1', 'd2', 'd3']);
+  });
+
+  it('id inexistente não mexe na lista', () => {
+    expect(removerDependenteNovo(associadoBase, 'nao-existe').dependentes).toHaveLength(3);
+  });
 });
 
 describe('dependentesMarcadosPorPadrao', () => {
@@ -84,6 +143,19 @@ describe('vidasDaReativacao', () => {
 
   it('id desconhecido não inventa vida', () => {
     expect(vidasDaReativacao(lista, ['nao-existe']).nVidas).toBe(1);
+  });
+
+  it('dependente acrescentado na tela conta como vida igual aos outros', () => {
+    const comNovo = acrescentarDependente(associadoBase, dep({
+      id: 'n1',
+      nome: 'NETO',
+      data_nascimento: '2020-05-05',
+    }));
+    const listaComNovo = dependentesParaReativacao(comNovo, hoje, ['d1', 'd2', 'd3']);
+    expect(vidasDaReativacao(listaComNovo, ['d1', 'n1'])).toEqual({
+      nVidas: 3,
+      idadesDependentes: [26, 6],
+    });
   });
 });
 
@@ -191,6 +263,21 @@ describe('montarAssociadoReativado', () => {
   it('aplica a seleção aos dependentes gravados', () => {
     const r = montarAssociadoReativado(associadoBase, dados);
     expect(r.dependentes.map((d) => d.status)).toEqual(['ativo', 'ativo', 'inativo']);
+  });
+
+  it('o dependente acrescentado é gravado ativo e entra na contagem de vidas', () => {
+    const comNovo = acrescentarDependente(associadoBase, dep({ id: 'n1', nome: 'NETO' }));
+    const r = montarAssociadoReativado(comNovo, {
+      ...dados,
+      idsDependentesReativados: ['d1', 'n1'],
+    });
+    expect(r.dependentes.map((d) => [d.id, d.status])).toEqual([
+      ['d1', 'ativo'],
+      ['d2', 'inativo'],
+      ['d3', 'inativo'],
+      ['n1', 'ativo'],
+    ]);
+    expect(r.n_vidas).toBe(3);
   });
 });
 

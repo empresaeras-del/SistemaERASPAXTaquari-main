@@ -1090,6 +1090,56 @@ utilitária, procure por **comportamento**, não pelo nome que você daria a ela
 parcelas" não estava em nenhum arquivo chamado `projecao*` — estava dentro dos helpers da aba
 de mensalidades do associado, que é onde ela nasceu.
 
+### A etapa de dependentes também inclui — a família muda enquanto o cadastro está parado
+
+Relato da UI em 14/09/2026, com a etapa 2 já funcionando: faltava poder **acrescentar**
+dependente ali, não só confirmar quem volta. Nasce neto, casa filho — e mandar o operador
+concluir a reativação para só então abrir o cadastro e incluir tem duas consequências, nenhuma
+visível na hora: **o contrato nasce com uma vida a menos do que a família tem, e as
+mensalidades já geradas cobram o valor errado** até alguém refazer tudo.
+
+O formulário é o `DependenteFormModal` que o cadastro já usa — não um segundo formulário de
+dependente. Ele já valida nome/nascimento, já gera id, já recusa CPF duplicado e já conhece a
+lista de parentescos; escrever outro seria garantir que as duas telas divergissem na primeira
+regra nova. O que a reativação passa é `existingCpfs` com o CPF **do titular mais o dos
+dependentes**, porque aqui a família inteira está em edição ao mesmo tempo.
+
+Três decisões valem como regra:
+
+- **Incluído entra marcado.** Quem acabou de digitar alguém quer essa pessoa coberta; nascer
+  desmarcado faria o contrato sair sem ela, e nada na tela explicaria por quê.
+- **Só o recém-incluído pode ser removido; o já cadastrado só pode ser desmarcado.**
+  `podeRemoverDependente` decide pelo `novo`, que vem de comparar o id com os que estavam no
+  banco quando a tela abriu (`idsJaCadastrados`, congelado na abertura). Remover um dependente
+  já existente faria `saveAssociado` apagá-lo do Postgres — é literalmente o defeito de
+  `handleInativarDependente`, que sumia com o falecido do cadastro que o próprio atendimento
+  referencia. Sem o `novo`, não há como distinguir um dependente recém-digitado de um que já
+  existia e estava ativo, e os dois têm regras opostas.
+- **`acrescentarDependente` substitui o de mesmo id** em vez de empilhar — é o que faz a
+  mesma função servir para corrigir um nome digitado errado, sem criar uma segunda linha para
+  a mesma pessoa.
+
+**A tela ganhou teste de render** (`ReativacaoAssociadoWizard.test.tsx`, o terceiro do projeto
+e o primeiro de um componente com hooks próprios): os hooks de dados são mockados e o que se
+testa é o assistente montado de verdade — incluir um dependente sobe a contagem de vidas de 2
+para 3, remover desfaz, desmarcar baixa para 1, e o último caso vai até o fim e confere o
+`valorPlano` que chega ao service (3 vidas × R$ 100 = R$ 300). Esse último é o que importa: sem
+ele, a inclusão seria só um número na tela.
+
+Duas coisas do método valem para a próxima mudança de UI aqui:
+
+- **A foto pegou o que o teste não pega.** Montado o componente em jsdom, o HTML foi
+  fotografado com o CSS do build (Chromium + puppeteer, como manda a seção "Conferindo a
+  impressão de verdade"). Apareceram dois defeitos que nenhuma asserção acusaria: o botão
+  "Incluir dependente" quebrava para a linha de baixo, e a etiqueta "Coberto" mudava de
+  posição entre as linhas conforme o dependente tivesse ou não botões de ação. A correção do
+  segundo é estrutural: **a área de ações é renderizada em toda linha, com largura fixa,
+  mesmo vazia** — sem isso, uma coluna recorrente dança de linha em linha.
+- **O primeiro dump não mostrou nada, e isso também foi informação.** O seletor procurava o
+  campo de nome por `placeholder` contendo "nome", mas o placeholder real é
+  `Ex: MARIA SILVA SANTOS`. O formulário nem chegou a validar. Ao dirigir um formulário alheio
+  por teste, **leia o markup antes de adivinhar o seletor**.
+
 ### O contrato é gerado depois de gravar, com o associado já reativado
 
 A última etapa escolhe o modelo padrão; ao concluir, o documento abre no

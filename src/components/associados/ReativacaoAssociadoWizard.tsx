@@ -7,7 +7,10 @@ import {
   ChevronRight,
   FileSignature,
   FileText,
+  Pencil,
   RotateCcw,
+  Trash2,
+  UserPlus,
   Users,
   X,
 } from 'lucide-react';
@@ -15,19 +18,23 @@ import { useAppContext } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { useDocumentosPadroes } from '../../hooks/useDocumentosPadroes';
-import { Associado } from '../../services/associadosService';
+import { Associado, Dependente } from '../../services/associadosService';
 import { getEmpresas, getEmpresaById, Empresa } from '../../services/empresasService';
 import {
   reativarAssociadoComNovoContrato,
   ResultadoReativacao,
 } from '../../services/reativacaoService';
 import {
+  acrescentarDependente,
   dependentesMarcadosPorPadrao,
   dependentesParaReativacao,
   gerarNumeroContratoReativacao,
   gerarProjecaoParcelas,
+  podeRemoverDependente,
+  removerDependenteNovo,
   vidasDaReativacao,
 } from '../../utils/reativacaoAssociado';
+import { DependenteFormModal } from './DependenteFormModal';
 import { formatCurrency } from '../../utils/formatters';
 import { formatarDocumento, idadeEmAnos } from '../../utils/resumoAssociado';
 import { DocumentoPadrao } from '../../types/documentos';
@@ -100,8 +107,16 @@ export const ReativacaoAssociadoWizard: React.FC<Props> = ({ associado, onClose,
   const alterarCadastro = (campo: keyof Associado, valor: string) =>
     setCadastro((atual) => ({ ...atual, [campo]: valor }));
 
-  // Etapa 2
-  const dependentes = useMemo(() => dependentesParaReativacao(associado), [associado]);
+  // Etapa 2 — os ids que vieram do banco são congelados na abertura: é por eles que se
+  // sabe quem pode ser removido e quem só pode ser desmarcado.
+  const idsJaCadastrados = useMemo(
+    () => (associado.dependentes || []).map((d) => d.id),
+    [associado],
+  );
+  const dependentes = useMemo(
+    () => dependentesParaReativacao(cadastro, new Date(), idsJaCadastrados),
+    [cadastro, idsJaCadastrados],
+  );
   const [selecionados, setSelecionados] = useState<string[]>(() =>
     dependentesMarcadosPorPadrao(dependentesParaReativacao(associado)),
   );
@@ -109,6 +124,39 @@ export const ReativacaoAssociadoWizard: React.FC<Props> = ({ associado, onClose,
     setSelecionados((atual) =>
       atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id],
     );
+
+  const [dependenteEmEdicao, setDependenteEmEdicao] = useState<Dependente | null>(null);
+  const [formDependenteAberto, setFormDependenteAberto] = useState(false);
+
+  const abrirFormDependente = (dep?: Dependente) => {
+    setDependenteEmEdicao(dep || null);
+    setFormDependenteAberto(true);
+  };
+
+  /**
+   * O dependente acrescentado entra no cadastro **e já marcado**.
+   *
+   * Quem acabou de digitar alguém quer essa pessoa coberta; deixá-la desmarcada por
+   * omissão faria o contrato nascer sem ela — e sem nada na tela explicando por quê.
+   */
+  const salvarDependente = (dep: Dependente) => {
+    setCadastro((atual) => acrescentarDependente(atual, dep));
+    setSelecionados((atual) => (atual.includes(dep.id) ? atual : [...atual, dep.id]));
+  };
+
+  const removerDependente = (id: string) => {
+    setCadastro((atual) => removerDependenteNovo(atual, id));
+    setSelecionados((atual) => atual.filter((x) => x !== id));
+  };
+
+  /** CPFs já usados no cadastro, para o formulário recusar duplicidade dentro da família. */
+  const cpfsDaFamilia = useMemo(
+    () =>
+      [cadastro.cpf || '', ...(cadastro.dependentes || []).map((d) => d.cpf || '')].filter(
+        Boolean,
+      ),
+    [cadastro],
+  );
 
   // Etapa 3
   const [planoId, setPlanoId] = useState<string>(associado.plano_pax_id || '');
@@ -453,25 +501,38 @@ export const ReativacaoAssociadoWizard: React.FC<Props> = ({ associado, onClose,
 
           {etapa === 2 && (
             <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-bold text-text-base">Quem volta a ser coberto</h3>
-                <p className="text-sm text-text-subtle mt-1">
-                  Desmarque quem não deve voltar — um dependente falecido, por exemplo. Quem
-                  ficar desmarcado continua inativo no cadastro, sem ser excluído.
-                </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg font-bold text-text-base">Quem volta a ser coberto</h3>
+                  <p className="text-sm text-text-subtle mt-1">
+                    Desmarque quem não deve voltar — um dependente falecido, por exemplo. Quem
+                    ficar desmarcado continua inativo no cadastro, sem ser excluído.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => abrirFormDependente()}
+                  className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#3B82F6] hover:bg-[#2563EB] text-white text-sm font-semibold transition-colors shadow-lg shadow-[#3B82F6]/20"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Incluir dependente
+                </button>
               </div>
 
               {dependentes.length === 0 ? (
                 <p className="px-4 py-6 text-center text-sm text-text-subtle rounded-2xl border border-dashed border-border-default">
-                  Este associado não tem dependentes. O contrato cobre apenas o titular.
+                  Este associado não tem dependentes. O contrato cobre apenas o titular — ou
+                  inclua alguém agora, se a família mudou.
                 </p>
               ) : (
                 <ul className="rounded-2xl border border-border-default divide-y divide-border-default overflow-hidden">
                   {dependentes.map((d) => {
                     const marcado = selecionados.includes(d.id);
+                    const removivel = podeRemoverDependente(d);
+                    const original = (cadastro.dependentes || []).find((x) => x.id === d.id);
                     return (
-                      <li key={d.id} className="bg-bg-base/40">
-                        <label className="flex items-center gap-3 px-4 py-3 cursor-pointer">
+                      <li key={d.id} className="bg-bg-base/40 flex items-center gap-2 pr-3">
+                        <label className="flex items-center gap-3 px-4 py-3 cursor-pointer min-w-0 flex-1">
                           <input
                             type="checkbox"
                             checked={marcado}
@@ -479,13 +540,20 @@ export const ReativacaoAssociadoWizard: React.FC<Props> = ({ associado, onClose,
                             className="w-4 h-4 accent-emerald-500 shrink-0"
                           />
                           <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-semibold text-text-base truncate">
-                              {d.nome}
+                            <span className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm font-semibold text-text-base truncate">
+                                {d.nome}
+                              </span>
+                              {d.novo && (
+                                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/30">
+                                  Novo
+                                </span>
+                              )}
                             </span>
                             <span className="block text-[11px] text-text-subtle">
                               {d.parentesco || 'Sem parentesco'}
                               {d.idade !== null ? ` • ${d.idade} anos` : ''}
-                              {d.jaAtivo ? ' • já estava ativo' : ''}
+                              {!d.novo && d.jaAtivo ? ' • já estava ativo' : ''}
                             </span>
                           </span>
                           <span
@@ -498,6 +566,36 @@ export const ReativacaoAssociadoWizard: React.FC<Props> = ({ associado, onClose,
                             {marcado ? 'Coberto' : 'Fica inativo'}
                           </span>
                         </label>
+
+                        {/* A área de ações existe em toda linha, mesmo vazia: sem largura
+                            reservada, a etiqueta "Coberto" muda de lugar de uma linha para
+                            a outra conforme o dependente tenha ou não botões.
+
+                            Só o recém-incluído tem editar/remover — o já cadastrado pode ter
+                            atendimento apontando para a linha dele, e removê-lo daqui o
+                            apagaria do banco. Para esse, o caminho é desmarcar. */}
+                        <span className="flex items-center justify-end gap-1 shrink-0 w-[72px]">
+                          {removivel && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => abrirFormDependente(original)}
+                                className="p-1.5 rounded-lg text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
+                                title="Editar dependente"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removerDependente(d.id)}
+                                className="p-1.5 rounded-lg text-text-subtle hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                                title="Remover dependente incluído agora"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </span>
                       </li>
                     );
                   })}
@@ -774,6 +872,18 @@ export const ReativacaoAssociadoWizard: React.FC<Props> = ({ associado, onClose,
           )}
         </div>
       </div>
+
+      <DependenteFormModal
+        isOpen={formDependenteAberto}
+        onClose={() => {
+          setFormDependenteAberto(false);
+          setDependenteEmEdicao(null);
+        }}
+        dependente={dependenteEmEdicao}
+        onSave={salvarDependente}
+        titularNome={cadastro.nome}
+        existingCpfs={cpfsDaFamilia}
+      />
 
       <VisualizadorDocumentoPadraoModal
         isOpen={Boolean(documentoGerado)}

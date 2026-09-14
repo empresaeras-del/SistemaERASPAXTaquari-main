@@ -42,6 +42,15 @@ export interface DependenteReativavel {
    * inativar alguém a pretexto de reativar o titular.
    */
   jaAtivo: boolean;
+  /**
+   * `true` para quem foi acrescentado nesta tela e ainda não existe no banco.
+   *
+   * É o que separa o que pode ser **removido** do que só pode ser **desmarcado**: um
+   * dependente já cadastrado pode ter atendimento apontando para a linha dele (a lição de
+   * `handleInativarDependente`), então some do contrato mas nunca do cadastro. O que acabou
+   * de ser digitado não tem nada apontando para ele e sai inteiro se foi engano.
+   */
+  novo: boolean;
 }
 
 /**
@@ -50,19 +59,29 @@ export interface DependenteReativavel {
  * **Todos entram na lista, ativos e inativos**, porque a etapa também é a conferência de
  * quem fica coberto pelo contrato novo — e é essa lista que determina o número de vidas e,
  * com ele, o valor da mensalidade.
+ *
+ * `idsJaCadastrados` são os ids que vieram do banco. Quem não estiver nessa lista foi
+ * acrescentado na própria tela e é marcado como `novo` — sem ela, não há como distinguir um
+ * dependente recém-digitado de um que já existia e estava ativo, e os dois têm regras
+ * diferentes de remoção. Omitir o parâmetro trata todos como já cadastrados, que é o estado
+ * de quem só está conferindo.
  */
 export const dependentesParaReativacao = (
   associado: Pick<Associado, 'dependentes'> | null | undefined,
   hoje: Date = new Date(),
-): DependenteReativavel[] =>
-  (associado?.dependentes || []).map((d) => ({
+  idsJaCadastrados?: readonly string[],
+): DependenteReativavel[] => {
+  const conhecidos = idsJaCadastrados ? new Set(idsJaCadastrados) : null;
+  return (associado?.dependentes || []).map((d) => ({
     id: d.id,
     nome: (d.nome || '').trim(),
     parentesco: (d.parentesco || '').trim(),
     dataNascimento: d.data_nascimento,
     idade: idadeEmAnos(d.data_nascimento, hoje),
     jaAtivo: (d.status || STATUS_ATIVO).trim().toLowerCase() !== 'inativo',
+    novo: conhecidos ? !conhecidos.has(d.id) : false,
   }));
+};
 
 /**
  * Quem vem marcado ao abrir a etapa: **todos**.
@@ -121,6 +140,55 @@ export const aplicarSelecaoDeDependentes = (
     status: marcados.has(d.id) ? ('ativo' as const) : ('inativo' as const),
   }));
 };
+
+/**
+ * Acrescenta um dependente ao cadastro em edição, sem tocar nos que já estavam.
+ *
+ * A etapa de dependentes não é só conferência: a família muda enquanto o cadastro está
+ * inativo — nasce neto, casa filho —, e mandar o operador concluir a reativação para só
+ * então abrir o cadastro e incluir teria duas consequências ruins, nenhuma visível na hora:
+ * o contrato nasceria com uma vida a menos do que a família tem, e as mensalidades já
+ * geradas cobrariam o valor errado até alguém refazer tudo.
+ *
+ * Quem chega aqui **substitui** o de mesmo id, o que faz a mesma função servir para a
+ * edição de um recém-incluído — sem isso, corrigir um nome digitado errado criaria uma
+ * segunda linha para a mesma pessoa.
+ */
+export const acrescentarDependente = <T extends { dependentes?: Dependente[] }>(
+  cadastro: T,
+  dependente: Dependente,
+): T => {
+  const atuais = cadastro.dependentes || [];
+  const jaExiste = atuais.some((d) => d.id === dependente.id);
+  return {
+    ...cadastro,
+    dependentes: jaExiste
+      ? atuais.map((d) => (d.id === dependente.id ? { ...d, ...dependente } : d))
+      : [...atuais, dependente],
+  };
+};
+
+/**
+ * `true` quando o dependente pode ser **removido** da lista, não apenas desmarcado.
+ *
+ * Só vale para quem foi acrescentado nesta tela. Um dependente que já existe no banco pode
+ * ter um atendimento funerário apontando para a linha dele; removê-lo daqui faria
+ * `saveAssociado` apagá-lo do Postgres — é exatamente o defeito que
+ * `handleInativarDependente` tinha, e que sumia com o falecido do cadastro que o próprio
+ * atendimento referencia. Para esse, o caminho é desmarcar: ele fica `inativo` e continua lá.
+ */
+export const podeRemoverDependente = (
+  dependente: Pick<DependenteReativavel, 'novo'> | null | undefined,
+): boolean => Boolean(dependente?.novo);
+
+/** Tira da lista um dependente acrescentado por engano nesta tela. */
+export const removerDependenteNovo = <T extends { dependentes?: Dependente[] }>(
+  cadastro: T,
+  id: string,
+): T => ({
+  ...cadastro,
+  dependentes: (cadastro.dependentes || []).filter((d) => d.id !== id),
+});
 
 /** Número do contrato novo, no mesmo formato que o wizard de contrato já usa. */
 export const gerarNumeroContratoReativacao = (
