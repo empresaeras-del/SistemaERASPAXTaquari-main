@@ -3,10 +3,11 @@ import {
   Search, X, ZoomIn, ZoomOut, RotateCcw, Maximize2, Minimize2,
   Layers, ChevronDown, ChevronRight, User, DollarSign, Calendar,
   CreditCard, CheckCircle2, Clock, AlertCircle, XCircle, Trash2,
-  Edit3, Printer, Sparkles, Building2, Wallet, ArrowRight, ShieldAlert,
+  Edit3, Printer, Sparkles, Building2, Wallet, ArrowRight, ShieldAlert, Lock,
   HelpCircle, Eye, Info, Check, Plus
 } from 'lucide-react';
 import { Receita, ParcelaReceber } from '../../services/financeiroService';
+import { MENSAGEM_PARCELA_LIQUIDADA, parcelaLiquidada } from '../../utils/statusParcela';
 import { formatLocalDate } from '../../utils/dateUtils';
 
 interface OrganogramaMensalidadesCanvasProps {
@@ -773,8 +774,9 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
                                       ) : null}
                                     </div>
 
-                                    {/* Admin Actions: Edit and Delete */}
-                                    {isAdmin && (
+                                    {/* Admin Actions: Edit and Delete — some quando a
+                                        parcela já foi liquidada (ver utils/statusParcela). */}
+                                    {isAdmin && !parcelaLiquidada(parcela.status) && (
                                       <div className="flex items-center gap-1">
                                         <button
                                           type="button"
@@ -1062,7 +1064,14 @@ export const OrganogramaMensalidadesCanvas: React.FC<OrganogramaMensalidadesCanv
                     </button>
                   )}
 
-                  {isAdmin && (
+                  {isAdmin && parcelaLiquidada(selectedNode.data.status) && (
+                    <p className="text-[11px] text-text-subtle flex items-start gap-1.5 leading-snug">
+                      <Lock className="w-3.5 h-3.5 shrink-0 mt-px" />
+                      {MENSAGEM_PARCELA_LIQUIDADA}
+                    </p>
+                  )}
+
+                  {isAdmin && !parcelaLiquidada(selectedNode.data.status) && (
                     <div className="flex gap-2">
                       <button
                         type="button"

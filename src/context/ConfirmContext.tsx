@@ -1,6 +1,21 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, FileText, X } from 'lucide-react';
+
+/**
+ * Uma linha do resumo do que será criado se o usuário confirmar.
+ *
+ * Existe porque "deseja gerar a cobrança?" não é uma confirmação de risco, é uma
+ * **decisão**: para responder, o operador precisa ver o que vai nascer — valor,
+ * vencimento, de quem se cobra. Enfiar isso na `message` produziria um parágrafo que
+ * ninguém lê; em linhas rotuladas, o valor e a data saltam à vista.
+ */
+export interface LinhaResumoConfirm {
+  rotulo: string;
+  valor: string;
+  /** Dá peso visual ao número que decide a resposta — tipicamente o valor. */
+  destaque?: boolean;
+}
 
 interface ConfirmOptions {
   title: string;
@@ -18,6 +33,13 @@ interface ConfirmOptions {
    */
   onCancel?: () => void | Promise<void>;
   danger?: boolean;
+  /**
+   * Resumo do registro que será criado. Quando presente, o diálogo abre mais largo e
+   * mostra as linhas num cartão entre a mensagem e os botões.
+   */
+  resumo?: LinhaResumoConfirm[];
+  /** Aviso em destaque âmbar, para o que o operador precisa saber antes de decidir. */
+  aviso?: string | null;
 }
 
 interface ConfirmContextData {
@@ -67,6 +89,8 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const temResumo = Boolean(options?.resumo && options.resumo.length > 0);
+
   return (
     <ConfirmContext.Provider value={{ confirm }}>
       {children}
@@ -77,15 +101,41 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-bg-subtle rounded-3xl shadow-2xl w-full max-w-sm flex flex-col border border-border-default overflow-hidden"
+              className={`bg-bg-subtle rounded-3xl shadow-2xl w-full flex flex-col border border-border-default overflow-hidden ${temResumo ? 'max-w-md' : 'max-w-sm'}`}
             >
               <div className="p-6 flex flex-col items-center text-center">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${options.danger ? 'bg-rose-500/10 text-rose-500' : 'bg-[#3B82F6]/10 text-[#3B82F6]'}`}>
-                  <AlertTriangle className="w-6 h-6" />
+                  {temResumo && !options.danger ? <FileText className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
                 </div>
                 <h3 className="text-xl font-bold text-text-base mb-2">{options.title}</h3>
                 <p className="text-text-subtle text-sm">{options.message}</p>
               </div>
+
+              {temResumo && (
+                <div className="px-6 pb-5 -mt-1">
+                  <dl className="bg-bg-surface rounded-2xl border border-border-default divide-y divide-border-default overflow-hidden">
+                    {options.resumo!.map((linha) => (
+                      <div key={linha.rotulo} className="flex items-baseline justify-between gap-4 px-4 py-2.5">
+                        <dt className="text-[11px] uppercase tracking-wider font-semibold text-text-subtle shrink-0">
+                          {linha.rotulo}
+                        </dt>
+                        <dd className={`text-right ${linha.destaque
+                          ? 'text-lg font-bold text-emerald-400 font-mono tabular-nums'
+                          : 'text-sm font-medium text-text-base'}`}>
+                          {linha.valor}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+
+                  {options.aviso && (
+                    <p className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-amber-300">
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />
+                      <span>{options.aviso}</span>
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="px-6 py-4 bg-bg-surface/50 border-t border-border-default flex items-center justify-end gap-3">
                 <button
                   type="button"

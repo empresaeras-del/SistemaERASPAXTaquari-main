@@ -52,6 +52,7 @@ import { parseLocalDate, formatLocalDate, formatLocalDateTime, isDateBeforeToday
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { sendWhatsAppMessage, generateCobrançaTemplate } from '../utils/whatsapp';
+import { MENSAGEM_PARCELA_LIQUIDADA, parcelaLiquidada } from '../utils/statusParcela';
 
 export const ContasReceberPage: React.FC = () => {
   const navigate = useNavigate();
@@ -453,7 +454,8 @@ export const ContasReceberPage: React.FC = () => {
           toast.success('Parcela excluída com sucesso!');
           loadData();
         } catch (e) {
-          toast.error('Erro ao excluir parcela');
+          const detalhe = e instanceof Error ? e.message : '';
+          toast.error(detalhe || 'Erro ao excluir parcela');
         }
       }
     });
@@ -782,33 +784,43 @@ export const ContasReceberPage: React.FC = () => {
                           <Eye className="w-4 h-4" />
                         </button>
 
-                        {/* Editar */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!canEditFinanceiro(state.user, state.isOnline)) {
-                              alertPermissionRestriction('Financeiro (Contas a Receber)', 'editar parcelas ou receitas existentes');
-                              return;
-                            }
-                            navigate(`/financeiro/contas-a-receber/${parcela.receita_id || parcela.id}/editar?parcela=${parcela.id}`);
-                          }}
-                          title="Editar Receita"
-                          disabled={parcela.status === 'recebido'}
-                          className={`p-1.5 rounded-lg transition-colors ${parcela.status === 'recebido' ? 'bg-bg-hover text-text-subtle cursor-not-allowed opacity-50' : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400'}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
+                        {/* Parcela liquidada não mostra editar nem excluir. Antes os
+                            dois ficavam `disabled` — e só olhavam 'recebido', então uma
+                            parcela 'pago' seguia editável e excluível aqui. */}
+                        {!parcelaLiquidada(parcela.status) && (
+                          <>
+                            {/* Editar */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!canEditFinanceiro(state.user, state.isOnline)) {
+                                  alertPermissionRestriction('Financeiro (Contas a Receber)', 'editar parcelas ou receitas existentes');
+                                  return;
+                                }
+                                navigate(`/financeiro/contas-a-receber/${parcela.receita_id || parcela.id}/editar?parcela=${parcela.id}`);
+                              }}
+                              title="Editar Receita"
+                              className="p-1.5 rounded-lg transition-colors bg-blue-500/10 hover:bg-blue-500/20 text-blue-400"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
 
-                        {/* Excluir Parcela */}
-                        <button
-                          type="button"
-                          onClick={() => handleExcluirParcela(parcela)}
-                          title="Excluir Parcela"
-                          disabled={parcela.status === 'recebido'}
-                          className={`p-1.5 rounded-lg transition-colors ${parcela.status === 'recebido' ? 'bg-bg-hover text-text-subtle cursor-not-allowed opacity-50' : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400'}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                            {/* Excluir Parcela */}
+                            <button
+                              type="button"
+                              onClick={() => handleExcluirParcela(parcela)}
+                              title="Excluir Parcela"
+                              className="p-1.5 rounded-lg transition-colors bg-rose-500/10 hover:bg-rose-500/20 text-rose-400"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                        {parcelaLiquidada(parcela.status) && (
+                          <span title={MENSAGEM_PARCELA_LIQUIDADA} className="p-1.5 text-text-subtle/60">
+                            <Lock className="w-4 h-4" />
+                          </span>
+                        )}
 
                         {/* Botão Receber */}
                         {(parcela.status === 'pendente' || parcela.status === 'atrasado') && (
@@ -1312,6 +1324,8 @@ export const ContasReceberPage: React.FC = () => {
             {/* Modal Footer Actions */}
             <div className="p-6 border-t border-border-default bg-bg-surface/50 flex flex-wrap items-center justify-between gap-3 print:hidden">
               <div className="flex items-center gap-2">
+                {!parcelaLiquidada(parcelaDetalhes.status) && (
+                  <>
                 <button
                   type="button"
                   onClick={() => {
@@ -1322,8 +1336,7 @@ export const ContasReceberPage: React.FC = () => {
                     setShowDetalhesModal(false);
                     navigate(`/financeiro/contas-a-receber/${parcelaDetalhes.receita_id || parcelaDetalhes.id}/editar?parcela=${parcelaDetalhes.id}`);
                   }}
-                  disabled={parcelaDetalhes.status === 'recebido'}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors ${parcelaDetalhes.status === 'recebido' ? 'bg-bg-hover text-text-subtle cursor-not-allowed opacity-50' : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400'}`}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors bg-blue-500/10 hover:bg-blue-500/20 text-blue-400"
                 >
                   <Pencil className="w-4 h-4" />
                   Editar Receita
@@ -1338,12 +1351,19 @@ export const ContasReceberPage: React.FC = () => {
                       setShowDetalhesModal(false);
                     }
                   }}
-                  disabled={parcelaDetalhes.status === 'recebido'}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors ${parcelaDetalhes.status === 'recebido' ? 'bg-bg-hover text-text-subtle cursor-not-allowed opacity-50' : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400'}`}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors bg-rose-500/10 hover:bg-rose-500/20 text-rose-400"
                 >
                   <Trash2 className="w-4 h-4" />
                   Excluir Receita
                 </button>
+                  </>
+                )}
+                {parcelaLiquidada(parcelaDetalhes.status) && (
+                  <p className="text-xs text-text-subtle flex items-center gap-2">
+                    <Lock className="w-4 h-4 shrink-0" />
+                    {MENSAGEM_PARCELA_LIQUIDADA}
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
