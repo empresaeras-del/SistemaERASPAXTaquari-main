@@ -10,12 +10,13 @@
  * Idade em anos completos.
  *
  * **Desconta o aniversário que ainda não chegou**, e é por isso que existe em vez de um
- * `getFullYear() - getFullYear()` a mais. Aquela subtração — que o projeto repete em
- * `associadoHelpers.ts`, `NovoContratoWizard.tsx` e no card de dependente — devolve 36
- * para quem nasceu em 31/12/1990 no dia 01/01/2026, quando a pessoa tem 35. No cabeçalho
- * isso seria um número errado ao lado do nome; naqueles outros pontos a idade entra no
- * cálculo do valor do plano, então corrigi-los muda preço e é decisão de produto — ficaram
- * como estão, de propósito.
+ * `getFullYear() - getFullYear()` a mais. Aquela subtração devolve 36 para quem nasceu em
+ * 31/12/1990 no dia 01/01/2026, quando a pessoa tem 35.
+ *
+ * É a única fonte de idade do projeto: `associadoHelpers.ts` (`calcularNVidasEIdades`),
+ * `NovoContratoWizard.tsx` e o card de dependente do formulário passaram a chamá-la. Nos
+ * dois primeiros a idade entra no cálculo do valor do plano, e por isso a unificação só
+ * foi feita depois de medir o efeito em produção — ver a seção do CLAUDE.md.
  *
  * A data é lida do texto `YYYY-MM-DD`, nunca por `new Date(texto)`: em UTC-3 essa
  * conversão devolve o dia anterior (a armadilha que este projeto já documenta em

@@ -14,7 +14,7 @@ import { ContratoDocumentosGenerator } from './ContratoDocumentosGenerator';
 import { NovoContratoWizard } from '../contratos/NovoContratoWizard';
 import { validarDadosAssociado } from '../../utils/associadoValidation';
 import { AssociadoResumoCabecalho } from './AssociadoResumoCabecalho';
-import { montarResumoAssociado } from '../../utils/resumoAssociado';
+import { idadeEmAnos, montarResumoAssociado } from '../../utils/resumoAssociado';
 import { MENSAGEM_CADASTRO_INATIVO, cadastroForaDeCirculacao } from '../../utils/selecaoCadastro';
 import { encontrarAssociadoComCpfDuplicado } from '../../utils/associadoHelpers';
 import { maskCPFOrCNPJ } from '../../utils/validators';
@@ -1000,18 +1000,12 @@ export const AssociadoFormModal = (props: any) => {
                                             <span className="font-medium text-text-base flex items-center gap-1.5">
                                               {formatDateSafe(dep.data_nascimento)}
                                               {(() => {
-                                                try {
-                                                  const d = new Date(dep.data_nascimento);
-                                                  if (!isNaN(d.getTime())) {
-                                                    const age = new Date().getFullYear() - d.getFullYear();
-                                                    return age >= 0 ? (
-                                                      <span className="text-[10px] text-blue-400 font-bold bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
-                                                        {age}a
-                                                      </span>
-                                                    ) : null;
-                                                  }
-                                                } catch {}
-                                                return null;
+                                                const age = idadeEmAnos(dep.data_nascimento);
+                                                return age !== null ? (
+                                                  <span className="text-[10px] text-blue-400 font-bold bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                                                    {age}a
+                                                  </span>
+                                                ) : null;
                                               })()}
                                             </span>
                                           </div>

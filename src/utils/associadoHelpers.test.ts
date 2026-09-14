@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   filtrarEOrdenarAssociados,
   extrairTodosDependentes,
@@ -192,6 +192,28 @@ describe('calcularNVidasEIdades', () => {
   it('retorna nVidas = 1 quando não há dependentes', () => {
     expect(calcularNVidasEIdades(undefined)).toEqual({ nVidas: 1, idadesDependentes: [] });
     expect(calcularNVidasEIdades([])).toEqual({ nVidas: 1, idadesDependentes: [] });
+  });
+
+  it('desconta o aniversário que ainda não chegou', () => {
+    // A subtração de anos que existia aqui devolvia 36 para quem tem 35.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 1));
+    try {
+      const deps: Dependente[] = [
+        { id: 'd1', nome: 'A', parentesco: 'filho', data_nascimento: '1990-12-31' },
+        { id: 'd2', nome: 'B', parentesco: 'filha', data_nascimento: '1990-01-01' },
+      ];
+      expect(calcularNVidasEIdades(deps).idadesDependentes).toEqual([35, 36]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('data quebrada cai no mesmo 0 de quem não tem data — a faixa casada não muda', () => {
+    const deps: Dependente[] = [
+      { id: 'd1', nome: 'A', parentesco: 'filho', data_nascimento: '31/12/1990' },
+    ];
+    expect(calcularNVidasEIdades(deps).idadesDependentes).toEqual([0]);
   });
 });
 

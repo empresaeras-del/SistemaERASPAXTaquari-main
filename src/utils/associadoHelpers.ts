@@ -1,4 +1,5 @@
 import { Associado, Dependente } from '../services/associadosService';
+import { idadeEmAnos } from './resumoAssociado';
 
 /**
  * Funções puras extraídas de pages/Associados.tsx — comportamento idêntico ao
@@ -169,13 +170,9 @@ export interface NVidasEIdades {
  */
 export const calcularNVidasEIdades = (dependentes: Dependente[] | undefined): NVidasEIdades => {
   const deps = dependentes || [];
-  const idadesDependentes = deps.map(d => {
-    if (d && d.data_nascimento) {
-      const bdate = new Date(d.data_nascimento);
-      return new Date().getFullYear() - bdate.getFullYear();
-    }
-    return 0;
-  });
+  // `?? 0` preserva o comportamento de dependente sem data de nascimento, que já valia
+  // antes desta correção — mudá-lo mexeria em qual faixa ele casa, e isso é outra decisão.
+  const idadesDependentes = deps.map(d => idadeEmAnos(d?.data_nascimento) ?? 0);
   return { nVidas: 1 + deps.length, idadesDependentes };
 };
 
