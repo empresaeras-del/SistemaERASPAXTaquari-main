@@ -1,6 +1,7 @@
 import React from 'react';
 import { Associado } from '../../services/associadosService';
-import { ShieldCheck, Calendar, Users, MessageCircle, Edit2, Trash2 } from 'lucide-react';
+import { ShieldCheck, Calendar, Users, MessageCircle, Edit2, Trash2, RotateCcw } from 'lucide-react';
+import { cadastroForaDeCirculacao } from '../../utils/selecaoCadastro';
 import { formatDateSafe } from '../../utils/dateUtils';
 import { PlanoPaxResumo } from '../../types/planosPax';
 
@@ -13,6 +14,8 @@ interface AssociadosListGridProps {
   handleWhatsAppMenu: (assoc: Associado) => void;
   handleOpenModal: (assoc: Associado) => void;
   handleDelete: (id: string) => void;
+  /** Abre a reativação; só aparece para cadastro fora de circulação. */
+  handleReativar?: (assoc: Associado) => void;
 }
 
 export const AssociadosListGrid: React.FC<AssociadosListGridProps> = ({
@@ -23,7 +26,8 @@ export const AssociadosListGrid: React.FC<AssociadosListGridProps> = ({
   setPreviewAssociado,
   handleWhatsAppMenu,
   handleOpenModal,
-  handleDelete
+  handleDelete,
+  handleReativar
 }) => {
   if (filtered.length === 0) {
     return (
@@ -107,6 +111,16 @@ export const AssociadosListGrid: React.FC<AssociadosListGridProps> = ({
               >
                 <MessageCircle className="w-4 h-4" />
               </button>
+              {handleReativar && cadastroForaDeCirculacao(associado) && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleReativar(associado); }}
+                  className="p-1.5 text-emerald-500/70 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                  title="Reativar Associado"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleOpenModal(associado); }}

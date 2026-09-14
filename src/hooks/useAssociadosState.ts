@@ -30,7 +30,10 @@ import { useColumnVisibility } from "../hooks/useColumnVisibility";
 import { ColumnVisibilityToggle } from "../components/ColumnVisibilityToggle";
 import { useFornecedores } from "../hooks/useFornecedores";
 import { registrarAuditoria } from "../lib/supabase";
-import { canDelete, canDeleteDependente, alertPermissionRestriction } from "../utils/permissions";
+import { canDelete, canDeleteDependente, canEditContratos, alertPermissionRestriction } from "../utils/permissions";
+import { ResultadoReativacao } from "../services/reativacaoService";
+import { cadastroForaDeCirculacao } from "../utils/selecaoCadastro";
+import { MENSAGEM_REATIVACAO_DESNECESSARIA } from "../utils/reativacaoAssociado";
 import { MessageCircle, Phone, ClipboardList, Activity, MapPin, User, FileText, CreditCard, FolderOpen, Folder, File, Plus, Search, Filter, Edit2, Trash2, X, Users, Heart, AlertCircle, ShieldCheck, CheckCircle, Clock, XCircle, DollarSign, Calendar, LayoutGrid, List , Printer, Eye, Download, UploadCloud, AlertTriangle, Image as ImageIcon, Lock, Wallet, ArrowRight, CheckCircle2 } from "lucide-react";
 import { PlanoPaxSelect } from "../components/planos-pax/PlanoPaxSelect";
 import { AssociadoRequisicoesTab } from "../components/associados/AssociadoRequisicoesTab";
@@ -124,6 +127,8 @@ export function useAssociadosState() {
     historico: HistoricoImpeditivo;
   } | null>(null);
   const [verificandoHistorico, setVerificandoHistorico] = useState(false);
+  /** Associado cujo assistente de reativação está aberto. */
+  const [reativacaoAlvo, setReativacaoAlvo] = useState<Associado | null>(null);
   const [inativandoAssociado, setInativandoAssociado] = useState(false);
   const [isSavedAssociado, setIsSavedAssociado] = useState(false);
   const [initialAssociadoSnapshot, setInitialAssociadoSnapshot] = useState<string>('');
@@ -603,6 +608,36 @@ export function useAssociadosState() {
     }
   };
 
+  /**
+   * Abre o assistente de reativação.
+   *
+   * A permissão pedida é a de contrato (`canEditContratos`), não a de editar associado: o
+   * que a reativação produz é um contrato novo com mensalidades, e quem não pode criar
+   * contrato não pode criá-lo por este caminho. Offline também não vale — a função recusa
+   * quando `isOnline` é falso, porque arquivar o contrato anterior precisa do servidor para
+   * não deixar dois contratos ativos em empresas diferentes de uma mesma fila de sync.
+   */
+  const handleAbrirReativacao = (assoc: Associado) => {
+    if (!canEditContratos(state.user, state.isOnline)) {
+      toast.error(
+        !state.isOnline
+          ? "Reativação bloqueada no Modo de Visualização (Offline)."
+          : "Permissão negada. A reativação cria um contrato novo e exige perfil de gerente ou superior."
+      );
+      return;
+    }
+    if (!cadastroForaDeCirculacao(assoc)) {
+      toast.error(MENSAGEM_REATIVACAO_DESNECESSARIA);
+      return;
+    }
+    setReativacaoAlvo(assoc);
+  };
+
+  /** Recarrega a lista depois da reativação; o assistente segue aberto com o contrato. */
+  const handleReativacaoConcluida = async (_resultado: ResultadoReativacao) => {
+    await loadData();
+  };
+
   const handleExcluirDependente = (dep: Dependente, index?: number) => {
     if (!canDeleteDependente(state.user, state.isOnline)) {
       if (state.user?.nivel === 'funcionario') {
@@ -715,6 +750,9 @@ export function useAssociadosState() {
     verificandoHistorico,
     inativandoAssociado,
     handleInativarAssociado,
+    reativacaoAlvo, setReativacaoAlvo,
+    handleAbrirReativacao,
+    handleReativacaoConcluida,
     handleExcluirDependente,
     handleExportPDF,
     handleExportDependentesPDF,

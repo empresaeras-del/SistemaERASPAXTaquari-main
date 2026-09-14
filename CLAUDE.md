@@ -1000,6 +1000,118 @@ Duas coisas valem como regra:
 travar "um dia antes do aniversário" sem depender de quando a suíte roda. Ao precisar de
 idade em qualquer tela nova, importe de lá.
 
+## Reativar é fazer contrato novo, não desfazer a inativação
+
+Pedido de 14/09/2026. O assistente (`ReativacaoAssociadoWizard`, cinco etapas) aproveita o
+cadastro e os dependentes que já existem — ninguém redigita nada —, mas **o contrato nasce do
+zero**: plano escolhido de novo, número e data próprios, mensalidades geradas, e o contrato
+anterior arquivado.
+
+A tentação era tratar reativação como simetria da inativação: desfazer o que
+`inativarAssociadoEmCascata` fez. **Não pode ser.** Aquela cascata cancelou as parcelas em
+aberto, e elas são de um período em que o associado não estava coberto — ressuscitá-las
+cobraria mensalidade de quem não teve direito a nada. O contrato antigo, do mesmo jeito, é o
+documento que valeu até ali, com o plano e o valor daquela época. Os dois ficam como estão.
+
+A divisão é a de sempre: `utils/reativacaoAssociado.ts` decide **o quê** (puro e testado),
+`services/reativacaoService.ts` grava, a tela decide **quando**.
+
+Seis decisões valem como regra:
+
+- **A ordem da gravação é a regra, e por isso mora no service.** Arquivar o contrato vigente
+  vem **antes** de criar o novo, porque `saveAssociado` procura o contrato ativo para
+  atualizar — com dois ativos ao mesmo tempo ele mexeria no errado. Há teste cobrando a
+  ordem das gravações, o que só é possível porque isso não está dentro do componente (o
+  `NovoContratoWizard` ainda orquestra tudo no `handleSave`, e lá não dá para testar).
+- **O operador escolhe quais dependentes voltam, e a escolha vale dinheiro.**
+  `vidasDaReativacao` conta só os marcados, e o valor do plano recalcula na hora. A
+  inativação costuma ser por falecimento: reativar a família inteira por padrão sem poder
+  desmarcar ninguém cobraria por uma vida que não existe. Todos vêm marcados (a inativação
+  foi em cascata), e **ninguém é removido** — o desmarcado fica `inativo`, porque o
+  atendimento funerário dele aponta para aquela linha.
+- **A taxa de adesão começa em zero e é digitável.** Quem volta não está aderindo pela
+  primeira vez; cobrar de novo por omissão seria decisão de preço tomada por descuido. Se a
+  empresa cobra readesão, o campo está ali e o valor aparece na projeção antes de gravar.
+- **O contrato anterior termina no dia em que o novo começa** — `dataAdesao`, nunca
+  `new Date()`. São a mesma coisa no caso comum, e é por isso que a diferença passa
+  despercebida: só divergem quando o operador retroage a adesão, e aí `historico_contratos`
+  e `contratos.data_fim` contariam histórias diferentes sobre o mesmo intervalo.
+- **O histórico recebe o contrato anterior SEMPRE**, não só quando o plano muda — ao
+  contrário do `NovoContratoWizard`, que compara `plano_pax_id !== planoId`. Aqui a adesão
+  anterior terminou de fato, e readerir ao mesmo plano ainda é um contrato novo.
+- **`n_vidas` é reescrito junto.** `MensalidadesGeracaoWizard` lê esse campo e não recalcula
+  nada — deixá-lo com a contagem antiga faria a próxima geração avulsa de parcelas cobrar
+  pelos dependentes que a reativação acabou de deixar de fora.
+
+A recusa mora no ponto de escrita (`cadastroForaDeCirculacao`, o mesmo predicado dos
+seletores): reativar quem já está ativo arquivaria o contrato vigente para criar outro igual,
+com as parcelas em aberto cobradas em duplicidade. `inadimplente` não é reativável — ele
+nunca saiu de circulação.
+
+### O contrato existente era procurado sem filtro de status
+
+Pré-requisito que a reativação destravou, e que teria quebrado em silêncio: `saveAssociado`
+(e o mesmo predicado copiado em `lib/syncService.ts`) buscava o contrato do associado com
+`.eq('associado_id', id).maybeSingle()`, **sem filtrar por status**, e descartava o `error`
+da consulta. Enquanto cada associado tinha exatamente um contrato, funcionava. Com o
+contrato anterior guardado como `inativo` ao lado do novo, a consulta passa a devolver mais
+de uma linha, `maybeSingle` não entrega objeto nenhum, e o código cairia no ramo de "não
+existe" — **inserindo uma linha nova em `contratos` a cada save do mesmo associado**.
+
+Agora a busca é `.eq('status','ativo').is('deleted_at', null).order(created_at desc).limit(1)`,
+e o erro da consulta interrompe a gravação do contrato em vez de virar linha duplicada. **A
+regra**: uma consulta que hoje devolve uma linha por acidente do dado — não por constraint —
+é uma consulta sem filtro. Antes de passar a criar mais linhas de uma tabela, procure quem a
+lê esperando encontrar só uma.
+
+Verificado contra a produção antes do commit, em transação revertida: arquivar o vigente e
+inserir o novo deixa o associado com **2 contratos e exatamente 1 ativo**, com as colunas
+que o service manda (`taxa_adesao`, `data_fim NULL`). `contratos` não tem unicidade por
+`associado_id` — só `numero_contrato`, e essa é **global, não por empresa** (a mesma classe
+do `credenciados.cnpj_cpf` que este arquivo já documenta). Não foi mexida: os números são
+`CTR-` + 8 caracteres aleatórios, e o único outro gerador é determinístico pelo id do
+associado, então não há colisão prática — mas se um dia a numeração passar a ser sequencial
+por empresa, essa constraint é a primeira coisa a corrigir.
+
+### A terceira cópia da projeção de parcelas, evitada por pouco
+
+Ao escrever o assistente, a projeção de parcelas foi implementada de novo — e só depois se
+viu que `gerarProjecaoParcelas` já existia em `utils/mensalidadesAssociadoHelpers.ts`,
+testada, usada pelo wizard de mensalidades avulso; e que o `NovoContratoWizard` tinha uma
+**segunda** cópia inline, num `useCallback` de sete dependências. As três faziam a mesma
+conta de vencimento.
+
+Ficou a que já existia: a cópia nova foi descartada e o `NovoContratoWizard` passou a chamá-la.
+`utils/reativacaoAssociado.ts` apenas a reexporta, para o assistente não precisar saber em
+qual módulo ela mora.
+
+**A regra, que este arquivo já registra em outras palavras**: antes de escrever uma função
+utilitária, procure por **comportamento**, não pelo nome que você daria a ela. "Projetar
+parcelas" não estava em nenhum arquivo chamado `projecao*` — estava dentro dos helpers da aba
+de mensalidades do associado, que é onde ela nasceu.
+
+### O contrato é gerado depois de gravar, com o associado já reativado
+
+A última etapa escolhe o modelo padrão; ao concluir, o documento abre no
+`VisualizadorDocumentoPadraoModal` com as variáveis resolvidas — o mesmo caminho do
+`ContratoDocumentosGenerator`. Ele é montado a partir do associado **devolvido pelo service**,
+não do que estava na tela: montá-lo antes imprimiria o número, o plano e o valor do contrato
+que acabou de virar histórico.
+
+Sem modelo escolhido a reativação conclui do mesmo jeito, com um aviso âmbar dizendo que
+nenhum contrato será gerado. Travar a conclusão por falta de modelo faria a empresa que ainda
+não cadastrou um não conseguir reativar ninguém — a mesma escolha da isenção "empresa sem
+conta lançável" da fase 3 do plano contábil.
+
+**`salvarReceita` engole a recusa do Postgres** (`console.error`, grava no IndexedDB, devolve
+`void`) — a armadilha que este arquivo documenta em `saveAtendimento`. Corrigir a função
+compartilhada mudaria o comportamento de todos os seus chamadores de uma vez e ficou fora
+desta rodada; aqui, onde a operação é irreversível, o service **confere** se a receita chegou
+ao servidor e, se não chegou, lança uma mensagem específica: o cadastro e o contrato já
+foram gravados, as mensalidades não, lance-as em Contas a Receber — **e não repita a
+reativação**, ou o associado fica com dois contratos. Um "erro ao reativar" genérico é
+exatamente o que produziria essa segunda passada.
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do

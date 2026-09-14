@@ -1,11 +1,19 @@
 import React from 'react';
-import { BadgeCheck, CalendarDays, CreditCard, Lock, User } from 'lucide-react';
+import { BadgeCheck, CalendarDays, CreditCard, Lock, RotateCcw, User } from 'lucide-react';
 import { ResumoAssociado } from '../../utils/resumoAssociado';
 
 interface Props {
   resumo: ResumoAssociado;
   /** Aviso exibido quando o cadastro está fora de circulação. */
   mensagemInativo: string;
+  /**
+   * Abre a reativação a partir do próprio aviso.
+   *
+   * O aviso diz "reative o cadastro para registrar novas operações" — sem o botão ao lado,
+   * ele manda o operador procurar onde, e o caminho mais curto que ele encontra é fechar o
+   * formulário e voltar para a lista. Opcional porque nem todo chamador tem como reativar.
+   */
+  onReativar?: () => void;
 }
 
 const Campo: React.FC<{ icone: React.ReactNode; rotulo: string; valor: string }> = ({
@@ -30,7 +38,11 @@ const Campo: React.FC<{ icone: React.ReactNode; rotulo: string; valor: string }>
  * "Plano: —" ocupa o mesmo espaço sem informar nada, e num cadastro novo seria quase tudo
  * o que se veria.
  */
-export const AssociadoResumoCabecalho: React.FC<Props> = ({ resumo, mensagemInativo }) => {
+export const AssociadoResumoCabecalho: React.FC<Props> = ({
+  resumo,
+  mensagemInativo,
+  onReativar,
+}) => {
   if (!resumo.nome) return null;
 
   return (
@@ -86,10 +98,20 @@ export const AssociadoResumoCabecalho: React.FC<Props> = ({ resumo, mensagemInat
       </div>
 
       {resumo.inativo && (
-        <p className="mt-2.5 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-amber-300">
-          <Lock className="w-4 h-4 shrink-0 mt-px" />
-          <span>{mensagemInativo}</span>
-        </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-amber-300">
+          <Lock className="w-4 h-4 shrink-0" />
+          <span className="min-w-0 flex-1">{mensagemInativo}</span>
+          {onReativar && (
+            <button
+              type="button"
+              onClick={onReativar}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reativar
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
