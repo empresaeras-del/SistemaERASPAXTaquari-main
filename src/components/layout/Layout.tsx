@@ -8,6 +8,7 @@ import { AlertasPanel } from './AlertasPanel';
 import { useAppContext } from '../../context/AppContext';
 import { useBackgroundChecks } from '../../hooks/useBackgroundChecks';
 import { useScheduledBackup } from '../../hooks/useScheduledBackup';
+import { useAvisoCadastrosIncompletos } from '../../hooks/useAvisoCadastrosIncompletos';
 import { WelcomeModal } from './WelcomeModal';
 import { InactivityManager } from '../auth/InactivityManager';
 import { OfflineBanner } from './OfflineBanner';
@@ -22,6 +23,7 @@ export const Layout: React.FC = () => {
   const navigate = useNavigate();
   useBackgroundChecks();
   useScheduledBackup();
+  useAvisoCadastrosIncompletos();
 
   // Persist alert panel state in IDB
   useEffect(() => {

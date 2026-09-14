@@ -1649,7 +1649,73 @@ volta `admin`, `current_tenant_id()` é a empresa certa, `is_super_admin()` é f
 
 **Ainda aberto**: dois cadastros de 11/09 (`welliton.francisco05@`, `gizelledejesus.1995@`)
 estão sem e-mail confirmado e nunca logaram. Aí não há metadata que resolva — é cadastro pela
-metade, e cabe decidir se reenvia o convite ou remove.
+metade, e cabe decidir se reenvia o convite ou remove. O reenvio deixou de depender de painel:
+virou botão na tela (ver a seção seguinte).
+
+### Cadastro de usuário pela metade: o sistema tem a informação, faltava alguém perguntar
+
+Pedido de 14/09/2026, depois do reparo acima. Um cadastro nasce em **dois lugares** — a
+credencial em `auth.users` e o perfil em `public.users` — e nenhum dos dois avisa quando o
+outro não acontece. Os dois estados já aconteceram de verdade e nenhum apareceu em tela
+nenhuma: `empresa.eras@gmail.com` autenticou 28 dias sem perfil, e dois convites de 11/09
+ficaram sem confirmação. Em ambos o banco sabia; ninguém perguntava.
+
+**A pergunta só existe do lado do servidor.** `auth.users` não é legível por `authenticated`,
+e é lá que moram `email_confirmed_at`, `last_sign_in_at` e o `raw_user_meta_data`. Daí a RPC
+`listar_cadastros_incompletos()` (migration `20260914141704`), `SECURITY DEFINER` com
+`search_path` fixo, revogada de `PUBLIC` **e** de `anon`. Ela mesma decide o escopo — tudo
+para super_admin, a empresa para admin, **nada** para os demais níveis —, então o cliente não
+tem permissão para checar nem para errar. Ensaiado em transação revertida com os cinco papéis
+antes de aplicar: o admin da PAX vê os dois pendentes dele, o admin da outra empresa vê zero,
+o `funcionario` vê zero, o super_admin vê tudo, e o anônimo leva `42501` — a policy recusando,
+não uma coluna.
+
+Quatro decisões valem como regra:
+
+- **A FK já respondia metade da pergunta.** A primeira versão era um `FULL OUTER JOIN`, para
+  também achar "perfil sem credencial". Esse estado é **impossível**: `public.users.id`
+  referencia `auth.users(id) ON DELETE CASCADE`. Virou `LEFT JOIN` a partir de `auth.users`.
+  Antes de escrever a consulta que procura um estado inconsistente, **veja se alguma
+  constraint já o proíbe** — senão o código passa a carregar uma pergunta que o schema fechou.
+- **"Nunca acessou" não é pendência**, e isso é o que separa aviso de ruído. Quem tem perfil e
+  convite confirmado e ainda não entrou não tem nada faltando *no sistema* — falta ele entrar,
+  e não há ação do admin. Listar isso encheria o aviso de linhas sobre as quais não há o que
+  fazer, e é assim que se aprende a não ler o aviso. `ja_acessou` continua no tipo como
+  **contexto** de uma pendência real.
+- **O título do aviso é constante; a contagem vive na mensagem.** Com o número no título, o
+  admin resolver um cadastro produziria um assunto novo e a rotina perderia o rastro do aviso
+  anterior — voltaria a avisar do zero a cada mudança, que é a armadilha do seeding de
+  boas-vindas que este arquivo já registra. `avisoDeCadastrosJaEnviado` compara o conteúdo com
+  o **último** aviso do mesmo título, **incluindo os que o admin já apagou**: incluir os
+  apagados impede o aviso de renascer a cada carregamento (foi o que acumulou 24 notificações
+  para um usuário, 22 já excluídas), e comparar com o último é o que faz um cadastro que
+  regride voltar a avisar. Quem dispensou sem resolver continua com a lista completa em
+  Configurações → Usuários, que é a superfície durável; a notificação é o toque no ombro.
+- **Aqui o offline-first não se aplica, de propósito.** `getCadastrosIncompletos` devolve
+  lista vazia offline em vez de ler cache. Guardar isso no IndexedDB espalharia e-mails e
+  níveis de acesso por cada navegador, e o cache velho diria "há 2 pendências" depois de as
+  duas terem sido resolvidas. **Aviso errado é pior que nenhum**; a resposta honesta offline é
+  "não sei".
+
+**O painel fica acima da tabela de usuários, e não é uma coluna dela** — porque o caso mais
+grave **não está na tabela**: um cadastro sem perfil não existe em `public.users`, então
+nenhuma linha o representa. Foi exatamente assim que `empresa.eras@gmail.com` passou 28 dias
+invisível: a tela mostrava tudo certo porque só sabia olhar para onde ele não estava.
+
+Cada linha traz os botões da pendência que ela tem: **Criar perfil** (que lê nome, nível e
+empresa do `raw_user_meta_data`, como manda a regra do reparo acima, e grava `created_at` com
+a data real da credencial) e **Reenviar convite** (`supabase.auth.resend`, que vale com a
+chave pública — não precisa de `service_role`, então o admin resolve da tela em vez de pedir
+acesso ao painel do Supabase). As duas **propagam a recusa do servidor**: um "reenviado com
+sucesso" sobre um limite de envio estourado faria o admin marcar a pendência como resolvida
+enquanto ela continua lá — a armadilha do `saveAtendimento`, de novo.
+
+A foto do painel (jsdom + Chromium com o CSS do build, como manda "Conferindo a impressão de
+verdade") pegou dois defeitos que nenhuma asserção acusaria: o cadastro sem nome no convite
+imprimia o e-mail **duas vezes** (o identificador cai para o e-mail, e a linha o repetia ao
+lado), e a coluna de ações quebrava os rótulos em duas linhas justamente na linha com os dois
+botões. A largura fixa da coluna precisa ser dimensionada **pelo caso mais cheio** — senão ela
+quebra exatamente onde há mais o que fazer.
 
 - **Não revogue `EXECUTE` das funções usadas pelas policies de RLS** (`has_tenant_access`,
   `current_tenant_id`, `current_user_nivel`, `is_super_admin`), mesmo que os advisors as apontem.
