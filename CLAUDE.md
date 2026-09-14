@@ -1550,9 +1550,81 @@ estética; ficou fora das entregas de redesenho.
   - **Cuidado com o rótulo "esperado".** Este achado ficou meses escondido atrás da conclusão
     (correta) de que as auxiliares de RLS não podem perder o `EXECUTE`. Aquela conclusão foi
     registrada como "os advisors restantes", no plural amplo, e o bloco inteiro passou a ser lido
-    como resolvido — só que das 8 funções que o advisor lista como chamáveis por `anon`, **4** são
-    auxiliares de RLS, 2 são de trigger e 2 não são nem uma coisa nem outra. Ao classificar um
-    alerta como esperado, **diga exatamente quais linhas** ele cobre.
+    como resolvido — só que das 8 funções que o advisor listava então como chamáveis por `anon`,
+    **4** eram auxiliares de RLS, 2 de trigger e 2 não eram nem uma coisa nem outra. Ao
+    classificar um alerta como esperado, **diga exatamente quais linhas** ele cobre.
+
+    Estado de 14/09/2026, conferido: **4** funções chamáveis por `anon`, e são exatamente as
+    quatro auxiliares de RLS (`has_tenant_access`, `current_tenant_id`, `current_user_nivel`,
+    `is_super_admin`). A quinta que ainda aparecia — `get_user_profile()` — saiu na migration
+    `20260914134717`; ver "O papel `public` na policy inclui o anônimo" abaixo. Daqui para
+    frente, o alerta `anon_security_definer_function_executable` com **contagem 4** é o
+    esperado: qualquer número maior é função nova para examinar, não ruído.
+### O papel `public` na policy inclui o anônimo — e é o papel que barra, não o predicado
+
+Levantamento de 14/09/2026, pedido como "verificar as pendências de Auth". O que barra quem
+não fez login neste schema **não é `has_tenant_access`**: são os papéis. 38 das 41 policies
+eram `TO authenticated`, e o `anon` nem chegava a ser avaliado. Três — `planos_contabeis`,
+`contas_contabeis` e `centros_custo`, do módulo contábil — eram `TO public`, e **`public`
+inclui `anon`**.
+
+Nelas o anônimo chegava ao predicado. Ler, não lia (as três colunas são `NOT NULL` e
+`has_tenant_access('<valor>')` é falso sem JWT), mas **o `WITH CHECK` passava**:
+
+```sql
+-- a terceira cláusula de has_tenant_access
+OR (record_tenant_id IS NULL AND current_tenant_id() IS NULL)
+```
+
+Sem login os dois lados são nulos, então `has_tenant_access(NULL)` é **verdadeiro para o
+anônimo**. O insert só era recusado pelo `NOT NULL` da coluna — `23502`, não `42501`. Uma
+constraint de coluna era a única coisa entre um anônimo e uma escrita. Corrigido na migration
+`20260914134717`, pondo as três em `TO authenticated` como as outras 38.
+
+Três coisas valem como regra:
+
+- **Policy nova declara o papel.** Omitir o `TO` deixa `public`, que inclui `anon` — e o
+  predicado deste schema não foi escrito para recusar quem não tem JWT. O `TO authenticated`
+  é a convenção de 41 das 41 policies agora; ao criar tabela nova, copie isso junto.
+- **`has_tenant_access(NULL)` é permissivo por construção, e isso é uma armadilha adormecida.**
+  A cláusula existe para o caso "registro global, sem empresa" — legítima para um usuário
+  logado sem tenant. Para o anônimo ela vira um curinga. Hoje inofensiva porque nenhuma tabela
+  com `tenant_id` nulável tem policy alcançável por `anon`; **11 tabelas deste schema têm
+  `tenant_id` nulável**, então a distância entre inofensivo e vazamento é uma policy mal
+  declarada.
+- **O sintoma de um teste diz qual guarda agiu.** `23502` é a coluna recusando; `42501` é a
+  policy. Ao verificar isolamento, insira com um valor **válido** na chave de tenant: com
+  `NULL` a constraint responde antes da policy e o teste passa sem provar nada. Foi essa troca
+  de `23502` por `42501`, no ensaio revertido, que mostrou que a correção mudou o que precisava
+  mudar.
+
+O ensaio seguiu a regra desta seção (permissão cujo caminho de falha é silencioso se testa
+dentro do rollback antes de aplicar): depois da mudança o anônimo leva `42501` nas três
+tabelas e em `get_user_profile()`, e o admin logado continuava lendo os 2 planos, 58 contas e
+7 centros da empresa dele — e 0 da outra.
+
+`get_user_profile()` saiu na mesma migration: era a única `SECURITY DEFINER` chamável por
+`anon` fora das quatro auxiliares de RLS. Não era explorável (filtra por `auth.uid()`, devolvia
+0 linhas com 7 usuários cadastrados), mas **nenhuma linha do `src/` a chama** — superfície
+exposta sem nada do outro lado. Revogada de `PUBLIC` **e** de `anon`, porque a ACL era
+`=X/postgres` mais grants explícitos e revogar de um lado só deixaria a herança valendo.
+
+### Pendências de Auth que dependem do painel, não de migration
+
+O advisor `auth_leaked_password_protection` está **aberto e não se resolve por SQL**: é um
+toggle em *Authentication → Sign In / Providers → Password*. Ligado, o Supabase recusa senha
+que já apareceu em vazamento conhecido (consulta ao HaveIBeenPwned).
+
+Registrado aqui porque o contexto pesa mais que o alerta isolado: em 14/09/2026 o projeto tem
+**8 usuários no `auth.users`, nenhum com MFA**, 1 super_admin, e `admin_alterar_senha_usuario`
+permite que um admin troque a senha de outro. A senha é a única barreira que existe.
+
+Dois achados operacionais da mesma varredura, deixados para decisão de produto: um usuário
+(`empresa.eras@gmail.com`) existe em `auth.users` desde 17/08, com e-mail confirmado e login
+em 30/08, **sem linha em `public.users`** — entra no Auth e não consegue usar o sistema, que é
+exatamente o caminho de falha silenciosa que a nota do `handle_new_user` descreve acima. E
+dois cadastros de 11/09 estão sem e-mail confirmado e nunca logaram.
+
 - **Não revogue `EXECUTE` das funções usadas pelas policies de RLS** (`has_tenant_access`,
   `current_tenant_id`, `current_user_nivel`, `is_super_admin`), mesmo que os advisors as apontem.
   A expressão de uma policy é avaliada com as permissões de quem consulta: sem `EXECUTE` em
