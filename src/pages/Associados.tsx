@@ -4,6 +4,7 @@ import { AssociadosToolbar } from '../components/associados/AssociadosToolbar';
 import { AssociadosListTable } from '../components/associados/AssociadosListTable';
 import { AssociadosListGrid } from '../components/associados/AssociadosListGrid';
 import { AssociadoDetailsModal } from '../components/associados/AssociadoDetailsModal';
+import { ExclusaoBloqueadaModal } from '../components/associados/ExclusaoBloqueadaModal';
 import { AssociadoFormModal } from '../components/associados/AssociadoFormModal';
 import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
 import { PlanoPaxSelect } from '../components/planos-pax/PlanoPaxSelect';
@@ -263,6 +264,16 @@ export const AssociadosPage: React.FC = () => {
           associado={previewAssociado}
           onClose={() => setPreviewAssociado(null)}
           onEdit={handleOpenModal}
+        />
+      )}
+
+      {associadosState.exclusaoBloqueada && (
+        <ExclusaoBloqueadaModal
+          associado={associadosState.exclusaoBloqueada.associado}
+          historico={associadosState.exclusaoBloqueada.historico}
+          inativando={associadosState.inativandoAssociado}
+          onInativar={associadosState.handleInativarAssociado}
+          onFechar={() => associadosState.setExclusaoBloqueada(null)}
         />
       )}
 
