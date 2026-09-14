@@ -15,6 +15,8 @@ import {
   getAssociados,
   saveAssociado,
   softDeleteAssociado,
+  getHistoricoImpeditivoAssociado,
+  inativarAssociadoEmCascata,
   Associado,
   Dependente,
   DocumentoAssociado,
@@ -59,6 +61,7 @@ import {
   aplicarEnderecoViaCep,
   aplicarMudancaCampoAssociado,
 } from '../utils/associadoHelpers';
+import { HistoricoImpeditivo } from '../utils/historicoAssociado';
 import { validarDadosAssociado } from '../utils/associadoValidation';
 import { RelatorioAssociadosModal } from '../components/associados/RelatorioAssociadosModal';
 import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
@@ -115,6 +118,13 @@ export function useAssociadosState() {
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [isDraggingDoc, setIsDraggingDoc] = useState(false);
   const [isSavingAssociado, setIsSavingAssociado] = useState(false);
+  /** Exclusão recusada: guarda o associado e o histórico que a impediu. */
+  const [exclusaoBloqueada, setExclusaoBloqueada] = useState<{
+    associado: Associado;
+    historico: HistoricoImpeditivo;
+  } | null>(null);
+  const [verificandoHistorico, setVerificandoHistorico] = useState(false);
+  const [inativandoAssociado, setInativandoAssociado] = useState(false);
   const [isSavedAssociado, setIsSavedAssociado] = useState(false);
   const [initialAssociadoSnapshot, setInitialAssociadoSnapshot] = useState<string>('');
 
@@ -500,13 +510,39 @@ export function useAssociadosState() {
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!canDelete(state.user, state.isOnline)) {
       toast.error(
         !state.isOnline
           ? "Exclusão bloqueada no Modo de Visualização (Offline)."
           : "Permissão negada. Somente usuários Administradores podem excluir registros no sistema."
       );
+      return;
+    }
+
+    const alvo = associados.find((a) => a.id === id);
+    if (!alvo) {
+      toast.error("Associado não encontrado.");
+      return;
+    }
+
+    // O histórico é levantado ANTES de perguntar. Confirmar primeiro e recusar depois
+    // ensinaria o operador a clicar em "Excluir" sem ler, e a recusa chegaria como um
+    // erro seco — sem dizer o que existe nem o que fazer a respeito.
+    setVerificandoHistorico(true);
+    let historico;
+    try {
+      historico = await getHistoricoImpeditivoAssociado(alvo, state.isOnline);
+    } catch (error) {
+      console.error("Erro ao verificar o histórico do associado", error);
+      toast.error("Não foi possível verificar o histórico do associado. Exclusão cancelada.");
+      return;
+    } finally {
+      setVerificandoHistorico(false);
+    }
+
+    if (historico.impede) {
+      setExclusaoBloqueada({ associado: alvo, historico });
       return;
     }
 
@@ -523,12 +559,48 @@ export function useAssociadosState() {
           toast.success("Associado excluído com sucesso!");
         } catch (error) {
           console.error("Erro ao excluir", error);
-          toast.error(
-            "Erro ao excluir associado.",
-          );
+          const detalhe = error instanceof Error ? error.message : "";
+          toast.error(detalhe || "Erro ao excluir associado.");
         }
       },
     });
+  };
+
+  /** Inativa o associado do modal de exclusão bloqueada e recarrega a lista. */
+  const handleInativarAssociado = async () => {
+    if (!exclusaoBloqueada) return;
+    setInativandoAssociado(true);
+    try {
+      const resultado = await inativarAssociadoEmCascata(
+        exclusaoBloqueada.associado,
+        state.isOnline,
+        "Inativado no lugar da exclusão, que foi recusada por histórico existente",
+      );
+      const partes = [
+        resultado.dependentesInativados > 0
+          ? `${resultado.dependentesInativados} dependente(s) inativado(s)`
+          : "",
+        resultado.contratosInativados > 0
+          ? `${resultado.contratosInativados} contrato(s) inativado(s)`
+          : "",
+        resultado.parcelasCanceladas > 0
+          ? `${resultado.parcelasCanceladas} parcela(s) em aberto cancelada(s)`
+          : "",
+      ].filter(Boolean);
+      toast.success(
+        partes.length > 0
+          ? `Associado inativado — ${partes.join(", ")}.`
+          : "Associado inativado.",
+      );
+      setExclusaoBloqueada(null);
+      await loadData();
+    } catch (error) {
+      console.error("Erro ao inativar associado", error);
+      const detalhe = error instanceof Error ? error.message : "";
+      toast.error(detalhe || "Erro ao inativar associado.");
+    } finally {
+      setInativandoAssociado(false);
+    }
   };
 
   const handleExcluirDependente = (dep: Dependente, index?: number) => {
@@ -639,6 +711,10 @@ export function useAssociadosState() {
     handleCloseModal,
     handleSave,
     handleDelete,
+    exclusaoBloqueada, setExclusaoBloqueada,
+    verificandoHistorico,
+    inativandoAssociado,
+    handleInativarAssociado,
     handleExcluirDependente,
     handleExportPDF,
     handleExportDependentesPDF,

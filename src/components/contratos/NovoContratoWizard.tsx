@@ -3,6 +3,7 @@ import { tenantDeRegistroExistente, MENSAGEM_TENANT_INDEFINIDO } from '../../uti
 import { useAppContext } from '../../context/AppContext';
 import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { getAssociados, saveAssociado, Associado } from '../../services/associadosService';
+import { associadoSelecionavel } from '../../utils/selecaoCadastro';
 import { salvarReceita } from '../../services/financeiroService';
 import { resolverContaLancamento } from '../../services/planoContabilService';
 import { CODIGO_CONTA_MENSALIDADE } from '../../config/planoContabilPadrao.config';
@@ -405,6 +406,7 @@ export const NovoContratoWizard: React.FC<{
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto">
                 {associados
+                  .filter((a) => associadoSelecionavel(a))
                   .filter(
                     (a) =>
                       a.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||

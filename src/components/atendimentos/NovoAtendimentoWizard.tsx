@@ -36,6 +36,8 @@ import { formatLocalDate } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatters';
 import { useConfirm } from '../../context/ConfirmContext';
 import { deveOferecerCobranca, montarCobrancaAtendimento, vencimentoPadrao } from '../../utils/cobrancaAutomatica';
+import { associadoSelecionavel, dependenteSelecionavel } from '../../utils/selecaoCadastro';
+import { inativarAssociadoEmCascata } from '../../services/associadosService';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { Atendimento, AtendimentoItem } from '../../types/atendimentos';
 import { falecidoExternoSchema, responsavelExternoSchema } from '../../schemas/atendimentoSchema';
@@ -116,8 +118,10 @@ export const NovoAtendimentoWizard: React.FC<{
 
   // Funções Utilitárias
   const filteredAssociados = useMemo(() => {
-    if (!associadoSearch) return associados.slice(0, 10);
-    return associados
+    // Inativo não entra em atendimento novo — é o que dá sentido à inativação.
+    const disponiveis = associados.filter((a) => associadoSelecionavel(a));
+    if (!associadoSearch) return disponiveis.slice(0, 10);
+    return disponiveis
       .filter(
         (a) =>
           a.nome.toLowerCase().includes(associadoSearch.toLowerCase()) ||
@@ -411,19 +415,23 @@ export const NovoAtendimentoWizard: React.FC<{
     setInactivating(true);
     try {
       const assoc = statusQuestionData.associado;
-      const updatedAssociado: Associado = {
-        ...assoc,
-        status: 'inativo',
-      };
-      await saveAssociado(updatedAssociado, state.isOnline);
-      await registrarAuditoria('INATIVACAO_ASSOCIADO_OBITO', {
-        associado_id: assoc.id,
-        associado_nome: assoc.nome,
-        status_anterior: assoc.status,
-        status_novo: 'inativo',
-        motivo: 'Inativação por falecimento / Atendimento funerário finalizado',
-      });
-      toast.success(`Titular "${assoc.nome}" foi inativado com sucesso.`);
+      // Mesma cascata da tela de Associados: dependentes, contrato e parcelas em aberto
+      // vão junto. Antes só o status do titular mudava, e o contrato seguia gerando
+      // mensalidade para quem faleceu.
+      const resultado = await inativarAssociadoEmCascata(
+        assoc,
+        state.isOnline,
+        'Inativação por falecimento / Atendimento funerário finalizado',
+      );
+      const extras = [
+        resultado.dependentesInativados > 0 ? `${resultado.dependentesInativados} dependente(s)` : '',
+        resultado.parcelasCanceladas > 0 ? `${resultado.parcelasCanceladas} parcela(s) cancelada(s)` : '',
+      ].filter(Boolean);
+      toast.success(
+        extras.length > 0
+          ? `Titular "${assoc.nome}" inativado — ${extras.join(', ')}.`
+          : `Titular "${assoc.nome}" foi inativado com sucesso.`,
+      );
       setStatusQuestionData(null);
       onSuccess();
     } catch (err) {
@@ -434,14 +442,22 @@ export const NovoAtendimentoWizard: React.FC<{
     }
   };
 
-  // Função para inativar / remover Dependente
+  // Função para inativar Dependente
   const handleInativarDependente = async () => {
     if (!statusQuestionData?.associado || !statusQuestionData.dependente) return;
     setInactivating(true);
     try {
       const assoc = statusQuestionData.associado;
       const dep = statusQuestionData.dependente;
-      const novosDeps = (assoc.dependentes || []).filter((d) => d.id !== dep.id);
+
+      // Antes esta função **removia** o dependente da lista, e `saveAssociado` então o
+      // apagava do Postgres — o falecido sumia do cadastro que o atendimento dele
+      // referencia. Agora ele é marcado `inativo`: sai dos seletores de registro novo
+      // (ver `utils/selecaoCadastro.ts`) e continua existindo para o histórico.
+      const novosDeps = (assoc.dependentes || []).map((d) =>
+        d.id === dep.id ? { ...d, status: 'inativo' as const } : d,
+      );
+      // `n_vidas` cai porque a vida coberta acabou — é o que o plano cobra.
       const novasVidas = Math.max(1, (assoc.n_vidas || (assoc.dependentes?.length || 0) + 1) - 1);
 
       const updatedAssociado: Associado = {
@@ -455,9 +471,9 @@ export const NovoAtendimentoWizard: React.FC<{
         dependente_nome: dep.nome,
         titular_id: assoc.id,
         titular_nome: assoc.nome,
-        motivo: 'Inativação/exclusão por falecimento / Atendimento funerário finalizado',
+        motivo: 'Inativação por falecimento / Atendimento funerário finalizado',
       });
-      toast.success(`Dependente "${dep.nome}" inativado do cadastro com sucesso.`);
+      toast.success(`Dependente "${dep.nome}" foi inativado com sucesso.`);
       setStatusQuestionData(null);
       onSuccess();
     } catch (err) {
@@ -632,7 +648,9 @@ export const NovoAtendimentoWizard: React.FC<{
                             </p>
                           </div>
                         </label>
-                        {selectedAssociado.dependentes?.map((d) => (
+                        {(selectedAssociado.dependentes || [])
+                          .filter((d) => dependenteSelecionavel(d, selectedAssociado))
+                          .map((d) => (
                           <label
                             key={d.id}
                             className="flex items-center gap-3 p-2 hover:bg-bg-surface rounded-lg cursor-pointer"

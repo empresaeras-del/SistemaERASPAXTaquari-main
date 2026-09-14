@@ -62,6 +62,7 @@ import {
   montarCobrancaCoparticipacao,
   vencimentoPadrao,
 } from '../utils/cobrancaAutomatica';
+import { associadoSelecionavel, dependenteSelecionavel } from '../utils/selecaoCadastro';
 import { resolverContaLancamento } from '../services/planoContabilService';
 import { CODIGO_CONTA_SERVICO_EXTRA } from '../config/planoContabilPadrao.config';
 
@@ -967,7 +968,9 @@ export const RequisicoesPage: React.FC = () => {
                       className="w-full bg-bg-surface border border-border-default rounded-xl px-3.5 py-2 text-sm text-text-base focus:outline-none focus:border-[#3B82F6]"
                     >
                       <option value="">Selecione um associado...</option>
-                      {associados.map(a => (
+                      {associados
+                        .filter(a => associadoSelecionavel(a, editingRequisicao?.associado_id))
+                        .map(a => (
                         <option key={a.id} value={a.id}>
                           {a.nome} {a.cpf ? `(CPF: ${a.cpf})` : ''} - Plano: {a.plano_nome || 'Padrão'}
                         </option>
@@ -1018,7 +1021,9 @@ export const RequisicoesPage: React.FC = () => {
                       className="w-full bg-bg-surface border border-border-default rounded-xl px-3.5 py-2 text-sm text-text-base focus:outline-none focus:border-[#3B82F6]"
                     >
                       <option value="">Selecione o dependente...</option>
-                      {associadoSelecionado.dependentes.map(d => (
+                      {associadoSelecionado.dependentes
+                        .filter(d => dependenteSelecionavel(d, associadoSelecionado, editingRequisicao?.paciente_id))
+                        .map(d => (
                         <option key={d.id} value={d.id}>
                           {d.nome} - Parentesco: {d.parentesco} {d.cpf ? `(CPF: ${d.cpf})` : ''}
                         </option>

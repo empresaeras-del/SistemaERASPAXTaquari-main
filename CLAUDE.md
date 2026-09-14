@@ -866,6 +866,75 @@ Duas decisões:
 `ConfirmContext.test.tsx` é o segundo teste de render do projeto e verifica o diálogo
 montado de verdade, não uma simulação dele.
 
+## Associado com histórico não se exclui — inativa-se
+
+Pedido de 14/09/2026. `softDeleteAssociado` **não é soft coisa nenhuma**: é uma cascata de
+hard delete que apaga receitas, **parcelas já recebidas**, atendimentos, requisições,
+contratos e dependentes — do IndexedDB *e* do Postgres. Um clique desfazia dinheiro que
+entrou no caixa e o registro do velório que a família já usou, deixando só a linha de
+auditoria.
+
+A regra nova tem duas metades, e uma sem a outra não vale nada:
+
+- **Recusar a exclusão** quando existe histórico: parcela recebida (dinheiro que virou
+  realizado no Plano de Contas) ou atendimento **do titular ou de qualquer dependente**.
+- **Oferecer a inativação**, que preserva o histórico e tira o cadastro de circulação.
+
+Quatro decisões valem como regra:
+
+- **A guarda vive antes da primeira linha ser tocada.** `softDeleteAssociado` levanta o
+  histórico e lança **antes** da limpeza local — a partir dali não há volta. É a mesma
+  escolha de `utils/statusParcela.ts`: esconder o botão é conveniência, a recusa mora no
+  ponto de escrita.
+- **Falha de consulta não vira "não há histórico".** `getHistoricoImpeditivoAssociado`
+  cai para o IndexedDB quando o Supabase falha, em vez de devolver vazio. Uma rede instável
+  liberando a exclusão que o banco recusaria seria o pior resultado possível.
+- **A recusa é um modal com os registros, não um toast.** O operador pediu para excluir e
+  precisa ver **o que existe** para decidir; e o botão de inativar tem de estar ali, senão
+  ele tenta de novo achando que errou o clique. A listagem mostra no máximo
+  `LIMITE_POR_GRUPO` por bloco, com o total no cabeçalho — doze parcelas de um plano anual
+  empurrariam o botão para fora da vista.
+- **Inativar é cascata, não um rótulo.** `inativarAssociadoEmCascata` marca o titular e os
+  dependentes, põe o contrato em `inativo` e **cancela as parcelas em aberto**
+  (`pendente`/`vencido`/`atrasado`). Parcela recebida não é tocada. O cancelamento da
+  dívida é decisão de negócio tomada explicitamente: a inativação aqui é tipicamente por
+  falecimento, e seguir cobrando mensalidade de quem morreu é o que a função existe para
+  evitar.
+
+### Inativar só significa algo se o inativo sumir dos seletores
+
+`utils/selecaoCadastro.ts` (puro e testado) é a segunda metade da regra: enquanto der para
+escolher o inativo num atendimento, numa guia ou num contrato, a inativação é decoração.
+Aplicado nos quatro seletores — wizard de atendimento (titular e dependentes), Requisições
+(titular e dependentes) e wizard de contrato.
+
+Três detalhes que o teste trava:
+
+- **`inadimplente` continua selecionável.** Quem deve é justamente quem precisa ser
+  atendido e cobrado; barrar aqui seria negar serviço por atraso — decisão que ninguém
+  tomou. Só `inativo` e `encerrado` saem.
+- **O dependente depende também do titular.** A cobertura dele vem do plano do titular:
+  sem esse segundo teste, inativar o titular deixaria a família inteira selecionável pela
+  porta dos fundos.
+- **O já selecionado continua visível** (`idJaSelecionado`). Um registro antigo pode
+  apontar para quem foi inativado depois, e sumir com ele faria a tela de edição perder a
+  seleção — reescrevendo o registro em silêncio ao salvar. É a mesma escolha do seletor de
+  conta contábil, que exibe a conta desativada já gravada.
+
+Dois defeitos pré-existentes saíram junto, porque estavam no caminho:
+
+- **`Dependente.status` existia no Postgres e não no TypeScript** — e o payload de
+  gravação também não o mandava. Inativar um dependente não tinha onde ficar guardado.
+- **`handleInativarDependente` (wizard de atendimento) REMOVIA o dependente** da lista, e
+  `saveAssociado` então o apagava do banco: o falecido sumia do cadastro que o próprio
+  atendimento referencia. Agora é marcado `inativo`. O `handleInativarTitular` passou a
+  usar a cascata — antes só mudava o status e o contrato seguia gerando mensalidade.
+
+`cancelarParcelasEmAbertoDoAssociado` cobre os três nomes de "em aberto". O
+`cancelarReceitasPorAtendimento`, mais antigo, filtra só `pendente` — deixa a vencida
+cobrável para trás. **Ao filtrar parcela por status, lembre que "em aberto" tem três
+nomes neste schema e "liquidada" tem dois.**
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do

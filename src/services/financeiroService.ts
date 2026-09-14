@@ -1449,6 +1449,78 @@ export const cancelarDespesa = async (isOnline: boolean, despesaId: string): Pro
 };
 
 
+/** Os status que significam "ainda cobrável". */
+const STATUS_PARCELA_EM_ABERTO = ['pendente', 'vencido', 'atrasado'];
+
+/**
+ * Cancela as parcelas ainda em aberto de um associado — usado ao inativá-lo.
+ *
+ * **Só toca no que ainda seria cobrado.** Parcela recebida fica como está: ela é dinheiro
+ * que entrou, virou realizado no Plano de Contas e tem recibo com a família (ver
+ * `utils/statusParcela.ts`). Cancelar a liquidada reescreveria o passado.
+ *
+ * Cobre os três nomes de "em aberto" — `pendente`, `vencido` e `atrasado`. O
+ * `cancelarReceitasPorAtendimento`, mais antigo, filtra só `pendente` e por isso deixa a
+ * vencida cobrável para trás; aqui isso seria o defeito principal, porque é justamente a
+ * parcela atrasada de quem parou de pagar que sobraria cobrando um inativo.
+ *
+ * Devolve quantas parcelas foram canceladas, para a tela poder dizer o que aconteceu.
+ */
+export const cancelarParcelasEmAbertoDoAssociado = async (
+  associadoId: string,
+  isOnline: boolean,
+): Promise<number> => {
+  let canceladas = 0;
+
+  if (isOnline) {
+    try {
+      const { data: receitas } = await supabase
+        .from('receitas')
+        .select('id')
+        .eq('associado_id', associadoId);
+
+      const receitaIds = (receitas || []).map((r: any) => r.id);
+      if (receitaIds.length > 0) {
+        const { data: alteradas, error } = await supabase
+          .from('parcelas_receber')
+          .update({ status: 'cancelado' })
+          .in('receita_id', receitaIds)
+          .in('status', STATUS_PARCELA_EM_ABERTO)
+          .select('id');
+        if (error) console.warn('Erro ao cancelar parcelas em aberto do associado:', error);
+        canceladas = (alteradas || []).length;
+      }
+    } catch (e) {
+      console.warn('Falha ao cancelar parcelas em aberto no Supabase:', e);
+    }
+  }
+
+  // Espelha no cache local nos dois caminhos: offline é a única gravação, e online mantém
+  // a lista da tela coerente sem esperar o próximo carregamento.
+  try {
+    const receitasLocais = await getAllFromIDB<Receita>('receitas');
+    const idsReceita = new Set(
+      receitasLocais.filter((r) => r && r.associado_id === associadoId).map((r) => r.id),
+    );
+    const parcelasLocais = await getAllFromIDB<ParcelaReceber>('parcelas_receber');
+    for (const parcela of parcelasLocais) {
+      if (!parcela || !idsReceita.has(parcela.receita_id)) continue;
+      if (!STATUS_PARCELA_EM_ABERTO.includes(parcela.status)) continue;
+
+      const atualizada = { ...parcela, status: 'cancelado' as const };
+      await saveToIDB('parcelas_receber', atualizada);
+      if (!isOnline) {
+        await addToSyncQueue({ storeName: 'parcelas_receber', action: 'update', data: atualizada });
+        canceladas += 1;
+      }
+    }
+  } catch (e) {
+    console.warn('Falha ao cancelar parcelas em aberto no cache local:', e);
+  }
+
+  return canceladas;
+};
+
 export const cancelarReceitasPorAtendimento = async (atendimentoId: string, isOnline: boolean): Promise<void> => {
   if (isOnline) {
     try {

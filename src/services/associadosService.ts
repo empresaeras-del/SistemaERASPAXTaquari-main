@@ -3,6 +3,12 @@ import { registroPertenceAoTenant, tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO }
 import { mesclarComCacheLocal, idsPendentesDeSync } from '../utils/mesclagemOfflineFirst';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { addToSyncQueue, getSyncQueue } from '../lib/syncService';
+import { cancelarParcelasEmAbertoDoAssociado } from './financeiroService';
+import {
+  HistoricoImpeditivo,
+  MENSAGEM_EXCLUSAO_BLOQUEADA,
+  montarHistoricoImpeditivo,
+} from '../utils/historicoAssociado';
 
 export interface Associado {
   id: string;
@@ -59,6 +65,13 @@ export interface Dependente {
   cpf?: string;
   data_nascimento?: string;
   parentesco: string;
+  /**
+   * A coluna já existia no Postgres (default `'ativo'`) mas faltava aqui — e o payload de
+   * gravação também não a mandava, então inativar um dependente não tinha onde ficar
+   * guardado. Ausente significa ativo, que é o estado de todo dependente anterior a esta
+   * mudança.
+   */
+  status?: 'ativo' | 'inativo';
 }
 
 const STORE_NAME = 'associados';
@@ -473,7 +486,9 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
               nome: (d.nome || '').trim().toUpperCase(),
               cpf: d.cpf && String(d.cpf).trim() !== '' ? String(d.cpf).trim() : null,
               data_nascimento: depNasc,
-              parentesco: d.parentesco && String(d.parentesco).trim() !== '' ? String(d.parentesco).trim().toUpperCase() : 'OUTRO'
+              parentesco: d.parentesco && String(d.parentesco).trim() !== '' ? String(d.parentesco).trim().toUpperCase() : 'OUTRO',
+              // Sem isto a inativação de um dependente não chegava ao banco.
+              status: d.status === 'inativo' ? 'inativo' : 'ativo'
             };
             await resilientSupabaseUpsert('dependentes', depPayload, 'id');
           }
@@ -545,7 +560,226 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
   }
 };
 
+/**
+ * Levanta o histórico que impede excluir este associado.
+ *
+ * Duas fontes, e as duas foram escolhidas pelo que a exclusão destrói:
+ *
+ * - **Parcelas recebidas** — `softDeleteAssociado` apaga as receitas do associado *e* as
+ *   parcelas delas, inclusive as liquidadas. É dinheiro que entrou no caixa e virou
+ *   realizado no Plano de Contas.
+ * - **Atendimentos** — do titular **e dos dependentes**. O atendimento é o velório que a
+ *   família já usou; ele some com a cascata e leva os itens junto.
+ *
+ * Segue o padrão offline-first: online consulta o Postgres, e em qualquer falha (ou
+ * offline) cai para o IndexedDB. **A falha não vira "não há histórico"** — cair para o
+ * cache é o que impede a rede instável de liberar uma exclusão que o banco recusaria.
+ */
+export const getHistoricoImpeditivoAssociado = async (
+  associado: Pick<Associado, 'id' | 'dependentes'>,
+  isOnline: boolean,
+): Promise<HistoricoImpeditivo> => {
+  const idsDependentes = (associado.dependentes || []).map((d) => d.id).filter(Boolean);
+  const parcelasRecebidas: { titulo: string; detalhe?: string }[] = [];
+  const atendimentos: { titulo: string; detalhe?: string }[] = [];
+
+  const dataBR = (valor?: string | null) => {
+    const texto = (valor || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return '';
+    const [ano, mes, dia] = texto.split('-');
+    return `${dia}/${mes}/${ano}`;
+  };
+  const moeda = (valor?: number | null) =>
+    typeof valor === 'number'
+      ? valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      : '';
+
+  const descreverParcela = (p: any) => {
+    const numero = p.numero_parcela ? `Parcela ${p.numero_parcela}` : 'Parcela';
+    const detalhes = [
+      p.data_pagamento ? `Recebida em ${dataBR(p.data_pagamento)}` : 'Recebida',
+      moeda(p.valor_recebido ?? p.valor),
+    ].filter(Boolean);
+    return { titulo: `${numero} — ${p.descricao || 'Mensalidade'}`, detalhe: detalhes.join(' · ') };
+  };
+
+  const descreverAtendimento = (a: any) => ({
+    titulo: a.falecido_nome || 'Atendimento',
+    detalhe: [a.data_obito ? `Óbito em ${dataBR(a.data_obito)}` : '', a.status ? a.status.toUpperCase() : '']
+      .filter(Boolean)
+      .join(' · '),
+  });
+
+  let remotoOk = false;
+
+  if (isOnline) {
+    try {
+      const { data: receitas } = await supabase
+        .from('receitas')
+        .select('id')
+        .eq('associado_id', associado.id);
+
+      const receitaIds = (receitas || []).map((r: any) => r.id);
+      if (receitaIds.length > 0) {
+        const { data: parcelas } = await supabase
+          .from('parcelas_receber')
+          .select('numero_parcela, descricao, valor, valor_recebido, data_pagamento, status')
+          .in('receita_id', receitaIds)
+          .in('status', ['recebido', 'pago']);
+        for (const p of parcelas || []) parcelasRecebidas.push(descreverParcela(p));
+      }
+
+      // Atendimentos do titular e dos dependentes: `dependente_id` é quem liga o
+      // atendimento ao dependente, e um velório de dependente impede igual.
+      const filtros = [`associado_id.eq.${associado.id}`];
+      if (idsDependentes.length > 0) filtros.push(`dependente_id.in.(${idsDependentes.join(',')})`);
+      const { data: atends } = await supabase
+        .from('atendimentos')
+        .select('falecido_nome, data_obito, status')
+        .or(filtros.join(','));
+      for (const a of atends || []) atendimentos.push(descreverAtendimento(a));
+
+      remotoOk = true;
+    } catch (e) {
+      console.warn('Falha ao levantar histórico do associado no Supabase, caindo para o cache:', e);
+    }
+  }
+
+  if (!remotoOk) {
+    try {
+      const receitasLocais = await getAllFromIDB<any>('receitas');
+      const idsReceita = new Set(
+        receitasLocais.filter((r) => r && r.associado_id === associado.id).map((r) => r.id),
+      );
+      const parcelasLocais = await getAllFromIDB<any>('parcelas_receber');
+      for (const p of parcelasLocais) {
+        if (p && idsReceita.has(p.receita_id) && (p.status === 'recebido' || p.status === 'pago')) {
+          parcelasRecebidas.push(descreverParcela(p));
+        }
+      }
+
+      const atendsLocais = await getAllFromIDB<any>('atendimentos');
+      const setDeps = new Set(idsDependentes);
+      for (const a of atendsLocais) {
+        if (a && (a.associado_id === associado.id || (a.dependente_id && setDeps.has(a.dependente_id)))) {
+          atendimentos.push(descreverAtendimento(a));
+        }
+      }
+    } catch (e) {
+      console.warn('Falha ao levantar histórico do associado no cache local:', e);
+    }
+  }
+
+  return montarHistoricoImpeditivo({ parcelasRecebidas, atendimentos });
+};
+
+export interface ResultadoInativacao {
+  dependentesInativados: number;
+  contratosInativados: number;
+  parcelasCanceladas: number;
+}
+
+/**
+ * Inativa o associado e tudo que o mantinha circulando.
+ *
+ * É a saída oferecida quando a exclusão é recusada, e a diferença entre as duas é o ponto:
+ * **excluir apaga o histórico; inativar preserva o histórico e tira o cadastro de
+ * circulação.** Depois disto o associado e seus dependentes somem dos seletores de
+ * atendimento, requisição e contrato, mas as parcelas recebidas, os atendimentos e as
+ * guias continuam lá, inteiros, para relatório e conferência.
+ *
+ * Três efeitos, e o terceiro é decisão de negócio, não consequência técnica:
+ *
+ * - **Dependentes vão junto.** Um dependente ativo de um titular inativo seria selecionável
+ *   num atendimento novo — a cobertura dele vem do plano do titular, que acabou de parar.
+ * - **Contrato vai para `inativo`**, então não gera mensalidade nova.
+ * - **Parcelas em aberto são canceladas** (`pendente`/`vencido`/`atrasado` ⇒ `cancelado`).
+ *   A dívida é perdoada: a inativação aqui é tipicamente por falecimento, e seguir cobrando
+ *   mensalidade de quem morreu é o comportamento que esta função existe para evitar.
+ *   Parcela **recebida não é tocada** — ver `cancelarParcelasEmAbertoDoAssociado`.
+ *
+ * Reativar é trabalho manual e deliberado: nada aqui é desfeito automaticamente, porque
+ * ressuscitar parcelas canceladas sem alguém olhar recriaria cobrança que já foi baixada.
+ */
+export const inativarAssociadoEmCascata = async (
+  associado: Associado,
+  isOnline: boolean,
+  motivo?: string,
+): Promise<ResultadoInativacao> => {
+  const dependentes = Array.isArray(associado.dependentes) ? associado.dependentes : [];
+  const dependentesInativados = dependentes.filter((d) => d.status !== 'inativo').length;
+
+  const inativado: Associado = {
+    ...associado,
+    status: 'inativo',
+    dependentes: dependentes.map((d) => ({ ...d, status: 'inativo' as const })),
+  };
+  await saveAssociado(inativado, isOnline);
+
+  let contratosInativados = 0;
+  if (isOnline) {
+    try {
+      const { data, error } = await supabase
+        .from('contratos')
+        .update({ status: 'inativo' })
+        .eq('associado_id', associado.id)
+        .eq('status', 'ativo')
+        .select('id');
+      if (error) console.warn('Erro ao inativar contratos do associado:', error);
+      contratosInativados = (data || []).length;
+    } catch (e) {
+      console.warn('Falha ao inativar contratos no Supabase:', e);
+    }
+  }
+
+  try {
+    const contratosLocais = await getAllFromIDB<any>('contratos');
+    for (const contrato of contratosLocais) {
+      if (!contrato || contrato.associado_id !== associado.id || contrato.status !== 'ativo') continue;
+      const atualizado = { ...contrato, status: 'inativo' };
+      await saveToIDB('contratos', atualizado);
+      if (!isOnline) {
+        await addToSyncQueue({ storeName: 'contratos', action: 'update', data: atualizado });
+        contratosInativados += 1;
+      }
+    }
+  } catch (e) {
+    console.warn('Falha ao inativar contratos no cache local:', e);
+  }
+
+  const parcelasCanceladas = await cancelarParcelasEmAbertoDoAssociado(associado.id, isOnline);
+
+  try {
+    await registrarAuditoria('Inativar Associado e Vínculos', {
+      associado_id: associado.id,
+      associado_nome: associado.nome,
+      status_anterior: associado.status,
+      motivo: motivo || 'Inativação solicitada na tela de Associados',
+      dependentes_inativados: dependentesInativados,
+      contratos_inativados: contratosInativados,
+      parcelas_canceladas: parcelasCanceladas,
+    });
+  } catch (e) {
+    console.warn('Falha ao registrar auditoria da inativação:', e);
+  }
+
+  return { dependentesInativados, contratosInativados, parcelasCanceladas };
+};
+
 export const softDeleteAssociado = async (id: string, isOnline: boolean): Promise<void> => {
+  // 0. Recusa antes de qualquer apagamento.
+  //
+  // O nome mente: esta função é uma cascata de hard delete — receitas, parcelas já
+  // recebidas, atendimentos, requisições, contratos e dependentes saem do IndexedDB E do
+  // Postgres. Só a tela bloqueando não bastaria: a guarda tem de viver aqui, antes da
+  // primeira linha ser tocada, porque a partir da limpeza local não há como voltar atrás.
+  const associadoAtual =
+    (await getFromIDB<Associado>(STORE_NAME, id)) || ({ id, dependentes: [] } as any as Associado);
+  const historico = await getHistoricoImpeditivoAssociado(associadoAtual, isOnline);
+  if (historico.impede) {
+    throw new Error(MENSAGEM_EXCLUSAO_BLOQUEADA);
+  }
+
   // 1. Limpeza no IndexedDB de todas as tabelas vinculadas
   try {
     await deleteFromIDB(STORE_NAME, id);
