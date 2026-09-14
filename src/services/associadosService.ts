@@ -513,17 +513,22 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
             observacoes: (associadoToSave as any).observacoes || null
           };
 
-          const { data: existingContrato } = await supabase
+          // Busca o contrato VIGENTE, não "o contrato" — desde a reativação um associado
+          // pode ter vários: o novo ativo e os anteriores inativos. Sem o filtro por status
+          // e o `limit(1)`, a consulta devolve mais de uma linha, `maybeSingle` não entrega
+          // objeto nenhum e — como o `error` é descartado aqui — o código cairia no ramo de
+          // "não existe", **inserindo uma linha nova a cada save** do mesmo associado.
+          const { data: contratosVigentes, error: erroContratoExistente } = await supabase
             .from('contratos')
             .select('id')
             .eq('associado_id', associadoId)
-            .maybeSingle();
+            .eq('status', 'ativo')
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          if (erroContratoExistente) throw erroContratoExistente;
 
-          if (existingContrato?.id) {
-            contratoData.id = existingContrato.id;
-          } else {
-            contratoData.id = crypto.randomUUID();
-          }
+          contratoData.id = contratosVigentes?.[0]?.id || crypto.randomUUID();
 
           await resilientSupabaseUpsert('contratos', contratoData, 'id');
         } catch (contratoErr) {

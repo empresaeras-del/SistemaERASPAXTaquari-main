@@ -51,7 +51,8 @@ export const AssociadoFormModal = (props: any) => {
     loadData, fieldErrors, setFieldErrors, buscandoCep, setBuscandoCep, buscarCepViaCep,
     executarValidacaoOuAlertar, handleFieldChange, handleOpenModal, handleCloseModal,
     handleSave, handleDelete, handleExcluirDependente, handleExportPDF, handleExportDependentesPDF,
-    totalTitulares, totalDependentes, vidasProtegidas, inadimplentes, qtdAssociadosAtivosSemParcelas
+    totalTitulares, totalDependentes, vidasProtegidas, inadimplentes, qtdAssociadosAtivosSemParcelas,
+    handleAbrirReativacao
   } = props;
 
   // Derivados do associado aberto: o cabeçalho e o bloqueio por status inativo.
@@ -86,7 +87,23 @@ export const AssociadoFormModal = (props: any) => {
 
             {/* Identidade do associado, visível em todas as abas — e o aviso de inativo,
                 que explica por que as ações estão bloqueadas adiante. */}
-            <AssociadoResumoCabecalho resumo={resumoAssociado} mensagemInativo={MENSAGEM_CADASTRO_INATIVO} />
+            <AssociadoResumoCabecalho
+              resumo={resumoAssociado}
+              mensagemInativo={MENSAGEM_CADASTRO_INATIVO}
+              onReativar={
+                handleAbrirReativacao && editingAssociado?.id
+                  ? () => {
+                      // Fecha o formulário antes de abrir o assistente: os dois são modais
+                      // de tela cheia, e o cadastro que o assistente vai gravar é o que está
+                      // no banco — deixar o formulário aberto por baixo convidaria a salvar
+                      // por cima da reativação com os valores de antes dela.
+                      const alvo = editingAssociado;
+                      handleCloseModal();
+                      handleAbrirReativacao(alvo);
+                    }
+                  : undefined
+              }
+            />
 
             {hasUnsavedChanges && (
               <div className="px-6 pt-3 shrink-0">

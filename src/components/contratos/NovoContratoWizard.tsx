@@ -5,6 +5,7 @@ import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { getAssociados, saveAssociado, Associado } from '../../services/associadosService';
 import { associadoSelecionavel } from '../../utils/selecaoCadastro';
 import { idadeEmAnos } from '../../utils/resumoAssociado';
+import { gerarProjecaoParcelas } from '../../utils/mensalidadesAssociadoHelpers';
 import { salvarReceita } from '../../services/financeiroService';
 import { resolverContaLancamento } from '../../services/planoContabilService';
 import { CODIGO_CONTA_MENSALIDADE } from '../../config/planoContabilPadrao.config';
@@ -172,41 +173,23 @@ export const NovoContratoWizard: React.FC<{
     return valorPlano;
   }, [isAdminOrSuperAdmin, valorParcelaManual, valorPlano]);
 
+  // Esta projeção estava escrita à mão aqui, idêntica à de `mensalidadesAssociadoHelpers`
+  // — que já era testada e já era usada pelo wizard de mensalidades avulso. Duas cópias da
+  // mesma regra de vencimento divergem na primeira correção feita só de um lado.
   const gerarProjecao = useCallback(() => {
     if (!planoSelecionado) return;
-    const dt = new Date(dataInicio + 'T12:00:00');
-    const arr = [];
-    const adesao = planoSelecionado.taxa_adesao || 0;
-    const baseParcela =
-      isAdminOrSuperAdmin &&
-      valorParcelaManual !== '' &&
-      !isNaN(Number(valorParcelaManual)) &&
-      Number(valorParcelaManual) >= 0
-        ? Number(valorParcelaManual)
-        : valorPlano;
-
-    for (let i = 1; i <= qtdParcelas; i++) {
-      const vencimento = new Date(dt.getFullYear(), dt.getMonth() + (i - 1), diaVencimento);
-      const valorParcela = i === 1 ? baseParcela + adesao : baseParcela;
-      const descAdesao = i === 1 && adesao > 0 ? ' (Inc. Adesão)' : '';
-
-      arr.push({
-        numero_parcela: i,
-        descricao: `Mensalidade ${i}/${qtdParcelas} - ${planoSelecionado.nome}${descAdesao}`,
-        data_vencimento: format(vencimento, 'yyyy-MM-dd'),
-        valor: valorParcela,
-      });
-    }
-    setParcelas(arr);
-  }, [
-    planoSelecionado,
-    dataInicio,
-    qtdParcelas,
-    diaVencimento,
-    valorPlano,
-    valorParcelaManual,
-    isAdminOrSuperAdmin,
-  ]);
+    setParcelas(
+      gerarProjecaoParcelas({
+        dataInicioISO: dataInicio,
+        qtdParcelas,
+        diaVencimento,
+        baseParcela: valorBaseParcela,
+        taxaAdesao: planoSelecionado.taxa_adesao || 0,
+        planoNome: planoSelecionado.nome,
+        formatarData: (d) => format(d, 'yyyy-MM-dd'),
+      }),
+    );
+  }, [planoSelecionado, dataInicio, qtdParcelas, diaVencimento, valorBaseParcela]);
 
   useEffect(() => {
     if (step === 3) gerarProjecao();

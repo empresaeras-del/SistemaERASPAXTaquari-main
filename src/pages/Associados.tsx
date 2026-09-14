@@ -6,6 +6,7 @@ import { AssociadosListGrid } from '../components/associados/AssociadosListGrid'
 import { AssociadoDetailsModal } from '../components/associados/AssociadoDetailsModal';
 import { ExclusaoBloqueadaModal } from '../components/associados/ExclusaoBloqueadaModal';
 import { AssociadoFormModal } from '../components/associados/AssociadoFormModal';
+import { ReativacaoAssociadoWizard } from '../components/associados/ReativacaoAssociadoWizard';
 import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
 import { PlanoPaxSelect } from '../components/planos-pax/PlanoPaxSelect';
 import { ColumnVisibilityToggle } from '../components/ColumnVisibilityToggle';
@@ -239,6 +240,7 @@ export const AssociadosPage: React.FC = () => {
                 handleWhatsAppMenu={handleWhatsAppMenu}
                 handleOpenModal={handleOpenModal}
                 handleDelete={handleDelete}
+                handleReativar={associadosState.handleAbrirReativacao}
               />
             ) : (
               <AssociadosListGrid 
@@ -250,6 +252,7 @@ export const AssociadosPage: React.FC = () => {
                 handleWhatsAppMenu={handleWhatsAppMenu}
                 handleOpenModal={handleOpenModal}
                 handleDelete={handleDelete}
+                handleReativar={associadosState.handleAbrirReativacao}
               />
             )}
           </div>
@@ -264,6 +267,14 @@ export const AssociadosPage: React.FC = () => {
           associado={previewAssociado}
           onClose={() => setPreviewAssociado(null)}
           onEdit={handleOpenModal}
+        />
+      )}
+
+      {associadosState.reativacaoAlvo && (
+        <ReativacaoAssociadoWizard
+          associado={associadosState.reativacaoAlvo}
+          onClose={() => associadosState.setReativacaoAlvo(null)}
+          onSuccess={associadosState.handleReativacaoConcluida}
         />
       )}
 

@@ -221,17 +221,21 @@ export const processSyncQueue = async (isOnline: boolean) => {
                   observacoes: payload.observacoes || null
                 };
 
-                const { data: existingContrato } = await supabase
+                // Mesmo predicado de `saveAssociado`, e pelo mesmo motivo: com o contrato
+                // anterior guardado como inativo ao lado do novo, uma busca sem filtro de
+                // status devolve mais de uma linha e faz a fila inserir contrato novo a
+                // cada item processado.
+                const { data: contratosVigentes, error: erroContratoExistente } = await supabase
                   .from('contratos')
                   .select('id')
                   .eq('associado_id', payload.id)
-                  .maybeSingle();
+                  .eq('status', 'ativo')
+                  .is('deleted_at', null)
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+                if (erroContratoExistente) throw erroContratoExistente;
 
-                if (existingContrato?.id) {
-                  contratoPayload.id = existingContrato.id;
-                } else {
-                  contratoPayload.id = generateUUID();
-                }
+                contratoPayload.id = contratosVigentes?.[0]?.id || generateUUID();
 
                 await resilientSyncUpsert('contratos', contratoPayload, 'id');
               } catch (contratoErr) {

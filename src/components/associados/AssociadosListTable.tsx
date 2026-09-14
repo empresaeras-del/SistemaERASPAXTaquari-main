@@ -1,6 +1,7 @@
 import React from 'react';
 import { Associado } from '../../services/associadosService';
-import { MessageCircle, Edit2, Trash2 } from 'lucide-react';
+import { MessageCircle, Edit2, Trash2, RotateCcw } from 'lucide-react';
+import { cadastroForaDeCirculacao } from '../../utils/selecaoCadastro';
 import { formatDateSafe } from '../../utils/dateUtils';
 import { PlanoPaxResumo } from '../../types/planosPax';
 
@@ -13,6 +14,8 @@ interface AssociadosListTableProps {
   handleWhatsAppMenu: (assoc: Associado) => void;
   handleOpenModal: (assoc: Associado) => void;
   handleDelete: (id: string) => void;
+  /** Abre a reativação; só aparece para cadastro fora de circulação. */
+  handleReativar?: (assoc: Associado) => void;
 }
 
 export const AssociadosListTable: React.FC<AssociadosListTableProps> = ({
@@ -23,7 +26,8 @@ export const AssociadosListTable: React.FC<AssociadosListTableProps> = ({
   setPreviewAssociado,
   handleWhatsAppMenu,
   handleOpenModal,
-  handleDelete
+  handleDelete,
+  handleReativar
 }) => {
   return (
     <div className="bg-bg-subtle rounded-2xl border border-border-default overflow-hidden animate-in fade-in duration-300 shadow-sm">
@@ -83,6 +87,16 @@ export const AssociadosListTable: React.FC<AssociadosListTableProps> = ({
                 </td>}
                 {isVisible('acoes') && <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2">
+                    {handleReativar && cadastroForaDeCirculacao(associado) && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleReativar(associado); }}
+                        className="p-1 text-emerald-500/70 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                        title="Reativar Associado"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleWhatsAppMenu(associado); }}
