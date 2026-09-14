@@ -4,6 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { DollarSign, CheckCircle2, Lock, Wallet, X } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../../context/ConfirmContext';
+import { MENSAGEM_TENANT_INDEFINIDO, tenantDeEscrita } from '../../utils/tenant';
+import { montarReciboDeRecebimento } from '../../utils/reciboRecebimento';
+import type { ReciboDados } from '../financeiro/VisualizadorReciboModal';
 import { ParcelaReceber, registrarRecebimento } from '../../services/financeiroService';
 import { getLoteAbertoAtivo, registrarMovimentacao } from '../../services/caixasService';
 import { ContaBancaria } from '../../types/contasBancarias';
@@ -15,6 +19,17 @@ interface ParcelaRecebimentoModalProps {
   contasBancarias: ContaBancaria[];
   onClose: () => void;
   onSuccess: () => void;
+  /**
+   * Recebe o recibo do que acabou de ser liquidado, para a tela exibi-lo.
+   *
+   * O recibo é montado **aqui**, onde os dados da baixa existem: o valor efetivamente
+   * recebido, a forma e o instante da liquidação só estão neste formulário. A parcela que
+   * a tela tem em memória ainda é a de antes da baixa, e um recibo montado a partir dela
+   * sairia com o campo que mais importa em branco.
+   */
+  onReciboGerado?: (recibo: ReciboDados) => void;
+  /** Plano do associado, que a parcela não carrega, só para o corpo do recibo. */
+  planoInfo?: string;
 }
 
 export const ParcelaRecebimentoModal: React.FC<ParcelaRecebimentoModalProps> = ({
@@ -22,10 +37,13 @@ export const ParcelaRecebimentoModal: React.FC<ParcelaRecebimentoModalProps> = (
   associadoNome,
   contasBancarias,
   onClose,
-  onSuccess
+  onSuccess,
+  onReciboGerado,
+  planoInfo
 }) => {
   const { state } = useAppContext();
   const toast = useToast();
+  const { confirm } = useConfirm();
   const navigate = useNavigate();
 
   const [dataRecebimento, setDataRecebimento] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -51,13 +69,20 @@ export const ParcelaRecebimentoModal: React.FC<ParcelaRecebimentoModalProps> = (
     }
   }, [parcelaSelecionada, contasBancarias]);
 
-  const handleVerificarLoteBaixa = async (e: React.FormEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleVerificarLoteBaixa = async () => {
     if (!parcelaSelecionada) return;
+    // Sem empresa resolvida não dá para procurar caixa: `getLotesCaixa` NÃO filtra quando
+    // recebe `'all'`, então o super_admin sem empresa escolhida receberia o lote aberto de
+    // **outra** empresa e a movimentação cairia no caixa dela. Recusar aqui é o mesmo que
+    // este projeto já faz em toda gravação sem tenant definido.
+    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
+    if (!tenantId) {
+      toast.error(MENSAGEM_TENANT_INDEFINIDO);
+      return;
+    }
     setCheckingLote(true);
     try {
-      const activeLote = await getLoteAbertoAtivo(state.isOnline, state.empresaSelecionada || 'tenant-default');
+      const activeLote = await getLoteAbertoAtivo(state.isOnline, tenantId);
       if (!activeLote) {
         setLoteAberto(null);
         setModalStage('bloqueio');
@@ -79,11 +104,23 @@ export const ParcelaRecebimentoModal: React.FC<ParcelaRecebimentoModalProps> = (
       return;
     }
     if (!parcelaSelecionada || !loteAberto) return;
+    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
+    if (!tenantId) {
+      toast.error(MENSAGEM_TENANT_INDEFINIDO);
+      return;
+    }
+    // Uma data só alimenta a baixa, a movimentação e o recibo: recalcular em cada ponto
+    // daria instantes diferentes perto da meia-noite, e o comprovante deixaria de bater
+    // com o lançamento que ele comprova.
+    const liquidacaoISO = dataRecebimento
+      ? new Date(dataRecebimento + 'T12:00:00').toISOString()
+      : new Date().toISOString();
+    const valorEfetivo = Number(valorRecebido) || parcelaSelecionada.valor;
     setSubmittingBaixa(true);
     try {
       await registrarRecebimento(state.isOnline, parcelaSelecionada.id, {
-        data_recebimento: dataRecebimento ? new Date(dataRecebimento + "T12:00:00").toISOString() : new Date().toISOString(),
-        valor_recebido: Number(valorRecebido) || parcelaSelecionada.valor,
+        data_recebimento: liquidacaoISO,
+        valor_recebido: valorEfetivo,
         forma_pagamento_efetivo: formaPagamentoEfetiva,
         conta_bancaria_id: formaPagamentoEfetiva !== 'dinheiro' ? contaBancariaId : null,
         recebido_por: state.user?.nome || 'Sistema',
@@ -91,15 +128,15 @@ export const ParcelaRecebimentoModal: React.FC<ParcelaRecebimentoModalProps> = (
       });
 
       await registrarMovimentacao(state.isOnline, {
-        tenant_id: state.empresaSelecionada || 'tenant-default',
+        tenant_id: tenantId,
         lote_id: loteAberto.id,
         tipo: 'entrada',
         origem: 'contas_receber',
         categoria: 'Receita / Mensalidade',
         descricao: `Recebimento: ${parcelaSelecionada.devedor_nome || associadoNome} - ${parcelaSelecionada.descricao}`,
-        valor: Number(valorRecebido) || parcelaSelecionada.valor,
+        valor: valorEfetivo,
         forma_pagamento: formaPagamentoEfetiva as any,
-        data_movimentacao: dataRecebimento ? new Date(dataRecebimento + "T12:00:00").toISOString() : new Date().toISOString(),
+        data_movimentacao: liquidacaoISO,
         referencia_id: parcelaSelecionada.id,
         documento_ref: `Parc. ${parcelaSelecionada.numero_parcela}/${parcelaSelecionada.total_parcelas || 1}`,
         operador_nome: state.user?.nome || loteAberto.operador_nome || 'Sistema',
@@ -107,6 +144,19 @@ export const ParcelaRecebimentoModal: React.FC<ParcelaRecebimentoModalProps> = (
       });
 
       toast.success(`Recebimento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
+      onReciboGerado?.(
+        montarReciboDeRecebimento(
+          parcelaSelecionada,
+          {
+            dataLiquidacaoISO: liquidacaoISO,
+            valorRecebido: valorEfetivo,
+            formaPagamento: formaPagamentoEfetiva,
+            operadorNome: state.user?.nome,
+            observacao: observacaoRecebimento,
+          },
+          { nomeFallback: associadoNome, planoFallback: planoInfo },
+        ),
+      );
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -138,7 +188,12 @@ export const ParcelaRecebimentoModal: React.FC<ParcelaRecebimentoModalProps> = (
               </button>
             </div>
 
-            <form onSubmit={handleVerificarLoteBaixa} className="p-6 space-y-4 text-xs">
+            {/* Um `div`, não um `form`: este modal é renderizado dentro do
+                `<form id="associado-form">` do cadastro, e `<form>` dentro de `<form>` é
+                HTML inválido — o React avisa em toda montagem. Funcionava só porque o
+                submit interno era barrado por `stopPropagation` e por uma guarda no
+                `handleSave`; duas defesas para um aninhamento que não precisa existir. */}
+            <div className="p-6 space-y-4 text-xs">
               <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-1">
                 <p className="text-[10px] text-text-subtle uppercase tracking-wider">
                   Parcela {parcelaSelecionada.numero_parcela}/{parcelaSelecionada.total_parcelas || 1}
@@ -224,14 +279,15 @@ export const ParcelaRecebimentoModal: React.FC<ParcelaRecebimentoModalProps> = (
                   Cancelar
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleVerificarLoteBaixa}
                   disabled={checkingLote}
                   className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
                 >
                   {checkingLote ? 'Verificando Caixa...' : 'Avançar'}
                 </button>
               </div>
-            </form>
+            </div>
           </>
         )}
 
@@ -273,8 +329,22 @@ export const ParcelaRecebimentoModal: React.FC<ParcelaRecebimentoModalProps> = (
               <button
                 type="button"
                 onClick={() => {
-                  onClose();
-                  navigate('/financeiro/caixas');
+                  // Sair daqui desmonta a tela inteira — e, quando este modal está aberto
+                  // dentro do cadastro do associado, leva junto o formulário com tudo que
+                  // o operador digitou e ainda não salvou. Era isso que fazia o recebimento
+                  // "fechar o cadastro": não um erro, uma navegação sem aviso.
+                  confirm({
+                    title: 'Sair para abrir o Caixa?',
+                    message:
+                      'Você será levado para a tela de Caixas. O que estiver aberto agora ' +
+                      'é fechado, e alterações ainda não salvas se perdem.',
+                    confirmText: 'Sair e abrir o Caixa',
+                    cancelText: 'Continuar aqui',
+                    onConfirm: () => {
+                      onClose();
+                      navigate('/financeiro/caixas');
+                    },
+                  });
                 }}
                 className="px-4 py-2 bg-[#3B82F6] hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/20 flex items-center gap-1.5"
               >

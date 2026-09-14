@@ -866,6 +866,77 @@ Duas decisões:
 `ConfirmContext.test.tsx` é o segundo teste de render do projeto e verifica o diálogo
 montado de verdade, não uma simulação dele.
 
+## Recebimento de parcela: o que fechava o cadastro, e o comprovante que não saía
+
+Relato da UI em 14/09/2026: "o recebimento não está realizando corretamente e fecha o
+respectivo cadastro". **O banco estava certo** — as duas parcelas recebidas do associado do
+relato têm `status`, `valor_recebido` e movimentação de caixa correspondentes. Perguntar ao
+banco antes de reler o componente (a regra que este arquivo já registra) descartou de saída a
+hipótese de falha de gravação e deixou o defeito onde ele estava: na tela.
+
+**O que fechava o cadastro era uma navegação, não um erro.** Sem lote de caixa aberto, o modal
+de recebimento mostra "Operação Bloqueada" com o botão "Abrir Lote de Caixa", que fazia
+`onClose(); navigate('/financeiro/caixas')`. Esse modal é renderizado **dentro** do
+`AssociadoFormModal`: sair da rota desmonta a tela inteira e leva junto o formulário com tudo
+que o operador digitou e ainda não salvou — sem aviso, sem erro, e com o recebimento não
+realizado. Agora a saída passa por `confirm`, dizendo exatamente o que se perde. **Um
+`navigate()` dentro de um modal reaproveitável é sempre uma pergunta**: quem o renderizou pode
+ter um formulário aberto por baixo.
+
+**A empresa do caixa vinha errada por dois caminhos independentes**, e os dois são a lição do
+`empresa_padrao` valendo de novo:
+
+- `getLoteAbertoAtivo(isOnline, state.empresaSelecionada || 'tenant-default')` — `getLotesCaixa`
+  **não filtra** quando recebe `'all'` (`if (tenantId && tenantId !== 'all')`), então um
+  super_admin sem empresa escolhida recebia o lote aberto de **outra** empresa, e a
+  movimentação caía no caixa dela. Vazamento entre empresas por um filtro que se desliga
+  sozinho.
+- `tenant_id: state.empresaSelecionada || 'tenant-default'` na movimentação — carimbar um
+  tenant que não existe é exatamente o que a seção "Nunca invente um `tenant_id`" proíbe.
+
+Os dois caminhos (aba de Mensalidades e Contas a Receber) passaram a resolver por
+`tenantDeEscrita` e a **recusar** com `MENSAGEM_TENANT_INDEFINIDO`. **Ao passar um tenant para
+uma função de leitura, saiba se ela trata `'all'` como "sem filtro"** — um valor que desliga o
+filtro é seguro numa listagem e é vazamento quando o resultado vira destino de escrita.
+
+### O recibo agora sai sozinho, e é montado com o que acabou de ser recebido
+
+Pedido junto com a correção: toda liquidação — pelo cadastro do associado ou por Contas a
+Receber — passa a abrir o comprovante ao final, no `VisualizadorReciboModal` que já existia.
+Antes o recibo só existia como reimpressão, num botão da linha: quem acabou de receber tinha
+de achar a parcela certa e clicar, e é assim que um recebimento termina sem documento.
+
+Três decisões valem como regra:
+
+- **O recibo nasce da parcela MAIS os dados da baixa, nunca só da parcela.** Logo depois de
+  efetivar, a linha que a tela tem em memória ainda é a de antes — `pendente`, sem
+  `valor_recebido`, sem data de liquidação. Montar o comprovante a partir dela o imprimiria
+  com o campo que mais importa em branco. Por isso `montarReciboDeRecebimento` recebe o
+  recebimento separado e o sobrepõe. Há teste travando isso, e outro travando que **R$ 0,00
+  não vira o valor de face**: um `||` encadeado trataria zero como ausente.
+- **Uma data só alimenta a baixa, a movimentação e o recibo.** Antes cada ponto recalculava
+  `new Date(...)`; perto da meia-noite o comprovante deixaria de bater com o lançamento que
+  ele comprova. É a mesma decisão do `hoje` único no diálogo de cobrança.
+- **A montagem estava escrita duas vezes**, com títulos e fallbacks diferentes entre as duas
+  telas. Virou `utils/reciboRecebimento.ts`, puro e testado — a reimpressão pela linha usa a
+  mesma função. Predicado repetido em dois lugares só é corrigido uma vez.
+
+### O `<form>` dentro do `<form>` que sobrevivia por duas defesas
+
+`ParcelaRecebimentoModal` tinha um `<form onSubmit={...}>` próprio, e é renderizado dentro do
+`<form id="associado-form">` do cadastro. `<form>` dentro de `<form>` é HTML inválido — o React
+avisa em toda montagem ("This will cause a hydration error"). Funcionava só porque havia **duas**
+defesas: o `stopPropagation()` no handler interno e a guarda
+`if (e.target !== e.currentTarget ...)` no `handleSave`. Reproduzido em jsdom: com as duas no
+lugar, o cadastro de fato não era submetido — ou seja, **não era essa a causa do relato**, e
+dizer que era teria "consertado" o sintoma errado.
+
+Saiu mesmo assim, virando um `<div>` com o botão em `type="button"`: duas defesas para um
+aninhamento que não precisa existir é uma que alguém remove sem saber o que ela segurava.
+`AssociadoMensalidadesRecebimento.test.tsx` monta a aba dentro do `<form>` real e trava as
+quatro coisas de uma vez — que não há `form form` no DOM, que efetivar não submete o cadastro,
+que o recibo abre, e que a movimentação nasce com a empresa resolvida.
+
 ## Associado com histórico não se exclui — inativa-se
 
 Pedido de 14/09/2026. `softDeleteAssociado` **não é soft coisa nenhuma**: é uma cascata de

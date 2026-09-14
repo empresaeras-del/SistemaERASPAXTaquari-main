@@ -22,6 +22,8 @@ import { getEmpresaById, Empresa } from '../services/empresasService';
 import { getAssociados, Associado } from '../services/associadosService';
 import { RelatorioContasReceberModal } from '../components/financeiro/RelatorioContasReceberModal';
 import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
+import { montarReciboDeRecebimento } from '../utils/reciboRecebimento';
+import { MENSAGEM_TENANT_INDEFINIDO, tenantDeEscrita } from '../utils/tenant';
 import { IndicadoresContasReceber } from '../components/financeiro/IndicadoresContasReceber';
 import { LoteCaixa } from '../types/caixas';
 import { canDelete, canEditFinanceiro, alertPermissionRestriction } from '../utils/permissions';
@@ -356,9 +358,18 @@ export const ContasReceberPage: React.FC = () => {
     e.preventDefault();
     if (!parcelaSelecionada) return;
 
+    // `getLotesCaixa` não filtra quando recebe `'all'`: sem empresa resolvida, o
+    // super_admin receberia o lote aberto de **outra** empresa e a movimentação cairia no
+    // caixa dela. E `'tenant-default'` carimbaria um tenant que não existe.
+    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
+    if (!tenantId) {
+      toast.error(MENSAGEM_TENANT_INDEFINIDO);
+      return;
+    }
+
     setCheckingLote(true);
     try {
-      const activeLote = await getLoteAbertoAtivo(state.isOnline, state.empresaSelecionada || 'tenant-default');
+      const activeLote = await getLoteAbertoAtivo(state.isOnline, tenantId);
       if (!activeLote) {
         setLoteAberto(null);
         setModalStage('bloqueio');
@@ -381,11 +392,23 @@ export const ContasReceberPage: React.FC = () => {
     }
     if (!parcelaSelecionada || !loteAberto) return;
 
+    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
+    if (!tenantId) {
+      toast.error(MENSAGEM_TENANT_INDEFINIDO);
+      return;
+    }
+    // Uma data só para a baixa, a movimentação e o recibo — recalcular em cada ponto daria
+    // instantes diferentes perto da meia-noite.
+    const liquidacaoISO = dataRecebimento
+      ? new Date(dataRecebimento + 'T12:00:00').toISOString()
+      : new Date().toISOString();
+    const valorEfetivo = Number(valorRecebido) || parcelaSelecionada.valor;
+
     setSubmittingBaixa(true);
     try {
       await registrarRecebimento(state.isOnline, parcelaSelecionada.id, {
-        data_recebimento: dataRecebimento ? new Date(dataRecebimento + "T12:00:00").toISOString() : new Date().toISOString(),
-        valor_recebido: Number(valorRecebido) || parcelaSelecionada.valor,
+        data_recebimento: liquidacaoISO,
+        valor_recebido: valorEfetivo,
         forma_pagamento_efetivo: formaPagamentoEfetiva,
         conta_bancaria_id: formaPagamentoEfetiva !== 'dinheiro' ? contaBancariaId : null,
         recebido_por: state.user?.nome || 'Sistema',
@@ -394,15 +417,15 @@ export const ContasReceberPage: React.FC = () => {
 
       // Registra a movimentação financeira diretamente no Lote de Caixa Aberto
       await registrarMovimentacao(state.isOnline, {
-        tenant_id: state.empresaSelecionada || 'tenant-default',
+        tenant_id: tenantId,
         lote_id: loteAberto.id,
         tipo: 'entrada',
         origem: 'contas_receber',
         categoria: 'Receita / Mensalidade',
         descricao: `Recebimento: ${parcelaSelecionada.devedor_nome} - ${parcelaSelecionada.descricao}`,
-        valor: Number(valorRecebido) || parcelaSelecionada.valor,
+        valor: valorEfetivo,
         forma_pagamento: formaPagamentoEfetiva as any,
-        data_movimentacao: dataRecebimento ? new Date(dataRecebimento + "T12:00:00").toISOString() : new Date().toISOString(),
+        data_movimentacao: liquidacaoISO,
         referencia_id: parcelaSelecionada.id,
         documento_ref: `Parc. ${parcelaSelecionada.numero_parcela}/${parcelaSelecionada.total_parcelas || 1}`,
         operador_nome: state.user?.nome || loteAberto.operador_nome || 'Sistema',
@@ -410,6 +433,29 @@ export const ContasReceberPage: React.FC = () => {
       });
 
       toast.success(`Recebimento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
+      // O comprovante abre sozinho: quem acabou de receber precisa entregá-lo na hora, e
+      // depender de o operador achar a linha e clicar em "Imprimir Recibo" é como um
+      // recebimento termina sem documento nenhum.
+      const receitaPaiDaParcela = receitas.find((r) => r.id === parcelaSelecionada.receita_id);
+      setReciboModalData(
+        montarReciboDeRecebimento(
+          parcelaSelecionada,
+          {
+            dataLiquidacaoISO: liquidacaoISO,
+            valorRecebido: valorEfetivo,
+            formaPagamento: formaPagamentoEfetiva,
+            operadorNome: state.user?.nome,
+            observacao: observacaoRecebimento,
+          },
+          {
+            nomeFallback: receitaPaiDaParcela?.associado_nome || receitaPaiDaParcela?.cliente_nome,
+            documentoFallback: receitaPaiDaParcela?.associado_cpf || receitaPaiDaParcela?.cliente_cpf_cnpj,
+            categoriaFallback: receitaPaiDaParcela?.categoria,
+            planoFallback: receitaPaiDaParcela?.associado_plano,
+          },
+        ),
+      );
+      setShowReciboModal(true);
       setShowBaixaModal(false);
       loadData();
     } catch (err: any) {
@@ -501,33 +547,23 @@ export const ContasReceberPage: React.FC = () => {
     return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500">Pendente</span>;
   };
 
+  // Reimpressão do comprovante de uma parcela já recebida. Mesma função pura da baixa —
+  // as duas telas montavam este objeto à mão, com fallbacks diferentes entre si.
   const handleImprimirRecibo = (parcela: ParcelaReceber) => {
     const receitaPai = receitas.find(r => r.id === parcela.receita_id);
-    const dataVenc = formatLocalDate(parcela.data_vencimento);
-    const dataRec = formatLocalDateTime(parcela.data_recebimento || parcela.recebido_em || parcela.data_pagamento);
-    const numDoc = (parcela.id || '').substring(0, 8).toUpperCase();
-    const devedorNome = parcela.devedor_nome || receitaPai?.associado_nome || receitaPai?.cliente_nome || 'Cliente / Associado';
-    const devedorDoc = parcela.devedor_cpf_cnpj || receitaPai?.associado_cpf || receitaPai?.cliente_cpf_cnpj || 'Não informado';
-    const formaEfetiva = (parcela.forma_pagamento_efetivo || parcela.forma_pagamento || 'PIX').toUpperCase();
-    const recebidoPor = parcela.recebido_por || state.user?.nome || 'Sistema';
-
-    setReciboModalData({
-      numRecibo: numDoc,
-      tipo: 'recebimento',
-      titulo: 'Comprovante de Recebimento',
-      pagadorNome: devedorNome,
-      pagadorDoc: devedorDoc,
-      descricao: parcela.descricao || 'Mensalidade',
-      parcelaInfo: `Parcela ${parcela.numero_parcela} de ${parcela.total_parcelas || 1}`,
-      categoria: receitaPai?.categoria || 'Mensalidades',
-      vencimentoOriginal: dataVenc,
-      dataLiquidacao: dataRec,
-      formaPagamento: formaEfetiva,
-      valor: Number(parcela.valor_recebido || parcela.valor),
-      operadorNome: recebidoPor,
-      observacoes: parcela.observacao_recebimento,
-      planoInfo: receitaPai?.associado_plano
-    });
+    setReciboModalData(
+      montarReciboDeRecebimento(
+        parcela,
+        {},
+        {
+          nomeFallback: receitaPai?.associado_nome || receitaPai?.cliente_nome,
+          documentoFallback: receitaPai?.associado_cpf || receitaPai?.cliente_cpf_cnpj,
+          categoriaFallback: receitaPai?.categoria,
+          planoFallback: receitaPai?.associado_plano,
+          operadorFallback: state.user?.nome,
+        },
+      ),
+    );
     setShowReciboModal(true);
   };
 

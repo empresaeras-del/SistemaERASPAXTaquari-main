@@ -42,6 +42,7 @@ import {
 import { MensalidadesGeracaoWizard } from './MensalidadesGeracaoWizard';
 import { MENSAGEM_CADASTRO_INATIVO, cadastroForaDeCirculacao } from '../../utils/selecaoCadastro';
 import { ParcelaRecebimentoModal } from './ParcelaRecebimentoModal';
+import { montarReciboDeRecebimento } from '../../utils/reciboRecebimento';
 import { MensalidadesListaParcelas } from './MensalidadesListaParcelas';
 
 
@@ -153,34 +154,24 @@ export const AssociadoMensalidadesTab: React.FC<{
 
 
 
-  // Visualizar / Imprimir recibo
+  // Visualizar / Imprimir recibo de uma parcela JÁ recebida (reimpressão).
+  //
+  // A montagem é a mesma de quando a baixa acabou de acontecer — `montarReciboDeRecebimento`
+  // decide o quê, aqui só se diz de onde vêm os valores que a parcela não carrega. Antes
+  // esta tela e a de Contas a Receber montavam o objeto à mão, com fallbacks diferentes.
   const handleImprimirRecibo = (parcela: ParcelaReceber) => {
-    const dataVenc = parcela.data_vencimento ? format(new Date(parcela.data_vencimento + 'T12:00:00'), 'dd/MM/yyyy') : '-';
-    const dataRec = (parcela.data_recebimento || parcela.recebido_em)
-      ? formatLocalDate(parcela.data_recebimento || parcela.recebido_em, "dd/MM/yyyy 'às' HH:mm")
-      : formatLocalDate(new Date(), "dd/MM/yyyy 'às' HH:mm");
-    const numRecibo = (parcela.id || '').substring(0, 8).toUpperCase();
-    const devedorNome = parcela.devedor_nome || associado.nome || 'Cliente';
-    const devedorDoc = parcela.devedor_cpf_cnpj || associado.cpf || 'Não informado';
-    const formaEfetiva = (parcela.forma_pagamento_efetivo || parcela.forma_pagamento || 'PIX').toUpperCase();
-
-    setReciboModalData({
-      numRecibo,
-      tipo: 'recebimento',
-      titulo: 'Recibo de Pagamento',
-      pagadorNome: devedorNome,
-      pagadorDoc: devedorDoc,
-      descricao: parcela.descricao || 'Mensalidade',
-      parcelaInfo: `Parcela ${parcela.numero_parcela} de ${parcela.total_parcelas || 1}`,
-      categoria: 'Mensalidades',
-      vencimentoOriginal: dataVenc,
-      dataLiquidacao: dataRec,
-      formaPagamento: formaEfetiva,
-      valor: Number(parcela.valor_recebido || parcela.valor),
-      operadorNome: parcela.recebido_por || state.user?.nome || 'Sistema',
-      observacoes: parcela.observacao_recebimento || (parcela as any).observacoes,
-      planoInfo: associado.plano_nome
-    });
+    setReciboModalData(
+      montarReciboDeRecebimento(
+        parcela,
+        {},
+        {
+          nomeFallback: associado.nome,
+          documentoFallback: associado.cpf,
+          operadorFallback: state.user?.nome,
+          planoFallback: associado.plano_nome,
+        },
+      ),
+    );
     setShowReciboModal(true);
   };
 
@@ -939,8 +930,16 @@ export const AssociadoMensalidadesTab: React.FC<{
           parcelaSelecionada={parcelaSelecionada}
           associadoNome={associado.nome}
           contasBancarias={contasBancarias}
+          planoInfo={associado.plano_nome}
           onClose={() => setShowBaixaModal(false)}
           onSuccess={carregarDadosFinanceiros}
+          onReciboGerado={(recibo) => {
+            // O recibo abre sozinho ao fim da baixa: quem recebeu precisa entregar o
+            // comprovante na hora, e depender de o operador lembrar de clicar em
+            // "Recibo" na linha certa é como um recebimento termina sem documento.
+            setReciboModalData(recibo);
+            setShowReciboModal(true);
+          }}
         />
       )}
 
