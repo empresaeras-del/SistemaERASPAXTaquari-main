@@ -4,6 +4,7 @@ import { useAppContext } from '../../context/AppContext';
 import { usePlanosPax } from '../../hooks/usePlanosPax';
 import { getAssociados, saveAssociado, Associado } from '../../services/associadosService';
 import { associadoSelecionavel } from '../../utils/selecaoCadastro';
+import { idadeEmAnos } from '../../utils/resumoAssociado';
 import { salvarReceita } from '../../services/financeiroService';
 import { resolverContaLancamento } from '../../services/planoContabilService';
 import { CODIGO_CONTA_MENSALIDADE } from '../../config/planoContabilPadrao.config';
@@ -153,13 +154,9 @@ export const NovoContratoWizard: React.FC<{
   const valorPlano = useMemo(() => {
     if (!planoSelecionado || !selectedAssociado) return 0;
     const nVidas = 1 + (selectedAssociado.dependentes?.length || 0);
-    const depsIds = (selectedAssociado.dependentes || []).map((d) => {
-      if (d.data_nascimento) {
-        const bdate = new Date(d.data_nascimento);
-        return new Date().getFullYear() - bdate.getFullYear();
-      }
-      return 0;
-    });
+    const depsIds = (selectedAssociado.dependentes || []).map(
+      (d) => idadeEmAnos(d.data_nascimento) ?? 0,
+    );
     return calcularValor(planoSelecionado, nVidas, depsIds, valorExtra).total;
   }, [planoSelecionado, selectedAssociado, calcularValor, valorExtra]);
 

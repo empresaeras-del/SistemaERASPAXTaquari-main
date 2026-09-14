@@ -957,13 +957,48 @@ cadastro. Agora mostra nome, status, idade, CPF e plano, mais o aviso âmbar que
 **por que** as ações adiante estão travadas. Campo sem valor não vira "CPF: —": a linha
 some, porque um cabeçalho de rótulos vazios ocupa o mesmo espaço sem informar nada.
 
-**A idade é calculada certo, e só aqui.** `idadeEmAnos` desconta o aniversário que ainda
-não chegou. O projeto repete `getFullYear() - getFullYear()` em três lugares
-(`associadoHelpers.ts`, `NovoContratoWizard.tsx` e o card de dependente), que devolve 36
-para quem nasceu em 31/12/1990 no dia 01/01/2026 — a pessoa tem 35. **Os três ficaram como
-estão de propósito**: naqueles pontos a idade entra no cálculo do valor do plano, então
-corrigi-los muda preço e é decisão de produto, não limpeza. No cabeçalho seria só um número
-errado ao lado do nome, e aí vale o cálculo correto.
+**A idade é calculada certo.** `idadeEmAnos` desconta o aniversário que ainda não chegou,
+ao contrário do `getFullYear() - getFullYear()` que o projeto repetia — que devolve 36 para
+quem nasceu em 31/12/1990 no dia 01/01/2026, quando a pessoa tem 35. O cabeçalho nasceu já
+com ela; os outros três pontos foram unificados logo depois, ver a seção seguinte.
+
+### A idade agora sai de um lugar só — e o preço foi medido antes, não depois
+
+`idadeEmAnos` passou a ser a única fonte de idade do projeto: `calcularNVidasEIdades`
+(`utils/associadoHelpers.ts`), o `valorPlano` do `NovoContratoWizard` e o badge `Na` do card
+de dependente chamavam cada um a sua própria subtração de anos. Três cópias do mesmo cálculo
+errado, e duas delas alimentam o **valor do plano** — que é o que fez essa correção esperar
+uma decisão em vez de entrar junto com o cabeçalho.
+
+**A pergunta que destravou não foi "o cálculo está errado?" (estava), e sim "quanto muda de
+preço?".** Medido na produção antes de tocar no código, e a resposta é **zero**, por dois
+motivos independentes:
+
+- `planos_pax_faixas` tem **0 linhas**, e `calcularValor` só soma `adicionaisDependentes`
+  quando `plano.faixas && plano.faixas.length > 0`. Sem faixa cadastrada, a idade do
+  dependente não entra na conta em lugar nenhum.
+- Os 4 planos existentes são `individual`, onde a base é `valor_mensalidade * vidas` — a
+  contagem de vidas, que esta mudança não toca.
+
+Dos 7 dependentes com data de nascimento, 3 tinham a idade **exibida** um ano a mais
+(64→63, 37→36, 15→14). Era isso que a correção mudava: o número na tela, não o boleto.
+
+Duas coisas valem como regra:
+
+- **Medir é mais barato que supor, nos dois sentidos.** A suposição conservadora ("mexe em
+  preço, não mexa") tinha segurado três bugs visíveis; a suposição otimista teria mudado
+  valor de contrato em produção. O `select` que respondeu levou menos tempo que qualquer um
+  dos dois raciocínios.
+- **`?? 0` preserva o fallback que já existia** para dependente sem data de nascimento — e
+  também para data em formato quebrado, que `idadeEmAnos` recusa e o `new Date()` antigo
+  aceitava de vez em quando. Mudar esse `0` mexeria em qual faixa o dependente casa quando
+  alguém cadastrar faixas, e isso é outra decisão, de produto. Há teste travando os dois
+  casos em `associadoHelpers.test.ts`.
+
+**A próxima cópia é impedida pelo teste, não pela boa vontade**: o cálculo vive em
+`utils/resumoAssociado.ts`, com clock injetável (`idadeEmAnos(data, hoje)`) — é o que permite
+travar "um dia antes do aniversário" sem depender de quando a suíte roda. Ao precisar de
+idade em qualquer tela nova, importe de lá.
 
 ## Módulo de Documentos Padrões
 
