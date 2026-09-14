@@ -1619,11 +1619,37 @@ Registrado aqui porque o contexto pesa mais que o alerta isolado: em 14/09/2026 
 **8 usuários no `auth.users`, nenhum com MFA**, 1 super_admin, e `admin_alterar_senha_usuario`
 permite que um admin troque a senha de outro. A senha é a única barreira que existe.
 
-Dois achados operacionais da mesma varredura, deixados para decisão de produto: um usuário
-(`empresa.eras@gmail.com`) existe em `auth.users` desde 17/08, com e-mail confirmado e login
-em 30/08, **sem linha em `public.users`** — entra no Auth e não consegue usar o sistema, que é
-exatamente o caminho de falha silenciosa que a nota do `handle_new_user` descreve acima. E
-dois cadastros de 11/09 estão sem e-mail confirmado e nunca logaram.
+Dois achados operacionais da mesma varredura. O primeiro **foi corrigido**; o segundo fica
+para decisão de produto.
+
+**O usuário que autenticava e não existia no app.** `empresa.eras@gmail.com` estava em
+`auth.users` desde 17/08, com e-mail confirmado e login em 30/08, **sem linha em
+`public.users`** — exatamente o caminho de falha silenciosa que a nota do `handle_new_user`
+descreve acima, acontecido de verdade.
+
+A causa saiu do carimbo de hora, não de suposição: o trigger nasceu na migration
+`20260817160000`, às **16:00** de 17/08; esse usuário se cadastrou às **15:25:36**, 34 minutos
+antes. Ele é o único do projeto anterior ao trigger que ficou sem linha.
+
+E a correção **não exigiu decisão nenhuma**: `raw_user_meta_data` já trazia `nome`, `nivel`
+(`admin`) e `tenant_id` (PAX e Funerária Taquari) gravados no cadastro — os mesmos campos que
+o trigger lê. A linha foi criada replicando o `INSERT` do próprio `handle_new_user` **a partir
+do metadata**, com duas diferenças deliberadas: `created_at` recebeu a data real do cadastro no
+Auth em vez de `now()`, para a linha não afirmar que nasceu meses depois; e `empresa_id` ficou
+`NULL`, como o trigger deixa (o app só o lê como fallback quando falta `tenant_id`, e o outro
+admin da mesma empresa também o tem nulo).
+
+**A regra**: quando um cadastro de Auth aparece sem perfil, o `raw_user_meta_data` costuma
+guardar a intenção original — leia dali antes de perguntar qual empresa e qual nível. Escolher
+por conta própria é o que transforma um reparo em decisão de acesso.
+
+Conferido depois, simulando o login real (`SET ROLE authenticated` + `sub` no JWT): o perfil
+volta `admin`, `current_tenant_id()` é a empresa certa, `is_super_admin()` é falso, ele lê os
+2 associados / 24 parcelas / 29 contas da empresa dele e **0 da outra**.
+
+**Ainda aberto**: dois cadastros de 11/09 (`welliton.francisco05@`, `gizelledejesus.1995@`)
+estão sem e-mail confirmado e nunca logaram. Aí não há metadata que resolva — é cadastro pela
+metade, e cabe decidir se reenvia o convite ou remove.
 
 - **Não revogue `EXECUTE` das funções usadas pelas policies de RLS** (`has_tenant_access`,
   `current_tenant_id`, `current_user_nivel`, `is_super_admin`), mesmo que os advisors as apontem.
