@@ -8,6 +8,7 @@ import { Users, Layers, Search, Shield, Edit2, Trash2, Plus } from 'lucide-react
 import { canEditUser, canDeleteUser, MODULOS_SISTEMA } from '../../../utils/permissions';
 import { UsuarioFormModal } from './UsuarioFormModal';
 import { OrganogramaCanvas } from '../OrganogramaCanvas';
+import { CadastrosIncompletosPainel } from './CadastrosIncompletosPainel';
 
 interface ConfigUsuariosTabProps {
   usuarios: Usuario[];
@@ -88,6 +89,8 @@ export const ConfigUsuariosTab: React.FC<ConfigUsuariosTabProps> = ({ usuarios, 
           <span className="hidden sm:inline">Novo Usuário</span>
         </button>
       </div>
+
+      <CadastrosIncompletosPainel onResolvido={onRefresh} />
 
       <div className={`bg-[#181B34] border border-[#262A45] rounded-2xl overflow-hidden shadow-sm flex-1 flex flex-col ${previewUsuario ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-4 border-b border-[#262A45] bg-[#101223]/50 flex flex-col gap-3">
