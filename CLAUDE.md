@@ -935,6 +935,36 @@ Dois defeitos pré-existentes saíram junto, porque estavam no caminho:
 cobrável para trás. **Ao filtrar parcela por status, lembre que "em aberto" tem três
 nomes neste schema e "liquidada" tem dois.**
 
+### O formulário de edição respeita o status, e diz de quem é o cadastro
+
+Pedido de 14/09/2026, fechando o ciclo da inativação. Duas coisas:
+
+**1. Associado inativo não recebe operação nova.** Três bloqueios no formulário: dependente
+novo, contrato (criar e modificar plano) e geração de mensalidades. A regra reaproveita
+`associadoSelecionavel` pelo avesso — `cadastroForaDeCirculacao` —, e isso é deliberado:
+"não pode ser escolhido num atendimento" e "não pode ganhar dependente novo" são a mesma
+pergunta sobre o mesmo estado, e uma segunda lista de status é como as duas metades passam
+a discordar na primeira mudança. Há teste cobrando que as duas continuem espelhadas.
+
+A guarda da geração de mensalidades fica em `handleAbrirGeracao`, **o funil**, não só nos
+botões: os dois botões do organograma chamam a mesma função, e travar um deixaria o outro
+aberto. Gerar mensalidade para quem acabou de ser inativado desfaria, em silêncio, o
+cancelamento das parcelas que a inativação tinha acabado de fazer.
+
+**2. O cabeçalho mostra o associado em todas as abas.** São oito abas, e o cabeçalho só
+dizia "Editar Associado" — três cliques adiante, nada na tela lembrava de quem era o
+cadastro. Agora mostra nome, status, idade, CPF e plano, mais o aviso âmbar que explica
+**por que** as ações adiante estão travadas. Campo sem valor não vira "CPF: —": a linha
+some, porque um cabeçalho de rótulos vazios ocupa o mesmo espaço sem informar nada.
+
+**A idade é calculada certo, e só aqui.** `idadeEmAnos` desconta o aniversário que ainda
+não chegou. O projeto repete `getFullYear() - getFullYear()` em três lugares
+(`associadoHelpers.ts`, `NovoContratoWizard.tsx` e o card de dependente), que devolve 36
+para quem nasceu em 31/12/1990 no dia 01/01/2026 — a pessoa tem 35. **Os três ficaram como
+estão de propósito**: naqueles pontos a idade entra no cálculo do valor do plano, então
+corrigi-los muda preço e é decisão de produto, não limpeza. No cabeçalho seria só um número
+errado ao lado do nome, e aí vale o cálculo correto.
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do

@@ -48,3 +48,20 @@ export const dependenteSelecionavel = (
   if (!associadoSelecionavel(titular ? { status: titular.status } : null)) return false;
   return !STATUS_FORA_DE_CIRCULACAO.includes((dependente.status || '').trim().toLowerCase());
 };
+
+/**
+ * `true` quando o cadastro está fora de circulação e **não aceita operação nova**.
+ *
+ * É o mesmo predicado de `associadoSelecionavel`, pelo outro lado — e de propósito: "não
+ * pode ser escolhido num atendimento" e "não pode ganhar dependente, contrato ou
+ * mensalidade nova" são a mesma pergunta sobre o mesmo estado. Escrever a lista de status
+ * uma segunda vez é como as duas metades passam a discordar na primeira mudança (a lição
+ * das três leituras de `plano_id`).
+ */
+export const cadastroForaDeCirculacao = (
+  cadastro: { id?: string; status?: string | null } | null | undefined,
+): boolean => Boolean(cadastro) && !associadoSelecionavel(cadastro);
+
+/** Motivo da recusa, igual em toda tela que bloqueia por este estado. */
+export const MENSAGEM_CADASTRO_INATIVO =
+  'Este associado está inativo. Reative o cadastro para registrar novas operações.';

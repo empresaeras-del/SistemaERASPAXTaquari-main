@@ -40,6 +40,7 @@ import {
   ordenarParcelasPorVencimento,
 } from '../../utils/mensalidadesAssociadoHelpers';
 import { MensalidadesGeracaoWizard } from './MensalidadesGeracaoWizard';
+import { MENSAGEM_CADASTRO_INATIVO, cadastroForaDeCirculacao } from '../../utils/selecaoCadastro';
 import { ParcelaRecebimentoModal } from './ParcelaRecebimentoModal';
 import { MensalidadesListaParcelas } from './MensalidadesListaParcelas';
 
@@ -331,6 +332,14 @@ export const AssociadoMensalidadesTab: React.FC<{
 
   // Handler para iniciar o wizard de geração de novas mensalidades
   const handleAbrirGeracao = () => {
+    // Associado inativo não gera mensalidade nova — a inativação acabou de cancelar as
+    // que estavam em aberto, e gerar outras aqui desfaria isso em silêncio. A guarda fica
+    // no funil, não só no botão: os dois botões do organograma chamam esta função.
+    if (cadastroForaDeCirculacao(associado)) {
+      toast.error(MENSAGEM_CADASTRO_INATIVO);
+      return;
+    }
+
     const proximaData = format(new Date(), 'yyyy-MM-dd');
     const pendentes = parcelas.filter(p => p.status === 'pendente' || p.status === 'vencido' || p.status === 'atrasado');
 
@@ -513,6 +522,7 @@ export const AssociadoMensalidadesTab: React.FC<{
           onReceberParcela={openBaixaModal}
           onImprimirRecibo={handleImprimirRecibo}
           onOpenGerarModal={handleAbrirGeracao}
+          geracaoBloqueada={cadastroForaDeCirculacao(associado)}
         />
       ) : (
         /* VISUALIZAÇÃO EM TABELA HIERÁRQUICA */
