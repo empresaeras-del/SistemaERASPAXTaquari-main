@@ -28,3 +28,17 @@ export const parcelaLiquidada = (status?: string | null): boolean =>
 export const MENSAGEM_PARCELA_LIQUIDADA =
   'Esta parcela já foi recebida e não pode ser editada nem excluída. ' +
   'Estorne o recebimento antes, se precisar corrigi-la.';
+
+/** Os três nomes que "em aberto" tem neste schema. */
+const STATUS_EM_ABERTO = ['pendente', 'vencido', 'atrasado'] as const;
+
+/**
+ * `true` quando a parcela ainda é cobrável.
+ *
+ * Existe porque "em aberto" tem **três** nomes aqui e "liquidada" tem dois — e quem
+ * filtra por um só deixa parte do caso de fora (foi o que aconteceu com `'pago'` na tela
+ * de Contas a Receber, e com `'vencido'` no `cancelarReceitasPorAtendimento`). Cancelada
+ * não entra: ela existe no banco e não cobra ninguém.
+ */
+export const parcelaEmAberto = (status?: string | null): boolean =>
+  STATUS_EM_ABERTO.includes((status || '').trim().toLowerCase() as typeof STATUS_EM_ABERTO[number]);

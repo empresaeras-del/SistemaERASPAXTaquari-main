@@ -937,6 +937,61 @@ aninhamento que não precisa existir é uma que alguém remove sem saber o que e
 quatro coisas de uma vez — que não há `form form` no DOM, que efetivar não submete o cadastro,
 que o recibo abre, e que a movimentação nasce com a empresa resolvida.
 
+## O segundo relatório de Contas a Receber: onde está o dinheiro, não quando ele vence
+
+Pedido de 15/09/2026. O relatório que existia lista parcelas em ordem de vencimento — o
+que o financeiro confere. O cobrador não usa isso: ele não percorre uma lista cronológica,
+escolhe um bairro e faz todas as visitas dali. O relatório novo responde a outra pergunta
+sobre **os mesmos filtros** — em que município e em que bairro está concentrado o valor a
+receber — e o antigo continua onde estava. O botão "Exportar PDF" virou "Relatórios", com
+a escolha explícita entre os dois: trocar um pelo outro tiraria de alguém o relatório que
+ele já usa.
+
+`utils/mapaCalorReceber.ts` decide **o quê** (agrupar, medir, ordenar) e cada saída decide
+só **como** — prévia em tela, janela de impressão e PDF. Cinco decisões valem como regra:
+
+- **Só parcela em aberto entra na soma; o resto vira nota.** O filtro da tela pode incluir
+  recebidas e canceladas — mandar um cobrador a um bairro cujo "calor" é dinheiro que já
+  entrou é o erro que este relatório existe para evitar. Elas continuam impressas, como
+  rodapé, do mesmo jeito que `foraDoExercicio` na Demonstração Contábil: **o que não entra
+  na conta aparece, em vez de sumir**. A parcela sem endereço (ou cujo devedor não foi
+  localizado) tem nota própria: ela está no total, porque é dinheiro a receber, e fora das
+  zonas, porque não é roteirizável.
+- **A cor é relativa à zona mais quente; o número é absoluto.** A primeira versão cortava
+  as faixas por participação no total, e **a foto do relatório mostrou o defeito**: com
+  cinco bairros o maior tinha 31,6% e nada alcançava "Crítica" — o topo da rampa ficava
+  sem uso justamente na linha que o cobrador procura. `faixaPorIntensidade` compara com a
+  líder do **mesmo nível** (município com município, bairro com bairro), então a mais
+  quente é sempre Crítica, e `participacao` segue impressa ao lado dizendo quanto aquilo é
+  do total. São duas perguntas diferentes: a cor responde "onde ir primeiro", o número
+  responde "quanto disso é".
+- **Uma rampa de um tom só, e a cor nunca vai sozinha.** Magnitude pede rampa sequencial;
+  arco-íris faria duas zonas vizinhas parecerem categorias diferentes em vez de mais e
+  menos dinheiro. Os quatro passos (`#184f95` → `#86b6ef`) foram validados antes de
+  entrar: luminosidade monotônica, degrau visível entre passos e o passo mais claro ainda
+  separável do papel. E toda faixa imprime o **rótulo** ao lado da cor — o relatório é
+  feito para ser fotocopiado, e em preto e branco a cor não informa nada.
+- **Normalizar agrupa, a primeira grafia imprime.** "Coxim", "COXIM" e "coxim - ms " são o
+  mesmo município digitado por operadores diferentes; sem `normalizarLocalidade` o
+  relatório mostraria três zonas com um terço do dinheiro cada e nenhuma pareceria
+  importante. Acento sai da chave porque "SÃO" e "SAO" convivem no mesmo cadastro — mas o
+  que vai ao papel é a grafia como foi cadastrada, que é como o cobrador reconhece o lugar.
+- **Devedores distintos, não parcelas.** A zona vale pelo número de **visitas** que
+  representa; doze parcelas do mesmo associado são uma visita, não doze.
+
+**O resolvedor de associado era o mesmo, e agora é um só.** O relatório antigo montava o
+índice e resolvia o dono da parcela inline (id da receita → CPF → nome, nessa ordem de
+confiança). O novo precisava exatamente disso; em vez da segunda cópia, o trecho virou
+`indiceDeAssociados`/`resolverAssociadoDaParcela` e o relatório antigo passou a chamá-los,
+sem mudança de comportamento. `parcelaEmAberto` foi para `utils/statusParcela.ts`, ao lado
+de `parcelaLiquidada`: é a terceira vez que este arquivo registra que "em aberto" tem três
+nomes neste schema e "liquidada" tem dois.
+
+**Limite conhecido, de propósito**: a tela não passa `receitas` para o relatório antigo
+(passa para o novo), então lá a resolução por `associado_id` nunca dispara e sobra o CPF e
+o nome. Ligar isso mudaria o que o relatório antigo imprime hoje — é decisão sobre um
+relatório em uso, não limpeza de código.
+
 ## Associado com histórico não se exclui — inativa-se
 
 Pedido de 14/09/2026. `softDeleteAssociado` **não é soft coisa nenhuma**: é uma cascata de
