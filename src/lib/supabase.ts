@@ -40,10 +40,22 @@ export const isolatedSupabase = createClient(supabaseUrl, supabaseKey, {
 // Wrapper para auditoria
 export const registrarAuditoria = async (acao: string, detalhes: any) => {
   let userId = 'system';
-  // 'system' é o default da própria coluna auditoria.tenant_id e, ao contrário do
-  // antigo 'empresa_padrao', não é um valor coringa na RLS: uma entrada de auditoria com
-  // tenant desconhecido deixa de nascer legível por todas as empresas.
-  let tenantId = 'system';
+  // Marcador de "empresa não determinada". Ao contrário do antigo 'empresa_padrao', ele
+  // não é coringa na RLS: `has_tenant_access('system')` é falso, então a linha nasce
+  // legível só pelo super_admin.
+  //
+  // Isso é uma rede de segurança de ÚLTIMO caso, não um destino aceitável — e por um
+  // bom tempo foi o destino de TODAS as linhas: as 568 de produção nasceram assim,
+  // porque a RPC `registrar_audit` lia o tenant de `app_metadata` (o app grava em
+  // `user_metadata`) e a coluna ainda tinha `DEFAULT 'system'`. O efeito é o espelho do
+  // incidente `empresa_padrao`: em vez de vazar para todas as empresas, sumia de todas —
+  // nenhum admin via log nenhum, e só o super_admin enxergava a Ata de Ocorrências.
+  //
+  // A migration `20260915192056` dropou o default e alinhou a RPC; as três leituras
+  // abaixo são o que de fato resolve a empresa. Ao mexer aqui, mantenha-as: cair neste
+  // marcador significa esconder a ação da empresa que a sofreu.
+  const TENANT_NAO_DETERMINADO = 'system';
+  let tenantId = TENANT_NAO_DETERMINADO;
   let userName = 'Sistema';
   let userEmail = 'sistema@eras.com.br';
   let userNivel: string | undefined = undefined;
