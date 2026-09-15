@@ -1735,6 +1735,59 @@ tabelas e em `get_user_profile()`, e o admin logado continuava lendo os 2 planos
 exposta sem nada do outro lado. Revogada de `PUBLIC` **e** de `anon`, porque a ACL era
 `=X/postgres` mais grants explícitos e revogar de um lado só deixaria a herança valendo.
 
+### Chamada sem argumento na policy vai dentro de `(select ...)` — a com argumento não vai
+
+Última pendência de performance da série, aberta desde a 15ª rodada e fechada na migration
+`20260915130747`. O advisor `auth_rls_initplan` apontava 7 policies — as 4 de `users` e 3 das 4
+de `notificacoes` — em que o Postgres reexecutava `auth.uid()` **uma vez por linha** em vez de
+uma vez por consulta. A correção que ele indica é envolver a chamada em `(select ...)`: um
+subselect sem referência à linha vira `InitPlan`, avaliado uma única vez.
+
+Três coisas valem como regra:
+
+- **O critério é ter argumento, não ser do schema `auth`.** O advisor só enxerga `auth.<fn>()` e
+  `current_setting()`, mas o que decide é outra coisa: uma chamada **sem argumento** não depende
+  da linha e pode ser içada. Por isso entraram junto `is_super_admin()` e `current_user_nivel()`,
+  que o advisor não lista — e são as caras, porque cada uma é `SECURITY DEFINER` (logo **não
+  inlinável** pelo planner) e pode acabar consultando `public.users`. Já
+  `has_tenant_access(tenant_id)` recebe a coluna: depende da linha por construção e **fica como
+  está**.
+- **Inlinar `has_tenant_access` para hoistar o resto seria trocar um custo por um vazamento.** O
+  corpo dela é hoistável (`is_super_admin() OR record = current_tenant_id() OR ambos NULL`), e
+  copiá-lo para dentro das 7 policies deixaria tudo em `InitPlan`. Mas poria a regra de tenant em
+  7 lugares novos, e a próxima mudança nela — já houve uma, a que tirou os coringas — passaria ao
+  largo dos 7. **A função continua sendo a fonte única**; o custo por linha que sobra é o preço
+  disso, e está medido abaixo.
+- **`ALTER POLICY`, nunca `DROP` + `CREATE`.** `ALTER` mexe só em `USING`/`WITH CHECK` e preserva
+  `cmd` e `roles` — as 8 seguem `TO authenticated`, a convenção que a seção anterior acabou de
+  estabelecer para as 41. Recriar uma policy é a chance de deixar cair o `TO` e voltar a `public`,
+  que inclui `anon`.
+
+**O ganho foi medido nos dois extremos, com 2.000 e 20.000 linhas sintéticas inseridas dentro de
+uma transação revertida** — a tabela real tem 51 linhas e não responderia nada. Os dois números
+importam, e o segundo é o que este arquivo costuma esquecer de registrar:
+
+- Linha que casa numa cláusula içada (é do próprio usuário, ou o usuário é super_admin):
+  **2.653 ms → 25 ms** em 20 mil linhas, ~105×.
+- Linha que **obriga** `has_tenant_access(tenant_id)` a rodar (mesma empresa, outro usuário):
+  **1.361 ms → 808 ms** em 2 mil linhas, só ~1,7×. Os 808 ms restantes são a função por linha, e
+  esta correção não os toca.
+
+Ou seja: o advisor ficou zerado e o pior caso continua caro. **Fechar o alerta não é o mesmo que
+resolver o problema** — vale lembrar disso antes de marcar o próximo como esperado.
+
+A oitava policy (`notificacoes_insert_policy`) entrou sem estar no advisor: o `WITH CHECK` dela é
+**a mesma expressão** do `WITH CHECK` da `notificacoes_update_policy`, que mudou. Em `INSERT` não
+há ganho nenhum — o motivo é só não deixar duas cópias do mesmo predicado começarem a divergir.
+
+O ensaio antes de aplicar seguiu o formato das duas rodadas anteriores: dentro de um `rollback`,
+as policies novas foram postas no lugar e a visibilidade de `users` e `notificacoes` foi contada
+**para os 8 usuários reais, nos 4 níveis** — comparando não só a contagem mas o conjunto de ids.
+16 de 16 idênticas, antes e depois. Um timeout no meio do caminho derrubou uma das transações de
+medição, e a conferência seguinte (51 linhas, 0 sintéticas, 0 policies alteradas) é o que provou
+que o `rollback` de fato aconteceu — **ao ensaiar em produção, confira o desfazimento também
+quando o ensaio falha**, não só quando ele termina.
+
 ### Pendências de Auth que dependem do painel, não de migration
 
 O advisor `auth_leaked_password_protection` está **aberto e não se resolve por SQL**: é um
