@@ -621,10 +621,51 @@ Duas correções, e a segunda é a que importa:
   lançada (rede fora) serve o cache. Servir cache calado numa tela de auditoria é pior que
   falhar: ela existe para ser a fonte da verdade sobre o que aconteceu.
 
-**Pendência conhecida, deixada de propósito**: as 76 linhas de "Editar Associado" com 385 KB
-cada continuam lá. Enxugar o que o gravador põe em `detalhes` é correção de bug e cabe numa
-passada própria; **reescrever o `detalhes` das linhas antigas é mexer em trilha de
-auditoria**, e isso é decisão de produto, não limpeza.
+### O gravador enxuga o que põe em `detalhes` — e o culpado era um PDF em base64
+
+Fechando a pendência que a correção anterior deixou registrada. O que inchava não era o
+registro do associado: era **`associado.documentos[]`, que guarda cada anexo como data URI
+em base64**. Um contrato em PDF de 352 KB vira ~470 mil caracteres — e aparece **duas
+vezes**, porque `saveAssociado` manda o registro inteiro em `dados_anteriores` **e** em
+`dados_novos`. São ~940 KB por save de associado com anexo.
+
+Medido em produção antes de mexer: **31 linhas** carregam anexo embutido, somando **27 MB
+de base64 — 97,8% do peso dessas linhas**. Enxugadas, as mesmas linhas cairiam de 28 MB
+para **631 KB**.
+
+`utils/detalhesAuditoria.ts` (puro, 18 testes) é chamado dentro de `registrarAuditoria`,
+**no funil, não em cada chamador** — os dois que hoje mandam o objeto inteiro
+(`associadosService` e `planosService`) são só os que se conhece; o próximo entra coberto
+sem precisar lembrar. Quatro decisões:
+
+- **Substituir, não remover.** O anexo vira
+  `[arquivo application/pdf · 344 KB · #a3f21b8c]`, e os metadados dele (`nome`, `tipo`,
+  `tamanho`) ficam intactos. Some do log o **conteúdo**, não o fato de existir um anexo —
+  é isso que mantém a linha auditável. Um diff de dois blocos de base64 de 470 KB lado a
+  lado nunca disse a ninguém o que mudou.
+- **O descritor carrega uma impressão digital do conteúdo**, e ela não é enfeite:
+  `calcularCamposAlterados` compara com `JSON.stringify`, então **dois descritores iguais
+  significam "não mudou"**. Sem o hash, trocar um PDF por outro de tamanho parecido sumiria
+  do diff — o log passaria a mentir exatamente sobre a coisa que ele existe para registrar.
+  É um FNV-1a de 32 bits, síncrono e determinístico; ele responde "é o mesmo arquivo de
+  antes?", não "qual é o arquivo". Há teste travando os dois lados: anexos diferentes de
+  **mesmo tamanho** acusam mudança, e o mesmo anexo não acusa.
+- **O teto total é a última rede, e ela avisa.** Passando de `LIMITE_TOTAL_DETALHES`
+  (64 KB), as chaves mais pesadas saem e `_omitido` diz quais foram — `usuario`,
+  `usuario_email` e `id` nunca são sacrificados, porque sem eles a linha deixa de valer
+  como log. **Encolher em silêncio faria o registro afirmar que está completo sem estar**,
+  que é a mesma falha da tela servindo cache como se fosse o banco.
+- **A função é idempotente**, e isso não é elegância: o payload passa pelo insert direto,
+  pelo fallback da RPC e pelo IndexedDB. Se enxugar duas vezes encurtasse de novo, as três
+  cópias divergiriam.
+
+O teste do teto pegou um defeito de verdade na primeira versão: a chave `_omitido` era
+acrescentada **depois** do corte e empurrava o payload de volta para cima do limite. **Ao
+cortar até caber, conte também o que você vai acrescentar para explicar o corte.**
+
+**Pendência que continua de propósito**: as linhas antigas seguem com os 28 MB. O
+enxugamento vale daqui para frente — **reescrever o `detalhes` de linha já gravada é mexer
+em trilha de auditoria**, e isso é decisão de produto, não limpeza.
 
 
 ## Índice novo em tabela que já existe: procure por definição, não por nome
