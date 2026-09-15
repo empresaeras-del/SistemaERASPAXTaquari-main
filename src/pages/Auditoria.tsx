@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { usePrintPreview } from '../hooks/usePrintPreview';
 import { getLogsAuditoria, LogAuditoria } from '../services/auditoriaService';
+import { escopoDaAuditoria, tenantDoEscopo, rotuloDoEscopo } from '../utils/escopoAuditoria';
 import { getEmpresaById, getEmpresas, Empresa } from '../services/empresasService';
 import { getUsuarios, UsuarioCadastro } from '../services/usuariosService';
 import { fetchImageWithDimensions } from '../utils/imageUtils';
@@ -262,25 +263,46 @@ export const AuditoriaPage: React.FC = () => {
   const [moduloFiltro, setModuloFiltro] = useState('todos');
   const [tipoAcaoFiltro, setTipoAcaoFiltro] = useState<'todos' | 'create' | 'update' | 'delete' | 'backup' | 'finance'>('todos');
 
+  // Quem vê o quê não sai do seletor de empresa do topo: sai do nível do usuário.
+  // super_admin sem empresa escolhida => tudo, de todas as empresas e de todos os
+  // usuários. Os demais => a própria empresa inteira, e o seletor não os alarga.
+  const escopo = useMemo(
+    () => escopoDaAuditoria(state.user, state.empresaSelecionada),
+    [state.user, state.empresaSelecionada]
+  );
+  const tenantDaConsulta = tenantDoEscopo(escopo);
+
   const loadData = async () => {
     setLoading(true);
     try {
+      if (tenantDaConsulta === null) {
+        // Sem empresa resolvida, listar com `'all'` daria visão global a quem não tem
+        // direito a ela — o erro exatamente oposto ao pretendido. Recusa-se a listagem.
+        setLogs([]);
+        toast.error(escopo.tipo === 'indefinido' ? escopo.motivo : 'Escopo de auditoria indefinido.');
+        return;
+      }
+
       const [logsData, empData, empsList, usersData] = await Promise.all([
-        getLogsAuditoria(state.isOnline, state.empresaSelecionada || 'all'),
+        getLogsAuditoria(state.isOnline, tenantDaConsulta),
         state.empresaSelecionada && state.empresaSelecionada !== 'all'
           ? getEmpresaById(state.empresaSelecionada, state.isOnline)
           : Promise.resolve(null),
         getEmpresas(state.isOnline),
-        getUsuarios(state.isOnline, state.empresaSelecionada || 'all')
+        getUsuarios(state.isOnline, tenantDaConsulta)
       ]);
-      
+
       setEmpresa(empData);
       setEmpresas(empsList);
       setUsuariosList(usersData);
       setLogs(logsData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar auditoria:', error);
-      toast.error('Não foi possível carregar o histórico de auditoria.');
+      // A mensagem do servidor vai para a tela: um "não foi possível carregar" genérico
+      // não diz se o problema é permissão, rede ou volume — e foi o silêncio desse
+      // caminho que deixou a tela mostrar o cache local como se fosse o banco.
+      setLogs([]);
+      toast.error(error?.message || 'Não foi possível carregar o histórico de auditoria.');
     } finally {
       setLoading(false);
     }
@@ -288,7 +310,7 @@ export const AuditoriaPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [state.isOnline, state.empresaSelecionada]);
+  }, [state.isOnline, state.empresaSelecionada, state.user?.nivel, state.user?.tenant_id]);
 
   // Filter logic
   const filteredLogs = useMemo(
@@ -650,11 +672,29 @@ export const AuditoriaPage: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-2xl font-bold tracking-tight text-text-base">Ata de Ocorrências</h2>
-                  {state.user?.nivel === 'super_admin' && (
-                    <span className="px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 text-xs font-bold uppercase tracking-wider">
-                      Visão Global
-                    </span>
-                  )}
+                  {/* O selo diz o escopo REAL da listagem, não o nível de quem olha:
+                      um super_admin que escolheu uma empresa no topo está vendo aquela
+                      empresa, e continuar anunciando "Visão Global" ali seria afirmar
+                      que a lista é completa quando ela não é. */}
+                  <span
+                    className={
+                      'px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ' +
+                      (escopo.tipo === 'global'
+                        ? 'bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400'
+                        : escopo.tipo === 'empresa'
+                          ? 'bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400'
+                          : 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400')
+                    }
+                    title={
+                      escopo.tipo === 'global'
+                        ? 'Todos os logs, de todas as empresas e de todos os usuários.'
+                        : escopo.tipo === 'empresa'
+                          ? 'Todos os logs de todos os usuários desta empresa.'
+                          : escopo.motivo
+                    }
+                  >
+                    {rotuloDoEscopo(escopo)}
+                  </span>
                 </div>
                 <p className="text-text-subtle text-xs sm:text-sm mt-0.5">
                   Logs de auditoria e rastreabilidade detalhada de eventos e ações de usuários.

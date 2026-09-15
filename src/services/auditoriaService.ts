@@ -21,6 +21,21 @@ export interface LogAuditoria {
 
 const STORE_NAME = 'auditoria';
 
+/**
+ * Teto de linhas trazidas numa carga da Ata de Ocorrências.
+ *
+ * Não é preciosismo: `detalhes` é um `jsonb` e a ação **"Editar Associado" grava o objeto
+ * inteiro do associado** — 76 linhas em produção com média de 385 mil caracteres cada,
+ * somando 28 MB numa tabela cujas outras 492 linhas somam ~100 KB. Um `select('*')` sem
+ * teto pedia esses 28 MB de uma vez, a requisição falhava, e o `catch` devolvia o
+ * IndexedDB **como se fosse o banco** — a tela mostrava 27 registros e "1 operador"
+ * (só as ações daquele navegador) sem nada indicando que não era a lista completa.
+ *
+ * 300 linhas são ~5 MB no pior caso medido; 100 são ~1 MB. Quem precisa de mais usa os
+ * filtros de período, que recortam no servidor.
+ */
+export const LIMITE_LOGS_AUDITORIA = 300;
+
 export const getLogsAuditoria = async (isOnline: boolean, tenantId: string | null): Promise<LogAuditoria[]> => {
   let logs: LogAuditoria[] = [];
   const usersMap = new Map<string, UsuarioCadastro>();
@@ -49,14 +64,28 @@ export const getLogsAuditoria = async (isOnline: boolean, tenantId: string | nul
       let query = supabase
         .from('auditoria')
         .select('*')
-        .order('created_at', { ascending: false });
-      
+        .order('created_at', { ascending: false })
+        .limit(LIMITE_LOGS_AUDITORIA);
+
+      // `'all'` aqui é "sem filtro de empresa", e só o super_admin chega com esse valor:
+      // quem decide isso é `escopoDaAuditoria`, não o seletor do topo da tela.
       if (tenantId && tenantId !== 'all') {
         query = query.eq('tenant_id', tenantId);
       }
-      
+
       const { data, error } = await query;
-      if (error) throw error;
+
+      // Recusa do servidor (RLS, coluna, timeout) e queda de rede não podem terminar
+      // igual. Devolver o cache aqui foi o que fez a tela afirmar 27 registros enquanto
+      // o banco tinha 568 — e ninguém tinha como saber. É a mesma regra que o CLAUDE.md
+      // já fixa para `saveAtendimento`, valendo agora no caminho de leitura.
+      if (error) {
+        const e: any = new Error(
+          `Não foi possível carregar a Ata de Ocorrências: ${error.message || 'erro do servidor'}`
+        );
+        e.recusaDoServidor = true;
+        throw e;
+      }
       
       if (data && data.length > 0) {
         logs = data.map((item: any) => {
@@ -106,8 +135,11 @@ export const getLogsAuditoria = async (isOnline: boolean, tenantId: string | nul
       } else {
         logs = await getAllFromIDB<LogAuditoria>(STORE_NAME);
       }
-    } catch (error) {
-      console.warn('Supabase fetch auditoria falhou, usando IndexedDB:', error);
+    } catch (error: any) {
+      // Só queda de rede justifica servir o cache: aí "não consegui falar com o
+      // servidor" é a verdade. Recusa do servidor é relançada para a tela avisar.
+      if (error?.recusaDoServidor) throw error;
+      console.warn('Supabase fetch auditoria falhou (rede), usando IndexedDB:', error);
       logs = await getAllFromIDB<LogAuditoria>(STORE_NAME);
     }
   } else {

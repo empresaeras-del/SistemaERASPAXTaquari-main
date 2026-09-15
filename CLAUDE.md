@@ -529,6 +529,104 @@ Duas decisões que valem para qualquer filtro derivado assim:
 As opções dos seletores incluem conta e centro **desativados** de propósito: um lançamento
 antigo pode apontar para um deles, e sem a opção na lista ele viraria infiltrável.
 
+## Ata de Ocorrências: o tenant inventado que escondia de todos
+
+Pedido de 15/09/2026: "super_admin vê todos os logs, independente da empresa; admin vê
+todos os logs de todos os usuários da própria empresa". A regra já estava escrita na
+policy — `has_tenant_access(tenant_id)` faz exatamente isso. **Ela só não valia porque o
+dado não deixava.**
+
+Perguntar ao banco antes de reler o componente respondeu em uma consulta: a tabela tinha
+**568 linhas e 7 operadores**, a tela mostrava **27 e 1 operador**, e **todo admin, gerente
+e funcionário lia ZERO**. As 568 tinham `tenant_id = 'system'` — um literal que não é
+empresa nenhuma.
+
+**É o espelho do incidente `empresa_padrao`.** Lá o literal inventado era coringa na RLS e
+**vazava** o registro para todas as empresas; aqui ele não casa com nada e **esconde** de
+todas. Mesma causa — carimbar um tenant que ninguém determinou —, sintomas opostos, e o
+segundo é ainda mais silencioso: ninguém reclama de um log que nunca viu.
+
+Três origens do `'system'`, e nenhuma bastava sozinha (migration `20260915192056`):
+
+- **`DEFAULT 'system'` na própria coluna.** Todo insert que esquecesse o `tenant_id`
+  nascia invisível, sem erro. Dropado: com a coluna `NOT NULL` e sem default, esquecer
+  agora **falha na hora**.
+- **A RPC `registrar_audit` lia `app_metadata.tenant_id`, e o app grava em
+  `user_metadata`.** Ela caía no fallback praticamente sempre. Passou a chamar
+  `current_tenant_id()` — a mesma função que as policies usam. Reimplementar a leitura do
+  JWT foi o que deixou as duas metades discordarem; predicado repetido em dois lugares só
+  é corrigido uma vez.
+- **`lib/supabase.ts` inicializava `tenantId = 'system'`.** Continua existindo como
+  marcador de último caso (documentado no `COMMENT` da coluna), não como destino normal.
+
+**O backfill foi uma decisão de acesso, e por isso foi perguntada.** Das 568, 187
+resolviam pelo autor e 25 pelo `tenant_id` que o próprio `detalhes` declara. Sobravam 381
+— 368 ações do super_admin (cujo `tenant_id` é `'default'`, também não é empresa) e 13 sem
+autor. Atribuí-las à empresa principal daria ao admin dela um histórico bem mais completo,
+mas **afirmaria que cada uma daquelas ações foi daquela empresa sem conferência linha a
+linha** — e este schema já teve três vazamentos entre empresas. A escolha (do usuário) foi
+deixá-las fora de empresa, com o marcador `'system'`, visíveis só ao super_admin; é
+reversível, dá para atribuí-las depois. **Preencher um campo que decide quem enxerga o
+registro não é reparo de dado, é decisão de acesso** — a mesma lição do perfil reconstruído
+a partir do `raw_user_meta_data`.
+
+Resultado conferido em produção, por papel: super_admin **568 logs / 7 operadores**; os
+dois admins da PAX e os funcionários dela **203 / 4**; o admin e o gerente da outra empresa
+**14 / 2**.
+
+### O escopo sai do nível do usuário, não do seletor de empresa
+
+`utils/escopoAuditoria.ts` (puro e testado) devolve `global`, `empresa` ou `indefinido`.
+Três decisões:
+
+- **Para o super_admin, o seletor do topo estreita; para os demais, ele não faz nada.** Um
+  admin que escolhesse `'all'` não ganha visão global, e escolher outra empresa não troca a
+  dele. Antes isso funcionava **por acidente**: o `AppContext` força
+  `empresaSelecionada = user.tenant_id` para quem não é super_admin, então usar o seletor
+  dava o resultado certo — e passaria a dar o errado no dia em que alguém mexesse naquele
+  `if`. A guarda de verdade continua sendo a RLS; a função existe para a tela **pedir o que
+  tem direito** em vez de pedir demais e depender de o banco aparar.
+- **O `tenant_id` do próprio super_admin nunca vira filtro.** Ele é `'default'` em
+  produção — cair nele transformaria "visão global" em "os logs de uma empresa que não
+  existe", ou seja, zero linhas. Há teste travando exatamente isso.
+- **Escopo indefinido devolve `null`, nunca `'all'`.** Cair em `'all'` aqui daria visão
+  global a quem não conseguiu provar a empresa: o erro exatamente oposto ao pretendido. A
+  tela recusa a listagem e diz por quê.
+
+O selo do cabeçalho passou a mostrar o escopo **real** (`VISÃO GLOBAL` / `EMPRESA` /
+`SEM ESCOPO`), não o nível de quem olha: um super_admin que escolheu uma empresa está
+vendo aquela empresa, e continuar anunciando "Visão Global" ali afirmaria que a lista é
+completa quando não é.
+
+### 28 MB num `select('*')`, e o cache servido como se fosse o banco
+
+O segundo defeito é o que fazia a tela mostrar 27 de 568 mesmo para o super_admin, que
+sempre teve direito a tudo. `getLogsAuditoria` pedia `select('*')` sem teto, e `detalhes`
+é `jsonb`: a ação **"Editar Associado" grava o objeto inteiro do associado** — 76 linhas
+com média de **385 mil caracteres** cada, **28 MB**, contra ~100 KB somados das outras 492.
+A requisição falhava, o `catch` devolvia o IndexedDB, e a tela exibia o cache **como se
+fosse o banco**.
+
+O sintoma que denuncia isso é fácil de ler e fácil de ignorar: **"1 operador no período"**.
+Um cache local só tem as ações daquele navegador. Quando um total despencar junto com a
+contagem de operadores, **suspeite do cache antes de suspeitar da permissão**.
+
+Duas correções, e a segunda é a que importa:
+
+- **Teto de `LIMITE_LOGS_AUDITORIA = 300`** (~5 MB no pior caso medido; 100 linhas são
+  ~1 MB). Quem precisa de mais usa os filtros de período.
+- **Recusa do servidor e queda de rede deixaram de terminar igual** — a regra que este
+  arquivo já fixa para `saveAtendimento`, valendo agora num caminho de **leitura**.
+  `error` devolvido pelo cliente é relançado com a mensagem do servidor; só exceção
+  lançada (rede fora) serve o cache. Servir cache calado numa tela de auditoria é pior que
+  falhar: ela existe para ser a fonte da verdade sobre o que aconteceu.
+
+**Pendência conhecida, deixada de propósito**: as 76 linhas de "Editar Associado" com 385 KB
+cada continuam lá. Enxugar o que o gravador põe em `detalhes` é correção de bug e cabe numa
+passada própria; **reescrever o `detalhes` das linhas antigas é mexer em trilha de
+auditoria**, e isso é decisão de produto, não limpeza.
+
+
 ## Índice novo em tabela que já existe: procure por definição, não por nome
 
 Nove tabelas ficaram meses com **dois índices byte a byte idênticos** sobre `tenant_id`
