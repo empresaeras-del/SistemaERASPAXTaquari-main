@@ -26,6 +26,7 @@ import { Empresa } from '../../services/empresasService';
 import { Associado } from '../../services/associadosService';
 import { formatLocalDate, formatLocalDateTime, isDateBeforeToday } from '../../utils/dateUtils';
 import { mascararDocumento } from '../../utils/mascaraDocumento';
+import { indiceDeAssociados, resolverAssociadoDaParcela } from '../../utils/mapaCalorReceber';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import toast from 'react-hot-toast';
@@ -63,25 +64,10 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const printAreaRef = useRef<HTMLDivElement>(null);
 
-  // Map de associados por CPF (limpo) e por Nome para busca ultrarrápida
-  const associadosMap = useMemo(() => {
-    const byCpf = new Map<string, Associado>();
-    const byName = new Map<string, Associado>();
-    const byId = new Map<string, Associado>();
-
-    associados.forEach((assoc) => {
-      if (assoc.id) byId.set(assoc.id, assoc);
-      if (assoc.cpf) {
-        const cleanCpf = assoc.cpf.replace(/\D/g, '');
-        if (cleanCpf) byCpf.set(cleanCpf, assoc);
-      }
-      if (assoc.nome) {
-        byName.set(assoc.nome.trim().toLowerCase(), assoc);
-      }
-    });
-
-    return { byCpf, byName, byId };
-  }, [associados]);
+  // Índice de busca dos associados. A montagem e a resolução moram em
+  // `utils/mapaCalorReceber.ts` porque o relatório de zonas faz exatamente a mesma
+  // pergunta — e um predicado repetido em dois lugares só é corrigido uma vez.
+  const associadosIndice = useMemo(() => indiceDeAssociados(associados), [associados]);
 
   // Map de receitas por ID
   const receitasMap = useMemo(() => {
@@ -95,17 +81,9 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
   // Enriquecimento dos dados com informações do associado / cliente
   const reportData = useMemo(() => {
     return parcelas.map((p, idx) => {
-      let assoc: Associado | undefined = undefined;
-      const cleanCpf = (p.devedor_cpf_cnpj || '').replace(/\D/g, '');
+      const assoc: Associado | undefined = resolverAssociadoDaParcela(p, associadosIndice, receitasMap);
+      // A receita continua sendo lida para o contato do cliente avulso, que não é associado.
       const rec = p.receita_id ? receitasMap.get(p.receita_id) : undefined;
-
-      if (rec?.associado_id && associadosMap.byId.has(rec.associado_id)) {
-        assoc = associadosMap.byId.get(rec.associado_id);
-      } else if (cleanCpf && associadosMap.byCpf.has(cleanCpf)) {
-        assoc = associadosMap.byCpf.get(cleanCpf);
-      } else if (p.devedor_nome) {
-        assoc = associadosMap.byName.get(p.devedor_nome.trim().toLowerCase());
-      }
 
       // Endereço formatado
       let enderecoFormatado = '-';
@@ -185,7 +163,7 @@ export const RelatorioContasReceberModal: React.FC<RelatorioContasReceberModalPr
             : '-',
       };
     });
-  }, [parcelas, associadosMap, receitasMap]);
+  }, [parcelas, associadosIndice, receitasMap]);
 
   // Cálculos consolidados para o relatório
   const totalizadores = useMemo(() => {

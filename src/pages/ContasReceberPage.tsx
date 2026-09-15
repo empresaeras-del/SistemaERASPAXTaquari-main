@@ -21,6 +21,7 @@ import { indicePorLancamento, parcelaCasaClassificacao } from '../utils/filtrosC
 import { getEmpresaById, Empresa } from '../services/empresasService';
 import { getAssociados, Associado } from '../services/associadosService';
 import { RelatorioContasReceberModal } from '../components/financeiro/RelatorioContasReceberModal';
+import { RelatorioMapaCalorModal } from '../components/financeiro/RelatorioMapaCalorModal';
 import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
 import { montarReciboDeRecebimento } from '../utils/reciboRecebimento';
 import { MENSAGEM_TENANT_INDEFINIDO, tenantDeEscrita } from '../utils/tenant';
@@ -48,7 +49,7 @@ import {
   Wallet,
   ArrowRight,
   ShieldAlert
-, ChevronUp, ChevronDown, Printer, MessageCircle } from "lucide-react";
+, ChevronUp, ChevronDown, Printer, MessageCircle, MapPin } from "lucide-react";
 import { format } from 'date-fns';
 import { parseLocalDate, formatLocalDate, formatLocalDateTime, isDateBeforeToday, isDateToday } from '../utils/dateUtils';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -219,6 +220,16 @@ export const ContasReceberPage: React.FC = () => {
   const [parcelaDetalhes, setParcelaDetalhes] = useState<ParcelaReceber | null>(null);
   const [receitaPai, setReceitaPai] = useState<Receita | null>(null);
   const [showRelatorioModal, setShowRelatorioModal] = useState(false);
+  const [showMapaCalorModal, setShowMapaCalorModal] = useState(false);
+  /**
+   * Qual relatório gerar — a escolha é do operador, e por isso é uma pergunta explícita.
+   *
+   * Os dois respondem a perguntas diferentes sobre os MESMOS filtros: o tradicional lista
+   * as parcelas em ordem de vencimento (o que o financeiro confere), o mapa de zonas diz
+   * onde está concentrado o valor a receber (o que o cobrador usa para montar a rota).
+   * Trocar um pelo outro tiraria de alguém o relatório que ele já usa.
+   */
+  const [showEscolhaRelatorio, setShowEscolhaRelatorio] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -576,15 +587,67 @@ export const ContasReceberPage: React.FC = () => {
           <p className="text-text-subtle mt-1">Gestão de recebimentos e mensalidades</p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setShowRelatorioModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors shadow-sm cursor-pointer"
-            title="Visualizar e Exportar Relatório Profissional em PDF"
-          >
-            <Printer className="w-4 h-4 text-blue-500" />
-            <span>Exportar PDF</span>
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowEscolhaRelatorio((aberto) => !aberto)}
+              className="flex items-center gap-2 px-4 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors shadow-sm cursor-pointer"
+              title="Escolher e gerar um relatório com os filtros aplicados"
+            >
+              <Printer className="w-4 h-4 text-blue-500" />
+              <span>Relatórios</span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showEscolhaRelatorio ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showEscolhaRelatorio && (
+              <>
+                {/* Fecha ao clicar fora, sem prender o menu na tela. */}
+                <button
+                  type="button"
+                  aria-label="Fechar seleção de relatório"
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => setShowEscolhaRelatorio(false)}
+                />
+                <div className="absolute right-0 mt-2 w-80 z-50 bg-bg-subtle border border-border-default rounded-2xl shadow-2xl overflow-hidden">
+                  <p className="px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-wide text-text-subtle">
+                    Gerar com os filtros aplicados
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEscolhaRelatorio(false);
+                      setShowRelatorioModal(true);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-bg-hover transition-colors flex gap-3 items-start"
+                  >
+                    <FileText className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                    <span>
+                      <span className="block text-sm font-semibold text-text-base">Relação de parcelas</span>
+                      <span className="block text-[11px] text-text-subtle">
+                        Lista detalhada por vencimento, com devedor, endereço e situação.
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEscolhaRelatorio(false);
+                      setShowMapaCalorModal(true);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-bg-hover transition-colors flex gap-3 items-start border-t border-border-default"
+                  >
+                    <MapPin className="w-4 h-4 text-[#5598e7] mt-0.5 shrink-0" />
+                    <span>
+                      <span className="block text-sm font-semibold text-text-base">Mapa de zonas de cobrança</span>
+                      <span className="block text-[11px] text-text-subtle">
+                        Municípios e bairros por concentração de valor a receber, com roteiro sugerido.
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button 
             type="button"
             disabled={!state.isOnline}
@@ -1452,6 +1515,23 @@ export const ContasReceberPage: React.FC = () => {
       )}
 
       {/* MODAL DE RELATÓRIO PROFISSIONAL (PREVIEW / VISUALIZADOR) */}
+      <RelatorioMapaCalorModal
+        isOpen={showMapaCalorModal}
+        onClose={() => setShowMapaCalorModal(false)}
+        parcelas={sortedParcelas}
+        empresaData={empresaData}
+        associados={associados}
+        receitas={receitas}
+        currentFilters={{
+          searchTerm,
+          statusFilter,
+          formaPagamentoFilter,
+          dataInicial,
+          dataFinal
+        }}
+        userName={state.user?.nome || 'Administrador'}
+      />
+
       <RelatorioContasReceberModal
         isOpen={showRelatorioModal}
         onClose={() => setShowRelatorioModal(false)}
