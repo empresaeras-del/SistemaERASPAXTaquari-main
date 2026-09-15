@@ -2,6 +2,7 @@ import { saveToIDB } from './idb';
 import { generateUUID } from '../utils/uuid';
 import { get } from './idb-safe';
 import { createClient } from '@supabase/supabase-js';
+import { enxugarDetalhesAuditoria } from '../utils/detalhesAuditoria';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'http://localhost:9999';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder_key';
@@ -107,11 +108,15 @@ export const registrarAuditoria = async (acao: string, detalhes: any) => {
     console.warn('Erro ao ler tenant do IDB:', e);
   }
 
-  const payloadDetalhes = {
+  // Enxugado aqui, no funil, e não em cada chamador: `saveAssociado` e `salvarPlano`
+  // passam o registro inteiro como dados_anteriores/dados_novos, e `associado.documentos[]`
+  // carrega cada anexo como data URI em base64 — um contrato em PDF de 352 KB virava ~470
+  // mil caracteres, duplicados no "antes" e no "depois". Ver utils/detalhesAuditoria.ts.
+  const payloadDetalhes = enxugarDetalhesAuditoria({
     ...(typeof detalhes === 'object' && detalhes !== null ? detalhes : { info: detalhes }),
     usuario: userName,
     usuario_email: userEmail
-  };
+  });
 
   // 3. Tentar gravar no Supabase (se configurado/online)
   try {
