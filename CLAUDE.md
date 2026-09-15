@@ -188,115 +188,96 @@ dado do usuário é **salvo com sucesso aparente e perdido**, sem erro visível.
 novo a uma interface que é persistida no Supabase, **sempre** crie a migration na mesma tarefa —
 nunca depois "quando der tempo".
 
-## Schema drift conhecido — colunas duplicadas
+## Schema drift resolvido — os pares de colunas duplicadas acabaram
 
-Duas tabelas têm pares de colunas para o mesmo dado, por terem evoluído em momentos diferentes sem
-migração da coluna antiga:
+**Encerrado em 15/09/2026 (migration `20260915132838`).** Duas tabelas tinham pares de colunas
+para o mesmo dado, por terem evoluído em momentos diferentes sem migração da coluna antiga. As 10
+colunas legadas foram dropadas; ficaram só as canônicas:
 
-- **`associados`**: `endereco_logradouro`/`logradouro`, `endereco_numero`/`numero`,
-  `endereco_bairro`/`bairro`, `endereco_cidade`/`cidade`, `endereco_cep`/`cep`,
-  `endereco_estado`/`uf`, e `plano_id`/`plano_pax_id`. O código atual lê com fallback
-  (`assoc.endereco_logradouro || assoc.logradouro`, ver `utils/documentoVariaveis.ts`), mas grava
-  majoritariamente no par `endereco_*`/`plano_pax_id` — trate esse par como o canônico ao escrever
-  código novo.
-- **`documentos_padroes`**: `conteudo`/`conteudo_html` e `created_at`/`updated_at` convivendo com
-  `criado_em`/`atualizado_em`. O par canônico em uso pelo código atual é `conteudo` e
-  `criado_em`/`atualizado_em`.
+- **`associados`**: saíram `logradouro`, `numero`, `bairro`, `cidade`, `cep`, `uf` e `plano_id`.
+  O par canônico é `endereco_*` e `plano_pax_id`.
+- **`documentos_padroes`**: saíram `conteudo_html`, `created_at` e `updated_at`. O par canônico é
+  `conteudo` e `criado_em`/`atualizado_em`.
 
-**Plano de deprecação — passo 1 concluído em 09/09/2026, resultado inverte a suposição inicial**:
-o plano abaixo presumia que as colunas legadas talvez já estivessem paradas, sobrando só migrar
-dado velho. Não é o caso: `associadosService.ts` (`salvarAssociado`, por volta da linha 391) e
-`useDocumentosPadroes.ts` (`criar`/`editar`) gravam as duas colunas de cada par, em todo save,
-deliberadamente — não é uma integração externa, é o próprio código-fonte. Conferido direto na
-produção (`qigytjkgehwxalhmwpdd`, consulta completa às 3 linhas de `associados` e 6 de
-`documentos_padroes` que existem hoje — a base ainda é pequena o bastante pra isso ser exaustivo,
-não amostra):
+O plano tinha quatro passos, e os quatro estão cumpridos: (1) confirmar que as legadas ainda
+recebiam escrita — recebiam, por dual-write deliberado do próprio código; (2) parar o dual-write
+(PR #30); (3) manter a legada um ciclo de release como somente-leitura; (4) dropar.
 
-- `logradouro`/`endereco_logradouro`: **0 divergências** nas 3 linhas — o dual-write mantém os dois
-  idênticos. Continua vivo; não dá pra passar do passo 1 pra esse par sem antes parar de gravar a
-  coluna legada no código (o que é o novo passo 2, não o passo 2 original).
-- `conteudo`/`conteudo_html`, `criado_em`/`created_at`, `atualizado_em`/`updated_at`: mesma coisa —
-  **0 divergências** nas 6 linhas de `documentos_padroes`. Mesma conclusão.
-- `plano_id`: diferente dos outros — **as 3 linhas têm `plano_id IS NULL`**, enquanto
-  `plano_pax_id` tem o valor real. `associadosService.ts:288` só grava `plano_id` quando
-  `rest.plano_id` já chega preenchido do formulário, o que não acontece (o formulário só popula
-  `plano_pax_id`); então a coluna legada é reescrita para `NULL` a cada save, não mantida em
-  sincronia. Na prática já está "vazia" — não há dado pra migrar (o passo 2 original é moot pra
-  esse caso). **As leituras de `plano_id` foram removidas numa passada isolada** — ver
-  "As três leituras de `plano_id`" abaixo.
-- Nenhuma function/view/trigger no schema `public` referencia essas colunas (`pg_proc`/
-  `information_schema.views` varridos), e não há Edge Functions no projeto — descarta o cenário de
-  integração externa escrevendo por fora do app.
+### O que o passo 4 exigiu antes de rodar, e vale como roteiro para a próxima coluna
 
-Efeito prático: o passo 2 original ("migrar os poucos registros divergentes") não tinha o que fazer —
-não havia divergência, o problema era o oposto, dado demais sendo escrito nos dois lugares.
+Um `drop` é irreversível e não avisa. As cinco checagens abaixo foram feitas **antes**, e é a
+combinação delas — não uma só — que autorizou:
 
-1. ~~Confirmar se as colunas legadas ainda recebem escrita~~ — feito, ver acima.
-2. ~~Parar o dual-write no código~~ — feito. `associadosService.ts` (`saveAssociado`) não grava mais
-   `logradouro`/`numero`/`bairro`/`cidade`/`cep`/`uf`/`plano_id`, só o par canônico
-   `endereco_*`/`plano_pax_id`. `lib/syncService.ts` (fila de sync offline) tinha a mesma duplicação
-   isolada em `cidade`/`plano_id` — removida do mesmo jeito, com os nomes legados destruturados pra
-   fora do payload em vez de só pararem de ser sobrescritos (evita que um registro antigo na fila
-   ainda carregue o valor de antes desta mudança e vaze pro insert via `...assocClean`).
-   `useDocumentosPadroes.ts` (`criar`/`editar`) não grava mais `conteudo_html`/`created_at`/
-   `updated_at`, só `conteudo`/`criado_em`/`atualizado_em`. As leituras com fallback
-   (`assoc.endereco_logradouro || assoc.logradouro`, `item.conteudo || item.conteudo_html`) foram
-   mantidas de propósito — é o que faz a coluna legada continuar valendo como alias pra quem ainda
-   a lê, agora só-leitura de verdade. A normalização em `getAssociados()` que espelha
-   `endereco_logradouro` em `logradouro` no objeto devolvido pro app também ficou — isso não escreve
-   no Postgres, só mantém o formato local consistente pra qualquer leitor que acesse o nome antigo.
-3. Manter a coluna legada por um ciclo de release como alias somente-leitura (estado atual).
-4. Só então dropar a coluna legada, numa migration própria, depois de confirmar nos logs/advisors
-   que nada mais a referencia.
+1. **Nenhuma linha guardava dado só do lado legado.** Verificado par a par, exaustivamente (a base
+   tinha 5 associados e 6 documentos). Onde havia divergência, o canônico era **o mais novo**: nos
+   6 documentos o `atualizado_em` canônico era ≥ `updated_at` legado. Atenção ao contra-intuitivo:
+   **a coluna legada às vezes era maior** (Ata de Tanatopraxia, 16.969 contra 15.581 caracteres) —
+   porque o operador tinha encurtado o documento depois que a escrita parou. Maior não é mais
+   correto; o que decide é a data, não o tamanho.
+2. **Nenhum nome legado viajava ao servidor.** Ver a regra da seção seguinte.
+3. **Nada no banco referenciava as 10**: 0 views, 0 índices, 0 constraints, 0 policies, 0 funções.
+   O único trigger das duas tabelas mexe em `associados.updated_at` — coluna própria daquela
+   tabela, que **não** estava na lista. Nomes parecidos em tabelas diferentes são a armadilha
+   central deste passo.
+4. **Os logs confirmaram com tráfego real.** 24h, 8.248 requisições, sendo 303 em `/associados` e
+   49 em `/documentos_padroes`: **zero** citando coluna legada. É o que nenhuma leitura de código
+   prova — um bundle antigo em cache de service worker ainda poderia estar mandando o payload de
+   dual-write, e os logs são o único lugar onde isso apareceria.
+5. **A fila de sync já estava blindada.** `lib/syncService.ts` desestrutura os 7 nomes legados para
+   fora do payload antes do spread — era isso que impedia um registro antigo na fila de mandar
+   coluna inexistente depois do drop. Sem essa blindagem (feita na PR #30), o passo 4 teria
+   quebrado a sincronização de quem estava offline.
 
-Não pule direto para o passo 4 — dropar uma coluna que algo ainda escreve quebra silenciosamente
-esse algo mais tarde.
+Além disso, o ensaio foi rodado **dentro de uma transação revertida**: dropar as 10, exercitar as
+consultas reais do app (o `select *, dependentes(*)` de `getAssociados`, o `select *` dos
+documentos) e inserir com o payload canônico dos dois formulários. Só depois a migration foi
+aplicada.
 
-### O passo 3 não deixa a coluna legada como alias — deixa como fotografia
+**A coluna canônica herda a constraint que a legada sustentava.** `created_at`/`updated_at` eram
+`NOT NULL` e `criado_em`/`atualizado_em` não. Dropar sem mais nada removeria em silêncio a garantia
+de que todo documento tem data — então as canônicas ganharam `NOT NULL` na mesma migration. **Ao
+dropar uma coluna, compare as constraints dos dois lados do par**: a legada pode estar segurando um
+invariante que ninguém percebeu que era dela.
 
-Parar o dual-write não congela os dois lados juntos: congela **só o legado**, e o canônico segue.
-Conferido em produção em 10/09, e a primeira divergência já existe: em `documentos_padroes`, a
-linha "Ata de Tanatopraxia" — a **única das 6 salva depois da PR #30** — tem `conteudo` com 15.581
-caracteres contra 16.969 em `conteudo_html`, e `atualizado_em` de 09/09 contra `updated_at` de
-24/08. As outras 5 continuam idênticas só porque ninguém as tocou desde então. Em `associados` a
-divergência ainda não apareceu porque a única linha salva depois da PR #30 não teve o endereço
-alterado.
+### Antes do `drop`, separe o que quebra do que degrada — e saiba que payload de escrita quebra
 
-Isso não é defeito — é a prova de que o passo 2 funcionou. Mas reclassifica as leituras com
-fallback que o passo 3 mantém de propósito: `item.conteudo || item.conteudo_html` deixou de ser
-"o mesmo texto por outro nome". Se o lado canônico vier vazio, o que a tela mostra é a versão de
-**antes** de a escrita parar. Ao manter um fallback assim, saiba que ele serve dado velho, não um
-sinônimo — e prefira `?? ` a `||` se string vazia for um valor legítimo do campo.
+A regra da PR #46, agora exercida em escala: ao varrer o que referencia uma coluna a ser dropada,
+separe o que **quebra** (nome de coluna que viaja ao servidor: `select`, `or`, `eq`, `order`) do
+que **degrada em silêncio** (acesso a propriedade em objeto já carregado, que em JavaScript devolve
+`undefined`). Só o primeiro grupo bloqueia o `drop`.
 
-### As três leituras de `plano_id`, e por que só duas eram bloqueantes
+O passo 4 acrescentou duas correções a essa regra:
 
-O passo 4 desse par estava descrito como "esperar um ciclo de release sem nada referenciar a
-coluna". A precondição não estava cumprida: **duas consultas iam ao Postgres pedindo `plano_id`**,
-e um `drop` as quebraria na hora com `42703 column does not exist`, não em silêncio meses depois:
+- **Chave de objeto em payload de `insert`/`update`/`upsert` viaja ao servidor.** Sintaticamente é
+  propriedade de objeto, igual ao grupo que degrada em silêncio — e é justamente aí que uma
+  varredura por forma erra: o payload chega ao Postgres e volta `PGRST204`. O que salvou aqui foi
+  os payloads já usarem só chaves canônicas, com os nomes legados aparecendo **apenas do lado
+  direito de um `||`**, que é leitura de memória.
+- **O ruído do grep é a regra, não a exceção.** As 10 colunas davam **424 ocorrências** no `src/`.
+  Nenhuma era bloqueante: `bairro`/`cidade`/`cep`/`numero` são nome **canônico** em outras tabelas
+  (credenciados, fornecedores, atendimentos), `created_at` é de `planos_pax` e `contratos`,
+  `numero_parcela` casou por substring, e `plano_id` é FK legítima de `planos_pax_faixas`,
+  `planos_pax_coberturas`, `credenciados_planos` e `contas_contabeis`. O mesmo vale do lado SQL:
+  um `ilike '%coluna%'` sobre `pg_proc` acusou **18 funções suspeitas**; com fronteira de palavra
+  sobrou **1**, e essa apontava para outra tabela. **Filtre por tabela e por fronteira de palavra
+  antes de contar** — senão o número que você leva para a decisão é ruído puro.
 
-- `hooks/usePlanosPax.ts` (`verificarVinculosPlano`) — `.or('plano_pax_id.eq.X,plano_id.eq.X')`;
-- `hooks/usePlanosAnalytics.ts` — `plano_id` na lista do `.select(...)`.
+### O fallback deixou de ser fotografia e virou síntese do cliente
 
-A terceira era o filtro do cache do IndexedDB, na mesma função da primeira
-(`a.plano_pax_id === planoId || a.plano_id === planoId`). Essa **não** quebraria: acessar
-propriedade inexistente em JavaScript devolve `undefined`, sem erro. As três saíram juntas mesmo
-assim, porque as duas da `verificarVinculosPlano` são o mesmo predicado escrito em dois lugares —
-deixar metade tornaria a função incoerente consigo mesma.
+O passo 3 tinha reclassificado as leituras com fallback: `item.conteudo || item.conteudo_html`
+deixara de ser "o mesmo texto por outro nome" e passara a servir **dado velho**. Com o passo 4 elas
+mudam de natureza outra vez, e desta vez ficam inofensivas: a coluna não existe mais, então o lado
+direito do `||` é sempre `undefined` e o fallback nunca dispara. Virou ramo morto.
 
-**A regra que vale para a próxima**: ao varrer o que ainda referencia uma coluna a ser dropada,
-separe o que **quebra** (qualquer nome de coluna que viaja para o servidor — `select`, `or`, `eq`,
-`order`) do que **degrada em silêncio** (acesso a propriedade em objeto já carregado). Só o
-primeiro grupo bloqueia o `drop`; e é o segundo que uma varredura por `grep` tende a misturar com
-ele.
+A normalização de `getAssociados()` é o caso interessante. Ela espelha `endereco_logradouro` em
+`logradouro` no objeto devolvido ao app, e **continua valendo** — mas deixou de ser "espelhar uma
+coluna que existe" para ser **a única fonte dos nomes legados, sintetizada no cliente**. Qualquer
+tela que leia `assoc.cidade` segue funcionando por causa dela, e só por causa dela. Não a remova
+sem antes varrer os componentes que leem os nomes antigos; essa varredura é passada própria, e
+ficou de fora desta.
 
-`verificarVinculosPlano` é a guarda que impede excluir um plano com associado vinculado, então
-estreitá-la é mudança de comportamento — e foi por isso que a remoção só valeu depois de conferir
-que o ramo legado não podia casar nada: as 3 linhas de `associados` têm `plano_id IS NULL`, e
-`plano_id.eq.<uuid>` nunca casa `NULL` de qualquer forma. `lib/syncService.ts` continua
-destruturando `plano_id` para fora do payload de escrita, e isso **não** sai: é o que impede um
-registro antigo na fila de mandar a coluna legada num insert — e passa a ser o que impede um erro
-de coluna inexistente depois do `drop`.
-
+**Nenhuma linha de `src/` precisou mudar para o drop** — esse era exatamente o objetivo dos passos
+2 e 3. Limpar os ramos mortos é cosmético e cabe numa passada posterior, não nesta.
 ## Plano contábil: a FK que carrega o `tenant_id` dentro dela
 
 `planos_contabeis` e `contas_contabeis` (migration `20260909021132`) são o catálogo de contas
