@@ -2016,6 +2016,68 @@ lado), e a coluna de ações quebrava os rótulos em duas linhas justamente na l
 botões. A largura fixa da coluna precisa ser dimensionada **pelo caso mais cheio** — senão ela
 quebra exatamente onde há mais o que fazer.
 
+
+### Trocar a própria senha: a sessão aberta não é credencial suficiente
+
+Pedido de 16/09/2026, a partir da área de logoff do topo. O vão foi medido no banco antes
+de escrever código, e é maior do que "falta um atalho": das 8 contas, **PAOLA
+(`funcionario`) e KAUA (`gerente`) não têm `configuracoes` em `modulos_permitidos`** — para
+elas não existia caminho nenhum dentro do app, só o e-mail de recuperação. As outras seis
+chegavam pela aba que edita **todo mundo**, que não é onde alguém procura a própria conta.
+
+**A senha atual é a regra central, e ela não existe por hábito de formulário.**
+`supabase.auth.updateUser({ password })` não pede a senha antiga: para o servidor, **uma
+sessão aberta basta**. Sem a conferência, quem sentar na máquina destravada de um operador
+troca a senha dele e o tranca para fora sem saber senha nenhuma — e o sistema roda o dia
+inteiro em balcão de atendimento. `alterarPropriaSenha` confere antes, e a recusa mora no
+service, não no botão.
+
+Quatro decisões valem como regra:
+
+- **A conferência usa `isolatedSupabase`, e o `signOut` dela leva `scope: 'local'`
+  explícito.** Um `signInWithPassword` no cliente principal **substituiria a sessão em
+  uso**; por isso o cliente sem persistência, que já existia para o cadastro de usuário não
+  deslogar o admin. E o `signOut()` do supabase-js tem **`scope: 'global'` por padrão** —
+  revogaria todas as sessões daquele usuário, inclusive a que está usando o sistema naquele
+  instante e as dos outros aparelhos. O padrão da biblioteca é justamente o que não se quer
+  aqui, então há teste travando o argumento. **Ao chamar `signOut` fora do logout de
+  verdade, declare o escopo.**
+- **A senha não é aparada em lugar nenhum.** `AuthContext.signIn` manda ao servidor
+  exatamente o que foi digitado, sem `trim`; aparar na troca gravaria uma senha diferente da
+  que o login vai enviar, e o usuário ficaria trancado para fora **com a senha que ele mesmo
+  acabou de escolher**. (`saveUsuario` apara — é inconsistência antiga, do caminho do admin,
+  deixada como está de propósito: mexer nela muda o cadastro de usuário, que é outra
+  decisão.)
+- **O mínimo é 6, igual ao resto do sistema, e a força é dica que nunca bloqueia.** Exigir
+  8 aqui recusaria uma senha que um admin pode gravar para o mesmo usuário pela tela de
+  Configurações — duas guardas discordando sobre a mesma coisa é como as metades divergem.
+  `forcaDaSenha` fica fora do caminho de gravação; quem decide se a troca segue é
+  `validarTrocaDeSenha`.
+- **Offline recusa, não enfileira.** Uma troca de senha na fila de sync ficaria pendente sem
+  ninguém saber, e o operador sairia da tela convencido de que a senha mudou. É a mesma razão
+  de `getCadastrosIncompletos` não ler cache: resposta errada é pior que nenhuma.
+
+O e-mail usado na conferência vem de `supabaseUser` (Auth), não de `state.user` (o perfil em
+`public.users`): é contra `auth.users` que o `signInWithPassword` roda, e são duas tabelas
+que podem discordar. A recusa do servidor chega inteira à tela e **o formulário continua
+aberto com o que foi digitado** — um "erro ao alterar" genérico não diz se o problema foi a
+senha atual, a política de senha ou a rede. A senha nunca entra em `auditoria.detalhes`; há
+teste cobrando isso, não só a intenção.
+
+**A área de logoff virou menu**, e isso troca um clique por dois de propósito: o botão único
+deslogava na hora, e ele fica ao lado de telas com formulário aberto. `Alterar minha senha` e
+`Sair do sistema` ficam no mesmo lugar onde o usuário já procurava sua conta, e sair continua
+passando pela confirmação que já existia.
+
+**A foto pegou dois defeitos que nenhuma asserção acusaria** (jsdom + Chromium com o CSS do
+build, como manda "Conferindo a impressão de verdade"): o medidor de força estava desenhado no
+fim do formulário, encostado em "Repita a nova senha" — **medindo a nova senha e parecendo
+medir a confirmação** —, e o cabeçalho do menu repetia, truncado, o mesmo nome que aparece
+inteiro no botão logo acima. O medidor foi para junto do campo que ele mede (com teste
+travando a posição, não só o texto) e o cabeçalho ficou só com o e-mail. É a lição do painel
+de cadastros pela metade valendo de novo: **não repita ali o identificador que já está na
+linha de cima.**
+
 - **Não revogue `EXECUTE` das funções usadas pelas policies de RLS** (`has_tenant_access`,
   `current_tenant_id`, `current_user_nivel`, `is_super_admin`), mesmo que os advisors as apontem.
   A expressão de uma policy é avaliada com as permissões de quem consulta: sem `EXECUTE` em

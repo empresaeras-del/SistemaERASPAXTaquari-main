@@ -7,6 +7,12 @@ import {
   deleteFromIDB,
 } from "../lib/idb";
 import { NivelAcesso } from "../types";
+import {
+  validarTrocaDeSenha,
+  MENSAGEM_SENHA_CURTA,
+  MENSAGEM_SENHA_IGUAL_A_ATUAL,
+  TrocaDeSenha
+} from "../utils/senhaUsuario";
 
 export interface UsuarioCadastro {
   id: string;
@@ -259,3 +265,103 @@ export const deleteUsuario = async (
   await registrarAuditoria("Excluir Usuário (Soft Delete)", { id });
 };
 
+
+export const MENSAGEM_SENHA_SEM_CONEXAO =
+  'Sem conexão. A troca de senha só vale quando chega ao servidor — tente novamente online.';
+export const MENSAGEM_SENHA_ATUAL_INCORRETA = 'A senha atual não confere.';
+export const MENSAGEM_SENHA_SEM_EMAIL =
+  'Não foi possível identificar o e-mail da sua conta. Entre novamente e tente de novo.';
+export const MENSAGEM_SENHA_MUITAS_TENTATIVAS =
+  'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.';
+export const MENSAGEM_SENHA_SESSAO_EXPIRADA =
+  'Sua sessão expirou. Entre novamente para trocar a senha.';
+
+const traduzirErroDeTrocaDeSenha = (mensagem: string): string => {
+  if (/Password should be at least/i.test(mensagem)) return MENSAGEM_SENHA_CURTA;
+  if (/should be different from the old password/i.test(mensagem)) {
+    return MENSAGEM_SENHA_IGUAL_A_ATUAL;
+  }
+  if (/pwned|leaked|weak/i.test(mensagem)) {
+    return 'Esta senha aparece em vazamentos conhecidos. Escolha outra.';
+  }
+  if (/Auth session missing|JWT expired|invalid claim/i.test(mensagem)) {
+    return MENSAGEM_SENHA_SESSAO_EXPIRADA;
+  }
+  if (/Too many requests|rate limit/i.test(mensagem)) {
+    return MENSAGEM_SENHA_MUITAS_TENTATIVAS;
+  }
+  return `Não foi possível alterar a senha: ${mensagem}`;
+};
+
+/**
+ * Troca a senha do usuário que está logado, conferindo antes a senha atual.
+ *
+ * Por que conferir, se `supabase.auth.updateUser({ password })` não exige a senha
+ * antiga: sem a conferência, **uma sessão aberta é a única credencial necessária**.
+ * Quem sentar na máquina destravada de um operador trocaria a senha dele e o
+ * trancaria para fora, sem saber senha nenhuma. A senha atual é o que prova que quem
+ * está no teclado é o dono da conta.
+ *
+ * A conferência usa `isolatedSupabase` — o cliente sem persistência que já existe para
+ * chamadas de auth que não podem mexer na sessão viva (é o mesmo usado no cadastro de
+ * usuário, para não deslogar o admin). Duas armadilhas ficam fechadas por isso:
+ *
+ * - Um `signInWithPassword` no cliente principal **substituiria a sessão em uso**.
+ * - O `signOut()` do supabase-js tem `scope: 'global'` por PADRÃO, o que revogaria
+ *   todas as sessões do usuário — inclusive a que está usando o sistema neste momento,
+ *   e as dos outros aparelhos dele. Por isso o `scope: 'local'` explícito abaixo: ele
+ *   encerra só a sessão efêmera que a conferência acabou de abrir.
+ *
+ * A senha vai ao servidor exatamente como foi digitada, sem `trim` — é o que o login
+ * envia (ver `AuthContext.signIn`), e aparar aqui gravaria uma senha diferente da que
+ * o usuário vai digitar amanhã.
+ */
+export const alterarPropriaSenha = async (
+  parametros: TrocaDeSenha & { email?: string | null },
+  isOnline: boolean
+): Promise<void> => {
+  const { email, senhaAtual, novaSenha, confirmacao } = parametros;
+
+  const validacao = validarTrocaDeSenha({ senhaAtual, novaSenha, confirmacao });
+  if (!validacao.ok) throw new Error(validacao.mensagem);
+
+  // Não entra na fila de sync de propósito: uma troca de senha enfileirada ficaria
+  // pendente sem ninguém saber, e o usuário sairia daqui achando que a senha mudou.
+  if (!isOnline) throw new Error(MENSAGEM_SENHA_SEM_CONEXAO);
+
+  const emailDaConta = (email || '').trim();
+  if (!emailDaConta) throw new Error(MENSAGEM_SENHA_SEM_EMAIL);
+
+  const { error: erroConferencia } = await isolatedSupabase.auth.signInWithPassword({
+    email: emailDaConta,
+    password: senhaAtual
+  });
+
+  if (erroConferencia) {
+    if (/Invalid login credentials/i.test(erroConferencia.message)) {
+      throw new Error(MENSAGEM_SENHA_ATUAL_INCORRETA);
+    }
+    if (/Too many requests|rate limit/i.test(erroConferencia.message)) {
+      throw new Error(MENSAGEM_SENHA_MUITAS_TENTATIVAS);
+    }
+    throw new Error(`Não foi possível conferir a senha atual: ${erroConferencia.message}`);
+  }
+
+  try {
+    await isolatedSupabase.auth.signOut({ scope: 'local' });
+  } catch (e) {
+    // Falhar ao descartar a sessão efêmera não é motivo para não trocar a senha.
+    console.warn('Não foi possível encerrar a sessão de conferência:', e);
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: novaSenha });
+  if (error) {
+    throw new Error(traduzirErroDeTrocaDeSenha(error.message || 'erro do servidor'));
+  }
+
+  // A senha NUNCA entra no log — nem a antiga, nem a nova, nem o tamanho delas.
+  await registrarAuditoria('Alterar Própria Senha', {
+    email: emailDaConta,
+    origem: 'menu do usuário'
+  });
+};
