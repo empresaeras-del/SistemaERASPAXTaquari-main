@@ -235,6 +235,18 @@ describe('saveUsuario: quem pode redefinir a senha de outro usuário', () => {
     expect(updateUser).not.toHaveBeenCalled();
   });
 
+  it('SEM usuário logado a senha é recusada, nunca descartada em silêncio', async () => {
+    // O caso real de 16/09/2026: a tela chamava saveUsuario sem o 4º argumento, os dois
+    // ramos eram pulados e a senha sumia com a auditoria dizendo `senha_alterada: true`.
+    await expect(
+      saveUsuario(alvo, true, 'NovaSenha!2026', undefined)
+    ).rejects.toThrow(MENSAGEM_SENHA_SEM_PERMISSAO);
+
+    expect(rpc).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
   it('salvar sem senha não aciona guarda nenhuma', async () => {
     await saveUsuario(alvo, true, '', { id: 'admin-1', nivel: 'admin' });
 

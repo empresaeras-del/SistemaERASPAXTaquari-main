@@ -64,7 +64,12 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
       }
       
       const novoUsuario = editingUsuario as Usuario;
-      await saveUsuario(novoUsuario, state.isOnline, senhaUsuario);
+      // `state.user` é obrigatório aqui: é por ele que `saveUsuario` decide COMO trocar a
+      // senha (a própria via `updateUser`, a de outro via RPC). Sem este argumento, os
+      // dois ramos eram pulados, a senha era descartada e a auditoria registrava
+      // `senha_alterada: true` mesmo assim — aconteceu de verdade em 16/09/2026, duas
+      // vezes, e foi o que deixou uma funcionária sem acesso por horas.
+      await saveUsuario(novoUsuario, state.isOnline, senhaUsuario, state.user ?? undefined);
       
       toast.success("Usuário salvo com sucesso!");
       onSave();
