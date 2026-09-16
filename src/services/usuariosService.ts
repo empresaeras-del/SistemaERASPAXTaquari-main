@@ -6,7 +6,8 @@ import {
   getAllFromIDB,
   deleteFromIDB,
 } from "../lib/idb";
-import { NivelAcesso } from "../types";
+import { NivelAcesso, Usuario } from "../types";
+import { canChangeUserPassword } from "../utils/permissions";
 import {
   validarTrocaDeSenha,
   MENSAGEM_SENHA_CURTA,
@@ -131,6 +132,15 @@ export const saveUsuario = async (
       throw new Error('A nova senha deve conter no mínimo 6 caracteres.');
     }
 
+    // A MESMA pergunta que a tela faz para mostrar o campo, feita aqui no ponto de
+    // escrita. Sem esta recusa explícita, quem não tem direito cairia fora dos dois
+    // ramos abaixo e a senha seria **descartada em silêncio**: o save terminaria com
+    // "usuário salvo com sucesso" e a senha continuaria a antiga. É a armadilha do
+    // PGRST204 que o CLAUDE.md documenta, por outro caminho.
+    if (!canChangeUserPassword(currentUser as Usuario, usuario, isOnline)) {
+      throw new Error(MENSAGEM_SENHA_SEM_PERMISSAO);
+    }
+
     // Caso A: O próprio usuário logado alterando sua própria senha
     if (currentUser?.id === usuario.id) {
       const { error: updateAuthErr } = await supabase.auth.updateUser({
@@ -140,29 +150,19 @@ export const saveUsuario = async (
         console.error("Erro ao atualizar senha no Supabase Auth:", updateAuthErr);
         throw new Error(`Erro ao atualizar senha: ${updateAuthErr.message}`);
       }
-    } else if (currentUser?.nivel === 'super_admin' || currentUser?.nivel === 'admin') {
-      // Caso B: Super Admin (ou Admin) alterando senha de outro usuário via RPC com search_path seguro
-      try {
-        const { error: rpcError } = await supabase.rpc('admin_alterar_senha_usuario', {
-          target_user_id: usuario.id,
-          new_password: cleanPassword
-        });
+    } else {
+      // Caso B: super_admin redefinindo a senha de outro usuário, via RPC com
+      // search_path seguro. A RPC aplica a mesma regra do lado do servidor — é ela
+      // quem de fato decide, e o guard acima existe para a recusa chegar antes com
+      // uma mensagem que explica o motivo.
+      const { error: rpcError } = await supabase.rpc('admin_alterar_senha_usuario', {
+        target_user_id: usuario.id,
+        new_password: cleanPassword
+      });
 
-        if (rpcError) {
-          console.warn("RPC admin_alterar_senha_usuario erro:", rpcError);
-          // Se for o próprio usuário, fallback para updateUser
-          if (currentUser?.id === usuario.id) {
-            const { error: fallbackErr } = await supabase.auth.updateUser({
-              password: cleanPassword
-            });
-            if (fallbackErr) throw fallbackErr;
-          } else {
-            throw new Error(`Erro ao alterar senha do usuário: ${rpcError.message}`);
-          }
-        }
-      } catch (err: any) {
-        console.error("Falha ao atualizar senha do usuário no Supabase:", err);
-        throw new Error(err.message || 'Erro ao alterar a senha do usuário no Supabase.');
+      if (rpcError) {
+        console.error("RPC admin_alterar_senha_usuario erro:", rpcError);
+        throw new Error(`Erro ao alterar senha do usuário: ${rpcError.message}`);
       }
     }
   }
@@ -265,6 +265,10 @@ export const deleteUsuario = async (
   await registrarAuditoria("Excluir Usuário (Soft Delete)", { id });
 };
 
+
+export const MENSAGEM_SENHA_SEM_PERMISSAO =
+  'Apenas o Super Administrador redefine a senha de outro usuário. O próprio usuário pode ' +
+  'trocar a dele pelo menu do topo, em "Alterar minha senha".';
 
 export const MENSAGEM_SENHA_SEM_CONEXAO =
   'Sem conexão. A troca de senha só vale quando chega ao servidor — tente novamente online.';
