@@ -2125,6 +2125,45 @@ O `try/catch` que envolvia a RPC saiu junto. Ele reembrulhava o erro em
 **dentro do ramo em que o alvo nunca é o próprio usuário** — ramo morto que, se algum dia
 fosse alcançado, trocaria a senha de quem está logado em vez da senha do alvo.
 
+
+### `backdrop-filter` no cabeçalho prende o `fixed` do modal — e a foto isolada não vê isso
+
+Relato da UI em 16/09/2026, com a foto da tela: o modal de alterar senha abria **grudado no
+topo e cortado** — o título e o campo "Senha atual" ficavam acima da viewport —, e o fundo
+escurecido cobria só uma tira no alto da página.
+
+A causa é de CSS, não de React: **um elemento com `backdrop-filter` vira bloco de contenção
+para descendentes `position: fixed`** (vale também para `transform`, `filter`, `perspective`,
+`contain` e `will-change`). O `<header>` do Topbar é
+`bg-bg-base/80 backdrop-blur-xl ... sticky top-0`, e o `AlterarSenhaModal` era renderizado
+dentro dele. Resultado: o `fixed inset-0` do modal resolvia contra a faixa de **64px** do
+cabeçalho em vez da janela, então `items-center justify-center` centralizava dentro daquela
+tira e o resto vazava para fora.
+
+A correção é `createPortal` para o `document.body` — o que a seção "Modal dentro de `<form>`"
+já apontava como "a correção estrutural que falta", agora aplicada porque aqui ela é
+**necessária**, não higiene. Medido depois, no aninhamento real: overlay `1440×900` (a
+viewport inteira) e a caixa em `x=496 / y=186`, exatamente centrada.
+
+**A lição que vale mais é sobre o método.** A foto que este arquivo recomenda pegou dois
+defeitos deste mesmo modal antes do merge — e não pegou este, porque foi tirada do
+**componente isolado**, montado sozinho em `document.body`. Ali o `fixed` funcionava. O que
+quebra não está no componente: está em **quem o monta**.
+
+- **Fotografe o componente no aninhamento em que ele vai viver**, não sozinho. Aqui isso
+  significou renderizar o `Topbar` inteiro, abrir o menu, abrir o modal e fotografar
+  `document.body.innerHTML` — com o `<header>` e seu `backdrop-blur` presentes.
+- **Meça, não só olhe.** `getBoundingClientRect()` do overlay contra `innerWidth/innerHeight`
+  responde "está enquadrado?" sem depender de o olho notar um corte.
+- **Todo modal `fixed` montado a partir do Topbar ou da Sidebar precisa de portal**, e o
+  componente do modal não tem como saber quem vai montá-lo — por isso o portal mora nele.
+
+O teste que trava isso não procura o campo no documento (procurar assim passava nos dois
+casos, e foi exatamente esse teste que deixou o defeito passar): ele exige que o overlay
+**não** seja descendente do `<header>` e que o pai dele seja o `document.body`. Como o
+conteúdo deixou de estar no `container` do `render`, os testes do modal passaram a consultar
+o documento — a mudança de seletor é o sinal de que o portal está de fato em uso.
+
 - **Não revogue `EXECUTE` das funções usadas pelas policies de RLS** (`has_tenant_access`,
   `current_tenant_id`, `current_user_nivel`, `is_super_admin`), mesmo que os advisors as apontem.
   A expressão de uma policy é avaliada com as permissões de quem consulta: sem `EXECUTE` em

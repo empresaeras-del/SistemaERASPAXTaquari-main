@@ -87,6 +87,29 @@ describe('menu do usuário no Topbar', () => {
     expect(document.querySelector('#senha-atual')).toBeTruthy();
   });
 
+  it('o modal é montado FORA do <header> — dentro dele o fixed não vale', () => {
+    // O `<header>` tem `backdrop-blur-xl`, e `backdrop-filter` cria bloco de contenção
+    // para descendentes `position: fixed`: renderizado ali dentro, o modal centralizava
+    // na faixa de 64px do cabeçalho e ficava cortado na tela. O portal é o que conserta,
+    // e é invisível para qualquer asserção que só procure o campo no documento.
+    const { container } = render(<Topbar />);
+    fireEvent.click(screen.getByTitle('Minha conta'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /alterar minha senha/i }));
+
+    const header = container.querySelector('header');
+    expect(header).toBeTruthy();
+    expect(header!.className).toContain('backdrop-blur');
+
+    const campo = document.querySelector('#senha-atual');
+    expect(campo).toBeTruthy();
+    expect(header!.contains(campo)).toBe(false);
+
+    const overlay = campo!.closest('.fixed');
+    expect(overlay).toBeTruthy();
+    expect(header!.contains(overlay)).toBe(false);
+    expect(overlay!.parentElement).toBe(document.body);
+  });
+
   it('Escape fecha o menu', () => {
     render(<Topbar />);
     fireEvent.click(screen.getByTitle('Minha conta'));

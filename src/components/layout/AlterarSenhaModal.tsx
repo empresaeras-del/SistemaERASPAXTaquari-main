@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { KeyRound, X, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAppContext } from '../../context/AppContext';
@@ -119,7 +120,18 @@ export const AlterarSenhaModal: React.FC<AlterarSenhaModalProps> = ({ isOpen, on
     }
   ];
 
-  return (
+  // O modal SAI do DOM do Topbar antes de ser desenhado, e isso não é preferência de
+  // organização: o `<header>` tem `backdrop-blur-xl`, e um elemento com `backdrop-filter`
+  // **vira bloco de contenção para descendentes `position: fixed`** (CSS Containment /
+  // Filter Effects). Renderizado ali dentro, o `fixed inset-0` deste modal resolvia contra
+  // a faixa de 64px do cabeçalho em vez da viewport: ele centralizava dentro do header,
+  // vazava para fora da tela (o título e o campo "Senha atual" ficavam cortados acima) e o
+  // fundo escurecido cobria só a tira do topo.
+  //
+  // `transform`, `filter`, `perspective`, `contain` e `will-change` têm o mesmo efeito.
+  // **Todo modal `fixed` renderizado a partir do Topbar ou da Sidebar precisa de portal** —
+  // não dá para saber pelo componente do modal quem vai montá-lo.
+  return createPortal(
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-md bg-bg-surface border border-border-default rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-default shrink-0">
@@ -231,6 +243,7 @@ export const AlterarSenhaModal: React.FC<AlterarSenhaModalProps> = ({ isOpen, on
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
