@@ -1951,6 +1951,43 @@ estão sem e-mail confirmado e nunca logaram. Aí não há metadata que resolva 
 metade, e cabe decidir se reenvia o convite ou remove. O reenvio deixou de depender de painel:
 virou botão na tela (ver a seção seguinte).
 
+### O serviço de e-mail embutido é 2 por hora e só entrega para a organização
+
+Medido em 16/09/2026, depois de dois destravamentos de acesso no mesmo dia. Os três números
+abaixo saíram do log do GoTrue, não da documentação, e cada um explica um sintoma que já tinha
+sido lido como outra coisa:
+
+- **A cota é de 2 e-mails por hora, e ela é do projeto inteiro.** Dois `mail.send` às 14:27:36 e
+  14:29:10 (os dois reenvios de confirmação) foram suficientes para o `/recover` seguinte,
+  às 14:36:30, levar `429: email rate limit exceeded`. Quem tentou recuperar a senha não tinha
+  mandado e-mail nenhum — pagou pela cota que **outra** operação gastou sete minutos antes.
+- **Sem SMTP próprio, o Supabase só entrega para endereços que são membros da organização**;
+  os demais falham com *"Email address not authorized"*. É a explicação mais provável para
+  `welliton.francisco05@` ter ficado com `confirmation_sent_at` **nulo desde o cadastro de
+  11/09** até o reenvio manual de 16/09 — o e-mail do cadastro nunca chegou a sair, e nada na
+  tela disse isso.
+- **O link de confirmação vence, e isso é outra configuração.** O link gerado às 14:29:10 foi
+  clicado quatro vezes entre 20:04 e 20:08 e todas devolveram `email link has expired`: a
+  validade é **menor que 5h35**. Trocar de provedor de SMTP não mexe nisso — a expiração fica em
+  *Authentication → Providers → Email OTP Expiration*. **Um operador que abre o e-mail no fim do
+  expediente clica num link vencido**, e o sintoma na tela é o mesmo de um link inválido.
+
+### `Email not confirmed` significa que a senha estava certa
+
+Regra de diagnóstico que resolveu os dois casos de 16/09 e que não é óbvia pelo nome dos erros:
+o GoTrue **confere a senha antes de olhar o estado de confirmação**. Então, em `/token`:
+
+- `400: Invalid login credentials` ⇒ a senha está errada. O estado da confirmação nem foi
+  consultado, e insistir em confirmar o e-mail não resolve.
+- `400: Email not confirmed` ⇒ **a senha está certa**. Falta só a confirmação.
+
+Foi o que separou os dois casos que pareciam iguais: uma funcionária com 29 tentativas, todas
+`Invalid login credentials` e **nenhuma** `Email not confirmed` — senha desconhecida, e o e-mail
+já estava confirmado; e um funcionário com três `Email not confirmed` — senha correta, faltava
+só o clique que o link vencido não deixava dar. **Antes de redefinir uma senha, leia qual dos
+dois erros o log mostra**: redefinir a senha de quem já sabe a senha troca um problema resolvido
+por um problema novo.
+
 ### Cadastro de usuário pela metade: o sistema tem a informação, faltava alguém perguntar
 
 Pedido de 14/09/2026, depois do reparo acima. Um cadastro nasce em **dois lugares** — a
