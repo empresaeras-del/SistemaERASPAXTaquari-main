@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Wifi, WifiOff, Bell, User, Building, Building2, Lock, Maximize, Minimize, Sun, Moon, ChevronDown } from 'lucide-react';
 import { getEmpresas, getEmpresaById, Empresa } from '../../services/empresasService';
 import { NotificationCenter } from './NotificationCenter';
+import { AlterarSenhaModal } from './AlterarSenhaModal';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useSyncStatus } from '../../hooks/useSyncStatus';
 import { useOfflineSync } from '../../hooks/useOfflineSync';
-import { RefreshCw, CheckCircle2, LogOut, Database } from 'lucide-react';
+import { RefreshCw, CheckCircle2, LogOut, Database, KeyRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import toast from 'react-hot-toast';
@@ -16,6 +17,9 @@ export const Topbar: React.FC = () => {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isSenhaModalOpen, setIsSenhaModalOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const { totalAlertsCount } = useNotifications();
   const { pendingCount, isSyncing: isQueueSyncing } = useSyncStatus();
   const { isPriming, lastSyncFormatted, syncNow } = useOfflineSync();
@@ -41,6 +45,7 @@ export const Topbar: React.FC = () => {
   };
 
   const handleLogout = () => {
+    setIsUserMenuOpen(false);
     confirm({
       title: 'Sair do Sistema',
       message: 'Tem certeza que deseja encerrar sua sessão agora?',
@@ -52,6 +57,28 @@ export const Topbar: React.FC = () => {
       }
     });
   };
+
+  // Fecha o menu do usuário por clique fora e por Escape. Sem o Escape, um menu aberto
+  // sobre a tela inteira só sai com o mouse — e ele guarda a saída do sistema.
+  useEffect(() => {
+    if (!isUserMenuOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsUserMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isUserMenuOpen]);
 
   useEffect(() => {
     const loadEmpresas = async () => {
@@ -251,21 +278,69 @@ export const Topbar: React.FC = () => {
           />
         </div>
 
-        <button 
-          type="button"
-          onClick={handleLogout}
-          className="flex items-center gap-3 pl-6 border-l border-border-default hover:opacity-80 transition-opacity cursor-pointer group"
-          title="Sair do sistema"
-        >
-          <div className="flex flex-col items-end">
-            <span className="text-sm font-semibold text-text-base group-hover:text-rose-500 transition-colors">{state.user?.nome}</span>
-            <span className="text-xs text-text-subtle capitalize">{state.user?.nivel}</span>
-          </div>
-          <div className="w-9 h-9 bg-gradient-to-tr from-[#3B82F6] to-[#60A5FA] group-hover:from-rose-500 group-hover:to-rose-400 rounded-full flex items-center justify-center text-white shadow-lg transition-all duration-300">
-            <LogOut className="w-4 h-4 translate-x-0.5" />
-          </div>
-        </button>
+        <div className="relative" ref={userMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsUserMenuOpen((v) => !v)}
+            className="flex items-center gap-3 pl-6 border-l border-border-default hover:opacity-80 transition-opacity cursor-pointer group"
+            title="Minha conta"
+            aria-haspopup="menu"
+            aria-expanded={isUserMenuOpen}
+          >
+            <div className="flex flex-col items-end">
+              <span className="text-sm font-semibold text-text-base group-hover:text-[#3B82F6] transition-colors">{state.user?.nome}</span>
+              <span className="text-xs text-text-subtle capitalize">{state.user?.nivel}</span>
+            </div>
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-lg transition-all duration-300 ${isUserMenuOpen ? 'bg-gradient-to-tr from-[#2f6fd8] to-[#3B82F6]' : 'bg-gradient-to-tr from-[#3B82F6] to-[#60A5FA]'}`}>
+              <User className="w-4 h-4" />
+            </div>
+          </button>
+
+          {isUserMenuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full mt-2 w-60 bg-bg-surface border border-border-default rounded-2xl shadow-2xl overflow-hidden z-50"
+            >
+              {/* Só o e-mail: o nome e o nível já estão no botão logo acima, e repeti-los
+                  aqui só produzia a mesma linha truncada uma segunda vez. */}
+              <div className="px-4 py-3 border-b border-border-default">
+                <p className="text-[11px] uppercase tracking-wide text-text-subtle/70">Conectado como</p>
+                <p className="text-sm text-text-base truncate" title={state.user?.email}>
+                  {state.user?.email}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  setIsSenhaModalOpen(true);
+                }}
+                className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-text-base hover:bg-bg-base transition-colors text-left"
+              >
+                <KeyRound className="w-4 h-4 text-[#3B82F6] shrink-0" />
+                Alterar minha senha
+              </button>
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left border-t border-border-default"
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                Sair do sistema
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      <AlterarSenhaModal
+        isOpen={isSenhaModalOpen}
+        onClose={() => setIsSenhaModalOpen(false)}
+      />
     </header>
   );
 };
