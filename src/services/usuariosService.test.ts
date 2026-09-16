@@ -11,12 +11,14 @@ const signInWithPassword = vi.fn();
 const signOutIsolado = vi.fn();
 const updateUser = vi.fn();
 const registrarAuditoriaMock = vi.fn();
+const rpc = vi.fn();
+const upsert = vi.fn();
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
     auth: { updateUser: (...args: unknown[]) => updateUser(...args) },
-    from: vi.fn(),
-    rpc: vi.fn(),
+    from: () => ({ upsert: (...args: unknown[]) => upsert(...args) }),
+    rpc: (...args: unknown[]) => rpc(...args),
   },
   isolatedSupabase: {
     auth: {
@@ -29,11 +31,15 @@ vi.mock('../lib/supabase', () => ({
 
 import {
   alterarPropriaSenha,
+  saveUsuario,
   MENSAGEM_SENHA_SEM_CONEXAO,
   MENSAGEM_SENHA_ATUAL_INCORRETA,
   MENSAGEM_SENHA_SEM_EMAIL,
   MENSAGEM_SENHA_MUITAS_TENTATIVAS,
+  MENSAGEM_SENHA_SEM_PERMISSAO,
+  UsuarioCadastro,
 } from './usuariosService';
+import { getFromIDB } from '../lib/idb';
 import {
   MENSAGEM_CONFIRMACAO_DIFERENTE,
   MENSAGEM_SENHA_IGUAL_A_ATUAL,
@@ -160,5 +166,80 @@ describe('alterarPropriaSenha', () => {
     signOutIsolado.mockRejectedValue(new Error('rede caiu'));
     await expect(alterarPropriaSenha(troca, true)).resolves.toBeUndefined();
     expect(updateUser).toHaveBeenCalled();
+  });
+});
+
+
+const alvo: UsuarioCadastro = {
+  id: 'func-1',
+  tenant_id: 'emp-1',
+  nome: 'GIZELLE LEMES',
+  email: 'func@empresa.com',
+  nivel: 'funcionario',
+  modulos_permitidos: ['dashboard'],
+  status: 'ativo',
+};
+
+describe('saveUsuario: quem pode redefinir a senha de outro usuário', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // o usuário já existe no cache => o save é edição, não criação
+    vi.mocked(getFromIDB).mockResolvedValue(alvo as never);
+    rpc.mockResolvedValue({ error: null });
+    upsert.mockResolvedValue({ error: null });
+    updateUser.mockResolvedValue({ data: {}, error: null });
+    registrarAuditoriaMock.mockResolvedValue(undefined);
+  });
+
+  it('super_admin redefine pela RPC', async () => {
+    await saveUsuario(alvo, true, 'NovaSenha!2026', {
+      id: 'super',
+      nivel: 'super_admin',
+    });
+
+    expect(rpc).toHaveBeenCalledWith('admin_alterar_senha_usuario', {
+      target_user_id: 'func-1',
+      new_password: 'NovaSenha!2026',
+    });
+  });
+
+  it('admin é RECUSADO antes de chegar ao servidor — e a senha não some em silêncio', async () => {
+    await expect(
+      saveUsuario(alvo, true, 'NovaSenha!2026', { id: 'admin-1', nivel: 'admin' })
+    ).rejects.toThrow(MENSAGEM_SENHA_SEM_PERMISSAO);
+
+    expect(rpc).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+    // e o cadastro tampouco é gravado como se tivesse dado certo
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('o próprio usuário troca a dele por updateUser, sem RPC', async () => {
+    await saveUsuario(alvo, true, 'NovaSenha!2026', {
+      id: 'func-1',
+      nivel: 'funcionario',
+    });
+
+    expect(updateUser).toHaveBeenCalledWith({ password: 'NovaSenha!2026' });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('a recusa da RPC chega inteira, sem retry com outro payload', async () => {
+    rpc.mockResolvedValue({ error: { message: 'Permissão negada.' } });
+
+    await expect(
+      saveUsuario(alvo, true, 'NovaSenha!2026', { id: 'super', nivel: 'super_admin' })
+    ).rejects.toThrow('Permissão negada.');
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('salvar sem senha não aciona guarda nenhuma', async () => {
+    await saveUsuario(alvo, true, '', { id: 'admin-1', nivel: 'admin' });
+
+    expect(rpc).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(upsert).toHaveBeenCalled();
   });
 });

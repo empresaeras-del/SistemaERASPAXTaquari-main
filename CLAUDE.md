@@ -2078,6 +2078,53 @@ travando a posição, não só o texto) e o cabeçalho ficou só com o e-mail. �
 de cadastros pela metade valendo de novo: **não repita ali o identificador que já está na
 linha de cima.**
 
+
+### O predicado da tela precisa ser o mesmo do banco — e a divergência só aparece ao salvar
+
+Descoberto em 16/09/2026, ao redefinir a senha de uma funcionária que não conseguia
+entrar. `canChangeUserPassword` liberava **`admin` sobre qualquer nível abaixo de
+super_admin**; a RPC `admin_alterar_senha_usuario`, que é quem de fato grava, tem outra
+regra:
+
+```sql
+IF v_current_nivel = 'super_admin' OR v_current_user_id = target_user_id THEN
+```
+
+Ou seja: o admin **via o campo, digitava a senha, salvava e só então** levava
+`Permissão negada`. Nada na tela dizia que aquilo não ia dar certo — é a mesma classe do
+`empresa_padrao` e do `'system'`: duas metades afirmando coisas diferentes sobre a mesma
+pergunta, e quem descobre é o operador, no pior momento.
+
+O frontend foi alinhado ao banco (a decisão foi do usuário; o outro caminho seria mexer na
+função, e aí ela precisaria passar a checar `tenant_id`, que hoje não checa — um admin
+poderia redefinir senha de usuário de **outra** empresa).
+
+Três coisas valem como regra:
+
+- **Tirar a permissão do predicado não basta: sem uma recusa explícita no ponto de
+  escrita, a senha passa a ser DESCARTADA EM SILÊNCIO.** O `saveUsuario` tinha
+  `if (próprio) … else if (super_admin || admin) …` e mais nada. Removido o `admin` da
+  segunda condição, ele cairia fora dos dois ramos, o `upsert` do cadastro seguiria
+  normalmente e a tela diria "usuário salvo com sucesso" — com a senha antiga intacta. É
+  a armadilha do `PGRST204` que este arquivo documenta, chegando por outra porta. Por isso
+  o guard novo lança `MENSAGEM_SENHA_SEM_PERMISSAO` **antes** dos dois ramos, e há teste
+  cobrando que nem a RPC, nem o `updateUser`, nem o `upsert` sejam chamados.
+- **O teste compara as duas metades, não repete a regra.** `permissions.test.ts` declara a
+  guarda do banco como função e varre **todos os 16 pares de níveis** exigindo igualdade.
+  Um teste que só listasse os casos esperados passaria a mentir no dia em que alguém
+  mudasse a RPC; este falha se as metades divergirem de novo em qualquer direção.
+- **O campo que some precisa dizer por quê.** Antes o ramo era `: null` — para quem não tem
+  direito, o campo simplesmente não existia, e o admin voltaria a procurá-lo achando que é
+  falha da tela. Agora há uma nota explicando quem redefine e lembrando que o próprio
+  usuário troca a dele pelo menu do topo. O texto de ajuda do campo, curiosamente, **já
+  descrevia a regra do banco** ("Como Super Admin, você pode redefinir…"): a cópia estava
+  certa e o predicado é que era largo.
+
+O `try/catch` que envolvia a RPC saiu junto. Ele reembrulhava o erro em
+`err.message || 'Erro ao alterar a senha…'` e continha um `fallback` para `updateUser`
+**dentro do ramo em que o alvo nunca é o próprio usuário** — ramo morto que, se algum dia
+fosse alcançado, trocaria a senha de quem está logado em vez da senha do alvo.
+
 - **Não revogue `EXECUTE` das funções usadas pelas policies de RLS** (`has_tenant_access`,
   `current_tenant_id`, `current_user_nivel`, `is_super_admin`), mesmo que os advisors as apontem.
   A expressão de uma policy é avaliada com as permissões de quem consulta: sem `EXECUTE` em

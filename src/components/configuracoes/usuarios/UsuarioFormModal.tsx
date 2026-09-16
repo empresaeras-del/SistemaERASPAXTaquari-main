@@ -4,7 +4,7 @@ import { Empresa } from '../../../services/empresasService';
 import { useAppContext } from '../../../context/AppContext';
 import { useToast } from '../../../context/ToastContext';
 import { AlertaAlteracoesPendentes } from '../../common/AlertaAlteracoesPendentes';
-import { Users, X, Save, Eye, EyeOff } from 'lucide-react';
+import { Users, X, Save, Eye, EyeOff, Lock } from 'lucide-react';
 import { canChangeUserPassword, canManageUserModules, getAvailableNiveisForUser } from '../../../utils/permissions';
 import { ModuloPermissionSelector } from '../../usuarios/ModuloPermissionSelector';
 
@@ -219,7 +219,18 @@ export const UsuarioFormModal: React.FC<UsuarioFormModalProps> = ({
                     : "Preencha para redefinir sua senha de acesso ao sistema (mínimo 6 caracteres)."}
                 </span>
               </div>
-            ) : null}
+            ) : (
+              /* Sem o aviso, o campo simplesmente sumiria da tela para quem não tem
+                 direito, e o admin voltaria a procurá-lo achando que é uma falha. */
+              <div className="p-3 rounded-xl border border-border-default bg-bg-base text-xs text-text-subtle flex items-start gap-2">
+                <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>
+                  A senha deste usuário só pode ser redefinida pelo Super Administrador. Ele
+                  mesmo pode trocá-la a qualquer momento pelo menu do topo, em{' '}
+                  <strong className="text-text-base">Alterar minha senha</strong>.
+                </span>
+              </div>
+            )}
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {(state.user?.nivel === 'super_admin' || state.user?.nivel === 'admin') && (

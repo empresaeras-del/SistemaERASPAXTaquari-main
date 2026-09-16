@@ -586,8 +586,24 @@ export const canEditUser = (
 };
 
 /**
- * Regra: Permitir ao respectivo usuário a edição da senha atual registrada.
- * Permitir ao usuário Super Admin e Admin realizar a alteração de senha dos usuários subordinados/mesmo nível.
+ * Quem pode redefinir a senha de `targetUser`: **o super_admin, ou o próprio dono da conta**.
+ *
+ * Este predicado é o espelho da guarda que o banco já aplica em
+ * `admin_alterar_senha_usuario`:
+ *
+ * ```sql
+ * IF v_current_nivel = 'super_admin' OR v_current_user_id = target_user_id THEN
+ * ```
+ *
+ * Até 16/09/2026 ele era mais largo — liberava `admin` sobre qualquer nível abaixo de
+ * super_admin — e as duas metades discordavam em silêncio até o momento de salvar: o admin
+ * via o campo, digitava a senha e só então levava `Permissão negada` da RPC. Apareceu de
+ * verdade ao redefinir a senha de uma funcionária que não conseguia entrar.
+ *
+ * **Ao mexer aqui, mexa na função do banco junto** — ou o defeito volta pela outra direção,
+ * com a tela escondendo uma ação que o servidor aceitaria. Um admin que precise devolver
+ * acesso a alguém pede ao super_admin; o próprio usuário troca a senha dele pelo menu do
+ * topo, que não depende de acesso a Configurações.
  */
 export const canChangeUserPassword = (
   currentUser: Usuario | null | undefined,
@@ -596,14 +612,10 @@ export const canChangeUserPassword = (
 ): boolean => {
   if (isOnline === false) return false;
   if (!currentUser || !targetUser) return false;
-  // Super admin pode alterar senha de qualquer usuário independente do nível
+  // Super admin pode redefinir a senha de qualquer usuário, independente do nível
   if (currentUser.nivel === 'super_admin') return true;
-  // O próprio usuário pode alterar sua própria senha
+  // O próprio usuário pode alterar a sua própria senha
   if (targetUser.id && currentUser.id === targetUser.id) return true;
-  // Admin pode alterar senha de usuários (Admin, Gerente e Funcionário), exceto Super Admin
-  if (currentUser.nivel === 'admin' && targetUser.nivel !== 'super_admin') {
-    return true;
-  }
   return false;
 };
 
