@@ -2164,6 +2164,64 @@ casos, e foi exatamente esse teste que deixou o defeito passar): ele exige que o
 conteúdo deixou de estar no `container` do `render`, os testes do modal passaram a consultar
 o documento — a mudança de seletor é o sinal de que o portal está de fato em uso.
 
+
+### A tela não dizia quem estava logado, e a senha sumia com a auditoria dizendo que mudou
+
+Descoberto em 16/09/2026 **enquanto se gravava a linha de auditoria** de uma redefinição
+feita à mão — o que revelou que a trilha já continha duas linhas afirmando o contrário do
+que aconteceu.
+
+`UsuarioFormModal` chamava:
+
+```ts
+await saveUsuario(novoUsuario, state.isOnline, senhaUsuario); // sem o 4º argumento
+```
+
+e `saveUsuario` decide **como** trocar a senha justamente pelo 4º (`currentUser`): a própria
+via `updateUser`, a de outro via RPC. Com ele `undefined`, os dois ramos eram pulados — e o
+código seguia para o `upsert` e para `registrarAuditoria`, que gravava
+`senha_alterada: Boolean(password && ...)`, ou seja **`true`**. Tela dizia "Usuário salvo com
+sucesso", log dizia que a senha mudou, e nada tinha mudado.
+
+**Nunca funcionou.** Não é regressão: o argumento nunca foi passado por essa tela.
+
+Três evidências independentes, e é a combinação que fecha o caso:
+
+1. **Zero chamadas a `admin_alterar_senha_usuario` nos logs de borda** em toda a janela do
+   incidente — só `registrar_audit` e `listar_cadastros_incompletos`.
+2. **`auth.users.updated_at` intacto** em `14:28:07` depois de duas tentativas (14:25 e
+   14:54) que a auditoria registrou como bem-sucedidas.
+3. **O call site**, com três argumentos onde a função recebe quatro.
+
+A consequência prática foi uma funcionária sem acesso por horas, com o operador convencido de
+já ter resolvido — porque a tela e o log concordavam entre si e ambos estavam errados.
+
+Duas regras:
+
+- **Um parâmetro opcional que decide o COMPORTAMENTO é um parâmetro obrigatório mal
+  declarado.** `currentUser?: {...}` deixou o `tsc` calado num call site que esquecia o que
+  mais importava. É a mesma lição já registrada em `encontrarAssociadoComCpfDuplicado`
+  ("o `tenantId` é parâmetro obrigatório, não opcional com padrão") — e aqui ela custou mais
+  caro, porque o caminho pulado ainda auditava sucesso. Ao escrever um service assim, ou o
+  parâmetro é obrigatório, ou o caminho "nenhum ramo casou" **lança**.
+- **Um teste de call site não pergunta "a função foi chamada"; pergunta com o quê.**
+  `UsuarioFormModal.test.tsx` exige `toHaveLength(4)` e confere o usuário no quarto
+  argumento. Conferido contra o código sem a correção: reprova com
+  `expected [...] to have a length of 4 but got 3`. Um teste que só verificasse a chamada
+  passaria nos dois casos — e foi exatamente esse tipo de asserção que deixou o defeito
+  atravessar a tela inteira.
+
+O guard de `MENSAGEM_SENHA_SEM_PERMISSAO` (da rodada anterior) já convertia este caso de
+perda silenciosa em erro visível, por acidente: sem `currentUser`, `canChangeUserPassword`
+devolve `false` e a função lança. A correção do call site é o que faz a tela voltar a
+funcionar em vez de só falhar alto.
+
+**As duas linhas falsas na auditoria ficam como estão** — `Editar Usuário` com
+`senha_alterada: true` em 14:25:27 e 14:54:13. Reescrever `detalhes` de linha já gravada é
+mexer em trilha de auditoria, o que este arquivo já classifica como decisão de produto; e
+apagá-las apagaria também o registro de que as tentativas existiram. A linha de 15:06:16
+(`Redefinir Senha de Usuário`) é a que descreve a troca que de fato ocorreu.
+
 - **Não revogue `EXECUTE` das funções usadas pelas policies de RLS** (`has_tenant_access`,
   `current_tenant_id`, `current_user_nivel`, `is_super_admin`), mesmo que os advisors as apontem.
   A expressão de uma policy é avaliada com as permissões de quem consulta: sem `EXECUTE` em
