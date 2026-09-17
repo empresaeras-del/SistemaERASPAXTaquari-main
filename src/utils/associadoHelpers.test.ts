@@ -1,3 +1,4 @@
+import { FILTRO_SOMENTE_PJ } from './empresaVinculada';
 import { describe, it, expect, vi } from 'vitest';
 import {
   filtrarEOrdenarAssociados,
@@ -30,6 +31,14 @@ describe('filtrarEOrdenarAssociados', () => {
     mkAssociado({ id: '3', nome: 'Bruno Lima', cpf: '333.333.333-33', status: 'ativo', plano_pax_id: 'p1', data_adesao: '2026-02-15' }),
   ];
 
+  /** A mesma lista mais três cadastros Pessoa Jurídica, para o filtro por empresa conveniada. */
+  const comPJ = [
+    ...lista,
+    mkAssociado({ id: '4', nome: 'Construtora A', status: 'ativo', tipo_pessoa: 'PJ', fornecedor_id: 'emp-a' }),
+    mkAssociado({ id: '5', nome: 'Transportes B', status: 'ativo', tipo_pessoa: 'PJ', fornecedor_id: 'emp-b' }),
+    mkAssociado({ id: '6', nome: 'Sem Empresa', status: 'inadimplente', tipo_pessoa: 'PJ' }),
+  ];
+
   it('filtra por nome (case-insensitive)', () => {
     const r = filtrarEOrdenarAssociados(lista, { searchTerm: 'ana', statusFilter: '', planoFilter: '', sortBy: 'nome_asc' });
     expect(r.map(a => a.id)).toEqual(['2']);
@@ -43,6 +52,26 @@ describe('filtrarEOrdenarAssociados', () => {
   it('filtra por status', () => {
     const r = filtrarEOrdenarAssociados(lista, { searchTerm: '', statusFilter: 'inadimplente', planoFilter: '', sortBy: 'nome_asc' });
     expect(r.map(a => a.id)).toEqual(['2']);
+  });
+
+  it('filtra por empresa conveniada, só entre os Pessoa Jurídica', () => {
+    const r = filtrarEOrdenarAssociados(comPJ, { searchTerm: '', statusFilter: '', planoFilter: '', empresaFilter: 'emp-a', sortBy: 'nome_asc' });
+    expect(r.map(a => a.id)).toEqual(['4']);
+  });
+
+  it('"somente PJ" traz também o PJ sem empresa escolhida', () => {
+    const r = filtrarEOrdenarAssociados(comPJ, { searchTerm: '', statusFilter: '', planoFilter: '', empresaFilter: FILTRO_SOMENTE_PJ, sortBy: 'nome_asc' });
+    expect(r.map(a => a.id).sort()).toEqual(['4', '5', '6']);
+  });
+
+  it('o filtro de empresa combina com os outros, não os substitui', () => {
+    const r = filtrarEOrdenarAssociados(comPJ, { searchTerm: '', statusFilter: 'inadimplente', planoFilter: '', empresaFilter: FILTRO_SOMENTE_PJ, sortBy: 'nome_asc' });
+    expect(r.map(a => a.id)).toEqual(['6']);
+  });
+
+  it('sem filtro de empresa, ninguém é excluído', () => {
+    const r = filtrarEOrdenarAssociados(comPJ, { searchTerm: '', statusFilter: '', planoFilter: '', sortBy: 'nome_asc' });
+    expect(r).toHaveLength(comPJ.length);
   });
 
   it('filtra por plano', () => {

@@ -22,7 +22,10 @@ vi.mock('./financeiroService', () => ({
 }));
 
 import { getFromIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
-import { getHistoricoImpeditivoAssociado, softDeleteAssociado, Associado } from './associadosService';
+import { supabase } from '../lib/supabase';
+import { getHistoricoImpeditivoAssociado, softDeleteAssociado, saveAssociado, Associado } from './associadosService';
+
+const mockSupabase = vi.mocked(supabase, true) as any;
 
 const mockGetFromIDB = vi.mocked(getFromIDB);
 const mockGetAllFromIDB = vi.mocked(getAllFromIDB);
@@ -112,5 +115,78 @@ describe('softDeleteAssociado', () => {
     mockGetFromIDB.mockResolvedValue(associado as any);
     await expect(softDeleteAssociado('assoc-1', false)).resolves.toBeUndefined();
     expect(vi.mocked(deleteFromIDB)).toHaveBeenCalledWith('associados', 'assoc-1');
+  });
+});
+
+describe('saveAssociado: o vínculo com a empresa conveniada chega ao Postgres', () => {
+  /**
+   * Até 17/09/2026 `fornecedor_id` era desestruturado para fora do payload em `saveAssociado`: o
+   * operador escolhia a empresa do associado PJ, a tela dizia "salvo com sucesso" e o vínculo não
+   * existia em lugar nenhum. O teste não pergunta se o upsert foi chamado — pergunta COM O QUÊ.
+   */
+  const capturarUpsertDeAssociados = () => {
+    const upserts: Array<Record<string, any>> = [];
+    mockSupabase.from.mockImplementation((tabela: string) => {
+      if (tabela === 'associados') {
+        return {
+          upsert: vi.fn(async (payload: Record<string, any>) => {
+            upserts.push(payload);
+            return { data: null, error: null };
+          }),
+        } as any;
+      }
+      // As demais tabelas tocadas no caminho (dependentes, contratos) respondem vazio.
+      const encadeavel: any = {
+        select: () => encadeavel,
+        upsert: async () => ({ data: null, error: null }),
+        insert: async () => ({ data: null, error: null }),
+        update: () => encadeavel,
+        delete: () => encadeavel,
+        eq: () => encadeavel,
+        is: () => encadeavel,
+        in: async () => ({ data: null, error: null }),
+        order: () => encadeavel,
+        limit: async () => ({ data: [], error: null }),
+        maybeSingle: async () => ({ data: null, error: null }),
+        then: (resolve: any) => resolve({ data: [], error: null }),
+      };
+      return encadeavel;
+    });
+    return upserts;
+  };
+
+  const associadoPJ = {
+    id: '11111111-1111-4111-8111-111111111111',
+    tenant_id: 'empresa-1',
+    nome: 'CONSTRUTORA XYZ',
+    tipo_pessoa: 'PJ',
+    fornecedor_id: '67ca71da-630f-4d84-8140-a327839d5719',
+    dependentes: [],
+  } as unknown as Associado;
+
+  it('manda fornecedor_id no payload do associado PJ', async () => {
+    const upserts = capturarUpsertDeAssociados();
+    await saveAssociado(associadoPJ, true);
+
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]).toHaveProperty('fornecedor_id', '67ca71da-630f-4d84-8140-a327839d5719');
+    expect(upserts[0].tipo_pessoa).toBe('PJ');
+  });
+
+  it('manda null quando o cadastro deixou de ser PJ, em vez de omitir a chave', async () => {
+    const upserts = capturarUpsertDeAssociados();
+    await saveAssociado({ ...associadoPJ, tipo_pessoa: 'PF' } as Associado, true);
+
+    // A chave precisa EXISTIR com null: omiti-la deixaria o vínculo antigo intacto no banco.
+    expect(upserts[0]).toHaveProperty('fornecedor_id');
+    expect(upserts[0].fornecedor_id).toBeNull();
+  });
+
+  it('manda null quando o PJ ficou sem empresa escolhida (string vazia)', async () => {
+    const upserts = capturarUpsertDeAssociados();
+    await saveAssociado({ ...associadoPJ, fornecedor_id: '' } as Associado, true);
+
+    // '' numa coluna uuid é 22P02 e derrubaria o insert inteiro.
+    expect(upserts[0].fornecedor_id).toBeNull();
   });
 });

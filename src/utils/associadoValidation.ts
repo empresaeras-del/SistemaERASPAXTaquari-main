@@ -6,7 +6,13 @@ export type AssociadoSubTab = 'basicas' | 'filiacao' | 'contato' | 'endereco' | 
 export interface ErroValidacaoAssociado {
   campo: string;
   label: string;
-  subTab: AssociadoSubTab;
+  /** Sub-aba da aba "Dados" onde o campo mora. Ausente quando o campo está em outra aba. */
+  subTab?: AssociadoSubTab;
+  /**
+   * Aba principal do formulário, quando o campo não está na aba "Dados". Sem isso, a tela mandaria
+   * o operador para uma sub-aba de dados e ele não encontraria o campo destacado em lugar nenhum.
+   */
+  tab?: 'contratos';
   mensagem: string;
 }
 
@@ -129,6 +135,20 @@ export const validarDadosAssociado = (assoc: Associado | null): ResultadoValidac
       label: 'Município / UF',
       subTab: 'endereco',
       mensagem: 'Município / UF é obrigatório.'
+    });
+  }
+
+  // Contratos — o vínculo com a empresa conveniada.
+  //
+  // A obrigatoriedade é do formulário, não da coluna: `associados.fornecedor_id` é nullable de
+  // propósito, porque um NOT NULL vale para a linha e quebraria todo cadastro PF no primeiro
+  // UPDATE. É a mesma escolha da fase 3 do plano contábil e dos dados do responsável.
+  if (assoc.tipo_pessoa === 'PJ' && !((assoc.fornecedor_id || '') + '').trim()) {
+    erros.push({
+      campo: 'fornecedor_id',
+      label: 'Empresa / Convênio',
+      tab: 'contratos',
+      mensagem: 'Associado Pessoa Jurídica precisa da empresa conveniada.'
     });
   }
 

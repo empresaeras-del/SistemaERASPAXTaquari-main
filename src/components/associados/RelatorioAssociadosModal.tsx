@@ -26,6 +26,13 @@ import { formatLocalDate } from '../../utils/dateUtils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import toast from 'react-hot-toast';
+import { Fornecedor } from '../../types/fornecedores';
+import {
+  FILTRO_SOMENTE_PJ,
+  indiceDeEmpresas,
+  nomeDaEmpresa,
+  nomeDaEmpresaDoAssociado,
+} from '../../utils/empresaVinculada';
 
 /**
  * Máscara de CPF conforme LGPD — oculta os 6 dígitos centrais.
@@ -46,7 +53,10 @@ interface RelatorioAssociadosModalProps {
     searchTerm?: string;
     statusFilter?: string;
     planoFilter?: string;
+    empresaFilter?: string;
   };
+  /** Empresas conveniadas, para resolver o nome da que cada associado PJ aponta. */
+  fornecedores?: Fornecedor[];
   userName?: string;
   initialReportType?: 'titulares' | 'dependentes';
 }
@@ -57,6 +67,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
   associados,
   empresaData,
   currentFilters = {},
+  fornecedores = [],
   userName = 'Operador do Sistema',
   initialReportType = 'titulares',
 }) => {
@@ -115,6 +126,24 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
   }, [associados]);
 
   // Lista de Titulares formatada
+  const indiceEmpresas = useMemo(() => indiceDeEmpresas(fornecedores), [fornecedores]);
+
+  /**
+   * Rótulo do filtro de empresa ativo, calculado UMA vez e lido pelas três saídas (prévia,
+   * impressão e PDF). Recalcular em cada renderizador é como dois cabeçalhos passam a discordar.
+   */
+  const filtroEmpresaLabel = useMemo(() => {
+    const f = currentFilters.empresaFilter;
+    if (!f) return 'TODAS';
+    if (f === FILTRO_SOMENTE_PJ) return 'SOMENTE PESSOA JURÍDICA';
+    return (nomeDaEmpresa(indiceEmpresas.get(f)) || 'EMPRESA NÃO LOCALIZADA').toUpperCase();
+  }, [currentFilters.empresaFilter, indiceEmpresas]);
+
+  /**
+   * A coluna de empresa só entra quando o relatório tem ao menos um PJ. Uma coluna que imprime
+   * "—" em todas as linhas gasta largura das que informam algo, e a esmagadora maioria dos
+   * relatórios aqui é só de pessoa física.
+   */
   const listaTitulares = useMemo(() => {
     return associados.map((assoc, idx) => {
       const endereco = [
@@ -158,11 +187,16 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
         enderecoCompleto: endereco || 'Endereço não informado',
         contatoCompleto: contato || 'Contato não informado',
         qtdDependentes: assoc.dependentes?.length || 0,
+        // Resolvida por id, não por um nome guardado no associado: numa listagem operacional a
+        // empresa renomeada precisa sair com o nome de hoje.
+        empresa: nomeDaEmpresaDoAssociado(assoc, indiceEmpresas) || '-',
         status: assoc.status,
         statusColor,
       };
     });
-  }, [associados]);
+  }, [associados, indiceEmpresas]);
+
+  const temAlgumPJ = useMemo(() => listaTitulares.some((t) => t.empresa !== '-'), [listaTitulares]);
 
   // KPIs
   const totais = useMemo(() => {
@@ -220,10 +254,11 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
           <th style="width: 24%;">Associado Titular</th>
           <th style="width: 24%;">Endereço Completo</th>
           <th style="width: 16%;">Contato</th>
-          <th style="width: 14%;">Plano / Contrato</th>
+          <th style="width: ${temAlgumPJ ? '11%' : '14%'};">Plano / Contrato</th>
+          ${temAlgumPJ ? '<th style="width: 11%;">Empresa (PJ)</th>' : ''}
           <th style="width: 7%; text-align: center;">Adesão</th>
           <th style="width: 5%; text-align: center;">Deps.</th>
-          <th style="width: 7%; text-align: center;">Status</th>
+          <th style="width: ${temAlgumPJ ? '6%' : '7%'}; text-align: center;">Status</th>
         </tr>
       `;
 
@@ -246,6 +281,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
             <div style="font-weight: 600; color: #047857;">${t.plano}</div>
             <div style="color: #64748b; font-size: 9px;">Contrato: ${t.contrato}</div>
           </td>
+          ${temAlgumPJ ? `<td style="font-size: 9.5px; color: #334155; line-height: 1.25;">${t.empresa}</td>` : ''}
           <td style="text-align: center; font-size: 9.5px; color: #0f172a;">${t.dataAdesao}</td>
           <td style="text-align: center; font-weight: 700; font-size: 10px; color: #7c3aed;">${t.qtdDependentes}</td>
           <td style="text-align: center;">
@@ -379,6 +415,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
             <div><strong>Tipo:</strong> ${reportType === 'titulares' ? 'Titulares' : 'Dependentes'}</div>
             <div><strong>Status:</strong> ${filtroStatus}</div>
             <div><strong>Busca:</strong> ${filtroBusca}</div>
+            <div><strong>Empresa:</strong> ${filtroEmpresaLabel}</div>
             <div><strong>Registros:</strong> ${reportType === 'titulares' ? listaTitulares.length : listaDependentes.length}</div>
           </div>
 
@@ -485,6 +522,11 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
         16,
         { align: 'right' },
       );
+      // O filtro de empresa vai impresso: um relatório que não diz por qual empresa foi filtrado
+      // afirma ser a lista completa sem ser.
+      if (reportType === 'titulares' && currentFilters.empresaFilter) {
+        doc.text(`Empresa: ${filtroEmpresaLabel}`, 14, 21);
+      }
 
       let tableHead: string[][] = [];
       let tableBody: string[][] = [];
@@ -497,6 +539,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
             'Endereço Completo',
             'Contato',
             'Plano / Contrato',
+            ...(temAlgumPJ ? ['Empresa (PJ)'] : []),
             'Adesão',
             'Deps.',
             'Status',
@@ -508,6 +551,7 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
           t.enderecoCompleto,
           t.contatoCompleto,
           `${t.plano}\nContrato: ${t.contrato}`,
+          ...(temAlgumPJ ? [t.empresa] : []),
           t.dataAdesao,
           t.qtdDependentes.toString(),
           t.status,
@@ -550,9 +594,23 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
           textColor: [15, 23, 42],
           cellPadding: 2,
         },
+        // As larguras são POSICIONAIS: com a coluna de empresa no índice 5, adesão/deps./status
+        // passam a 6/7/8. Manter o mapa antigo aqui aplicaria a largura da adesão na empresa.
         columnStyles:
           reportType === 'titulares'
-            ? {
+            ? temAlgumPJ
+              ? {
+                  0: { cellWidth: 8, halign: 'center' },
+                  1: { cellWidth: orientation === 'landscape' ? 50 : 34 },
+                  2: { cellWidth: orientation === 'landscape' ? 52 : 36 },
+                  3: { cellWidth: orientation === 'landscape' ? 36 : 25 },
+                  4: { cellWidth: orientation === 'landscape' ? 38 : 26 },
+                  5: { cellWidth: orientation === 'landscape' ? 38 : 26 },
+                  6: { cellWidth: 17, halign: 'center' },
+                  7: { cellWidth: 10, halign: 'center' },
+                  8: { cellWidth: 18, halign: 'center' },
+                }
+              : {
                 0: { cellWidth: 8, halign: 'center' },
                 1: { cellWidth: orientation === 'landscape' ? 55 : 40 },
                 2: { cellWidth: orientation === 'landscape' ? 62 : 44 },
@@ -799,6 +857,11 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
                 <div className="text-[10px] text-slate-500">
                   Emitido por: <span className="font-medium text-slate-700">{userName}</span>
                 </div>
+                {reportType === 'titulares' && currentFilters.empresaFilter && (
+                  <div className="text-[10px] text-slate-500">
+                    Empresa: <span className="font-medium text-slate-700">{filtroEmpresaLabel}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -854,9 +917,14 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
                           Endereço Completo
                         </th>
                         <th className="py-2 px-3 w-[16%] border-r border-slate-700">Contato</th>
-                        <th className="py-2 px-3 w-[15%] border-r border-slate-700">
+                        <th className={`py-2 px-3 ${temAlgumPJ ? 'w-[12%]' : 'w-[15%]'} border-r border-slate-700`}>
                           Plano / Contrato
                         </th>
+                        {temAlgumPJ && (
+                          <th className="py-2 px-3 w-[11%] border-r border-slate-700">
+                            Empresa (PJ)
+                          </th>
+                        )}
                         <th className="py-2 px-2 text-center w-[7%] border-r border-slate-700">
                           Adesão
                         </th>
@@ -912,6 +980,11 @@ export const RelatorioAssociadosModal: React.FC<RelatorioAssociadosModalProps> =
                             </div>
                             <div className="text-[10px] text-slate-500">Contrato: {t.contrato}</div>
                           </td>
+                          {temAlgumPJ && (
+                            <td className="py-2 px-3 border-r border-slate-200 text-[10.5px] text-slate-700 leading-snug">
+                              {t.empresa}
+                            </td>
+                          )}
                           <td className="py-2 px-2 text-center font-medium text-slate-900 border-r border-slate-200 text-[11px]">
                             {t.dataAdesao}
                           </td>

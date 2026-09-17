@@ -1408,6 +1408,101 @@ foram gravados, as mensalidades não, lance-as em Contas a Receber — **e não 
 reativação**, ou o associado fica com dois contratos. Um "erro ao reativar" genérico é
 exatamente o que produziria essa segunda passada.
 
+## Associado Pessoa Jurídica: o campo que existia na tela e era descartado antes de gravar
+
+Pedido de 17/09/2026: "criar um campo para selecionar a empresa do associado PJ, vinculado a
+fornecedores". **O campo já existia** — `AssociadoFormModal` tinha o select de `tipo_pessoa` e, para
+PJ, o de empresa conveniada, alimentado por `useFornecedores` e filtrado pela categoria. O que não
+existia era tudo depois do clique:
+
+- `associados.fornecedor_id` **não existia no banco** (só `tipo_pessoa`, com `CHECK` e default `'PF'`);
+- `saveAssociado` fazia `const { dependentes, fornecedor_id, ...rest } = associado`, desestruturando
+  o campo **para fora** do payload, com o comentário "campos não existentes na tabela principal";
+- `lib/syncService.ts` fazia o mesmo com a fila de sync.
+
+Resultado: o operador escolhia a empresa, salvava, a tela dizia "sucesso" e o vínculo nunca
+existiu. **Não dava nem `PGRST204`** — a armadilha que este arquivo documenta em `documentos_padroes`
+e `atendimentos` aparece aqui na forma mais silenciosa de todas, porque o campo nem chegava a ser
+enviado. O que confirma que o caminho nunca funcionou: **0 associados PJ em produção**, com 1
+fornecedor cadastrado e ele exatamente na categoria de convênios.
+
+**A regra que isto acrescenta**: desestruturar um campo para fora do payload "porque a coluna não
+existe" não é sanitização, é perda de dado agendada. Ou a coluna é criada na mesma tarefa (o que a
+seção do `PGRST204` já manda), ou o campo sai da interface — deixar os dois lados discordando em
+silêncio é o pior dos três estados.
+
+### O vínculo (migration `20260917193736`)
+
+- **FK composta com `tenant_id`**, como manda a seção do plano contábil:
+  `(tenant_id, fornecedor_id) → fornecedores (tenant_id, id)`, com a `unique (tenant_id, id)` nova
+  do lado referenciado (`fornecedores` só tinha `PRIMARY KEY (id)`). Exercitado em transação
+  revertida antes de aplicar: apontar para conveniada de **outra** empresa leva `23503`, e uma FK
+  simples por `id` teria deixado passar.
+- **`ON DELETE RESTRICT`**: excluir a conveniada não pode desfazer, em cascata e sem aviso, o
+  vínculo dos associados dela.
+- **Nullable, e a obrigatoriedade é do formulário.** Um `NOT NULL` — ou um
+  `CHECK (tipo_pessoa <> 'PJ' OR fornecedor_id IS NOT NULL)` — vale para a linha, não para o
+  preenchimento, e quebraria todo cadastro PF no primeiro `UPDATE`. A exigência vive em
+  `validarDadosAssociado`. Mesma escolha da fase 3 do plano contábil e dos dados do responsável.
+- **Índice parcial de cobertura** `(tenant_id, fornecedor_id) where fornecedor_id is not null` — a
+  esmagadora maioria dos associados é PF e nunca terá valor aqui. Conferido em `pg_indexes` por
+  **definição** antes de criar, e o advisor `unindexed_foreign_keys` não lista a FK nova.
+
+### O erro de validação precisa saber em que aba mora o campo
+
+`ErroValidacaoAssociado` tinha só `subTab`, e `executarValidacaoOuAlertar` fazia
+`setActiveSubTab(erros[0].subTab)`. O campo da empresa fica na aba **Contratos**, não nas sub-abas
+de Dados — mandar o operador para uma sub-aba de Dados destacaria um campo que não está lá. O tipo
+ganhou `tab` opcional e o hook decide entre os dois. **Ao validar um campo novo, confira se ele mora
+na aba que a navegação do erro assume.**
+
+### `utils/empresaVinculada.ts` — o predicado num lugar só
+
+Puro e testado (20 testes), porque quatro lugares precisam da mesma pergunta: cadastro, listagem,
+filtro e relatório. Decisões que valem como regra:
+
+- **A categoria saiu do JSX para constante.** `'Convenios Associados'` era literal dentro do
+  `filter` do select. Renomear a categoria no cadastro de fornecedores esvaziaria o seletor **em
+  silêncio**, e o operador ficaria sem salvar um PJ sem nada na tela explicando por quê — é a lição
+  de `resolverContaPorCodigo` (procurar por código, não por nome) valendo para outra chave.
+- **A empresa já gravada aparece mesmo desativada**, no cadastro e nas opções do filtro. Sem isso,
+  abrir para editar perderia a seleção e salvaria o vínculo vazio; e no filtro os associados dela
+  virariam infiltráveis. Mesma escolha do seletor de conta contábil e de `idJaSelecionado`.
+- **`vinculoEmpresaParaGravacao` normaliza no ponto de escrita**, e cobre três armadilhas já
+  registradas neste arquivo: `''` numa coluna `uuid` é `22P02` (foi o que manteve `atendimentos`
+  zerada); cadastro que deixou de ser PJ grava `null`, senão sobra vínculo órfão invisível no
+  formulário e visível no filtro; e o retorno é `null`, **nunca `undefined`** — `JSON.stringify`
+  descarta chave `undefined` e o `upsert` chegaria sem a coluna, deixando o valor antigo no banco.
+- **O nome da empresa é resolvido por id, não guardado no associado.** É o oposto do `categoria`
+  dos lançamentos, que é snapshot de propósito: lá o documento precisa dizer o que valia na época;
+  aqui é listagem operacional, e a empresa renomeada tem de sair com o nome de hoje.
+- **"Somente Pessoa Jurídica" é opção do filtro**, e inclui o PJ que ainda não tem empresa
+  escolhida — ele existe e é justamente o cadastro que falta completar. Filtrar só por empresa
+  responderia metade da pergunta.
+
+### A coluna do relatório só aparece quando há PJ
+
+`listaTitulares` já era a fonte única das três saídas (prévia, impressão e PDF), então a empresa
+entrou lá e os três renderizadores só decidem **como** — o mesmo desenho da Ficha de Cadastro. Duas
+decisões:
+
+- **`temAlgumPJ` decide se a coluna existe.** Uma coluna que imprime "—" em todas as linhas gasta
+  largura das que informam algo, e a esmagadora maioria dos relatórios aqui é só de pessoa física.
+- **As larguras do `columnStyles` do jsPDF são POSICIONAIS.** Com a empresa no índice 5,
+  adesão/deps./status passam a 6/7/8; manter o mapa antigo aplicaria a largura da adesão na
+  empresa. Há um mapa para cada caso. **Ao inserir coluna no meio de uma tabela do `autoTable`,
+  o mapa de larguras muda junto — ele não casa por nome.**
+
+O filtro ativo vai impresso no cabeçalho das três saídas, ao lado de status e busca, e o rótulo é
+calculado **uma vez** (`filtroEmpresaLabel`) para os três: recalcular em cada renderizador é como
+dois cabeçalhos passam a discordar. Um relatório que não diz por qual empresa foi filtrado afirma
+ser a lista completa sem ser.
+
+**Fora de escopo de propósito**: Ficha de Cadastro impressa, carteirinha e as tags `{{...}}` de
+documento não mostram a empresa. Nenhuma foi pedida, e a de documento tem regra própria (catálogo e
+resolver em sincronia, senão a tag aparece no painel e nunca preenche). O associado PJ também
+continua tendo nome e CPF de pessoa: a empresa é o fornecedor vinculado, não o cadastro em si.
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do

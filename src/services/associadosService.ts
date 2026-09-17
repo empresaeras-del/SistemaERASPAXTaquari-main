@@ -9,6 +9,7 @@ import {
   MENSAGEM_EXCLUSAO_BLOQUEADA,
   montarHistoricoImpeditivo,
 } from '../utils/historicoAssociado';
+import { vinculoEmpresaParaGravacao } from '../utils/empresaVinculada';
 
 export interface Associado {
   id: string;
@@ -282,8 +283,13 @@ export async function resilientSupabaseUpsert(
 export const saveAssociado = async (associado: Associado, isOnline: boolean): Promise<void> => {
   const existing = await getFromIDB<Associado>(STORE_NAME, associado.id);
   
-  // Extrai dependentes e campos não existentes na tabela principal do Supabase
-  const { dependentes, fornecedor_id, ...rest } = associado as any;
+  // Extrai dependentes, que vivem em tabela própria.
+  //
+  // `fornecedor_id` SAIA daqui: até 17/09/2026 ele era desestruturado junto e nunca chegava ao
+  // Postgres — o operador escolhia a empresa conveniada do associado PJ, a tela dizia "salvo com
+  // sucesso" e o vínculo não existia. A coluna passou a existir na migration
+  // 20260917193736_associado_pj_vinculo_fornecedor.
+  const { dependentes, ...rest } = associado as any;
 
   // Garante que o ID do associado é um UUID válido
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -325,6 +331,9 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
     data_adesao: dataAdesao,
     valor_plano: valorPlano ?? undefined,
     n_vidas: nVidas,
+    // Normaliza também a cópia local: cache e servidor divergindo aqui faria o filtro por empresa
+    // dar respostas diferentes conforme a busca remota tivesse funcionado ou não.
+    fornecedor_id: vinculoEmpresaParaGravacao(rest.tipo_pessoa, rest.fornecedor_id) ?? undefined,
     dependentes: Array.isArray(dependentes) ? dependentes : []
   } as any;
 
@@ -409,6 +418,8 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
         endereco_cep: rest.endereco_cep || rest.cep || null,
         endereco_estado: rest.endereco_estado || rest.uf || null,
         tipo_pessoa: rest.tipo_pessoa || 'PF',
+        // `null` quando não é PJ ou quando o id não é um uuid — ver utils/empresaVinculada.ts.
+        fornecedor_id: vinculoEmpresaParaGravacao(rest.tipo_pessoa, rest.fornecedor_id),
         tipo_associado: rest.tipo_associado || 'titular',
         plano_pax_id: planoPaxId,
         plano_nome: rest.plano_nome || null,

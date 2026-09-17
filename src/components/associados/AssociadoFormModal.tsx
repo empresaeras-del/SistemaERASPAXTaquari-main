@@ -17,6 +17,11 @@ import { AssociadoResumoCabecalho } from './AssociadoResumoCabecalho';
 import { idadeEmAnos, montarResumoAssociado } from '../../utils/resumoAssociado';
 import { MENSAGEM_CADASTRO_INATIVO, cadastroForaDeCirculacao } from '../../utils/selecaoCadastro';
 import { encontrarAssociadoComCpfDuplicado } from '../../utils/associadoHelpers';
+import {
+  CATEGORIA_EMPRESA_CONVENIADA,
+  nomeDaEmpresa,
+  opcoesEmpresaConveniada,
+} from '../../utils/empresaVinculada';
 import { maskCPFOrCNPJ } from '../../utils/validators';
 import { formatDateSafe } from '../../utils/dateUtils';
 import { formatPhone } from '../../utils/formatters';
@@ -34,7 +39,7 @@ export const AssociadoFormModal = (props: any) => {
     empresaData, setEmpresaData, showRelatorioModal, setShowRelatorioModal,
     relatorioReportType, setRelatorioReportType, viewMode, setViewMode,
     searchTerm, setSearchTerm, visibleColumns, isVisible, setVisibleColumns,
-    columns, statusFilter, setStatusFilter, planoFilter, setPlanoFilter,
+    columns, statusFilter, setStatusFilter, planoFilter, setPlanoFilter, empresaFilter,
     sortBy, setSortBy, showFilters, setShowFilters, filtered, activeTab, setActiveTab,
     isModalOpen, setIsModalOpen, editingAssociado, setEditingAssociado,
     dependenteFormModalOpen, setDependenteFormModalOpen, dependenteEmEdicao, setDependenteEmEdicao,
@@ -58,6 +63,9 @@ export const AssociadoFormModal = (props: any) => {
   // Derivados do associado aberto: o cabeçalho e o bloqueio por status inativo.
   const resumoAssociado = montarResumoAssociado(editingAssociado);
   const bloqueadoPorInatividade = cadastroForaDeCirculacao(editingAssociado);
+  // Empresas conveniadas oferecidas ao associado PJ. A já gravada entra na lista mesmo se tiver
+  // sido desativada depois — senão abrir para editar perderia a seleção e salvaria o vínculo vazio.
+  const empresasConveniadas = opcoesEmpresaConveniada(fornecedores || [], editingAssociado?.fornecedor_id);
 
   return (
     <>
@@ -1078,18 +1086,28 @@ export const AssociadoFormModal = (props: any) => {
                           </div>
                           {editingAssociado.tipo_pessoa === 'PJ' && (
                             <div>
-                              <label className="block text-xs font-medium text-text-subtle mb-1">Empresa / Convenio (Fornecedor) *</label>
-                              <select 
-                                value={editingAssociado.fornecedor_id || ''}
-                                onChange={(e) => setEditingAssociado({ ...editingAssociado, fornecedor_id: e.target.value })}
-                                required
-                                className="w-full bg-bg-base border border-border-default rounded-xl px-4 py-2.5 text-sm text-text-base focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent outline-none transition-all"
-                              >
-                                <option value="">Selecione a empresa conveniada</option>
-                                {fornecedores.filter((f: any) => f.categoria === 'Convenios Associados' && f.status === 'ativo').map((f: any) => (
-                                  <option key={f.id} value={f.id}>{f.razao_social || f.nome_fantasia}</option>
-                                ))}
-                              </select>
+                              <label className="block text-xs font-medium text-text-subtle mb-1">Empresa / Convênio (Fornecedor) *</label>
+                              {empresasConveniadas.length === 0 ? (
+                                <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 text-xs text-amber-600 dark:text-amber-400">
+                                  Nenhuma empresa conveniada cadastrada. Cadastre um fornecedor na categoria
+                                  <strong> {CATEGORIA_EMPRESA_CONVENIADA}</strong> em Cadastros → Fornecedores para
+                                  poder vincular este associado.
+                                </div>
+                              ) : (
+                                <select
+                                  value={editingAssociado.fornecedor_id || ''}
+                                  onChange={(e) => setEditingAssociado({ ...editingAssociado, fornecedor_id: e.target.value })}
+                                  required
+                                  className="w-full bg-bg-base border border-border-default rounded-xl px-4 py-2.5 text-sm text-text-base focus:ring-2 focus:ring-[#3B82F6] focus:border-transparent outline-none transition-all"
+                                >
+                                  <option value="">Selecione a empresa conveniada</option>
+                                  {empresasConveniadas.map((f) => (
+                                    <option key={f.id} value={f.id}>
+                                      {nomeDaEmpresa(f)}{f.status !== 'ativo' ? ' (desativada)' : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1979,8 +1997,10 @@ export const AssociadoFormModal = (props: any) => {
         currentFilters={{
           searchTerm,
           statusFilter,
-          planoFilter
+          planoFilter,
+          empresaFilter
         }}
+        fornecedores={fornecedores || []}
         userName={state.user?.nome || 'Administrador'}
         initialReportType={relatorioReportType}
       />

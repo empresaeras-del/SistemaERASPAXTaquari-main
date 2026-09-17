@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { getFromIDB, saveToIDB, deleteFromIDB, getAllFromIDB } from './idb';
 import { generateUUID } from '../utils/uuid';
 import { tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
+import { vinculoEmpresaParaGravacao } from '../utils/empresaVinculada';
 
 export interface SyncTask {
   id: string;
@@ -152,8 +153,12 @@ export const processSyncQueue = async (isOnline: boolean) => {
             // duplicados (ver CLAUDE.md, "Schema drift conhecido") — excluídas aqui para não
             // reintroduzir o dual-write removido de associadosService.ts, caso um registro em fila
             // ainda as carregue de antes dessa mudança.
+            // `fornecedor_id` saiu desta lista em 17/09/2026: a coluna passou a existir
+            // (migration 20260917193736) e descartá-la aqui faria o associado PJ criado offline
+            // chegar ao servidor sem a empresa conveniada — o mesmo vínculo perdido em silêncio
+            // que `saveAssociado` produzia online.
             const {
-              dependentes, fornecedor_id, justificativa_modificacao_plano, complemento,
+              dependentes, justificativa_modificacao_plano, complemento,
               endereco_complemento, municipio, logradouro, numero, bairro, cidade, cep, uf,
               plano_id, ...assocClean
             } = payload;
@@ -175,6 +180,7 @@ export const processSyncQueue = async (isOnline: boolean) => {
               rg: assocClean.rg ? String(assocClean.rg).trim() : null,
               email: assocClean.email ? String(assocClean.email).trim() : null,
               endereco_cidade: assocClean.endereco_cidade || cidade || municipio || null,
+              fornecedor_id: vinculoEmpresaParaGravacao(assocClean.tipo_pessoa, assocClean.fornecedor_id),
               plano_pax_id: planoPaxId,
               data_nascimento: dataNascimento,
               data_adesao: dataAdesao,

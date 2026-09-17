@@ -10,6 +10,7 @@ import { ReativacaoAssociadoWizard } from '../components/associados/ReativacaoAs
 import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
 import { PlanoPaxSelect } from '../components/planos-pax/PlanoPaxSelect';
 import { ColumnVisibilityToggle } from '../components/ColumnVisibilityToggle';
+import { FILTRO_SOMENTE_PJ, nomeDaEmpresa } from '../utils/empresaVinculada';
 import { Users, Search, Filter, ShieldCheck, Heart, AlertCircle, AlertTriangle, LayoutGrid, List } from "lucide-react";
 
 export const AssociadosPage: React.FC = () => {
@@ -20,6 +21,8 @@ export const AssociadosPage: React.FC = () => {
     searchTerm, setSearchTerm,
     statusFilter, setStatusFilter,
     planoFilter, setPlanoFilter,
+    empresaFilter, setEmpresaFilter,
+    indiceEmpresas, empresasParaFiltro,
     sortBy, setSortBy,
     showFilters, setShowFilters,
     viewMode, setViewMode,
@@ -119,17 +122,19 @@ export const AssociadosPage: React.FC = () => {
                 pageKey="associados"
                 showFilters={showFilters}
                 setShowFilters={setShowFilters}
-                currentFilters={{ searchTerm, statusFilter, planoFilter, sortBy }}
+                currentFilters={{ searchTerm, statusFilter, planoFilter, empresaFilter, sortBy }}
                 onApplyFilters={(filters) => {
                   setSearchTerm(filters.searchTerm || '');
                   setStatusFilter(filters.statusFilter || '');
                   setPlanoFilter(filters.planoFilter || '');
+                  setEmpresaFilter(filters.empresaFilter || '');
                   setSortBy(filters.sortBy || 'nome_asc');
                 }}
                 onClearFilters={() => {
                   setSearchTerm('');
                   setStatusFilter('');
                   setPlanoFilter('');
+                  setEmpresaFilter('');
                   setSortBy('nome_asc');
                 }}
               >
@@ -174,6 +179,29 @@ export const AssociadosPage: React.FC = () => {
                       />
                     </div>
                   </div>
+                  {empresasParaFiltro.length > 0 && (
+                    <div className="space-y-1.5 flex flex-col">
+                      <label className="text-[11px] font-bold text-text-subtle uppercase tracking-wider">Empresa (PJ)</label>
+                      <div className="relative">
+                        <select
+                          value={empresaFilter}
+                          onChange={(e) => setEmpresaFilter(e.target.value)}
+                          className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-sm text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-all appearance-none cursor-pointer"
+                        >
+                          <option value="">Todas as Empresas</option>
+                          <option value={FILTRO_SOMENTE_PJ}>Somente Pessoa Jurídica</option>
+                          {empresasParaFiltro.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              {nomeDaEmpresa(f)}{f.status !== 'ativo' ? ' (desativada)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-text-subtle">
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-1.5 flex flex-col">
                     <label className="text-[11px] font-bold text-text-subtle uppercase tracking-wider">Ordenação</label>
                     <div className="relative">
@@ -241,6 +269,7 @@ export const AssociadosPage: React.FC = () => {
                 handleOpenModal={handleOpenModal}
                 handleDelete={handleDelete}
                 handleReativar={associadosState.handleAbrirReativacao}
+                indiceEmpresas={indiceEmpresas}
               />
             ) : (
               <AssociadosListGrid 
