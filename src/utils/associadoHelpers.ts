@@ -1,5 +1,6 @@
 import { Associado, Dependente } from '../services/associadosService';
 import { idadeEmAnos } from './resumoAssociado';
+import { associadoCasaFiltroEmpresa } from './empresaVinculada';
 
 /**
  * Funções puras extraídas de pages/Associados.tsx — comportamento idêntico ao
@@ -13,6 +14,11 @@ export interface FiltrosAssociados {
   searchTerm: string;
   statusFilter: string;
   planoFilter: string;
+  /**
+   * Id da empresa conveniada do associado Pessoa Jurídica, ou `FILTRO_SOMENTE_PJ` para todos os
+   * PJ. Vazio não filtra. Ver utils/empresaVinculada.ts.
+   */
+  empresaFilter?: string;
   sortBy: OrdenacaoAssociados | string;
 }
 
@@ -23,7 +29,7 @@ export interface FiltrosAssociados {
  */
 export const filtrarEOrdenarAssociados = (
   associados: Associado[],
-  { searchTerm, statusFilter, planoFilter, sortBy }: FiltrosAssociados
+  { searchTerm, statusFilter, planoFilter, empresaFilter, sortBy }: FiltrosAssociados
 ): Associado[] => {
   const result = associados.filter((a) => {
     if (!a) return false;
@@ -39,7 +45,8 @@ export const filtrarEOrdenarAssociados = (
       cpf.includes(s);
     const matchesStatus = statusFilter ? a.status === statusFilter : true;
     const matchesPlano = planoFilter ? a.plano_pax_id === planoFilter : true;
-    return matchesSearch && matchesStatus && matchesPlano;
+    const matchesEmpresa = associadoCasaFiltroEmpresa(a, empresaFilter);
+    return matchesSearch && matchesStatus && matchesPlano && matchesEmpresa;
   });
 
   switch (sortBy) {

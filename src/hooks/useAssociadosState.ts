@@ -64,6 +64,7 @@ import {
   aplicarEnderecoViaCep,
   aplicarMudancaCampoAssociado,
 } from '../utils/associadoHelpers';
+import { indiceDeEmpresas, opcoesFiltroEmpresa } from '../utils/empresaVinculada';
 import { HistoricoImpeditivo } from '../utils/historicoAssociado';
 import { validarDadosAssociado } from '../utils/associadoValidation';
 import { RelatorioAssociadosModal } from '../components/associados/RelatorioAssociadosModal';
@@ -95,16 +96,27 @@ export function useAssociadosState() {
     { id: 'plano', label: 'Plano' },
     { id: 'status', label: 'Status' },
     { id: 'adesao', label: 'Adesão' },
+    { id: 'empresa', label: 'Empresa (PJ)' },
     { id: 'acoes', label: 'Ações' }
   ];
   const [statusFilter, setStatusFilter] = useState("");
   const [planoFilter, setPlanoFilter] = useState("");
+  const [empresaFilter, setEmpresaFilter] = useState("");
   const [sortBy, setSortBy] = useState("nome_asc");
   const [showFilters, setShowFilters] = useState(false);
 
   const filtered = React.useMemo(
-    () => filtrarEOrdenarAssociados(associados, { searchTerm, statusFilter, planoFilter, sortBy }),
-    [associados, searchTerm, statusFilter, planoFilter, sortBy]
+    () => filtrarEOrdenarAssociados(associados, { searchTerm, statusFilter, planoFilter, empresaFilter, sortBy }),
+    [associados, searchTerm, statusFilter, planoFilter, empresaFilter, sortBy]
+  );
+
+  // Índice id → empresa conveniada, montado uma vez em vez de cada linha varrer a lista inteira.
+  const indiceEmpresas = React.useMemo(() => indiceDeEmpresas(fornecedores || []), [fornecedores]);
+  // Opções do filtro: as conveniadas ativas mais qualquer uma já vinculada a algum associado,
+  // ainda que desativada — senão esses associados ficariam infiltráveis.
+  const empresasParaFiltro = React.useMemo(
+    () => opcoesFiltroEmpresa(fornecedores || [], associados),
+    [fornecedores, associados]
   );
 
   const [activeTab, setActiveTab] = useState<
@@ -302,7 +314,11 @@ export function useAssociadosState() {
       const nomesCampos = erros.map(e => e.label).join(', ');
       toast.error(`Atenção: Campos obrigatórios pendentes (${erros.length}): ${nomesCampos}. Preencha os campos destacados em vermelho.`);
 
-      if (erros[0]?.subTab) {
+      // O primeiro erro decide para onde levar o operador. Campo fora da aba "Dados" traz `tab`;
+      // mandá-lo para uma sub-aba de dados destacaria um campo que não está ali.
+      if (erros[0]?.tab) {
+        setActiveTab(erros[0].tab);
+      } else if (erros[0]?.subTab) {
         setActiveSubTab(erros[0].subTab);
       }
       return false;
@@ -705,6 +721,8 @@ export function useAssociadosState() {
     columns,
     statusFilter, setStatusFilter,
     planoFilter, setPlanoFilter,
+    empresaFilter, setEmpresaFilter,
+    indiceEmpresas, empresasParaFiltro,
     sortBy, setSortBy,
     showFilters, setShowFilters,
     filtered,

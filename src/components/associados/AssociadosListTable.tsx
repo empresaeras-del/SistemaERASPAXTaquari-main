@@ -4,6 +4,8 @@ import { MessageCircle, Edit2, Trash2, RotateCcw } from 'lucide-react';
 import { cadastroForaDeCirculacao } from '../../utils/selecaoCadastro';
 import { formatDateSafe } from '../../utils/dateUtils';
 import { PlanoPaxResumo } from '../../types/planosPax';
+import { Fornecedor } from '../../types/fornecedores';
+import { nomeDaEmpresaDoAssociado } from '../../utils/empresaVinculada';
 
 interface AssociadosListTableProps {
   filtered: Associado[];
@@ -16,6 +18,8 @@ interface AssociadosListTableProps {
   handleDelete: (id: string) => void;
   /** Abre a reativação; só aparece para cadastro fora de circulação. */
   handleReativar?: (assoc: Associado) => void;
+  /** Índice id → empresa conveniada, para resolver o nome sem varrer a lista por linha. */
+  indiceEmpresas?: Map<string, Fornecedor>;
 }
 
 export const AssociadosListTable: React.FC<AssociadosListTableProps> = ({
@@ -27,7 +31,8 @@ export const AssociadosListTable: React.FC<AssociadosListTableProps> = ({
   handleWhatsAppMenu,
   handleOpenModal,
   handleDelete,
-  handleReativar
+  handleReativar,
+  indiceEmpresas
 }) => {
   return (
     <div className="bg-bg-subtle rounded-2xl border border-border-default overflow-hidden animate-in fade-in duration-300 shadow-sm">
@@ -40,6 +45,7 @@ export const AssociadosListTable: React.FC<AssociadosListTableProps> = ({
               {isVisible('plano') && <th className="px-6 py-3 text-xs font-semibold text-text-subtle uppercase tracking-wider">Plano</th>}
               {isVisible('status') && <th className="px-6 py-3 text-xs font-semibold text-text-subtle uppercase tracking-wider">Status</th>}
               {isVisible('adesao') && <th className="px-6 py-3 text-xs font-semibold text-text-subtle uppercase tracking-wider">Adesão</th>}
+              {isVisible('empresa') && <th className="px-6 py-3 text-xs font-semibold text-text-subtle uppercase tracking-wider">Empresa (PJ)</th>}
               {isVisible('acoes') && <th className="px-6 py-3 text-right text-xs font-semibold text-text-subtle uppercase tracking-wider">Ações</th>}
             </tr>
           </thead>
@@ -84,6 +90,11 @@ export const AssociadosListTable: React.FC<AssociadosListTableProps> = ({
                 </td>}
                 {isVisible('adesao') && <td className="px-6 py-4">
                   {formatDateSafe(associado.data_adesao)}
+                </td>}
+                {isVisible('empresa') && <td className="px-6 py-4">
+                  {nomeDaEmpresaDoAssociado(associado, indiceEmpresas ?? new Map()) || (
+                    <span className="text-text-subtle/60">—</span>
+                  )}
                 </td>}
                 {isVisible('acoes') && <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2">
