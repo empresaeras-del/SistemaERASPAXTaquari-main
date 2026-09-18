@@ -1642,6 +1642,56 @@ que nenhuma tela sabe exibir) é **outro** defeito, e a correção dele é tirar
 tabela.
 
 
+### O relatório da carteira: a cor tem de sair do dado, nunca da posição
+
+Pedido de 18/09/2026: pôr no papel o que a aba **Associados & Mensalidades** mostra, no padrão
+dos relatórios de Associados e Atendimentos. `utils/relatorioCarteiraConveniada.ts` decide
+**o quê** e as três saídas — prévia em tela, janela de impressão e `jsPDF` — decidem só **como**,
+como manda a seção da Ficha de Cadastro.
+
+**Este módulo não soma nada.** Os totais vêm prontos de `montarCarteiraEmpresaConveniada`, que é
+a mesma fonte da tela. Recalcular abriria espaço para o papel discordar do que o operador acabou
+de ver, e as duas contas pareceriam igualmente corretas.
+
+Quatro decisões valem como regra:
+
+- **A máscara é a dos relatórios FINANCEIROS** (`mascararDocumento`, `***.537.031-**`), não a do
+  relatório cadastral de associados (`mascaraCpfLGPD`, `046.***.***-40`). As duas existem neste
+  projeto, e o CLAUDE.md já fixa qual vale para cada classe. Aplicada **na montagem do item**,
+  não em cada renderizador: são três saídas lendo o mesmo campo.
+- **A cor sai do tipo da parte, nunca do índice da linha dentro da célula.** A primeira versão
+  coloria verde a primeira linha e âmbar a segunda — o que acerta só quando a célula tem os dois
+  valores. **Num mês que só tinha parcela em aberto, o valor saía verde**, afirmando que o
+  dinheiro entrou. Por isso `CelulaRelatorio` ganhou `partes: {texto, tipo}[]` e os renderizadores
+  perguntam ao dado. Há teste travando os três casos (só recebido, só aberto, os dois).
+- **A largura das colunas mora na função pura, com os 12 meses iguais.** Sem largura declarada o
+  navegador dimensiona por conteúdo, e o mês **vazio** encolhe: na primeira foto `Fev` saiu com
+  34px contra 74px de `Jan`. Num relatório que se lê varrendo a linha, coluna de mês com largura
+  variável desalinha o olho a cada registro. `larguraColuna` alimenta o `<colgroup>` da prévia e
+  o da impressão; o índice é posicional, como o `columnStyles` do `autoTable`.
+- **A grade mensal não repete o `R$`; o total e o resumo mantêm.** Na grade o símbolo apareceria
+  24 vezes por linha sem dizer nada de novo — e, pior, `R$ 120,00` não cabia na largura de uma
+  coluna de mês e empurrava a coluna, que era o que impedia os 12 meses de medirem igual. A
+  unidade fica na legenda e nos KPIs. Nos totais há espaço, e são os números que alguém copia.
+
+**O texto puro do PDF deriva das mesmas células** (`linhaParaTexto` chama `celulasDaLinha`), em
+vez de uma segunda montagem paralela: é assim que as saídas param de discordar na primeira coluna
+nova. Há teste cobrando que as duas formas devolvam o mesmo conteúdo, nos dois tipos.
+
+**O emitente é a empresa do tenant do fornecedor**, carregada por `getEmpresaById(tenantId)` — não
+a do seletor do topo. Mesma razão pela qual a carteira é consultada por `tenantId`: um cabeçalho
+com o CNPJ de outra empresa faria o documento afirmar que foi emitido por quem não o emitiu. Falha
+ao carregá-la não bloqueia o relatório — o cabeçalho cai para o nome padrão do sistema, que é
+menos informação, não um documento errado.
+
+**As duas saídas foram conferidas no navegador de verdade**, como manda "Conferindo a impressão
+de verdade": a prévia fotografada no aninhamento real (dentro do `<form>` e do overlay com
+`backdrop-blur`), e o HTML da janela de impressão capturado de um `window.open` dublê e renderizado
+no Chromium — 12 meses com 44px cada, sem estouro horizontal, cores distintas para recebido e em
+aberto, e o PDF fechando em **uma** página A4 paisagem. Os dois defeitos acima vieram dessa
+conferência; nenhum teste de contagem os acusaria.
+
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do

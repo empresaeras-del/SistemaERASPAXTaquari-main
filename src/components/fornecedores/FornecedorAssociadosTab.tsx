@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Loader2, RefreshCw, Users } from 'lucide-react';
+import { AlertTriangle, FileBarChart, Loader2, RefreshCw, Users } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { Associado, getAssociados } from '../../services/associadosService';
 import { ParcelaReceber, Receita, getParcelasReceber, getReceitas } from '../../services/financeiroService';
@@ -11,6 +11,8 @@ import {
 import { formatCurrency } from '../../utils/formatters';
 import { formatDateSafe } from '../../utils/dateUtils';
 import { maskCPFOrCNPJ } from '../../utils/validators';
+import { Empresa, getEmpresaById } from '../../services/empresasService';
+import { RelatorioCarteiraConveniadaModal } from './RelatorioCarteiraConveniadaModal';
 
 interface Props {
   /** Id do fornecedor já GRAVADO. Sem id não há vínculo possível. */
@@ -22,13 +24,20 @@ interface Props {
    * para uma função de leitura, saiba se ela trata `'all'` como sem filtro".
    */
   tenantId?: string;
-  /** Nome da conveniada, só para o texto do estado vazio. */
+  /** Nome da conveniada — texto do estado vazio e assunto do relatório. */
   nomeEmpresa?: string;
+  /** Documento da conveniada, impresso no cabeçalho do relatório. */
+  documentoEmpresa?: string;
 }
 
 const hojeAno = () => new Date().getFullYear();
 
-export const FornecedorAssociadosTab: React.FC<Props> = ({ fornecedorId, tenantId, nomeEmpresa }) => {
+export const FornecedorAssociadosTab: React.FC<Props> = ({
+  fornecedorId,
+  tenantId,
+  nomeEmpresa,
+  documentoEmpresa,
+}) => {
   const { state } = useAppContext();
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -36,6 +45,13 @@ export const FornecedorAssociadosTab: React.FC<Props> = ({ fornecedorId, tenantI
   const [parcelas, setParcelas] = useState<ParcelaReceber[]>([]);
   const [receitas, setReceitas] = useState<Receita[]>([]);
   const [exercicio, setExercicio] = useState<number>(hojeAno());
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
+  /**
+   * Emitente do relatório: a empresa do **tenant do fornecedor**, não a do seletor do topo —
+   * mesma razão pela qual a carteira é consultada por `tenantId`. Um cabeçalho com o CNPJ de
+   * outra empresa faria o documento afirmar que foi emitido por quem não o emitiu.
+   */
+  const [empresaEmitente, setEmpresaEmitente] = useState<Empresa | null>(null);
 
   const carregar = useCallback(async () => {
     if (!fornecedorId || !tenantId) {
@@ -65,6 +81,15 @@ export const FornecedorAssociadosTab: React.FC<Props> = ({ fornecedorId, tenantI
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    // Falha aqui não bloqueia a aba nem o relatório: sem a empresa o cabeçalho cai para o nome
+    // padrão do sistema, que é menos informação, não um documento errado.
+    getEmpresaById(tenantId, state.isOnline)
+      .then((e) => setEmpresaEmitente(e))
+      .catch(() => setEmpresaEmitente(null));
+  }, [tenantId, state.isOnline]);
 
   const carteira: CarteiraEmpresaConveniada = useMemo(
     () => montarCarteiraEmpresaConveniada({ associados, parcelas, receitas, fornecedorId, exercicio }),
@@ -161,7 +186,15 @@ export const FornecedorAssociadosTab: React.FC<Props> = ({ fornecedorId, tenantI
           </select>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setRelatorioAberto(true)}
+            className="px-4 py-2.5 rounded-xl bg-[#3B82F6] hover:bg-blue-600 text-white text-sm font-bold flex items-center gap-2 whitespace-nowrap shadow-lg shadow-blue-600/20"
+          >
+            <FileBarChart className="w-4 h-4" />
+            Relatório
+          </button>
           <div className="px-4 py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 min-w-[150px]">
             <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase">
               Recebido em {exercicio}
@@ -335,6 +368,18 @@ export const FornecedorAssociadosTab: React.FC<Props> = ({ fornecedorId, tenantI
             </p>
           )}
         </div>
+      )}
+
+      {relatorioAberto && (
+        <RelatorioCarteiraConveniadaModal
+          isOpen
+          onClose={() => setRelatorioAberto(false)}
+          carteira={carteira}
+          nomeConveniada={nomeEmpresa || 'Empresa conveniada'}
+          documentoConveniada={documentoEmpresa}
+          empresaData={empresaEmitente}
+          userName={state.user?.nome || 'Operador do Sistema'}
+        />
       )}
     </div>
   );
