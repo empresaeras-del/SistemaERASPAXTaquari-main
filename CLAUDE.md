@@ -1112,6 +1112,76 @@ nomes neste schema e "liquidada" tem dois.
 o nome. Ligar isso mudaria o que o relatório antigo imprime hoje — é decisão sobre um
 relatório em uso, não limpeza de código.
 
+## O upsert que apagava campos para conseguir gravar
+
+Achado na análise de 18/09/2026, corrigido na sequência. `resilientSupabaseUpsert`
+(`services/associadosService.ts`) tentava o `upsert` até **8 vezes**, e cada tentativa
+removia algo do payload até o Postgres aceitar:
+
+| Recusa do servidor | O que a função fazia |
+| --- | --- |
+| `PGRST204` / `42703` (coluna inexistente) | `delete currentPayload[coluna]` e tentava de novo |
+| `23503` (FK de `plano_pax_id` violada) | **`plano_pax_id = null`** e tentava de novo |
+| Qualquer erro citando `empresa_id` | `delete currentPayload.empresa_id` e tentava de novo |
+
+O segundo é o pior: o associado era gravado **sem plano**, a tela dizia "salvo com sucesso" e
+o valor da mensalidade perdia a base de cálculo. A única testemunha era um `console.warn`, e
+ninguém lê o console de um operador.
+
+**É o mesmo padrão que este repositório já removeu de `criarRequisicao`** em 11/09 — o retry
+que regravava a guia com `status: 'pendente'` — e que este arquivo classifica desde então:
+*um retry que muda o dado enviado não é tolerância a falha, é corromper o registro para
+conseguir gravá-lo.* A cópia em `associadosService` sobreviveu porque ninguém a ligou à
+mesma regra.
+
+O teste mede o defeito em vez de descrevê-lo: rodado contra o código antigo, ele reprova com
+`expected [...] to have a length of 1 but got 8` — as oito tentativas, cada uma com o payload
+mutilado. **Ao corrigir um comportamento silencioso, escreva primeiro o teste que falha
+contra o código atual**; é o que separa a correção da intenção de correção.
+
+### Por que a função existia, e por que deixou de ser necessária
+
+Ela era defesa contra o schema drift — o período em que o TypeScript declarava campos que o
+banco não tinha. Esse período acabou em 15/09 (as colunas duplicadas foram dropadas, as
+migrations estão rastreadas, e a regra "campo novo, migration na mesma tarefa" já vale). O que
+restava era uma rede que só escondia o próximo defeito — e o `PGRST204` é justamente o
+**único sinal** de que ele existe.
+
+### O que entrou no lugar
+
+`upsertOuFalhar` faz uma tentativa, com um payload, e **lança** na recusa. Três decisões
+valem como regra:
+
+- **A recusa é uma classe, não uma string.** `RecusaDoServidor` existe para o chamador
+  distinguir recusa de queda de rede — a regra que este arquivo fixa desde `saveAtendimento`,
+  e que num `catch` só é impossível de aplicar. Exceção de rede sobe do `await` e vai para o
+  IndexedDB e a fila de sync; recusa lança e **não** é enfileirada.
+- **Isso corrigiu um enfileiramento duplo que ninguém tinha notado.** O bloco do associado
+  enfileirava a recusa *e* lançava, e o `catch` externo enfileirava a **mesma** recusa outra
+  vez — duas tarefas de sync por save, ambas destinadas a falhar para sempre com o mesmo
+  payload. Enfileirar recusa não é resiliência: só adia a perda.
+- **`explicarRecusa` traduz o código do Postgres numa frase acionável.** Repassar só a
+  `message` deixa o operador com "violates foreign key constraint", que não diz qual campo
+  nem o que fazer. O `PGRST204` passou a dizer o nome da coluna **e** que falta a migration —
+  é o aviso que transforma o bug recorrente deste arquivo em algo que se lê na hora.
+
+**Os call sites de dependentes e contratos paravam a recusa num `console.warn`**, então a
+correção da função sozinha não apareceria: o `try/catch` foi removido dos dois e a recusa
+sobe. O associado já está gravado quando eles rodam, e todo upsert é por `id` com
+`onConflict` — salvar de novo depois de corrigir é idempotente, não duplica nada.
+
+A pré-sincronização de `planos_pax` **manteve o `warn`**, e é o único que ficou: se o plano
+local não subir, o insert do associado logo abaixo falha na FK e é **esse** erro que chega ao
+operador, dizendo que o plano não existe. Antes, era exatamente aqui que o `plano_pax_id`
+virava nulo.
+
+**Fora de escopo, de propósito**: `lib/syncService.ts` tem `resilientSyncUpsert`, a **mesma
+função copiada** (6 tentativas em vez de 8, as três mesmas mutações). Não foi tocada porque a
+fila tem `MAX_RETRIES = 3` e **apaga a tarefa** ao esgotar, com um `console.warn` — fazê-la
+lançar trocaria "escrita parcial silenciosa" por "registro criado offline descartado em
+silêncio", que não é melhor. Corrigir ali exige antes decidir para onde vai o aviso de uma
+tarefa que não sobe, e isso é decisão de produto sobre dado offline, não limpeza de código.
+
 ## A inadimplência virou aviso — ela marcava o cadastro sozinha
 
 Achado na análise de 18/09/2026. `hooks/useBackgroundChecks` rodava no carregamento da

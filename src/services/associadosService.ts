@@ -216,68 +216,114 @@ export const getAssociados = async (isOnline: boolean, tenantId: string | null):
 };
 
 /**
- * Executa um upsert no Supabase de forma resiliente:
- * 1. Se falhar por coluna inexistente no schema cache do PostgREST (PGRST204 ou erro 42703),
- *    detecta dinamicamente a coluna, remove do payload e tenta novamente.
- * 2. Se falhar por foreign key em plano_pax_id (23503), anula o campo e tenta novamente.
- * 3. Se falhar por empresa_id/tenant_id em constraints locais, remove ou ajusta e tenta novamente.
+ * Recusa do Postgres — distinta de uma queda de rede.
+ *
+ * O CLAUDE.md fixa que as duas **não podem terminar igual**: exceção lançada (rede fora) é o
+ * caso offline-first legítimo e vai para o IndexedDB e para a fila de sync; `error` devolvido
+ * pelo cliente é recusa (constraint, RLS, coluna inexistente) e repetir amanhã dá o mesmo
+ * resultado, então enfileirar **só adia a perda**. Num `catch` só elas são indistinguíveis —
+ * esta classe é o que permite ao chamador separá-las.
  */
-export async function resilientSupabaseUpsert(
+export class RecusaDoServidor extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecusaDoServidor';
+  }
+}
+
+/**
+ * Traduz a recusa do Postgres numa frase que diz o que fazer.
+ *
+ * O `error` do supabase-js chega com `message`, `details`, `hint` e `code`. Repassar só a
+ * `message` deixa o operador com "insert or update on table violates foreign key
+ * constraint", que não diz qual campo nem o que corrigir. Aqui o código vira a frase, e a
+ * mensagem do servidor continua no fim — quem lê o `toast` decide, quem lê o log depura.
+ */
+const explicarRecusa = (tableName: string, error: any): string => {
+  const msg = error?.message || '';
+  const detalhes = error?.details || '';
+  const completo = `${msg} ${detalhes}`;
+
+  const colunaAusente =
+    completo.match(/Could not find the '([^']+)' column/i) ||
+    completo.match(/column "([^"]+)" of relation/i) ||
+    completo.match(/column "([^"]+)" does not exist/i);
+
+  if (error?.code === 'PGRST204' || error?.code === '42703' || colunaAusente) {
+    const coluna = colunaAusente?.[1] || 'desconhecida';
+    return (
+      `A coluna '${coluna}' não existe na tabela '${tableName}'. ` +
+      'Isso é campo no TypeScript sem a migration correspondente — nada foi salvo. ' +
+      `Detalhe do servidor: ${msg}`
+    );
+  }
+
+  if (error?.code === '23503') {
+    return (
+      `A tabela '${tableName}' recusou uma referência que não existe (ou é de outra empresa). ` +
+      'Confira o plano, a empresa ou o registro vinculado antes de salvar de novo. ' +
+      `Detalhe do servidor: ${msg}`
+    );
+  }
+
+  if (error?.code === '23502') {
+    return `Campo obrigatório não preenchido em '${tableName}'. Detalhe do servidor: ${msg}`;
+  }
+
+  if (error?.code === '23514') {
+    return (
+      `Valor fora do domínio aceito pela tabela '${tableName}'. ` +
+      `Detalhe do servidor: ${msg}`
+    );
+  }
+
+  if (error?.code === '42501') {
+    return `Sem permissão para gravar em '${tableName}'. Detalhe do servidor: ${msg}`;
+  }
+
+  return `Erro ao gravar em '${tableName}': ${msg || error}`;
+};
+
+/**
+ * Faz o upsert e **lança** quando o Postgres recusa. Uma tentativa, um payload.
+ *
+ * Substitui `resilientSupabaseUpsert`, que tentava até 8 vezes e **mudava o payload a cada
+ * tentativa** até o banco aceitar: removia a coluna que o `PGRST204` apontava, anulava o
+ * `plano_pax_id` quando a FK falhava, e removia o `empresa_id`. As três "recuperações"
+ * gravavam um registro diferente do que o operador preencheu, com a tela dizendo "salvo com
+ * sucesso" e só um `console.warn` como testemunha.
+ *
+ * A pior delas era a FK: o associado era gravado **sem plano**, e o valor da mensalidade
+ * perdia a base de cálculo. O plano some do cadastro e nada na tela explica por quê.
+ *
+ * **É exatamente o padrão que este repositório já removeu de `criarRequisicao`** em
+ * 11/09/2026 (o retry que regravava a guia com `status: 'pendente'`), e que o CLAUDE.md
+ * classifica desde então: *um retry que muda o dado enviado não é tolerância a falha — é
+ * corromper o registro para conseguir gravá-lo.* Se o servidor recusou, ou o payload está
+ * errado (corrija o payload) ou a constraint está errada (corrija a constraint).
+ *
+ * A função nasceu como defesa contra o schema drift — o período em que o TypeScript
+ * declarava campos que o banco não tinha. Esse período acabou em 15/09/2026: as colunas
+ * duplicadas foram dropadas, as migrations estão rastreadas, e a regra "campo novo, migration
+ * na mesma tarefa" já vale. O que restava era uma rede que só escondia o próximo defeito —
+ * e `PGRST204` é justamente o **único sinal** de que ele existe.
+ *
+ * Continua valendo a distinção que o CLAUDE.md fixa: **recusa do Postgres e queda de rede
+ * não terminam igual**. Esta função trata a recusa (`error` devolvido pelo cliente) e lança;
+ * a exceção de rede sobe do `await` e é o `catch` do chamador que a manda para o IndexedDB e
+ * para a fila de sync.
+ */
+export async function upsertOuFalhar(
   tableName: string,
   data: Record<string, any>,
   onConflict: string = 'id',
-  maxRetries: number = 8
-): Promise<{ data: any; error: any }> {
-  const currentPayload = { ...data };
+): Promise<any> {
+  const { data: resData, error } = await supabase
+    .from(tableName)
+    .upsert(data, { onConflict });
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const { data: resData, error } = await supabase
-      .from(tableName)
-      .upsert(currentPayload, { onConflict });
-
-    if (!error) {
-      return { data: resData, error: null };
-    }
-
-    const errMsg = error.message || '';
-    const errDetails = error.details || '';
-    const fullErr = `${errMsg} ${errDetails}`;
-
-    // 1. Detecta coluna inexistente no schema cache do PostgREST
-    const missingColMatch =
-      fullErr.match(/Could not find the '([^']+)' column/i) ||
-      fullErr.match(/column "([^"]+)" of relation/i) ||
-      fullErr.match(/column "([^"]+)" does not exist/i) ||
-      fullErr.match(/column ([a-zA-Z0-9_]+) does not exist/i);
-
-    if (missingColMatch && missingColMatch[1]) {
-      const colToRemove = missingColMatch[1];
-      console.warn(`[resilientSupabaseUpsert] Tabela ${tableName}: Coluna '${colToRemove}' ausente no Supabase. Removendo do payload e reprocessando...`);
-      delete currentPayload[colToRemove];
-      continue;
-    }
-
-    // 2. Detecta violação de Foreign Key em plano_pax_id
-    if (fullErr.includes('plano_pax_id') || fullErr.includes('planos_pax') || error.code === '23503') {
-      if (currentPayload.plano_pax_id !== undefined && currentPayload.plano_pax_id !== null) {
-        console.warn(`[resilientSupabaseUpsert] Tabela ${tableName}: FK de plano_pax_id violada. Anulando plano_pax_id e reprocessando...`);
-        currentPayload.plano_pax_id = null;
-        continue;
-      }
-    }
-
-    // 3. Se falhar por empresa_id
-    if (fullErr.includes('empresa_id') && currentPayload.empresa_id) {
-      console.warn(`[resilientSupabaseUpsert] Tabela ${tableName}: Erro com empresa_id. Removendo e reprocessando...`);
-      delete currentPayload.empresa_id;
-      continue;
-    }
-
-    // Se for outro erro irrecuperável, retorna
-    return { data: null, error };
-  }
-
-  return { data: null, error: new Error(`Excedido limite de tentativas de sanitização para ${tableName}`) };
+  if (error) throw new RecusaDoServidor(explicarRecusa(tableName, error));
+  return resData;
 }
 
 export const saveAssociado = async (associado: Associado, isOnline: boolean): Promise<void> => {
@@ -378,7 +424,7 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
             const localPlano = await getFromIDB<any>('planos_pax', planoPaxId);
             if (localPlano) {
               const { coberturas, faixas, itens, ...cleanPlano } = localPlano;
-              await resilientSupabaseUpsert('planos_pax', {
+              await upsertOuFalhar('planos_pax', {
                 id: planoPaxId,
                 tenant_id: tenantId,
                 empresa_id: empresaId,
@@ -392,7 +438,12 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
             }
           }
         } catch (planCheckErr) {
-          console.warn('Verificação de plano_pax falhou:', planCheckErr);
+          // Pré-sincronização best-effort, e por isso o único `warn` que sobrou aqui: se o
+          // plano local não subir, o insert do associado logo abaixo falha na FK e é ESSE
+          // erro que chega ao operador, dizendo que o plano não existe. Antes o upsert
+          // "resiliente" anulava o `plano_pax_id` nesse ponto e gravava o associado sem
+          // plano, em silêncio.
+          console.warn('Pré-sincronização do plano_pax falhou; a FK do associado dirá o que falta:', planCheckErr);
         }
       }
 
@@ -436,118 +487,121 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
         observacoes: rest.observacoes || null
       };
 
-      // 4. Salva o Associado no Supabase com resiliência a esquemas divergentes
-      const { error: assocError } = await resilientSupabaseUpsert('associados', associadoDataSupabase, 'id');
-
-      if (assocError) {
-        console.error('Erro ao salvar associado no Supabase:', assocError);
-        await addToSyncQueue({
-          storeName: STORE_NAME,
-          action: 'update',
-          data: associadoToSave
-        });
-        throw new Error(`Erro ao salvar associado no Supabase: ${assocError.message || assocError}`);
-      }
+      // 4. Salva o Associado. `upsertOuFalhar` lança na recusa — antes o upsert "resiliente"
+      // apagava do payload o que o banco reclamasse e devolvia sucesso.
+      //
+      // O enfileiramento que existia aqui saiu: era recusa indo para a fila de sync, onde
+      // repetiria com o mesmo payload e o mesmo resultado, para sempre. Pior, o `catch`
+      // externo enfileirava a MESMA recusa de novo — duas tarefas mortas por save.
+      await upsertOuFalhar('associados', associadoDataSupabase, 'id');
 
       // 5. Salva e sincroniza dependentes vinculados de forma seletiva
-      try {
-        // Busca dependentes atualmente cadastrados no Supabase para este associado
-        const { data: existingDeps } = await supabase
-          .from('dependentes')
-          .select('id')
-          .eq('associado_id', associadoId);
+      // Sem try/catch: dependente que não grava é perda de dado, não detalhe. O operador
+      // cadastrou a pessoa, a tela diria "sucesso" e ela não existiria no Postgres. A recusa
+      // sobe até o catch externo, que a distingue de queda de rede. O associado já está
+      // gravado aqui, e todo upsert é por `id` com `onConflict` — salvar de novo depois de
+      // corrigir é idempotente.
+      // Busca dependentes atualmente cadastrados no Supabase para este associado
+      const { data: existingDeps } = await supabase
+        .from('dependentes')
+        .select('id')
+        .eq('associado_id', associadoId);
 
-        const currentDepIds = new Set(
-          (Array.isArray(dependentes) ? dependentes : [])
-            .map((d: any) => d.id)
-            .filter(Boolean)
-        );
+      const currentDepIds = new Set(
+        (Array.isArray(dependentes) ? dependentes : [])
+          .map((d: any) => d.id)
+          .filter(Boolean)
+      );
 
-        // Exclui apenas os dependentes que foram expressamente removidos do associado
-        if (existingDeps && existingDeps.length > 0) {
-          const idsToDelete = existingDeps
-            .map((d: any) => d.id)
-            .filter((id: string) => !currentDepIds.has(id));
+      // Exclui apenas os dependentes que foram expressamente removidos do associado
+      if (existingDeps && existingDeps.length > 0) {
+        const idsToDelete = existingDeps
+          .map((d: any) => d.id)
+          .filter((id: string) => !currentDepIds.has(id));
 
-          if (idsToDelete.length > 0) {
-            const { error: delErr } = await supabase
-              .from('dependentes')
-              .delete()
-              .eq('associado_id', associadoId)
-              .in('id', idsToDelete);
+        if (idsToDelete.length > 0) {
+          const { error: delErr } = await supabase
+            .from('dependentes')
+            .delete()
+            .eq('associado_id', associadoId)
+            .in('id', idsToDelete);
 
-            if (delErr) {
-              console.warn('Aviso ao excluir dependentes removidos no Supabase:', delErr);
-            }
+          if (delErr) {
+            console.warn('Aviso ao excluir dependentes removidos no Supabase:', delErr);
           }
         }
+      }
 
-        // Salva/atualiza cada um dos dependentes ativos
-        if (Array.isArray(dependentes) && dependentes.length > 0) {
-          for (const d of dependentes) {
-            const depId = UUID_REGEX.test(d.id || '') ? d.id : crypto.randomUUID();
-            const depNasc = (d.data_nascimento && String(d.data_nascimento).trim() !== '') 
-              ? String(d.data_nascimento).split('T')[0] 
-              : null;
-            const depPayload = {
-              id: depId,
-              associado_id: associadoId,
-              tenant_id: tenantId,
-              empresa_id: empresaId,
-              nome: (d.nome || '').trim().toUpperCase(),
-              cpf: d.cpf && String(d.cpf).trim() !== '' ? String(d.cpf).trim() : null,
-              data_nascimento: depNasc,
-              parentesco: d.parentesco && String(d.parentesco).trim() !== '' ? String(d.parentesco).trim().toUpperCase() : 'OUTRO',
-              // Sem isto a inativação de um dependente não chegava ao banco.
-              status: d.status === 'inativo' ? 'inativo' : 'ativo'
-            };
-            await resilientSupabaseUpsert('dependentes', depPayload, 'id');
-          }
+      // Salva/atualiza cada um dos dependentes ativos
+      if (Array.isArray(dependentes) && dependentes.length > 0) {
+        for (const d of dependentes) {
+          const depId = UUID_REGEX.test(d.id || '') ? d.id : crypto.randomUUID();
+          const depNasc = (d.data_nascimento && String(d.data_nascimento).trim() !== '') 
+            ? String(d.data_nascimento).split('T')[0] 
+            : null;
+          const depPayload = {
+            id: depId,
+            associado_id: associadoId,
+            tenant_id: tenantId,
+            empresa_id: empresaId,
+            nome: (d.nome || '').trim().toUpperCase(),
+            cpf: d.cpf && String(d.cpf).trim() !== '' ? String(d.cpf).trim() : null,
+            data_nascimento: depNasc,
+            parentesco: d.parentesco && String(d.parentesco).trim() !== '' ? String(d.parentesco).trim().toUpperCase() : 'OUTRO',
+            // Sem isto a inativação de um dependente não chegava ao banco.
+            status: d.status === 'inativo' ? 'inativo' : 'ativo'
+          };
+          await upsertOuFalhar('dependentes', depPayload, 'id');
         }
-      } catch (depErr) {
-        console.warn('Erro ao sincronizar dependentes:', depErr);
       }
 
       // 6. Salva registro na tabela 'contratos' do Supabase se o associado tiver plano
       if (planoPaxId || associadoToSave.plano_pax_id || associadoToSave.plano_nome) {
-        try {
-          const contratoData: Record<string, any> = {
-            tenant_id: tenantId,
-            empresa_id: empresaId,
-            associado_id: associadoId,
-            plano_pax_id: planoPaxId,
-            numero_contrato: associadoToSave.numero_contrato || `CTR-${associadoId.substring(0, 8).toUpperCase()}`,
-            data_inicio: dataAdesao,
-            data_adesao: dataAdesao,
-            valor_mensalidade: Number(valorPlano) || 0,
-            status: associadoToSave.status || 'ativo',
-            observacoes: (associadoToSave as any).observacoes || null
-          };
+        // Sem try/catch, pelo mesmo motivo: contrato que não grava deixa o associado com plano
+        // na tela e sem contrato no banco — e é o contrato que a geração de mensalidades e os
+        // relatórios leem.
+        const contratoData: Record<string, any> = {
+          tenant_id: tenantId,
+          empresa_id: empresaId,
+          associado_id: associadoId,
+          plano_pax_id: planoPaxId,
+          numero_contrato: associadoToSave.numero_contrato || `CTR-${associadoId.substring(0, 8).toUpperCase()}`,
+          data_inicio: dataAdesao,
+          data_adesao: dataAdesao,
+          valor_mensalidade: Number(valorPlano) || 0,
+          status: associadoToSave.status || 'ativo',
+          observacoes: (associadoToSave as any).observacoes || null
+        };
 
-          // Busca o contrato VIGENTE, não "o contrato" — desde a reativação um associado
-          // pode ter vários: o novo ativo e os anteriores inativos. Sem o filtro por status
-          // e o `limit(1)`, a consulta devolve mais de uma linha, `maybeSingle` não entrega
-          // objeto nenhum e — como o `error` é descartado aqui — o código cairia no ramo de
-          // "não existe", **inserindo uma linha nova a cada save** do mesmo associado.
-          const { data: contratosVigentes, error: erroContratoExistente } = await supabase
-            .from('contratos')
-            .select('id')
-            .eq('associado_id', associadoId)
-            .eq('status', 'ativo')
-            .is('deleted_at', null)
-            .order('created_at', { ascending: false })
-            .limit(1);
-          if (erroContratoExistente) throw erroContratoExistente;
+        // Busca o contrato VIGENTE, não "o contrato" — desde a reativação um associado
+        // pode ter vários: o novo ativo e os anteriores inativos. Sem o filtro por status
+        // e o `limit(1)`, a consulta devolve mais de uma linha, `maybeSingle` não entrega
+        // objeto nenhum e — como o `error` é descartado aqui — o código cairia no ramo de
+        // "não existe", **inserindo uma linha nova a cada save** do mesmo associado.
+        const { data: contratosVigentes, error: erroContratoExistente } = await supabase
+          .from('contratos')
+          .select('id')
+          .eq('associado_id', associadoId)
+          .eq('status', 'ativo')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (erroContratoExistente) throw erroContratoExistente;
 
-          contratoData.id = contratosVigentes?.[0]?.id || crypto.randomUUID();
+        contratoData.id = contratosVigentes?.[0]?.id || crypto.randomUUID();
 
-          await resilientSupabaseUpsert('contratos', contratoData, 'id');
-        } catch (contratoErr) {
-          console.warn('Erro ao sincronizar contrato no Supabase:', contratoErr);
-        }
+        await upsertOuFalhar('contratos', contratoData, 'id');
       }
     } catch (err: any) {
-      console.error('Supabase save falhou, fallback para fila de sync:', err);
+      // Recusa do servidor NÃO vai para a fila: o payload continuaria igual e o Postgres
+      // continuaria recusando. O formulário fica aberto com tudo preenchido e o operador
+      // corrige — que é a regra que o CLAUDE.md fixa desde `saveAtendimento`.
+      if (err instanceof RecusaDoServidor) {
+        console.error('Supabase recusou a gravação do associado:', err.message);
+        throw err;
+      }
+      // Exceção lançada (rede fora, fetch abortado) é o caso offline-first legítimo.
+      console.error('Supabase save falhou por rede, fallback para fila de sync:', err);
       await addToSyncQueue({
         storeName: STORE_NAME,
         action: 'update',
