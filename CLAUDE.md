@@ -1635,11 +1635,7 @@ com `23514`, e **nenhum fornecedor com esse status jamais existiu**. É a mesma 
 diferença é que aqui o erro ao menos chegava ao operador, porque `useFornecedores` lança; lá havia
 um retry que gravava com outro status e escondeu o defeito por meses.
 
-**Continua pendente, de propósito**: `tipos_fornecimento` segue no `localStorage`, com "Gerenciar"
-próprio. Não é a mesma doença — os três valores (`produtos`/`servicos`/`ambos`) têm rótulo cravado
-no JSX e a coluna é um domínio fechado, então o que aquele "Gerenciar" permite (acrescentar um valor
-que nenhuma tela sabe exibir) é **outro** defeito, e a correção dele é tirar a ação, não criar
-tabela.
+**`tipos_fornecimento` era outro defeito, e a correção foi tirar a ação** — ver a seção seguinte.
 
 
 ### O relatório da carteira: a cor tem de sair do dado, nunca da posição
@@ -1690,6 +1686,65 @@ de verdade": a prévia fotografada no aninhamento real (dentro do `<form>` e do 
 no Chromium — 12 meses com 44px cada, sem estouro horizontal, cores distintas para recebido e em
 aberto, e o PDF fechando em **uma** página A4 paisagem. Os dois defeitos acima vieram dessa
 conferência; nenhum teste de contagem os acusaria.
+
+
+### O "Gerenciar" que não devia existir: nem toda lista no `localStorage` quer virar tabela
+
+Fechado em 18/09/2026 (migration `20260918185138`). O campo **Tipo de Fornecimento** tinha o mesmo
+"Gerenciar" das categorias, sobre a mesma lista guardada no `localStorage` — e a conclusão foi a
+oposta: **aqui não há catálogo a manter, e a correção é remover a ação.**
+
+O que separa os dois casos, e é o que vale como regra:
+
+- **Categoria é um catálogo da empresa**: cada empresa tem a sua lista, o operador precisa
+  acrescentar, renomear e desativar, e o nome é dado. Virou tabela.
+- **Tipo de fornecimento é um domínio fechado de três valores** (`produtos`/`servicos`/`ambos`).
+  Os rótulos são cravados no código, o filtro da listagem sempre ofereceu **só esses três** (nunca
+  leu a lista do `localStorage`), e os cards de resumo contam `produtos`/`servicos`/`ambos`
+  explicitamente. Um quarto valor criado pelo "Gerenciar" nasceria **sem rótulo, fora do filtro e
+  fora dos contadores** — visível só na coluna crua da tabela. A lista não era a fonte do domínio;
+  era uma cópia editável dele.
+
+**Antes de mover uma lista para tabela, pergunte se alguém precisa editá-la.** Se os valores têm
+rótulo, cor ou contador no código, a lista não é catálogo — é um `enum` com uma porta aberta, e a
+porta é o defeito.
+
+**O `CHECK` é a outra metade, e sem ele isto seria só o botão sumido.** `fornecedores.tipo_fornecedor`
+**não tinha constraint nenhuma** — o domínio existia só no TypeScript. (A seção anterior afirmava
+que "a coluna é um domínio fechado"; era o tipo que fechava, não o banco. Conferido em
+`pg_constraint`: a tabela só tinha os `CHECK` de `status` e `tipo_pessoa`.) Sem o `CHECK`, a coluna
+seguiria aceitando qualquer texto pela fila de sync, por um bundle antigo em cache de service worker
+ou por qualquer chamador novo — é a regra que este arquivo já fixa em `utils/statusParcela.ts`:
+**esconder o botão é conveniência; a recusa mora no ponto de escrita.**
+
+Ensaiado em transação revertida antes de aplicar: os três valores passam, `'qualquer coisa'` leva
+`23514`, `NULL` passa (a coluna é nullable, e um `CHECK` é satisfeito quando a expressão é nula), e
+as 2 linhas existentes — ambas `servicos` — validam sob a constraint. Produção não tinha **nenhum**
+valor inventado, o que confirma que ninguém chegou a usar aquele "Gerenciar" para valer.
+
+Três coisas menores saíram junto, porque estavam no caminho:
+
+- **`opcoesTipoFornecimento` preserva o valor já gravado fora do domínio.** Um fornecedor vindo do
+  IndexedDB de um navegador que usou o "Gerenciar" continua abrindo com a seleção certa; sem isso o
+  select perderia o valor e o save gravaria outro tipo em silêncio. Mesma escolha de
+  `nomesDeCategoriaParaSelecao` e do seletor de conta contábil. `rotuloTipoFornecimento` segue a
+  mesma linha: valor fora do domínio volta como está, em vez de virar vazio.
+- **A listagem tinha estado morto.** `FornecedoresPage` declarava `tiposFornecimento`, carregava do
+  `localStorage` num `useEffect`... e **nunca usava** — o filtro sempre teve os três `<option>`
+  cravados. Ou seja, metade do "catálogo" já não alimentava nada.
+- **`ListManageModal` foi removido.** Era o modal genérico que servia as duas listas; sem categoria
+  (que ganhou gerenciador próprio) e sem tipos, ficou sem chamador.
+
+Os rótulos, que estavam escritos em quatro lugares com palavras diferentes ("Produtos & Serviços",
+"Produtos e Serviços", "Produtos e Serviços (Ambos)"), passaram para
+`config/tiposFornecimento.config.ts`, com três formas nomeadas: `rotulo` (formulário), `rotuloCurto`
+(card e tabela) e `rotuloFiltro` (o "Apenas ...", que é outra pergunta). **Ao acrescentar um valor
+ao domínio, acrescente o `CHECK` na mesma tarefa** — é a regra do campo novo sem migration, na
+direção contrária.
+
+**Fora de escopo de propósito**: `FornecedorDetailsModal.getTipoFornecedorBadge` continua com o
+próprio `switch`, porque ele carrega também a **cor** de cada tipo, que a config não modela.
+Consolidar isso é passada própria, não parte de remover uma ação.
 
 
 ## Módulo de Documentos Padrões

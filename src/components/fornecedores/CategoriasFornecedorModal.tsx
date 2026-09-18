@@ -1,7 +1,8 @@
 /**
  * Cadastro e edição das categorias de fornecedor da empresa.
  *
- * Substitui o `ListManageModal` genérico que o formulário usava para categoria: aquele
+ * Substitui o `ListManageModal` genérico que o formulário usava para categoria (removido junto
+ * com o "Gerenciar" de tipos de fornecimento, em 18/09/2026): aquele
  * gerenciava um array de strings no **localStorage**, então cada navegador tinha a sua lista.
  * Aqui as categorias são linhas da empresa, com id, código e estado — e o fornecedor aponta
  * para elas por `categoria_id`, com FK composta levando o `tenant_id` junto.
