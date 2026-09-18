@@ -1503,6 +1503,65 @@ documento não mostram a empresa. Nenhuma foi pedida, e a de documento tem regra
 resolver em sincronia, senão a tag aparece no painel e nunca preenche). O associado PJ também
 continua tendo nome e CPF de pessoa: a empresa é o fornecedor vinculado, não o cadastro em si.
 
+### A carteira da conveniada: quem está vinculado e quanto cada um deve, mês a mês
+
+Pedido de 17/09/2026, fechando o ciclo do vínculo: o formulário de fornecedor ganhou a aba
+**Associados & Mensalidades**, que só existe para empresa da categoria de convênios. Ela lista os
+associados PJ vinculados àquela empresa e, para cada um, quanto de mensalidade foi recebido e
+quanto está em aberto em cada mês do exercício.
+
+`utils/carteiraEmpresaConveniada.ts` é puro e testado (20 testes) e decide **o quê**; a aba decide
+só **como**. Cinco decisões valem como regra:
+
+- **A competência é o VENCIMENTO para os dois lados — e isso diverge de propósito da Demonstração
+  Contábil.** Lá o realizado é datado pela **liquidação**, porque a pergunta é "quanto entrou neste
+  exercício". Aqui a pergunta é outra: "a mensalidade de março foi paga?". Datando o recebido pela
+  liquidação, uma parcela de março paga em abril sairia da coluna de março **sem entrar como
+  aberta** — março mostraria um buraco que não existe. Pelo vencimento, cada parcela aparece
+  exatamente uma vez, e recebido + em aberto do mês é o que foi lançado naquele mês. **Ao somar
+  dinheiro por período, escreva qual data manda e por quê**; as duas estão sempre disponíveis e
+  sempre parecem intercambiáveis.
+- **A consulta é escopada pelo tenant do PRÓPRIO fornecedor, não pelo seletor do topo.**
+  `getParcelasReceber` trata `'all'` como "sem filtro", e o super_admin costuma estar nesse estado:
+  a carteira passaria a somar parcela de outra empresa. `initialData.tenant_id` é preciso e não tem
+  o fundo falso. É a lição do lote de caixa valendo num caminho de leitura.
+- **A aba usa a categoria SALVA, não a do formulário.** Trocar o select faria a aba piscar enquanto
+  se edita, e os associados estão vinculados ao registro como ele está no banco, não como está na
+  tela. Sem `id` gravado a aba nem aparece — não há vínculo possível com um cadastro que ainda não
+  existe.
+- **O que não entra na soma vira nota**: parcela cancelada (existe e não cobra ninguém) e parcela de
+  outro exercício. Mesma regra de `foraDoExercicio` na Demonstração Contábil e das parcelas sem
+  endereço no mapa de calor. O associado **sem nenhuma parcela também continua na lista**, zerado: a
+  carteira é a relação de quem está vinculado, e sumir com ele faria procurar o cadastro que se sabe
+  que existe.
+- **Zero não é impresso.** Célula sem lançamento é `—`, e um total zerado não vira "R$ 0,00" ao lado
+  de um valor real. É a mesma escolha do cabeçalho do associado, que omite a linha do CPF em vez de
+  mostrar "CPF: —".
+
+**A categoria de convênios não estava na lista padrão** — existia só porque alguém a criou pelo
+"Gerenciar", e essa lista vive no `localStorage` de **cada navegador**. Em outra máquina ela não
+aparecia no select, e não havia como cadastrar uma conveniada nova. É a mesma doença que `categoria`
+tinha antes do plano contábil e `centros_custo` antes de virar tabela. Corrigido de duas formas:
+`CATEGORIA_EMPRESA_CONVENIADA` entrou nas duas listas padrão **e** é acrescentada à lista salva
+quando falta. **Mover a lista inteira de categorias para tabela continua pendente** — é a mesma
+decisão que `centros_custo` já tomou, e não cabia nesta passada.
+
+### A foto pegou três coisas, e uma delas não era defeito
+
+Fotografado no aninhamento real (o `<form>` do modal de fornecedor, com o CSS do build), como manda
+a seção "Conferindo a impressão de verdade" e a lição do `backdrop-filter`:
+
+1. **O modal tinha 768px e a grade tem 12 meses.** A largura serve aos formulários e não a uma
+   carteira anual; o modal passou a alargar para `max-w-6xl` **só nessa aba**.
+2. **A coluna Total ficava cortada pela rolagem** — justamente a coluna que o operador veio ver.
+   Ela passou a ser `sticky right-0`, como o nome já era `sticky left-0`. **Numa tabela larga, as
+   duas pontas grudam**: sem isso a rolagem esconde ou a identidade da linha ou o resultado dela.
+3. **O seletor de exercício parecia mostrar o ano errado — e não mostrava.** `innerHTML` não
+   serializa o `value` que o React põe como **propriedade do DOM**, então o dump exibe a primeira
+   `<option>`. Conferido no HTML gerado: não há `selected` em lugar nenhum. **Artefato do método, não
+   defeito** — e refutar antes de "corrigir" é a mesma disciplina do `<form>` aninhado que este
+   arquivo já registra.
+
 ## Módulo de Documentos Padrões
 
 Este é o módulo mais recentemente modernizado — vale como referência de padrão para o resto do

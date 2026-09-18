@@ -35,8 +35,10 @@ import toast from 'react-hot-toast';
 import { useConfirm } from '../context/ConfirmContext';
 import { canDelete } from '../utils/permissions';
 import { useAppContext } from '../context/AppContext';
+import { CATEGORIA_EMPRESA_CONVENIADA } from '../utils/empresaVinculada';
 
 const defaultCategoriasList = [
+  CATEGORIA_EMPRESA_CONVENIADA,
   'Urnas e Caixões',
   'Floricultura e Coroas',
   'Marmoraria e Lápides',
