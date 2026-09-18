@@ -37,23 +37,12 @@ import { canDelete } from '../utils/permissions';
 import { useAppContext } from '../context/AppContext';
 import { useCategoriasFornecedor } from '../hooks/useCategoriasFornecedor';
 import { nomesDeCategoriaParaFiltro } from '../utils/categoriasFornecedor';
-
-const defaultTiposFornecimentoList = [
-  'produtos',
-  'servicos',
-  'ambos'
-];
+import { TIPOS_FORNECIMENTO, rotuloTipoFornecimento } from '../config/tiposFornecimento.config';
 
 
 export const FornecedoresPage: React.FC = () => {
   const { state } = useAppContext();
   const { categorias: categoriasCadastradas } = useCategoriasFornecedor();
-  const [tiposFornecimento, setTiposFornecimento] = useState<string[]>(defaultTiposFornecimentoList);
-
-  useEffect(() => {
-    const savedTipos = localStorage.getItem('tipos_fornecimento');
-    if (savedTipos) setTiposFornecimento(JSON.parse(savedTipos));
-  }, []);
 
   const { 
     fornecedores, 
@@ -340,9 +329,11 @@ export const FornecedoresPage: React.FC = () => {
             className="bg-bg-subtle border border-border-default rounded-xl px-3 py-2 text-text-base focus:outline-none focus:border-[#3B82F6]"
           >
             <option value="todos">Todos os Tipos</option>
-            <option value="produtos">Apenas Produtos</option>
-            <option value="servicos">Apenas Serviços</option>
-            <option value="ambos">Produtos e Serviços</option>
+            {TIPOS_FORNECIMENTO.map((t) => (
+              <option key={t.valor} value={t.valor}>
+                {t.rotuloFiltro}
+              </option>
+            ))}
           </select>
 
           <select
@@ -435,7 +426,7 @@ export const FornecedoresPage: React.FC = () => {
                     {fornecedor.categoria}
                   </span>
                   <span className="px-2.5 py-1 rounded-lg bg-bg-subtle text-text-subtle font-medium border border-border-default">
-                    {fornecedor.tipo_fornecedor === 'produtos' ? 'Produtos' : fornecedor.tipo_fornecedor === 'servicos' ? 'Serviços' : fornecedor.tipo_fornecedor === 'ambos' ? 'Produtos & Serviços' : fornecedor.tipo_fornecedor}
+                    {rotuloTipoFornecimento(fornecedor.tipo_fornecedor)}
                   </span>
                 </div>
 
@@ -540,7 +531,7 @@ export const FornecedoresPage: React.FC = () => {
                     </td>
                     <td className="p-4 font-mono text-text-subtle">{fornecedor.cnpj_cpf}</td>
                     <td className="p-4 font-medium">{fornecedor.categoria}</td>
-                    <td className="p-4 capitalize text-text-subtle">{fornecedor.tipo_fornecedor}</td>
+                    <td className="p-4 text-text-subtle">{rotuloTipoFornecimento(fornecedor.tipo_fornecedor)}</td>
                     <td className="p-4 text-text-subtle">
                       <div>{fornecedor.celular_whatsapp || fornecedor.telefone || '-'}</div>
                       <div className="text-[11px]">{fornecedor.cidade ? `${fornecedor.cidade}/${fornecedor.uf}` : '-'}</div>

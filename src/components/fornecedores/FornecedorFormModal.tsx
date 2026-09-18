@@ -26,6 +26,7 @@ import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 import { FornecedorAssociadosTab } from './FornecedorAssociadosTab';
 import { CATEGORIA_EMPRESA_CONVENIADA } from '../../utils/empresaVinculada';
+import { opcoesTipoFornecimento } from '../../config/tiposFornecimento.config';
 import { useCategoriasFornecedor } from '../../hooks/useCategoriasFornecedor';
 import { CategoriasFornecedorModal } from './CategoriasFornecedorModal';
 import {
@@ -59,88 +60,6 @@ const maskCEP = (value: string) => {
   if (v.length > 8) v = v.slice(0, 8);
   return v.replace(/^(\d{5})(\d)/, '$1-$2');
 };
-
-const ListManageModal = ({
-  isOpen,
-  onClose,
-  title,
-  items,
-  onAdd,
-  onRemove,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  title: string;
-  items: string[];
-  onAdd: (item: string) => void;
-  onRemove: (item: string) => void;
-}) => {
-  const [newItem, setNewItem] = useState('');
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-bg-base/80 backdrop-blur-md">
-      <div className="bg-bg-subtle rounded-3xl shadow-2xl w-full max-w-md flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between p-6 border-b border-border-default">
-          <h3 className="text-xl font-bold text-text-base">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 text-text-muted hover:text-text-base hover:bg-bg-hover rounded-full transition-colors"
-            aria-label="Fechar"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-6 flex-1 overflow-y-auto max-h-[400px]">
-          <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
-              placeholder="Adicionar nova opção..."
-              className="flex-1 bg-bg-surface border border-border-default rounded-xl px-4 py-2 text-text-base focus:outline-none focus:border-[#3B82F6]"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                if (newItem.trim() && !items.includes(newItem.trim())) {
-                  onAdd(newItem.trim());
-                  setNewItem('');
-                }
-              }}
-              className="px-4 py-2 bg-[#3B82F6] text-white rounded-xl font-medium hover:bg-[#2563EB] transition-colors"
-            >
-              Adicionar
-            </button>
-          </div>
-          <div className="space-y-2">
-            {items.map((item) => (
-              <div
-                key={item}
-                className="flex justify-between items-center p-3 bg-bg-surface border border-border-default rounded-xl"
-              >
-                <span className="text-sm font-medium text-text-base">{item}</span>
-                <button
-                  type="button"
-                  onClick={() => onRemove(item)}
-                  className="p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-            {items.length === 0 && (
-              <p className="text-sm text-text-muted text-center py-4">Nenhuma opção cadastrada.</p>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const defaultTiposFornecimentoList = ['produtos', 'servicos', 'ambos'];
 
 const schema = z.object({
   codigo: z.string().min(1, 'Código é obrigatório').toUpperCase(),
@@ -223,17 +142,7 @@ export const FornecedorFormModal: React.FC<Props> = ({
    */
   const { categorias: categoriasCadastradas, carregar: recarregarCategorias } =
     useCategoriasFornecedor();
-  const [tiposFornecimento, setTiposFornecimento] = useState<string[]>(() => {
-    const saved = localStorage.getItem('tipos_fornecimento');
-    return saved ? JSON.parse(saved) : defaultTiposFornecimentoList;
-  });
-
   const [showCategoriasModal, setShowCategoriasModal] = useState(false);
-  const [showTiposModal, setShowTiposModal] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem('tipos_fornecimento', JSON.stringify(tiposFornecimento));
-  }, [tiposFornecimento]);
 
   const [buscandoCep, setBuscandoCep] = useState(false);
 
@@ -608,34 +517,25 @@ export const FornecedorFormModal: React.FC<Props> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <div className="flex justify-between items-center mb-1.5">
-                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider">
-                      Tipo de Fornecimento *
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowTiposModal(true)}
-                      className="text-[10px] font-bold text-[#3B82F6] hover:underline"
-                    >
-                      Gerenciar
-                    </button>
-                  </div>
+                  {/*
+                    Sem "Gerenciar": tipo de fornecimento é um domínio fechado de três valores,
+                    não um catálogo da empresa. Acrescentar um quarto valor produzia um
+                    fornecedor sem rótulo, fora do filtro e fora dos contadores da listagem.
+                    O domínio vale também no banco — `fornecedores_tipo_fornecedor_check`.
+                  */}
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                    Tipo de Fornecimento *
+                  </label>
                   <select
                     {...register('tipo_fornecedor')}
-                    className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6] capitalize"
+                    className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:outline-none focus:border-[#3B82F6]"
                   >
                     <option value="" disabled>
                       Selecione...
                     </option>
-                    {tiposFornecimento.map((tipo) => (
-                      <option key={tipo} value={tipo}>
-                        {tipo === 'produtos'
-                          ? 'Produtos / Insumos'
-                          : tipo === 'servicos'
-                            ? 'Prestador de Serviços'
-                            : tipo === 'ambos'
-                              ? 'Produtos e Serviços (Ambos)'
-                              : tipo}
+                    {opcoesTipoFornecimento(initialData?.tipo_fornecedor).map((tipo) => (
+                      <option key={tipo.valor} value={tipo.valor}>
+                        {tipo.rotulo}
                       </option>
                     ))}
                   </select>
@@ -1033,14 +933,6 @@ export const FornecedorFormModal: React.FC<Props> = ({
           onAlterou={recarregarCategorias}
         />
       )}
-      <ListManageModal
-        isOpen={showTiposModal}
-        onClose={() => setShowTiposModal(false)}
-        title="Gerenciar Tipos de Fornecimento"
-        items={tiposFornecimento}
-        onAdd={(tipo) => setTiposFornecimento([...tiposFornecimento, tipo])}
-        onRemove={(tipo) => setTiposFornecimento(tiposFornecimento.filter((t) => t !== tipo))}
-      />
     </div>
   );
 };
