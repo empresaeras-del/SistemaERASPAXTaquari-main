@@ -1112,6 +1112,71 @@ nomes neste schema e "liquidada" tem dois.
 o nome. Ligar isso mudaria o que o relatório antigo imprime hoje — é decisão sobre um
 relatório em uso, não limpeza de código.
 
+## A inadimplência virou aviso — ela marcava o cadastro sozinha
+
+Achado na análise de 18/09/2026. `hooks/useBackgroundChecks` rodava no carregamento da
+aplicação, **para todo operador que abrisse o sistema**, e mudava o status do associado para
+`inadimplente` direto no cadastro:
+
+```ts
+if (associado.status === 'ativo' && associado.cpf && overdueMap[associado.cpf] > 2) {
+  await saveAssociado({ ...associado, status: 'inadimplente' }, state.isOnline);
+}
+```
+
+Ninguém decidia. Não havia confirmação, notificação nem aviso na tela; a única marca era um
+`console.log`, e ninguém lê o console de um operador. Quem descobria era quem abrisse o
+cadastro depois. Como vários operadores abrem o sistema ao mesmo tempo, a gravação ainda
+acontecia em concorrência — e `saveAssociado` mexe no contrato junto.
+
+**Estava armado, não inerte.** Conferido em produção antes de mexer: `associados.cpf` e
+`parcelas_receber.devedor_cpf_cnpj` estão gravados no mesmo formato (`017.989.211-89`), então
+o `overdueMap` casava. Só não disparou porque o máximo hoje é **1** parcela vencida e o
+limiar é 3. O primeiro associado a acumular três seria marcado em silêncio.
+
+A regra de negócio é legítima; o que estava errado era ela ser executada sem ninguém no
+circuito. **Marcar um cliente como inadimplente é decisão de cobrança, não reparo de dado** —
+a mesma lição que o backfill da Ata de Ocorrências já registra sobre preencher um campo que
+decide o que o registro significa.
+
+Quatro decisões valem como regra:
+
+- **Detectar e gravar são passos separados.** `utils/inadimplencia.ts` (puro, 20 testes)
+  decide **quem**; `hooks/useAvisoInadimplencia` cria a notificação; quem grava é o
+  administrador, na tela de Associados, onde o seletor de status já existe. É a mesma divisão
+  da cobrança automática de atendimento e requisição: montar a proposta não pode escrever
+  nada. **Nenhuma linha do caminho novo escreve em `associados`.**
+- **O dono da parcela sai de `resolverAssociadoDaParcela`**, que tenta `associado_id` da
+  receita, depois CPF, depois nome. A rotina antiga montava um mapa `cpf → contagem` e
+  dependia de os dois lados estarem no mesmo formato — bastava um operador digitar sem
+  pontuação para a contagem zerar e o associado **sumir do aviso**, que é o erro mais quieto
+  dos dois. `parcelas_receber` não tem `associado_id`; o vínculo é pela receita, e o
+  resolvedor que faz isso já existia no relatório de Contas a Receber.
+- **"Em aberto" tem três nomes, e a rotina antiga só olhava dois.** Ela filtrava `'pendente'`
+  e `'vencido'` e deixava **`'atrasado'`** de fora — justamente o status que significa atraso.
+  Por isso a checagem é `parcelaEmAberto`, de `utils/statusParcela.ts`, e não um `||` escrito
+  de novo. É a terceira vez que este arquivo registra esse mesmo descuido.
+- **A data é comparada como texto.** Para `YYYY-MM-DD` a ordem lexicográfica é a cronológica.
+  A rotina antiga concatenava `'T12:00:00'` na data antes de construir o `Date` — o meio-dia
+  era a margem que a fazia escapar da armadilha do UTC que este arquivo documenta em
+  `anoDaData()`. Comparar texto dispensa a margem. A parcela que vence **hoje** não conta: o
+  associado ainda tem o dia.
+
+**O título do aviso é constante e a contagem vive na mensagem**, como no aviso de cadastros
+pela metade e pelo mesmo motivo — com o número no título, cada mudança na lista viraria
+assunto novo e o aviso renasceria do zero a cada carregamento (foi o que acumulou 24
+notificações para um usuário, 22 já apagadas).
+
+`avisoJaEnviado` **saiu de `cadastrosIncompletosService` para `notificacoesService`**: os dois
+avisos fazem a mesma pergunta, e `avisoDeCadastrosJaEnviado` passou a ser uma casca que só
+fixa o título. A próxima rotina de aviso entra coberta sem copiar o predicado.
+
+**Limitação conhecida, deixada de propósito**: `LIMITE_PARCELAS_VENCIDAS` é constante do
+código (3, o mesmo valor do `> 2` antigo), não configuração da empresa — duas empresas com
+políticas de cobrança diferentes recebem a mesma régua. Tornar o limiar configurável precisa
+de coluna nova e de tela. Por isso ele é **parâmetro da função**, e não literal no corpo: é o
+que torna essa passada barata depois.
+
 ## Associado com histórico não se exclui — inativa-se
 
 Pedido de 14/09/2026. `softDeleteAssociado` **não é soft coisa nenhuma**: é uma cascata de

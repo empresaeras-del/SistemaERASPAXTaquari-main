@@ -3,6 +3,7 @@ import {
   CadastroDeUsuario,
   TITULO_AVISO_CADASTROS_INCOMPLETOS,
 } from '../utils/cadastrosIncompletos';
+import { avisoJaEnviado } from './notificacoesService';
 
 /**
  * Acesso aos cadastros de usuário pela metade.
@@ -97,41 +98,16 @@ export const criarPerfilDoCadastro = async (cadastro: CadastroDeUsuario): Promis
 };
 
 /**
- * Este aviso, com este conteúdo, já foi dado a este usuário?
+ * Este aviso, com este conteúdo, já foi dado a este admin?
  *
- * Compara com o **último** aviso do assunto, incluindo os que o admin já apagou. Duas
- * decisões, e as duas vêm de incidentes já registrados neste projeto:
- *
- * - **Incluir os apagados** é o que impede o aviso de renascer a cada carregamento depois
- *   de dispensado — a armadilha que fez um usuário acumular 24 notificações de boas-vindas,
- *   22 delas já excluídas. Quem dispensou sem resolver continua com a lista completa em
- *   Configurações → Usuários, que é a superfície durável; a notificação é o toque no ombro,
- *   não o registro.
- * - **Comparar com o último, não com qualquer um**, é o que faz um cadastro que regride
- *   voltar a avisar: o conteúdo volta a ser diferente do último aviso dado.
- *
- * No escuro (offline, ou consulta falhando) responde `true`: não avisar é o lado seguro,
- * exatamente como `usuarioJaTeveNotificacao`.
+ * Fina camada sobre `avisoJaEnviado`, que é onde a regra mora e está documentada — os dois
+ * avisos deste projeto (cadastros pela metade e parcelas vencidas) fazem a mesma pergunta,
+ * e ela é respondida num lugar só. O que esta função acrescenta é fixar o título do
+ * assunto, para o chamador não poder errá-lo.
  */
 export const avisoDeCadastrosJaEnviado = async (
   isOnline: boolean,
   usuarioId: string,
   mensagem: string,
-): Promise<boolean> => {
-  if (!isOnline || !usuarioId) return true;
-  try {
-    const { data, error } = await supabase
-      .from('notificacoes')
-      .select('mensagem')
-      .eq('usuario_id', usuarioId)
-      .eq('titulo', TITULO_AVISO_CADASTROS_INCOMPLETOS)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    if (error) throw error;
-    if (!data || data.length === 0) return false;
-    return data[0]?.mensagem === mensagem;
-  } catch (e) {
-    console.warn('Não foi possível conferir o último aviso de cadastros incompletos:', e);
-    return true;
-  }
-};
+): Promise<boolean> =>
+  avisoJaEnviado(isOnline, usuarioId, TITULO_AVISO_CADASTROS_INCOMPLETOS, mensagem);
