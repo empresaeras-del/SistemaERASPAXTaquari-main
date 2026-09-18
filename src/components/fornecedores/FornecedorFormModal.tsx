@@ -977,6 +977,7 @@ export const FornecedorFormModal: React.FC<Props> = ({
               fornecedorId={initialData?.id}
               tenantId={initialData?.tenant_id}
               nomeEmpresa={initialData?.razao_social || initialData?.nome_fantasia}
+              documentoEmpresa={initialData?.cnpj_cpf}
             />
           )}
 
