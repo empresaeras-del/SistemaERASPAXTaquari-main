@@ -23,7 +23,15 @@ vi.mock('./financeiroService', () => ({
 
 import { getFromIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { supabase } from '../lib/supabase';
-import { getHistoricoImpeditivoAssociado, softDeleteAssociado, saveAssociado, Associado } from './associadosService';
+import { addToSyncQueue } from '../lib/syncService';
+import {
+  getHistoricoImpeditivoAssociado,
+  softDeleteAssociado,
+  saveAssociado,
+  upsertOuFalhar,
+  RecusaDoServidor,
+  Associado,
+} from './associadosService';
 
 const mockSupabase = vi.mocked(supabase, true) as any;
 
@@ -188,5 +196,150 @@ describe('saveAssociado: o vínculo com a empresa conveniada chega ao Postgres',
 
     // '' numa coluna uuid é 22P02 e derrubaria o insert inteiro.
     expect(upserts[0].fornecedor_id).toBeNull();
+  });
+});
+
+describe('upsertOuFalhar: a recusa do Postgres sobe, o payload não muda', () => {
+  /**
+   * `resilientSupabaseUpsert` tentava até 8 vezes e mudava o payload a cada tentativa até o
+   * banco aceitar — removia a coluna que o PGRST204 apontava, anulava o `plano_pax_id` na
+   * violação de FK e removia o `empresa_id`. As três gravavam um registro diferente do que o
+   * operador preencheu, com a tela dizendo "sucesso".
+   */
+  const recusar = (error: Record<string, any>) => {
+    const chamadas: Array<Record<string, any>> = [];
+    mockSupabase.from.mockImplementation(() => ({
+      upsert: vi.fn(async (payload: Record<string, any>) => {
+        chamadas.push(payload);
+        return { data: null, error };
+      }),
+    }) as any);
+    return chamadas;
+  };
+
+  it('tenta UMA vez e não reenvia com o payload encurtado', async () => {
+    const chamadas = recusar({ code: 'PGRST204', message: "Could not find the 'campo_novo' column of 'associados'" });
+
+    await expect(upsertOuFalhar('associados', { id: 'a1', campo_novo: 'x' })).rejects.toThrow();
+
+    // A função antiga faria 2 chamadas aqui: a segunda sem `campo_novo`.
+    expect(chamadas).toHaveLength(1);
+    expect(chamadas[0]).toHaveProperty('campo_novo', 'x');
+  });
+
+  it('PGRST204 nomeia a coluna e diz que falta a migration', async () => {
+    recusar({ code: 'PGRST204', message: "Could not find the 'observacoes_extra' column of 'associados'" });
+
+    await expect(upsertOuFalhar('associados', { id: 'a1' })).rejects.toThrow(/observacoes_extra/);
+    await expect(upsertOuFalhar('associados', { id: 'a1' })).rejects.toThrow(/migration/i);
+  });
+
+  it('FK violada NÃO vira plano_pax_id nulo — ela lança', async () => {
+    const chamadas = recusar({
+      code: '23503',
+      message: 'insert or update on table "associados" violates foreign key constraint "associados_plano_pax_id_fkey"',
+    });
+
+    await expect(
+      upsertOuFalhar('associados', { id: 'a1', plano_pax_id: 'plano-que-nao-existe' }),
+    ).rejects.toThrow(/referência/i);
+
+    // O coração da correção: uma chamada só, e o plano continua no payload.
+    expect(chamadas).toHaveLength(1);
+    expect(chamadas[0].plano_pax_id).toBe('plano-que-nao-existe');
+  });
+
+  it('o erro lançado é RecusaDoServidor — é o que separa recusa de queda de rede', async () => {
+    recusar({ code: '23502', message: 'null value in column "nome" violates not-null constraint' });
+    await expect(upsertOuFalhar('associados', { id: 'a1' })).rejects.toBeInstanceOf(RecusaDoServidor);
+  });
+
+  it('sucesso devolve o dado e não lança', async () => {
+    mockSupabase.from.mockImplementation(() => ({
+      upsert: vi.fn(async () => ({ data: [{ id: 'a1' }], error: null })),
+    }) as any);
+    await expect(upsertOuFalhar('associados', { id: 'a1' })).resolves.toEqual([{ id: 'a1' }]);
+  });
+});
+
+describe('saveAssociado: recusa e queda de rede não terminam igual', () => {
+  const associado = {
+    id: '22222222-2222-4222-8222-222222222222',
+    tenant_id: 'empresa-1',
+    nome: 'FULANO',
+    plano_pax_id: '33333333-3333-4333-8333-333333333333',
+    dependentes: [],
+  } as unknown as Associado;
+
+  /** Todas as tabelas respondem; `falha` decide o que a tabela nomeada devolve ou lança. */
+  const montarSupabase = (falha: { tabela: string; error?: any; excecao?: any }) => {
+    mockSupabase.from.mockImplementation((tabela: string) => {
+      const encadeavel: any = {
+        select: () => encadeavel,
+        upsert: async (payload: Record<string, any>) => {
+          if (tabela === falha.tabela) {
+            if (falha.excecao) throw falha.excecao;
+            return { data: null, error: falha.error };
+          }
+          return { data: [payload], error: null };
+        },
+        insert: async () => ({ data: null, error: null }),
+        update: () => encadeavel,
+        delete: () => encadeavel,
+        eq: () => encadeavel,
+        is: () => encadeavel,
+        in: async () => ({ data: null, error: null }),
+        order: () => encadeavel,
+        limit: async () => ({ data: [], error: null }),
+        // O plano existe no servidor, então a pré-sincronização não roda.
+        maybeSingle: async () => ({ data: { id: associado.plano_pax_id }, error: null }),
+        then: (resolve: any) => resolve({ data: [], error: null }),
+      };
+      return encadeavel;
+    });
+  };
+
+  it('recusa do servidor NÃO vai para a fila de sync', async () => {
+    montarSupabase({
+      tabela: 'associados',
+      error: { code: '23503', message: 'violates foreign key constraint' },
+    });
+
+    await expect(saveAssociado(associado, true)).rejects.toBeInstanceOf(RecusaDoServidor);
+
+    // Enfileirar uma recusa só adia a perda: o payload seria o mesmo e o banco recusaria de
+    // novo, para sempre. Antes desta correção ela era enfileirada DUAS vezes.
+    expect(vi.mocked(addToSyncQueue)).not.toHaveBeenCalled();
+  });
+
+  it('queda de rede VAI para a fila de sync', async () => {
+    montarSupabase({ tabela: 'associados', excecao: new TypeError('Failed to fetch') });
+
+    await expect(saveAssociado(associado, true)).rejects.toThrow('Failed to fetch');
+    expect(vi.mocked(addToSyncQueue)).toHaveBeenCalledTimes(1);
+  });
+
+  it('dependente recusado propaga em vez de virar console.warn', async () => {
+    montarSupabase({
+      tabela: 'dependentes',
+      error: { code: '23502', message: 'null value in column "nome"' },
+    });
+
+    // Antes: o catch só avisava no console, a tela dizia "sucesso" e o dependente não existia.
+    await expect(
+      saveAssociado(
+        { ...associado, dependentes: [{ id: 'd1', nome: 'FILHO', parentesco: 'FILHO' }] } as unknown as Associado,
+        true,
+      ),
+    ).rejects.toBeInstanceOf(RecusaDoServidor);
+  });
+
+  it('contrato recusado propaga', async () => {
+    montarSupabase({
+      tabela: 'contratos',
+      error: { code: '23514', message: 'violates check constraint' },
+    });
+
+    await expect(saveAssociado(associado, true)).rejects.toBeInstanceOf(RecusaDoServidor);
   });
 });
