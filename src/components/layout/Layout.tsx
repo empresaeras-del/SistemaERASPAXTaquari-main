@@ -6,7 +6,7 @@ import { Topbar } from './Topbar';
 import { TopNav } from './TopNav';
 import { AlertasPanel } from './AlertasPanel';
 import { useAppContext } from '../../context/AppContext';
-import { useBackgroundChecks } from '../../hooks/useBackgroundChecks';
+import { useAvisoInadimplencia } from '../../hooks/useAvisoInadimplencia';
 import { useScheduledBackup } from '../../hooks/useScheduledBackup';
 import { useAvisoCadastrosIncompletos } from '../../hooks/useAvisoCadastrosIncompletos';
 import { WelcomeModal } from './WelcomeModal';
@@ -21,7 +21,7 @@ export const Layout: React.FC = () => {
   const { state } = useAppContext();
   const location = useLocation();
   const navigate = useNavigate();
-  useBackgroundChecks();
+  useAvisoInadimplencia();
   useScheduledBackup();
   useAvisoCadastrosIncompletos();
 

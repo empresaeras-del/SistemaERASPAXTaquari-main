@@ -189,3 +189,52 @@ export const createNotificacao = async (notificacao: Omit<Notificacao, 'id' | 'c
     console.error('Erro ao criar notificacao', error);
   }
 };
+
+/**
+ * Este aviso, com este conteúdo, já foi dado a este usuário?
+ *
+ * Compara com o **último** aviso do mesmo título, incluindo os que o usuário já apagou.
+ * Duas decisões, e as duas vêm de incidentes já registrados neste projeto:
+ *
+ * - **Incluir os apagados** é o que impede o aviso de renascer a cada carregamento depois
+ *   de dispensado — a armadilha que fez um usuário acumular 24 notificações de boas-vindas,
+ *   22 delas já excluídas. Quem dispensou sem resolver continua com a lista completa na
+ *   tela correspondente, que é a superfície durável; a notificação é o toque no ombro.
+ * - **Comparar com o último, não com qualquer um**, é o que faz uma situação que regride
+ *   voltar a avisar: o conteúdo volta a ser diferente do último aviso dado.
+ *
+ * Daí a regra que os chamadores seguem: **título constante, contagem na mensagem**. Com o
+ * número no título, cada mudança na lista viraria um assunto novo e esta função perderia o
+ * rastro do aviso anterior.
+ *
+ * No escuro (offline, ou consulta falhando) responde `true`: não avisar é o lado seguro,
+ * exatamente como `usuarioJaTeveNotificacao`.
+ *
+ * Vive aqui, e não no service de cada assunto, porque é a mesma pergunta para todos — o
+ * aviso de cadastros pela metade e o de parcelas vencidas usam esta função, e a próxima
+ * rotina de aviso entra coberta sem precisar copiá-la. Predicado repetido em dois lugares
+ * só é corrigido uma vez.
+ */
+export const avisoJaEnviado = async (
+  isOnline: boolean,
+  usuarioId: string,
+  titulo: string,
+  mensagem: string,
+): Promise<boolean> => {
+  if (!isOnline || !usuarioId) return true;
+  try {
+    const { data, error } = await supabase
+      .from('notificacoes')
+      .select('mensagem')
+      .eq('usuario_id', usuarioId)
+      .eq('titulo', titulo)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    if (!data || data.length === 0) return false;
+    return data[0]?.mensagem === mensagem;
+  } catch (e) {
+    console.warn(`Não foi possível conferir o último aviso "${titulo}":`, e);
+    return true;
+  }
+};
