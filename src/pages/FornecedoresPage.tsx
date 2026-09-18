@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useFornecedores } from '../hooks/useFornecedores';
 import { FornecedorFormModal } from '../components/fornecedores/FornecedorFormModal';
 import { FornecedorDetailsModal } from '../components/fornecedores/FornecedorDetailsModal';
@@ -35,22 +35,9 @@ import toast from 'react-hot-toast';
 import { useConfirm } from '../context/ConfirmContext';
 import { canDelete } from '../utils/permissions';
 import { useAppContext } from '../context/AppContext';
-import { CATEGORIA_EMPRESA_CONVENIADA } from '../utils/empresaVinculada';
+import { useCategoriasFornecedor } from '../hooks/useCategoriasFornecedor';
+import { nomesDeCategoriaParaFiltro } from '../utils/categoriasFornecedor';
 
-const defaultCategoriasList = [
-  CATEGORIA_EMPRESA_CONVENIADA,
-  'Urnas e Caixões',
-  'Floricultura e Coroas',
-  'Marmoraria e Lápides',
-  'Translado e Veículos',
-  'Equipamentos Médicos',
-  'Tanatopraxia e Insumos',
-  'Cemitério e Crematório',
-  'Gráfica e Impressões',
-  'Manutenção e Conservação',
-  'Tecnologia e Sistemas',
-  'Outros'
-];
 const defaultTiposFornecimentoList = [
   'produtos',
   'servicos',
@@ -60,13 +47,10 @@ const defaultTiposFornecimentoList = [
 
 export const FornecedoresPage: React.FC = () => {
   const { state } = useAppContext();
-  const [categorias, setCategorias] = useState<string[]>(defaultCategoriasList);
+  const { categorias: categoriasCadastradas } = useCategoriasFornecedor();
   const [tiposFornecimento, setTiposFornecimento] = useState<string[]>(defaultTiposFornecimentoList);
 
   useEffect(() => {
-    const savedCats = localStorage.getItem('categorias_fornecedores');
-    if (savedCats) setCategorias(JSON.parse(savedCats));
-    
     const savedTipos = localStorage.getItem('tipos_fornecimento');
     if (savedTipos) setTiposFornecimento(JSON.parse(savedTipos));
   }, []);
@@ -82,6 +66,16 @@ export const FornecedoresPage: React.FC = () => {
     excluir, 
     restaurarDadosExemplo 
   } = useFornecedores();
+
+  /**
+   * Opções do filtro: as categorias ativas da empresa, mais qualquer uma que um fornecedor da
+   * lista já use — categoria desativada com fornecedores dentro precisa continuar filtrável,
+   * senão eles viram infiltráveis. Mesma escolha de `opcoesFiltroEmpresa`.
+   */
+  const categorias = useMemo(
+    () => nomesDeCategoriaParaFiltro(categoriasCadastradas, fornecedores.map((f) => f.categoria)),
+    [categoriasCadastradas, fornecedores],
+  );
 
   const { confirm } = useConfirm();
 

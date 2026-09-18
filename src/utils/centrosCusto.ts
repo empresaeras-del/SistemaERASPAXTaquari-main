@@ -7,33 +7,17 @@
  * é num relatório exportado, "03" não diz nada.
  */
 import { CentroCusto } from '../types/centroCusto';
-
-const ACENTOS = 'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ';
-const SEM_ACENTO = 'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC';
+import { codigoDeNome } from './codigoDeNome';
 
 /**
  * `'Comercial / Vendas'` → `'COMERCIAL-VENDAS'`.
  *
  * Mesma regra do backfill em SQL (`20260909122939`), para o código que o app gera bater com
- * o que a migration gerou: sem acento, maiúsculas, e qualquer corrida de caractere que não
- * seja letra ou número vira um hífen só. Nome que não sobra nada (só símbolos) devolve
- * `'CENTRO'`, para nunca gravar código vazio numa coluna `UNIQUE`.
+ * o que a migration gerou. A derivação em si mora em `utils/codigoDeNome.ts`, porque as
+ * categorias de fornecedor passaram a precisar exatamente dela.
  */
 export function codigoDeCentroCusto(nome: string): string {
-  const semAcento = (nome ?? '')
-    .split('')
-    .map((ch) => {
-      const i = ACENTOS.indexOf(ch);
-      return i >= 0 ? SEM_ACENTO[i] : ch;
-    })
-    .join('');
-
-  const codigo = semAcento
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-  return codigo || 'CENTRO';
+  return codigoDeNome(nome, 'CENTRO');
 }
 
 /** Ordena por código, com os desativados no fim — a tela lista os utilizáveis primeiro. */
