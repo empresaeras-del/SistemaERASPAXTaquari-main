@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useFornecedores } from '../../hooks/useFornecedores';
 import { z } from 'zod';
@@ -26,11 +26,16 @@ import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
 import { FornecedorAssociadosTab } from './FornecedorAssociadosTab';
 import { CATEGORIA_EMPRESA_CONVENIADA } from '../../utils/empresaVinculada';
+import { useCategoriasFornecedor } from '../../hooks/useCategoriasFornecedor';
+import { CategoriasFornecedorModal } from './CategoriasFornecedorModal';
+import {
+  categoriaIdParaGravacao,
+  nomesDeCategoriaParaSelecao,
+} from '../../utils/categoriasFornecedor';
 import {
   Fornecedor,
   FornecedorInsert,
   FornecedorUpdate,
-  CategoriaFornecedor,
   TipoPessoa,
   TipoFornecedor,
   StatusFornecedor,
@@ -135,21 +140,6 @@ const ListManageModal = ({
   );
 };
 
-const defaultCategoriasList: CategoriaFornecedor[] = [
-  CATEGORIA_EMPRESA_CONVENIADA,
-  'Urnas e Caixões',
-  'Floricultura e Coroas',
-  'Marmoraria e Lápides',
-  'Translado e Veículos',
-  'Equipamentos Médicos',
-  'Tanatopraxia e Insumos',
-  'Cemitério e Crematório',
-  'Gráfica e Impressões',
-  'Manutenção e Conservação',
-  'Tecnologia e Sistemas',
-  'Outros',
-];
-
 const defaultTiposFornecimentoList = ['produtos', 'servicos', 'ambos'];
 
 const schema = z.object({
@@ -225,17 +215,14 @@ export const FornecedorFormModal: React.FC<Props> = ({
   }, [activeTab, mostrarAbaAssociados]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { fornecedores } = useFornecedores();
-  const [categorias, setCategorias] = useState<string[]>(() => {
-    const saved = localStorage.getItem('categorias_fornecedores');
-    const lista: string[] = saved ? JSON.parse(saved) : defaultCategoriasList;
-    // A categoria de convênios é a chave do vínculo com o associado PJ, e a lista de categorias
-    // vive no localStorage de CADA navegador: quem nunca a criou pelo "Gerenciar" não a veria no
-    // select e não conseguiria cadastrar uma conveniada. Garantir a presença aqui é o que impede
-    // o recurso de existir só na máquina de quem o configurou.
-    return lista.includes(CATEGORIA_EMPRESA_CONVENIADA)
-      ? lista
-      : [CATEGORIA_EMPRESA_CONVENIADA, ...lista];
-  });
+  /**
+   * As categorias vêm da tabela da empresa (migration `20260918010924`), não mais do
+   * `localStorage` de cada navegador. Enquanto a empresa não tiver nenhuma cadastrada,
+   * `nomesDeCategoriaParaSelecao` cai na lista modelo — senão o select abriria vazio e não
+   * daria para salvar fornecedor nenhum.
+   */
+  const { categorias: categoriasCadastradas, carregar: recarregarCategorias } =
+    useCategoriasFornecedor();
   const [tiposFornecimento, setTiposFornecimento] = useState<string[]>(() => {
     const saved = localStorage.getItem('tipos_fornecimento');
     return saved ? JSON.parse(saved) : defaultTiposFornecimentoList;
@@ -243,10 +230,6 @@ export const FornecedorFormModal: React.FC<Props> = ({
 
   const [showCategoriasModal, setShowCategoriasModal] = useState(false);
   const [showTiposModal, setShowTiposModal] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem('categorias_fornecedores', JSON.stringify(categorias));
-  }, [categorias]);
 
   useEffect(() => {
     localStorage.setItem('tipos_fornecimento', JSON.stringify(tiposFornecimento));
@@ -272,11 +255,25 @@ export const FornecedorFormModal: React.FC<Props> = ({
       cnpj_cpf: '',
       tipo_pessoa: 'PJ',
       tipo_fornecedor: 'produtos',
-      categoria: 'Urnas e Caixões',
+      // Vazio, e não um nome cravado: as categorias vêm da tabela e o `reset` do efeito abaixo
+      // escolhe a primeira da lista real assim que ela chega.
+      categoria: '',
       status: 'ativo',
       tipo_conta: 'corrente',
     },
   });
+
+  const categoriaSelecionada = watch('categoria');
+  /**
+   * A categoria JÁ GRAVADA continua na lista mesmo depois de desativada — sem isso, abrir para
+   * editar perderia a seleção na tela e reescreveria o campo ao salvar, em silêncio. Mesma
+   * escolha do seletor de conta contábil e de `idJaSelecionado`.
+   */
+  const categorias = useMemo(
+    () => nomesDeCategoriaParaSelecao(categoriasCadastradas, categoriaSelecionada || initialData?.categoria),
+    [categoriasCadastradas, categoriaSelecionada, initialData?.categoria],
+  );
+
 
   const tipoPessoaWatch = watch('tipo_pessoa');
 
@@ -293,7 +290,7 @@ export const FornecedorFormModal: React.FC<Props> = ({
           inscricao_estadual: initialData.inscricao_estadual || '',
           inscricao_municipal: initialData.inscricao_municipal || '',
           tipo_fornecedor: initialData.tipo_fornecedor || 'produtos',
-          categoria: initialData.categoria || 'Urnas e Caixões',
+          categoria: initialData.categoria || categorias[0] || '',
           status: initialData.status || 'ativo',
           contato_nome: initialData.contato_nome || '',
           telefone: initialData.telefone || '',
@@ -322,13 +319,16 @@ export const FornecedorFormModal: React.FC<Props> = ({
           cnpj_cpf: '',
           tipo_pessoa: 'PJ',
           tipo_fornecedor: 'produtos',
-          categoria: 'Urnas e Caixões',
+          categoria: categorias[0] || '',
           status: 'ativo',
           tipo_conta: 'corrente',
         });
       }
     }
-  }, [isOpen, initialData, reset, proximoCodigo]);
+    // `categorias` entra nas deps porque é de onde sai o default do cadastro novo: com a
+    // lista cravada em literal, o default apontava para uma categoria que a empresa pode
+    // ter desativado ou renomeado.
+  }, [isOpen, initialData, reset, proximoCodigo, categorias]);
 
   if (!isOpen) return null;
 
@@ -372,6 +372,10 @@ export const FornecedorFormModal: React.FC<Props> = ({
         inscricao_municipal: values.inscricao_municipal || undefined,
         tipo_fornecedor: values.tipo_fornecedor as TipoFornecedor,
         categoria: values.categoria,
+        // `null`, nunca `undefined`: JSON.stringify descarta chave `undefined` e o update
+        // chegaria ao Postgres sem a coluna, deixando o id antigo no banco depois de o
+        // operador ter trocado a categoria na tela.
+        categoria_id: categoriaIdParaGravacao(categoriasCadastradas, values.categoria),
         status: values.status as StatusFornecedor,
         contato_nome: values.contato_nome || undefined,
         telefone: values.telefone || undefined,
@@ -1022,14 +1026,12 @@ export const FornecedorFormModal: React.FC<Props> = ({
           </div>
         </form>
       </div>
-      <ListManageModal
-        isOpen={showCategoriasModal}
-        onClose={() => setShowCategoriasModal(false)}
-        title="Gerenciar Categorias"
-        items={categorias}
-        onAdd={(cat) => setCategorias([...categorias, cat])}
-        onRemove={(cat) => setCategorias(categorias.filter((c) => c !== cat))}
-      />
+      {showCategoriasModal && (
+        <CategoriasFornecedorModal
+          onClose={() => setShowCategoriasModal(false)}
+          onAlterou={recarregarCategorias}
+        />
+      )}
       <ListManageModal
         isOpen={showTiposModal}
         onClose={() => setShowTiposModal(false)}

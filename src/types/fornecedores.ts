@@ -25,6 +25,14 @@ export interface Fornecedor {
   inscricao_municipal?: string;
   tipo_fornecedor: TipoFornecedor;
   categoria: CategoriaFornecedor | string;
+  /**
+   * Categoria do fornecedor em `categorias_fornecedor` (migration `20260918010924`). Nulo em
+   * empresa que ainda não tem a lista montada — aí a tela cai na lista modelo do frontend.
+   *
+   * **Quem manda é este id**; `categoria` (texto) acompanha o nome da categoria e é atualizado
+   * quando ela é renomeada. Não é snapshot, ao contrário de `despesas.centro_custo`.
+   */
+  categoria_id?: string | null;
   status: StatusFornecedor;
   
   // Contato

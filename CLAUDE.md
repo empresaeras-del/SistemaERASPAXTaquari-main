@@ -1543,8 +1543,8 @@ só **como**. Cinco decisões valem como regra:
 aparecia no select, e não havia como cadastrar uma conveniada nova. É a mesma doença que `categoria`
 tinha antes do plano contábil e `centros_custo` antes de virar tabela. Corrigido de duas formas:
 `CATEGORIA_EMPRESA_CONVENIADA` entrou nas duas listas padrão **e** é acrescentada à lista salva
-quando falta. **Mover a lista inteira de categorias para tabela continua pendente** — é a mesma
-decisão que `centros_custo` já tomou, e não cabia nesta passada.
+quando falta. Mover a lista inteira de categorias para tabela ficou para a passada seguinte — que
+é a seção abaixo.
 
 ### A foto pegou três coisas, e uma delas não era defeito
 
@@ -1561,6 +1561,86 @@ a seção "Conferindo a impressão de verdade" e a lição do `backdrop-filter`:
    `<option>`. Conferido no HTML gerado: não há `selected` em lugar nenhum. **Artefato do método, não
    defeito** — e refutar antes de "corrigir" é a mesma disciplina do `<form>` aninhado que este
    arquivo já registra.
+
+### As categorias de fornecedor viraram tabela — a terceira vez que este schema trata a mesma doença
+
+Migrations `20260918010924` (tabela e vínculo) e `20260918010937` (semeadura). Fecha a pendência
+que a seção acima registrou.
+
+**É a mesma doença de `categoria` antes do plano contábil e de `centros_custo` antes de virar
+tabela, na variante mais escondida das três**: as outras duas viviam no IndexedDB; esta vivia no
+**`localStorage`**, por navegador. Dois operadores da mesma empresa tinham listas diferentes, e uma
+categoria criada pelo "Gerenciar" numa máquina não existia em nenhuma outra. Foi exatamente assim
+que `Convenios Associados` — a chave de todo o vínculo do associado PJ — ficou invisível para quem
+não a tinha criado.
+
+Cinco decisões valem como regra:
+
+- **`fornecedores.categoria` (texto) NÃO é snapshot, e essa é a diferença que decide o desenho.**
+  Em `despesas.centro_custo` e no `categoria` dos lançamentos o texto congela o que valia na época,
+  porque aquilo é documento histórico. Aqui é classificação operacional: a categoria renomeada tem
+  de aparecer com o nome de hoje na listagem, no filtro e no relatório. Então quem manda é
+  `categoria_id`, e o texto acompanha — propagado por `propagarNomeParaFornecedores`, **num lugar
+  só**. É o mesmo critério que `nomeDaEmpresaDoAssociado` já registra, aplicado na direção
+  contrária. **Ao acrescentar uma coluna de nome ao lado de um id, escreva qual dos dois manda e
+  o que acontece quando o nome muda** — as duas formas existem neste schema e parecem a mesma.
+- **FK composta com `tenant_id`**, como manda a seção do plano contábil:
+  `(tenant_id, categoria_id) → categorias_fornecedor (tenant_id, id)`, `ON DELETE RESTRICT`, com a
+  `unique (tenant_id, id)` do lado referenciado. Exercitado em transação revertida antes de
+  aplicar: apontar para categoria de **outra** empresa leva `23503`, e excluir categoria em uso
+  também. Uma FK simples por `id` teria deixado as duas passar.
+- **Nullable, e a empresa sem categoria nenhuma cai na lista modelo.** Uma empresa criada depois do
+  backfill não tem linha em `categorias_fornecedor`; com `NOT NULL`, ou com um select vazio, ela não
+  conseguiria salvar fornecedor nenhum, porque `categoria` é obrigatória no formulário.
+  `nomesDeCategoriaParaSelecao` devolve `CATEGORIAS_FORNECEDOR_PADRAO` nesse caso — mesma escolha do
+  seletor de centro de custo e da isenção "empresa sem conta lançável" da fase 3: só se exige o que
+  é possível cumprir.
+- **Nenhum índice avulso por `tenant_id` na tabela nova.** As três `UNIQUE` já começam por ele, e um
+  `idx_..._tenant` seria byte a byte redundante — a armadilha da migration `20260910012513`, em que
+  `CREATE INDEX IF NOT EXISTS` casou pelo **nome** e nove pares idênticos conviveram por meses.
+  Conferido em `pg_indexes` por definição antes de criar.
+- **A policy declara `TO authenticated`.** Omitir o `TO` deixa `public`, que inclui `anon`, e
+  `has_tenant_access(NULL)` é permissivo por construção (ver "O papel `public` na policy inclui o
+  anônimo"). `centros_custo` nasceu sem o `TO` e precisou da migration `20260914134717` para
+  consertar; tabela nova já nasce certa.
+
+**O que a migration não consegue trazer, de propósito**: uma categoria que alguém criou pelo
+"Gerenciar" e nunca usou em fornecedor nenhum. Ela existia só no `localStorage` daquele navegador,
+fora do alcance do SQL — e, por definição, era invisível para todo o resto da empresa. O backfill
+semeia o que **aparece em `fornecedores.categoria`** mais a lista modelo, e isso cobre tudo que
+alguém além daquele navegador chegou a ver.
+
+**A derivação do código foi para `utils/codigoDeNome.ts`**, compartilhada com
+`codigoDeCentroCusto`, porque o `translate()`/`regexp_replace` das migrations gera **exatamente o
+mesmo código de propósito**: divergir faz o app criar categoria duplicada em vez de reaproveitar a
+que a migration criou. Há teste travando os 12 códigos da lista modelo contra o que o backfill
+produziu em produção.
+
+**A foto pegou um defeito que nenhuma asserção acusaria**: a etiqueta `(desativada)` ficava
+**dentro** do span com `truncate`, então era a primeira coisa cortada — sumia justamente o que a
+linha existe para dizer, e sobrava o nome, que já estava visível. Foi para fora do span, com
+`shrink-0`. **Rótulo de estado nunca compartilha a caixa que trunca com o texto variável.**
+
+O modal novo vai ao `document.body` por `createPortal`: é renderizado dentro do `<form>` do
+formulário de fornecedor, que por sua vez está dentro de um overlay com `backdrop-blur` — as duas
+armadilhas que este arquivo já documenta, resolvidas de uma vez. O teste não procura o conteúdo no
+documento (isso passaria nos dois casos): ele exige que o pai do overlay seja o `body` e que
+`closest('form')` seja nulo.
+
+**Achado incidental, corrigido junto** (migration `20260918010947`): o `CHECK` de
+`fornecedores.status` só conhecia `'ativo'` e `'inativo'`, mas o formulário oferece "Bloqueado /
+Suspenso" desde sempre e `StatusFornecedor` declara os três. Salvar um fornecedor bloqueado falhava
+com `23514`, e **nenhum fornecedor com esse status jamais existiu**. É a mesma classe do `CHECK` de
+`requisicoes.status` que não conhecia `'emitida'` — opção que a tela oferece e o banco recusa. A
+diferença é que aqui o erro ao menos chegava ao operador, porque `useFornecedores` lança; lá havia
+um retry que gravava com outro status e escondeu o defeito por meses.
+
+**Continua pendente, de propósito**: `tipos_fornecimento` segue no `localStorage`, com "Gerenciar"
+próprio. Não é a mesma doença — os três valores (`produtos`/`servicos`/`ambos`) têm rótulo cravado
+no JSX e a coluna é um domínio fechado, então o que aquele "Gerenciar" permite (acrescentar um valor
+que nenhuma tela sabe exibir) é **outro** defeito, e a correção dele é tirar a ação, não criar
+tabela.
+
 
 ## Módulo de Documentos Padrões
 
