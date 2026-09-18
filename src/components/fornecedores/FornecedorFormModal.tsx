@@ -19,10 +19,13 @@ import {
   Tag,
   ShieldCheck,
   AlertTriangle,
+  Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BotaoSalvar } from '../common/BotaoSalvar';
 import { AlertaAlteracoesPendentes } from '../common/AlertaAlteracoesPendentes';
+import { FornecedorAssociadosTab } from './FornecedorAssociadosTab';
+import { CATEGORIA_EMPRESA_CONVENIADA } from '../../utils/empresaVinculada';
 import {
   Fornecedor,
   FornecedorInsert,
@@ -133,6 +136,7 @@ const ListManageModal = ({
 };
 
 const defaultCategoriasList: CategoriaFornecedor[] = [
+  CATEGORIA_EMPRESA_CONVENIADA,
   'Urnas e Caixões',
   'Floricultura e Coroas',
   'Marmoraria e Lápides',
@@ -203,12 +207,34 @@ export const FornecedorFormModal: React.FC<Props> = ({
   initialData,
   proximoCodigo = 'FORN0001',
 }) => {
-  const [activeTab, setActiveTab] = useState<'dados' | 'contato' | 'financeiro'>('dados');
+  const [activeTab, setActiveTab] = useState<'dados' | 'contato' | 'financeiro' | 'associados'>('dados');
+
+  /**
+   * A aba da carteira só existe para empresa conveniada JÁ GRAVADA, e o predicado usa a
+   * categoria **salva** (`initialData`), não a que está no formulário: trocar o select faria a
+   * aba piscar enquanto se edita, e os associados estão vinculados ao registro como ele está no
+   * banco, não como está na tela.
+   */
+  const mostrarAbaAssociados =
+    Boolean(initialData?.id) && initialData?.categoria === CATEGORIA_EMPRESA_CONVENIADA;
+
+  // Categoria deixou de ser a de convênios e a aba estava aberta: volta para a primeira, senão
+  // o formulário ficaria sem nenhum painel renderizado.
+  useEffect(() => {
+    if (activeTab === 'associados' && !mostrarAbaAssociados) setActiveTab('dados');
+  }, [activeTab, mostrarAbaAssociados]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { fornecedores } = useFornecedores();
   const [categorias, setCategorias] = useState<string[]>(() => {
     const saved = localStorage.getItem('categorias_fornecedores');
-    return saved ? JSON.parse(saved) : defaultCategoriasList;
+    const lista: string[] = saved ? JSON.parse(saved) : defaultCategoriasList;
+    // A categoria de convênios é a chave do vínculo com o associado PJ, e a lista de categorias
+    // vive no localStorage de CADA navegador: quem nunca a criou pelo "Gerenciar" não a veria no
+    // select e não conseguiria cadastrar uma conveniada. Garantir a presença aqui é o que impede
+    // o recurso de existir só na máquina de quem o configurou.
+    return lista.includes(CATEGORIA_EMPRESA_CONVENIADA)
+      ? lista
+      : [CATEGORIA_EMPRESA_CONVENIADA, ...lista];
   });
   const [tiposFornecimento, setTiposFornecimento] = useState<string[]>(() => {
     const saved = localStorage.getItem('tipos_fornecimento');
@@ -383,7 +409,13 @@ export const FornecedorFormModal: React.FC<Props> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-base/80 backdrop-blur-sm p-4">
-      <div className="bg-bg-subtle rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in-95">
+      {/* A carteira é uma grade de 12 meses; nos 768px que bastam para os formulários ela
+          viraria rolagem horizontal do começo ao fim. O modal alarga só nessa aba. */}
+      <div
+        className={`bg-bg-subtle rounded-3xl shadow-2xl w-full ${
+          activeTab === 'associados' ? 'max-w-6xl' : 'max-w-3xl'
+        } max-h-[90vh] flex flex-col border border-border-default overflow-hidden animate-in fade-in zoom-in-95 transition-[max-width] duration-200`}
+      >
         {/* MODAL HEADER */}
         <div className="flex items-center justify-between p-6 border-b border-border-default bg-bg-surface/30">
           <div className="flex items-center gap-3">
@@ -451,6 +483,21 @@ export const FornecedorFormModal: React.FC<Props> = ({
             <CreditCard className="w-4 h-4" />
             <span>Dados Bancários & Extras</span>
           </button>
+
+          {mostrarAbaAssociados && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('associados')}
+              className={`flex items-center gap-2 py-3.5 px-4 border-b-2 font-semibold text-sm transition-all ${
+                activeTab === 'associados'
+                  ? 'border-[#3B82F6] text-[#3B82F6] bg-bg-surface/80 rounded-t-xl'
+                  : 'border-transparent text-text-subtle hover:text-text-base'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Associados & Mensalidades</span>
+            </button>
+          )}
         </div>
 
         {/* FORM CONTENT */}
@@ -918,6 +965,15 @@ export const FornecedorFormModal: React.FC<Props> = ({
                 />
               </div>
             </div>
+          )}
+
+          {/* TAB 4: ASSOCIADOS VINCULADOS E MENSALIDADES (só para empresa conveniada) */}
+          {activeTab === 'associados' && mostrarAbaAssociados && (
+            <FornecedorAssociadosTab
+              fornecedorId={initialData?.id}
+              tenantId={initialData?.tenant_id}
+              nomeEmpresa={initialData?.razao_social || initialData?.nome_fantasia}
+            />
           )}
 
           {/* FOOTER ACTIONS */}
