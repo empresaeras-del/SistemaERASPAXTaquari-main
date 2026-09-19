@@ -2280,6 +2280,86 @@ estética; ficou fora das entregas de redesenho.
     `20260914134717`; ver "O papel `public` na policy inclui o anônimo" abaixo. Daqui para
     frente, o alerta `anon_security_definer_function_executable` com **contagem 4** é o
     esperado: qualquer número maior é função nova para examinar, não ruído.
+### As permissões por módulo passaram a valer no servidor (migration `20260919001244`)
+
+Achado na análise de 18/09/2026. A tela de Configurações concede módulos e submódulos por
+usuário, com granularidade fina, e **nada disso chegava ao banco**: das 41 policies, **zero**
+consultavam `modulos_permitidos` e apenas 2 (ambas em `users`) consultavam `current_user_nivel()`.
+Todas as demais perguntavam uma coisa só — o registro é da sua empresa?
+
+**Provado, não deduzido.** Simulando o JWT real do gerente KAUA (que tem apenas os módulos de
+Associados) dentro de transação revertida: ele leu 24 parcelas a receber, 2 receitas, 3
+movimentações de caixa e 14 linhas de auditoria, e o **`UPDATE` nas 24 parcelas foi aceito**. A
+chave anônima está no bundle — isso é alcançável por qualquer autenticado via `/rest/v1`, sem
+passar pela tela que esconde o botão.
+
+#### O mapa completo tabela→módulo era o desenho óbvio, e teria quebrado produção
+
+Vale como regra antes de qualquer mudança de RLS deste tipo: **um módulo é agrupamento de
+navegação, não fronteira de dados.** Seis dos catorze arquivos que criam receita/parcela vivem
+**fora** das telas de financeiro — gerar mensalidade e receber parcela (dentro do cadastro do
+associado), reativar associado, atendimento e contrato com cobrança, e guia com co-participação.
+
+Amarrar `receitas` ao módulo `financeiro` tiraria do KAUA justamente as operações centrais do
+módulo que ele **tem**. Conferido usuário a usuário antes de decidir: dos 8, quatro têm o curinga
+`'*'` (3 admins + super_admin) e três funcionários têm `associados` **e** `financeiro` — KAUA era
+o único afetado, e seria afetado no lugar errado. **Ao apertar RLS, meça quem perde o quê antes
+de escolher o corte**; o desenho mais completo não é o que entrega mais segurança se ele derruba
+uma operação legítima.
+
+#### O corte que entrou
+
+- **A escrita exige o módulo; a leitura continua por empresa.** Duas policies por tabela:
+  `<t>_select_policy` (cmd `SELECT`, empresa) e `<t>_write_policy` (cmd `ALL`, empresa **e**
+  módulo). Como policies permissivas são OR, em `SELECT` as duas são avaliadas e o resultado é
+  "empresa"; em `INSERT`/`UPDATE`/`DELETE` só a segunda se aplica. Nenhuma tela perde dado que já
+  mostrava — e é isso que torna a mudança segura de aplicar sem UI logada para conferir.
+- **Só as tabelas em que o módulo é fronteira real**: `planos_pax` (+faixas, +coberturas) →
+  `planos`; `credenciados` (+planos, +procedimentos, `procedimentos`, `remessas_faturamento`) →
+  `credenciados`; `itens_funerarios`; `fornecedores` e `categorias_fornecedor` → `administracao`;
+  `documentos_padroes` → `configuracoes`; `planos_contabeis`, `contas_contabeis` e `centros_custo`
+  → `financeiro`. `associados` e o resto do financeiro seguem um domínio só, porque de fato são.
+- **`auditoria` passou a ser por NÍVEL e append-only.** Leitura só para `admin`/`super_admin` — a
+  regra que a própria tela anuncia desde 15/09, e nenhum funcionário ou gerente tem o módulo
+  `auditoria`, então não se tirou nada alcançável. **Sem policy de `UPDATE` nem de `DELETE`**: com
+  RLS ligada, o que nenhuma policy permite é negado. Conferido no `src/` antes de fechar — existem
+  exatamente um `SELECT` e um `INSERT` sobre a tabela, nada reescreve nem apaga.
+
+#### Três detalhes que valem como regra
+
+- **`DROP` + `CREATE` foi inevitável aqui, e por isso cada `CREATE` declara `TO authenticated`.**
+  Este arquivo prefere `ALTER POLICY` justamente para não deixar cair o papel — mas `ALTER` não
+  muda o `cmd`, e a mudança **é** o `cmd`. A conferência que fecha o risco é contar depois:
+  **0 policies fora de `authenticated`**, de 58.
+- **`tem_modulo(text)` recebe um literal constante, não uma coluna** — então, ao contrário de
+  `has_tenant_access(tenant_id)`, a chamada não depende da linha e **vai dentro de `(select ...)`**.
+  O critério que a seção do `auth_rls_initplan` fixa é "não depender da linha", e um argumento
+  constante não cria dependência.
+- **Ela é revogada de `PUBLIC` e de `anon`.** Todas as policies que a usam são `TO authenticated`,
+  então o anônimo nunca a avalia — e revogar mantém o advisor
+  `anon_security_definer_function_executable` em **4**, a contagem que este arquivo fixa como
+  esperada. Conferido depois de aplicar: continua 4, e as 4 são as auxiliares de RLS. O advisor de
+  `authenticated` subiu de 10 para 11, que é o esperado: a função precisa desse `EXECUTE` para as
+  policies serem avaliáveis.
+
+#### Resultado conferido em produção, por usuário
+
+| | escreve plano | escreve fornecedor | escreve associado | lê auditoria |
+|---|---|---|---|---|
+| 3 admins + super_admin (`'*'`) | sim | sim | sim | 14 / 204 / 204 / 582 |
+| GIZELLE (tem `planos` e `administracao`) | sim | sim | sim | **0** |
+| PAOLA (tem `administracao`) | **não** | sim | sim | **0** |
+| WELLITON (não tem nenhum dos dois) | **não** | **não** | sim | **0** |
+| KAUA, gerente (só Associados) | **não** | **não** | **sim** | **0** |
+
+A última coluna da direita é a que importava: **todos continuam gravando associado**, inclusive
+KAUA. E as leituras de `planos_pax` e `parcelas_receber` ficaram idênticas às de antes.
+
+**Limite conhecido, de propósito**: a pré-sincronização de `planos_pax` em `saveAssociado` passa a
+ser recusada para quem não tem o módulo `planos`. Ela só dispara quando o plano existe **apenas**
+no IndexedDB, o que exige tê-lo criado — e criar plano já pede o módulo. Se acontecer, o `warn`
+dela cai e a FK do associado devolve a mensagem certa, dizendo que o plano não existe.
+
 ### O papel `public` na policy inclui o anônimo — e é o papel que barra, não o predicado
 
 Levantamento de 14/09/2026, pedido como "verificar as pendências de Auth". O que barra quem
