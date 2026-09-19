@@ -10,6 +10,7 @@ import {
   montarHistoricoImpeditivo,
 } from '../utils/historicoAssociado';
 import { vinculoEmpresaParaGravacao } from '../utils/empresaVinculada';
+import { statusDoContratoParaAssociado } from '../utils/statusContrato';
 
 export interface Associado {
   id: string;
@@ -569,7 +570,10 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
           data_inicio: dataAdesao,
           data_adesao: dataAdesao,
           valor_mensalidade: Number(valorPlano) || 0,
-          status: associadoToSave.status || 'ativo',
+          // O status do CONTRATO, traduzido do status do associado — não copiado dele. Os dois
+          // domínios divergem: `associados.status` aceita 'inadimplente' e
+          // `contratos_status_check` recusa, com 23514. Ver utils/statusContrato.ts.
+          status: statusDoContratoParaAssociado(associadoToSave.status),
           observacoes: (associadoToSave as any).observacoes || null
         };
 

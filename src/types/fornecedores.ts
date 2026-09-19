@@ -1,6 +1,15 @@
 export type TipoPessoa = 'PJ' | 'PF';
 
-export type TipoFornecedor = 'produtos' | 'servicos' | 'ambos' | string;
+/**
+ * Domínio fechado, e agora fechado também no banco.
+ *
+ * O `| string` do fim anulava a union — para o compilador ela era `string`, e qualquer valor
+ * passava. Fazia sentido enquanto o "Gerenciar" da tela deixava inventar tipo; esse caminho saiu
+ * em 18/09/2026 junto com o `CHECK` de `fornecedores.tipo_fornecedor`, então o `| string` virou
+ * o que restava da porta aberta. Valor legado fora do domínio é tratado onde ele aparece — em
+ * `opcoesTipoFornecimento` e `rotuloTipoFornecimento` —, não afrouxando o tipo.
+ */
+export type TipoFornecedor = 'produtos' | 'servicos' | 'ambos';
 
 export type StatusFornecedor = 'ativo' | 'inativo' | 'bloqueado';
 

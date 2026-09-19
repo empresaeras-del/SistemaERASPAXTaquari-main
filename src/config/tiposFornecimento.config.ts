@@ -20,7 +20,12 @@ import { TipoFornecedor } from '../types/fornecedores';
  */
 
 export interface OpcaoTipoFornecimento {
-  valor: TipoFornecedor;
+  /**
+   * `string`, não `TipoFornecedor`, de propósito: a lista pode carregar um valor legado que está
+   * gravado e não pertence mais ao domínio (ver `opcoesTipoFornecimento`). Tipar como
+   * `TipoFornecedor` obrigaria um `as` que afirmaria o contrário do que se sabe.
+   */
+  valor: string;
   /** Rótulo do formulário de cadastro. */
   rotulo: string;
   /** Rótulo curto, para cards e tabelas onde não há espaço. */
@@ -29,7 +34,12 @@ export interface OpcaoTipoFornecimento {
   rotuloFiltro: string;
 }
 
-export const TIPOS_FORNECIMENTO: readonly OpcaoTipoFornecimento[] = [
+/**
+ * Os três valores canônicos. O `valor` é tipado como `TipoFornecedor`, não `string`: é aqui que
+ * o domínio precisa ser checado pelo compilador — `OpcaoTipoFornecimento.valor` é largo de
+ * propósito, porque a lista devolvida ao seletor pode carregar um legado fora do domínio.
+ */
+export const TIPOS_FORNECIMENTO: readonly (OpcaoTipoFornecimento & { valor: TipoFornecedor })[] = [
   {
     valor: 'produtos',
     rotulo: 'Produtos / Insumos',
@@ -75,11 +85,13 @@ export const rotuloLongoTipoFornecimento = (valor: string | null | undefined): s
 export const opcoesTipoFornecimento = (
   valorJaGravado?: string | null
 ): OpcaoTipoFornecimento[] => {
-  const opcoes = [...TIPOS_FORNECIMENTO];
+  // Anotado, e não inferido: `TIPOS_FORNECIMENTO` é do tipo estreito (só os três canônicos), e
+  // é exatamente aqui que um valor legado pode entrar na lista. O `tsc` cobra essa fronteira.
+  const opcoes: OpcaoTipoFornecimento[] = [...TIPOS_FORNECIMENTO];
   const atual = (valorJaGravado || '').trim();
   if (atual && !opcoes.some((t) => t.valor === atual)) {
     opcoes.push({
-      valor: atual as TipoFornecedor,
+      valor: atual,
       rotulo: atual,
       rotuloCurto: atual,
       rotuloFiltro: atual,

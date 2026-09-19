@@ -1182,6 +1182,81 @@ lançar trocaria "escrita parcial silenciosa" por "registro criado offline desca
 silêncio", que não é melhor. Corrigir ali exige antes decidir para onde vai o aviso de uma
 tarefa que não sobe, e isso é decisão de produto sobre dado offline, não limpeza de código.
 
+## O domínio do TypeScript e o `CHECK` do Postgres agora são comparados por teste
+
+Fechado em 19/09/2026. Este projeto teve **quatro** defeitos da mesma classe, e os quatro foram
+achados um a um, por acaso, quando alguém tentou usar:
+
+| Descoberto | O defeito |
+| --- | --- |
+| 11/09 | `requisicoes.status` não conhecia `'emitida'` — o status com que o app cria **toda** guia |
+| 18/09 | `fornecedores.status` não conhecia `'bloqueado'`, que o formulário oferece desde sempre |
+| 18/09 | `fornecedores.tipo_fornecedor` não tinha `CHECK` nenhum: o domínio existia só no TypeScript |
+| 19/09 | `contratos.status` recusa `'inadimplente'`, que `saveAssociado` copiava do associado |
+
+`config/dominiosDoBanco.ts` guarda o retrato dos 30 domínios de texto que o Postgres impõe, e
+`test/dominiosDoBanco.test.ts` compara com as unions do TypeScript. **O quarto da lista foi
+achado pelo próprio teste**, na primeira vez que ele rodou.
+
+### Três decisões do desenho
+
+- **O teste lê o FONTE, não o tipo.** Uma union do TypeScript é apagada na compilação — não há o
+  que importar em tempo de execução. A alternativa idiomática seria declarar cada domínio como
+  `['a','b'] as const` e derivar o tipo dele; é mais robusto e é uma reescrita de 16 tipos, que
+  ficou para outra rodada. Ler por regex é frágil **de propósito controlado**: há um teste que
+  exige achar cada union declarada no mapa, então uma regex que pare de casar **reprova** em vez
+  de passar vazio. Um guarda que não acha o que deveria checar é um enfeite.
+- **O retrato é gerado, não digitado.** O SQL que o produz está no cabeçalho do arquivo, e a saída
+  já vem no formato exato das linhas. **Ao criar ou alterar um `CHECK` de domínio, regere o
+  retrato na mesma tarefa** — é a regra do campo novo sem migration, na direção contrária.
+- **Valor que só existe no banco precisa de motivo escrito.** `requisicoes.status` aceita
+  `'pendente'` e `'negada'`, que o TypeScript não declara: são legado das linhas antigas, e tirá-los
+  do `CHECK` quebraria o `UPDATE` delas. A exceção é declarada com a frase que explica por quê, e
+  há um teste exigindo que o motivo tenha mais de 30 caracteres — **sem isso a exceção vira só um
+  jeito de calar o teste**, que é exatamente o que ele existe para impedir.
+
+As duas direções são checadas separadamente porque têm gravidades diferentes: o TypeScript
+declarar um valor que o banco recusa **quebra a gravação** (`23514`); o banco aceitar um valor que
+o TypeScript não conhece deixa o registro **sem rótulo, fora do filtro e fora dos contadores** —
+visível só na coluna crua.
+
+### O defeito que o teste achou: status de associado não é status de contrato
+
+`saveAssociado` montava o payload de `contratos` com `status: associadoToSave.status || 'ativo'` —
+**copiando** um domínio no outro. `associados.status` aceita `'inadimplente'`;
+`contratos_status_check` não. Conferido em produção, em transação revertida:
+
+```
+ANTES  (status copiado: 'inadimplente') -> 23514
+DEPOIS (status traduzido: 'ativo')      -> aceito
+```
+
+Bastava o operador marcar um associado como inadimplente — opção que o formulário oferece — e
+salvar o cadastro. Estava armado e ainda não disparou só porque a produção tem 0 inadimplentes.
+Até a PR #77 a recusa morria num `console.warn` no `catch` do contrato: o associado era salvo, o
+contrato ficava com o status velho e a tela dizia sucesso.
+
+`utils/statusContrato.ts` traduz em vez de copiar, e **`'inadimplente'` vira contrato `'ativo'`,
+não `'inativo'`**: quem deve continua coberto — o contrato está vigente, o que existe é uma
+dívida. É a mesma decisão que `associadoSelecionavel` já registra ao manter o inadimplente
+escolhível num atendimento. O teste amarra isso ao retrato em vez de repetir a lista: varre
+**todos** os valores de `associados.status` e exige que o resultado esteja em `contratos.status`.
+
+`StatusContrato` passou a espelhar o `CHECK` (`ativo | inativo | encerrado | cancelado`) — ela
+declarava `'inadimplente'`, que o banco recusa, e não declarava `'cancelado'`, que ele aceita.
+
+### `| string` no fim de uma union anula a union
+
+`TipoFornecedor` era `'produtos' | 'servicos' | 'ambos' | string` — para o compilador, `string`.
+Qualquer valor passava, e o teste de domínio não teria como acusar nada. Fazia sentido enquanto o
+"Gerenciar" da tela deixava inventar tipo; esse caminho saiu em 18/09 junto com o `CHECK`, então o
+`| string` era o que restava da porta aberta.
+
+Ao fechá-la, o `tsc` apontou **exatamente** a fronteira onde um valor legado entra
+(`opcoesTipoFornecimento`, que preserva o que já está gravado). A constante canônica ficou tipada
+com o domínio estreito e só a lista devolvida ao seletor é larga — **estreite o tipo onde o
+domínio vale e alargue onde o legado entra**, em vez de alargar o tipo inteiro.
+
 ## A inadimplência virou aviso — ela marcava o cadastro sozinha
 
 Achado na análise de 18/09/2026. `hooks/useBackgroundChecks` rodava no carregamento da

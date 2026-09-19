@@ -5,7 +5,14 @@
  * do associado. Este tipo formaliza esse espelho, para uso no catálogo de variáveis
  * de documentos e em qualquer lugar que precise ler a tabela `contratos` diretamente.
  */
-export type StatusContrato = 'ativo' | 'inativo' | 'inadimplente' | 'encerrado';
+/**
+ * Os quatro valores que `contratos_status_check` aceita.
+ *
+ * Declarava `'inadimplente'` e não declarava `'cancelado'` — e `'inadimplente'` não é status de
+ * contrato: é do **associado**. O contrato de quem está devendo continua vigente; o que existe é
+ * uma dívida. Ver `statusDoContratoParaAssociado`, que faz a tradução no ponto de escrita.
+ */
+export type StatusContrato = 'ativo' | 'inativo' | 'encerrado' | 'cancelado';
 
 export interface Contrato {
   id: string;
