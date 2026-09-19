@@ -301,11 +301,50 @@ policy recusando, `23505` é você.
 
 Já aconteceu duas vezes (`documentos_padroes` e `atendimentos`): alguém adiciona um campo opcional
 à interface TypeScript, o código já lê/grava esse campo, mas ninguém cria a migration — o Supabase
-responde `PGRST204` (coluna não encontrada) e, como vários services têm uma rotina que descarta
-silenciosamente qualquer coluna ausente e tenta salvar de novo (ver `useDocumentosPadroes.ts`), o
-dado do usuário é **salvo com sucesso aparente e perdido**, sem erro visível. Ao adicionar um campo
-novo a uma interface que é persistida no Supabase, **sempre** crie a migration na mesma tarefa —
-nunca depois "quando der tempo".
+responde `PGRST204` (coluna não encontrada). Ao adicionar um campo novo a uma interface que é
+persistida no Supabase, **sempre** crie a migration na mesma tarefa — nunca depois "quando der
+tempo".
+
+**O que tornava isso mudo acabou em 19/09/2026.** Até então `useDocumentosPadroes` respondia ao
+`PGRST204` **apagando a coluna que faltava e regravando**, em laço de até 12 tentativas: o
+documento era gravado sem o campo, a tela dizia "salvo com sucesso" e o dado do usuário sumia sem
+erro nenhum. Era a terceira cópia do mesmo padrão neste repositório, depois do retry que regravava
+a guia com `status: 'pendente'` (11/09) e do `resilientSupabaseUpsert` que anulava o
+`plano_pax_id` (18/09) — *um retry que muda o dado enviado não é tolerância a falha, é corromper o
+registro para conseguir gravá-lo.* Os dois blocos (`criar` e `editar`) passaram a fazer uma
+tentativa com um payload e lançar `RecusaDoServidor` com `explicarRecusa`, o par que
+`utils/recusaDoServidor.ts` já oferecia. O `PGRST204` é justamente o **único** sinal de que falta
+uma migration; engoli-lo escondia o defeito seguinte.
+
+**A cópia que sobra é a de `lib/syncService.ts`** (`resilientSyncUpsert`), deixada de fora pelo
+motivo já registrado adiante: a fila apaga a tarefa ao esgotar as tentativas, e fazê-la lançar
+trocaria "escrita parcial silenciosa" por "registro criado offline descartado em silêncio".
+
+### Testando um hook que grava
+
+`useDocumentosPadroes.test.tsx` (25 casos) e `useAvisoInadimplencia.test.tsx` (16) são os
+primeiros testes de hook do projeto. Quatro decisões valem para o próximo:
+
+- **O mock do Supabase registra a CHAMADA, não só a resposta.** O defeito acima não aparece no
+  valor devolvido — aparece em **quantas vezes** o hook tentou gravar e **com qual payload em
+  cada tentativa**. Um mock que só devolvesse `{data, error}` não distinguiria "gravou" de
+  "gravou depois de jogar fora metade dos campos do usuário". Rodado contra o código anterior, o
+  teste reprova com `expected [ … ] to have a length of 1 but got 2` — mede o defeito em vez de
+  descrevê-lo, como o de `resilientSupabaseUpsert` já fazia.
+- **O IndexedDB falso guarda estado**, pelo mesmo motivo de `caixasService.test.ts`: toda escrita
+  deste hook termina chamando `carregarDocumentos`, que relê o store inteiro.
+- **No hook de aviso, o teste central é sobre o que ele NÃO faz.** `useAvisoInadimplencia`
+  substituiu o `useBackgroundChecks`, que marcava o associado como inadimplente sozinho; por isso
+  o primeiro caso do arquivo exige que `saveAssociado` não seja chamado em caminho nenhum,
+  inclusive quando a notificação falha. Um teste que só cobrisse a notificação passaria de novo no
+  dia em que alguém reintroduzisse a gravação "para adiantar o trabalho do admin".
+- **O quirk que ficou documentado, não corrigido**: sem empresa resolvida, `criar` e `editar`
+  carimbam o literal `'emp-001'` — a mesma classe de "Nunca invente um `tenant_id`", na variante
+  que **esconde** (o modelo nasce invisível para todas as empresas, como o `'system'` da Ata de
+  Ocorrências). Só o super_admin alcança esse estado. Recusar a gravação ali é decisão de produto
+  sobre quem pode criar modelo sem empresa escolhida, e o mesmo literal está em
+  `useItensFunerarios`; há um teste travando o comportamento atual para que a mudança, quando
+  vier, seja deliberada.
 
 ## Schema drift resolvido — os pares de colunas duplicadas acabaram
 

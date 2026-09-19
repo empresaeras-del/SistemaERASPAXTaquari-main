@@ -507,9 +507,12 @@ export const DocumentosPadroesPage = () => {
     }
     try {
       await editar(doc.id, { ativo: !doc.ativo });
-    } catch (err) {
+    } catch (err: any) {
+      // A mensagem do servidor chega inteira: desde 19/09/2026 o hook lança em vez de
+      // apagar a coluna recusada e regravar, e um "Erro ao alterar status" genérico não
+      // diz se o problema é permissão, migration faltando ou rede.
       console.error(err);
-      alert('Erro ao alterar status');
+      alert(err?.message || 'Erro ao alterar status');
     }
   };
 
@@ -817,7 +820,7 @@ export const DocumentosPadroesPage = () => {
             toast.success(config ? 'Posição da assinatura salva!' : 'Posicionamento personalizado removido.');
           } catch (err) {
             console.error('Erro ao salvar posição da assinatura:', err);
-            toast.error('Erro ao salvar a posição da assinatura.');
+            toast.error((err as Error)?.message || 'Erro ao salvar a posição da assinatura.');
           }
         }}
         onSaveOrientacao={async (orientacao) => {
@@ -826,7 +829,7 @@ export const DocumentosPadroesPage = () => {
             await editar(docToPrint.id, { orientacao });
           } catch (err) {
             console.error('Erro ao salvar a orientação do documento:', err);
-            toast.error('Erro ao salvar a orientação do documento.');
+            toast.error((err as Error)?.message || 'Erro ao salvar a orientação do documento.');
           }
         }}
       />
