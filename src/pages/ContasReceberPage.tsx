@@ -23,6 +23,7 @@ import { getAssociados, Associado } from '../services/associadosService';
 import { RelatorioContasReceberModal } from '../components/financeiro/RelatorioContasReceberModal';
 import { RelatorioMapaCalorModal } from '../components/financeiro/RelatorioMapaCalorModal';
 import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
+import { avisoLiquidacaoSemCaixa } from '../utils/avisoLiquidacaoSemCaixa';
 import { montarReciboDeRecebimento } from '../utils/reciboRecebimento';
 import { MENSAGEM_TENANT_INDEFINIDO, tenantDeEscrita } from '../utils/tenant';
 import { IndicadoresContasReceber } from '../components/financeiro/IndicadoresContasReceber';
@@ -426,24 +427,34 @@ export const ContasReceberPage: React.FC = () => {
         observacao: observacaoRecebimento
       });
 
-      // Registra a movimentação financeira diretamente no Lote de Caixa Aberto
-      await registrarMovimentacao(state.isOnline, {
-        tenant_id: tenantId,
-        lote_id: loteAberto.id,
-        tipo: 'entrada',
-        origem: 'contas_receber',
-        categoria: 'Receita / Mensalidade',
-        descricao: `Recebimento: ${parcelaSelecionada.devedor_nome} - ${parcelaSelecionada.descricao}`,
-        valor: valorEfetivo,
-        forma_pagamento: formaPagamentoEfetiva as any,
-        data_movimentacao: liquidacaoISO,
-        referencia_id: parcelaSelecionada.id,
-        documento_ref: `Parc. ${parcelaSelecionada.numero_parcela}/${parcelaSelecionada.total_parcelas || 1}`,
-        operador_nome: state.user?.nome || loteAberto.operador_nome || 'Sistema',
-        observacao: observacaoRecebimento
-      });
+      // Registra a movimentação financeira diretamente no Lote de Caixa Aberto.
+      // A baixa acima já valeu: uma recusa aqui não a desfaz, e o aviso diz o que faltou.
+      let caixaLancado = true;
+      try {
+        await registrarMovimentacao(state.isOnline, {
+          tenant_id: tenantId,
+          lote_id: loteAberto.id,
+          tipo: 'entrada',
+          origem: 'contas_receber',
+          categoria: 'Receita / Mensalidade',
+          descricao: `Recebimento: ${parcelaSelecionada.devedor_nome} - ${parcelaSelecionada.descricao}`,
+          valor: valorEfetivo,
+          forma_pagamento: formaPagamentoEfetiva as any,
+          data_movimentacao: liquidacaoISO,
+          referencia_id: parcelaSelecionada.id,
+          documento_ref: `Parc. ${parcelaSelecionada.numero_parcela}/${parcelaSelecionada.total_parcelas || 1}`,
+          operador_nome: state.user?.nome || loteAberto.operador_nome || 'Sistema',
+          observacao: observacaoRecebimento
+        });
+      } catch (errCaixa: any) {
+        caixaLancado = false;
+        console.error('Movimentação de caixa recusada após a baixa da parcela:', errCaixa);
+        toast.error(avisoLiquidacaoSemCaixa('recebimento', errCaixa?.message), { duration: 12000 });
+      }
 
-      toast.success(`Recebimento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
+      if (caixaLancado) {
+        toast.success(`Recebimento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
+      }
       // O comprovante abre sozinho: quem acabou de receber precisa entregá-lo na hora, e
       // depender de o operador achar a linha e clicar em "Imprimir Recibo" é como um
       // recebimento termina sem documento nenhum.

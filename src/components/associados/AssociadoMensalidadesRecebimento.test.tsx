@@ -111,3 +111,35 @@ describe('recebimento de parcela no cadastro do associado', () => {
     expect(movimentacao.data_movimentacao).toBe(dadosBaixa.data_recebimento);
   });
 });
+
+describe('a movimentação de caixa recusada depois de a baixa já ter valido', () => {
+  // Desde 19/09/2026 `registrarMovimentacao` LANÇA quando o servidor recusa, em vez de
+  // gravar só no navegador e dizer sucesso. Como a baixa da parcela acontece ANTES e não
+  // se desfaz, a tela precisa dizer o que valeu e o que faltou — e continuar entregando o
+  // comprovante, porque a parcela está liquidada de fato.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(registrarMovimentacao).mockRejectedValueOnce(
+      new Error('new row violates check constraint "movimentacoes_caixa_natureza_check"'),
+    );
+  });
+
+  it('a baixa da parcela NÃO é desfeita', async () => {
+    montarDentroDoCadastro(vi.fn());
+    await efetivarRecebimento();
+    expect(vi.mocked(registrarRecebimento)).toHaveBeenCalledTimes(1);
+  });
+
+  it('o recibo ainda abre: a parcela foi liquidada, e é ela que o comprovante documenta', async () => {
+    montarDentroDoCadastro(vi.fn());
+    await efetivarRecebimento();
+    expect((await screen.findAllByText(/EB5CE46F/)).length).toBeGreaterThan(0);
+  });
+
+  it('a falha não submete nem fecha o cadastro do associado', async () => {
+    const salvarCadastro = vi.fn();
+    montarDentroDoCadastro(salvarCadastro);
+    await efetivarRecebimento();
+    expect(salvarCadastro).not.toHaveBeenCalled();
+  });
+});

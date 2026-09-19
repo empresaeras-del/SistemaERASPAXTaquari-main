@@ -3067,15 +3067,66 @@ próximo service:
   fundo falso que levou a movimentação para o caixa de outra empresa; e a sincronização é
   idempotente por `referencia_id`, senão rodar de novo traz o mesmo recebimento duas vezes.
 
-**Achado que ficou de fora de propósito**: no caminho **online**, `abrirLoteCaixa`,
-`fecharLoteCaixa`, `registrarMovimentacao` e `estornarMovimentacaoCaixa` tratam o `error`
-devolvido pelo Supabase com `console.warn`, gravam no IndexedDB e **não enfileiram na fila de
-sync** — o registro nunca sobe, a tela diz sucesso e, no caso do lote, a auditoria registra a
-abertura. É a mesma armadilha que este arquivo documenta em `saveAtendimento` ("recusa do
-Postgres e queda de rede não podem terminar igual"), no único service que ainda a tem inteira;
-`reabrirLoteCaixa`, no mesmo arquivo, já lança. Não foi corrigido aqui porque mudar isso é
-mudar comportamento de gravação de quatro caminhos de caixa, não acrescentar teste — e um
-teste que fixasse o comportamento atual carimbaria a perda silenciosa como esperada.
+### O caixa parou de engolir a recusa do servidor — e o invariante virou "ou subiu, ou está na fila"
+
+Corrigido na sequência dos testes acima, que foram o que tornou a mudança barata de fazer.
+Os quatro caminhos de escrita do caixa — `abrirLoteCaixa`, `fecharLoteCaixa`,
+`registrarMovimentacao` e `estornarMovimentacaoCaixa` — tratavam o `error` devolvido pelo
+Supabase com `console.warn`, gravavam no IndexedDB e **não enfileiravam nada**. O registro
+ficava preso no navegador de quem operou, a tela dizia sucesso e, no caso do lote, a
+**auditoria registrava uma abertura que o servidor havia recusado**. Era a armadilha que este
+arquivo documenta desde `saveAtendimento`, no último service que ainda a tinha inteira —
+`reabrirLoteCaixa`, no mesmo arquivo, já lançava.
+
+`escreverNoServidor` concentra a distinção: **`error` devolvido é recusa e lança**
+(constraint, RLS, `CHECK`, coluna inexistente — repetir amanhã com o mesmo payload dá o
+mesmo resultado, então enfileirar só adia a perda); **exceção lançada é rede fora**, e aí o
+caso offline-first é legítimo, com cache e fila. A recusa é guardada numa variável e
+relançada **fora** do `try`, senão cairia no próprio `catch` que trata rede — o mesmo detalhe
+de implementação que `saveAtendimento` já registra.
+
+Quatro decisões valem como regra:
+
+- **O invariante é "ou subiu, ou está na fila", nunca nenhum dos dois** — e há um teste que
+  varre os quatro caminhos cobrando exatamente isso, em vez de quatro testes parecidos.
+- **A recusa não grava nem no cache.** Antes, o lote recusado existia no IndexedDB daquele
+  navegador e em lugar nenhum mais; a tela mostrava fechado um lote que não fechou. Agora o
+  estado local continua igual ao do servidor: nada aconteceu dos dois lados.
+- **`recalcularTotaisLote` é o único que segue falhando calado, de propósito.**
+  `saldo_entradas`/`saldo_saidas`/`saldo_esperado` são **cache derivado** — o fechamento do
+  lote os recalcula do zero a partir das movimentações, ignorando o que estiver gravado.
+  Lançar ali faria a movimentação que o servidor **já aceitou** ser reportada ao operador
+  como se tivesse falhado, que é o erro mais caro dos dois. **Antes de propagar um erro,
+  pergunte se o dado é fonte ou é cache dela.**
+- **A recusa da movimentação não desfaz a baixa da parcela, e o aviso diz isso.** As duas
+  escritas são sequenciais e não há transação entre elas. `utils/avisoLiquidacaoSemCaixa.ts`
+  monta a frase única dos três pontos de liquidação: a baixa **valeu**, o valor **não** entra
+  no saldo do lote (então a conferência vai acusar diferença), e a saída é "Sincronizar
+  Financeiro". Um "Erro ao efetivar recebimento" genérico faria o operador repetir a baixa.
+
+**`RecusaDoServidor` e `explicarRecusa` saíram de `associadosService` para
+`utils/recusaDoServidor.ts`**, porque o segundo service precisava da mesma tradução —
+copiá-la faria as duas metades divergirem no primeiro código de erro novo.
+`associadosService` continua reexportando a classe, que já era parte do contrato dele.
+
+**Dois tenants inventados saíram junto, porque estavam no caminho da correção.** A seção do
+recebimento registra que "os dois caminhos passaram a resolver por `tenantDeEscrita`" — eram
+os dois de **recebimento**. Contas a **Pagar** tinha o mesmo defeito intacto
+(`getLoteAbertoAtivo(..., state.empresaSelecionada || 'tenant-default')`, com `'all'`
+desligando o filtro e devolvendo o lote aberto de outra empresa), e `CaixasPage` abria lote
+com `state.empresaSelecionada || 'tenant-1'`. Os dois passaram a recusar com
+`MENSAGEM_TENANT_INDEFINIDO`. Em Contas a Pagar a movimentação resolve pelo
+**`tenant_id` do lote já aberto**, não pelo seletor do topo: é nele que o dinheiro está
+saindo, e reler o seletor abriria espaço para os dois discordarem se a seleção mudar entre
+abrir o modal e confirmar a baixa.
+
+**O botão "Sincronizar Financeiro" era um `setTimeout`.** `handleSyncFinancials` esperava
+1,5s e anunciava "Integração concluída com sucesso!" sem chamar nada —
+`sincronizarLancamentosFinanceiros` **não tinha chamador nenhum no app**, e o texto ao lado
+afirmava que a integração era "em tempo real", o que é verdade no caminho feliz e deixa de
+ser exatamente quando a movimentação falha. Ele agora chama a função de verdade e diz quantos
+lançamentos trouxe. **Um botão que relata sucesso sem fazer nada é pior que um botão
+ausente**: ele é a razão pela qual ninguém procurou o problema antes.
 
 **Conferindo a impressão de verdade**: o CSS de impressão não é observável por teste unitário — só
 dá para checar que a string gerada contém a regra certa (é o que `documentoPrintStyles.test.ts` faz).

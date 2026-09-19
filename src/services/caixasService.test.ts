@@ -24,6 +24,7 @@ vi.mock('./financeiroService', () => ({
 }));
 
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
+import { supabase, registrarAuditoria } from '../lib/supabase';
 import { addToSyncQueue } from '../lib/syncService';
 import {
   getParcelasReceber,
@@ -55,6 +56,8 @@ const mockSaveToIDB = vi.mocked(saveToIDB);
 const mockGetAllFromIDB = vi.mocked(getAllFromIDB);
 const mockDeleteFromIDB = vi.mocked(deleteFromIDB);
 const mockAddToSyncQueue = vi.mocked(addToSyncQueue);
+const mockSupabaseFrom = vi.mocked(supabase.from);
+const mockRegistrarAuditoria = vi.mocked(registrarAuditoria);
 const mockGetParcelasReceber = vi.mocked(getParcelasReceber);
 const mockGetParcelasPagar = vi.mocked(getParcelasPagar);
 const mockEstornarRecebimento = vi.mocked(estornarRecebimento);
@@ -1001,5 +1004,246 @@ describe('sincronizarLancamentosFinanceiros (offline)', () => {
     const out = await sincronizarLancamentosFinanceiros(false, 'emp-1');
     expect(out).toEqual({ novosContasReceber: 0, novosContasPagar: 0 });
     expect(guardados('movimentacoes_caixa')).toHaveLength(0);
+  });
+});
+
+// ============================================================================
+// Caminho ONLINE: recusa do servidor × queda de rede
+//
+// É a regra que o CLAUDE.md fixa desde `saveAtendimento` e que este service era o último a
+// não aplicar. O invariante que estes testes cobram: **ou a escrita subiu, ou ela está na
+// fila de sync** — nunca nenhum dos dois, que era o estado antigo (console.warn + IndexedDB,
+// com a tela dizendo sucesso e o registro preso no navegador de quem operou).
+// ============================================================================
+
+describe('caminho online: recusa do servidor × queda de rede', () => {
+  type ModoDoServidor = 'aceito' | 'recusa' | 'rede';
+  let modo: ModoDoServidor = 'aceito';
+  let leituraRemota: Record<string, Registro[]> = {};
+
+  const RECUSA = { code: '23514', message: 'new row violates check constraint "lotes_caixa_status_check"' };
+
+  const construirQuery = (tabela: string) => {
+    const escrever = async () => {
+      // Rede fora lança de dentro do `await` — é assim que o supabase-js se comporta com o
+      // fetch abortado, e é o que separa este caso da recusa devolvida em `error`.
+      if (modo === 'rede') throw new TypeError('Failed to fetch');
+      if (modo === 'recusa') return { data: null, error: RECUSA };
+      return { data: null, error: null };
+    };
+    const q: any = {
+      select: () => q,
+      eq: () => q,
+      order: () => q,
+      insert: escrever,
+      upsert: escrever,
+      update: escrever,
+      delete: escrever,
+      single: async () => ({ data: null, error: null }),
+      maybeSingle: async () => ({ data: null, error: null }),
+      then: (ok: any, falha: any) =>
+        Promise.resolve({ data: leituraRemota[tabela] ?? [], error: null }).then(ok, falha),
+    };
+    return q;
+  };
+
+  beforeEach(() => {
+    prepararBancoLocal();
+    modo = 'aceito';
+    leituraRemota = { lotes_caixa: [], movimentacoes_caixa: [] };
+    mockSupabaseFrom.mockReset();
+    mockSupabaseFrom.mockImplementation(((tabela: string) => construirQuery(tabela)) as any);
+    mockRegistrarAuditoria.mockReset();
+    mockEstornarRecebimento.mockClear();
+    vi.setSystemTime(new Date(2026, 8, 19, 10, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const dadosDeAbertura = {
+    tenant_id: 'emp-1',
+    terminal_caixa: 'Caixa Principal',
+    operador_nome: 'ANA',
+    saldo_inicial: 100,
+  };
+
+  describe('abrirLoteCaixa', () => {
+    it('recusa do servidor LANÇA, com o motivo do Postgres na mensagem', async () => {
+      modo = 'recusa';
+      await expect(abrirLoteCaixa(true, dadosDeAbertura)).rejects.toThrow(/violates check constraint/);
+    });
+
+    it('recusa NÃO vai para a fila de sync — repetir o mesmo payload dá o mesmo erro', async () => {
+      modo = 'recusa';
+      await expect(abrirLoteCaixa(true, dadosDeAbertura)).rejects.toThrow();
+      expect(mockAddToSyncQueue).not.toHaveBeenCalled();
+    });
+
+    it('recusa NÃO grava no cache local: o lote não existe em lugar nenhum', async () => {
+      // Era exatamente isto que acontecia antes — o lote ficava só no IndexedDB de quem
+      // operou, invisível para todo o resto da empresa e para a conferência do caixa.
+      modo = 'recusa';
+      await expect(abrirLoteCaixa(true, dadosDeAbertura)).rejects.toThrow();
+      expect(guardados('lotes_caixa')).toHaveLength(0);
+    });
+
+    it('recusa NÃO registra auditoria de abertura', async () => {
+      // A trilha não pode afirmar que um lote foi aberto quando o servidor o recusou.
+      modo = 'recusa';
+      await expect(abrirLoteCaixa(true, dadosDeAbertura)).rejects.toThrow();
+      expect(mockRegistrarAuditoria).not.toHaveBeenCalled();
+    });
+
+    it('queda de rede NÃO lança: grava no cache e enfileira', async () => {
+      modo = 'rede';
+      const lote = await abrirLoteCaixa(true, dadosDeAbertura);
+      expect(guardado('lotes_caixa', lote.id)).toBeDefined();
+      expect(mockAddToSyncQueue).toHaveBeenCalledWith(
+        expect.objectContaining({ storeName: 'lotes_caixa', action: 'update' }),
+      );
+    });
+
+    it('aceito pelo servidor: grava, audita e NÃO enfileira', async () => {
+      const lote = await abrirLoteCaixa(true, dadosDeAbertura);
+      expect(guardado('lotes_caixa', lote.id)).toBeDefined();
+      expect(mockRegistrarAuditoria).toHaveBeenCalledWith(
+        'Abertura de Lote de Caixa',
+        expect.objectContaining({ lote_id: lote.id }),
+      );
+      expect(mockAddToSyncQueue).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fecharLoteCaixa', () => {
+    beforeEach(() => {
+      semear('lotes_caixa', [loteBase]);
+    });
+
+    it('recusa lança e não enfileira o fechamento', async () => {
+      modo = 'recusa';
+      await expect(fecharLoteCaixa(true, 'lote-1', { saldo_fechamento_informado: 100 })).rejects.toThrow();
+      expect(mockAddToSyncQueue).not.toHaveBeenCalled();
+      expect(mockRegistrarAuditoria).not.toHaveBeenCalled();
+    });
+
+    it('recusa deixa o lote ABERTO no cache — a tela não pode mostrar fechado o que não fechou', async () => {
+      modo = 'recusa';
+      await expect(fecharLoteCaixa(true, 'lote-1', { saldo_fechamento_informado: 100 })).rejects.toThrow();
+      expect(guardado<LoteCaixa>('lotes_caixa', 'lote-1')?.status).toBe('aberto');
+    });
+
+    it('queda de rede fecha localmente e enfileira', async () => {
+      modo = 'rede';
+      const fechado = await fecharLoteCaixa(true, 'lote-1', { saldo_fechamento_informado: 100 });
+      expect(fechado.status).toBe('fechado');
+      expect(mockAddToSyncQueue).toHaveBeenCalledWith(
+        expect.objectContaining({ storeName: 'lotes_caixa', action: 'update' }),
+      );
+    });
+  });
+
+  describe('registrarMovimentacao', () => {
+    const nova = () => {
+      const { id: _id, criado_em: _c, ...semId } = { ...movBase, origem: 'suprimento' as const };
+      return semId as Omit<MovimentacaoCaixa, 'id' | 'criado_em'>;
+    };
+
+    beforeEach(() => {
+      semear('lotes_caixa', [loteBase]);
+    });
+
+    it('recusa lança, não grava e não enfileira', async () => {
+      modo = 'recusa';
+      await expect(registrarMovimentacao(true, nova())).rejects.toThrow(/violates check constraint/);
+      expect(guardados('movimentacoes_caixa')).toHaveLength(0);
+      expect(mockAddToSyncQueue).not.toHaveBeenCalled();
+    });
+
+    it('recusa NÃO mexe no saldo do lote: o dinheiro não entrou', async () => {
+      modo = 'recusa';
+      await expect(registrarMovimentacao(true, nova())).rejects.toThrow();
+      expect(guardado<LoteCaixa>('lotes_caixa', 'lote-1')?.saldo_esperado).toBe(100);
+    });
+
+    it('queda de rede grava e enfileira', async () => {
+      modo = 'rede';
+      const mov = await registrarMovimentacao(true, nova());
+      expect(guardado('movimentacoes_caixa', mov.id)).toBeDefined();
+      expect(mockAddToSyncQueue).toHaveBeenCalledWith(
+        expect.objectContaining({ storeName: 'movimentacoes_caixa', action: 'update' }),
+      );
+    });
+
+    it('aceito: grava e NÃO enfileira', async () => {
+      const mov = await registrarMovimentacao(true, nova());
+      expect(guardado('movimentacoes_caixa', mov.id)).toBeDefined();
+      expect(mockAddToSyncQueue).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('estornarMovimentacaoCaixa', () => {
+    beforeEach(() => {
+      semear('lotes_caixa', [loteBase]);
+      semear('movimentacoes_caixa', [{ ...movBase, origem: 'suprimento', referencia_id: undefined }]);
+    });
+
+    it('recusa lança e a movimentação continua NÃO estornada no cache', async () => {
+      modo = 'recusa';
+      await expect(estornarMovimentacaoCaixa(true, 'mov-1', 'engano')).rejects.toThrow();
+      expect(guardado<MovimentacaoCaixa>('movimentacoes_caixa', 'mov-1')?.estornado).toBeFalsy();
+      expect(mockAddToSyncQueue).not.toHaveBeenCalled();
+    });
+
+    it('queda de rede estorna localmente e enfileira', async () => {
+      modo = 'rede';
+      await estornarMovimentacaoCaixa(true, 'mov-1', 'engano');
+      expect(guardado<MovimentacaoCaixa>('movimentacoes_caixa', 'mov-1')?.estornado).toBe(true);
+      expect(mockAddToSyncQueue).toHaveBeenCalledWith(
+        expect.objectContaining({ storeName: 'movimentacoes_caixa', action: 'update' }),
+      );
+    });
+  });
+
+  it('o invariante dos quatro caminhos: ou subiu, ou está na fila', async () => {
+    // Um só teste varrendo os quatro, porque o que importa aqui não é cada função e sim que
+    // nenhuma delas volte a terminar nos dois estados de uma vez — gravada no navegador e
+    // fora da fila, que é como um registro de caixa desaparecia sem erro nenhum.
+    const caminhos: { nome: string; executar: () => Promise<unknown> }[] = [
+      { nome: 'abrirLoteCaixa', executar: () => abrirLoteCaixa(true, dadosDeAbertura) },
+      {
+        nome: 'fecharLoteCaixa',
+        executar: () => fecharLoteCaixa(true, 'lote-1', { saldo_fechamento_informado: 100 }),
+      },
+      {
+        nome: 'registrarMovimentacao',
+        executar: () => {
+          const { id: _i, criado_em: _c, ...m } = { ...movBase, origem: 'suprimento' as const };
+          return registrarMovimentacao(true, m as Omit<MovimentacaoCaixa, 'id' | 'criado_em'>);
+        },
+      },
+      { nome: 'estornarMovimentacaoCaixa', executar: () => estornarMovimentacaoCaixa(true, 'mov-1', 'x') },
+    ];
+
+    for (const caminho of caminhos) {
+      // --- rede fora: nada sobe, então TEM de estar na fila
+      prepararBancoLocal();
+      mockSupabaseFrom.mockImplementation(((t: string) => construirQuery(t)) as any);
+      semear('lotes_caixa', [loteBase]);
+      semear('movimentacoes_caixa', [{ ...movBase, origem: 'suprimento', referencia_id: undefined }]);
+      modo = 'rede';
+      await caminho.executar();
+      expect(mockAddToSyncQueue, `${caminho.nome} sem rede deveria enfileirar`).toHaveBeenCalled();
+
+      // --- recusa: nada sobe e nada é enfileirado, mas o erro CHEGA a quem chamou
+      prepararBancoLocal();
+      mockSupabaseFrom.mockImplementation(((t: string) => construirQuery(t)) as any);
+      semear('lotes_caixa', [loteBase]);
+      semear('movimentacoes_caixa', [{ ...movBase, origem: 'suprimento', referencia_id: undefined }]);
+      modo = 'recusa';
+      await expect(caminho.executar(), `${caminho.nome} deveria lançar na recusa`).rejects.toThrow();
+      expect(mockAddToSyncQueue, `${caminho.nome} não deveria enfileirar uma recusa`).not.toHaveBeenCalled();
+    }
   });
 });

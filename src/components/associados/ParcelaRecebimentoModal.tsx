@@ -6,6 +6,7 @@ import { useAppContext } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { MENSAGEM_TENANT_INDEFINIDO, tenantDeEscrita } from '../../utils/tenant';
+import { avisoLiquidacaoSemCaixa } from '../../utils/avisoLiquidacaoSemCaixa';
 import { montarReciboDeRecebimento } from '../../utils/reciboRecebimento';
 import type { ReciboDados } from '../financeiro/VisualizadorReciboModal';
 import { ParcelaReceber, registrarRecebimento } from '../../services/financeiroService';
@@ -127,23 +128,35 @@ export const ParcelaRecebimentoModal: React.FC<ParcelaRecebimentoModalProps> = (
         observacao: observacaoRecebimento
       });
 
-      await registrarMovimentacao(state.isOnline, {
-        tenant_id: tenantId,
-        lote_id: loteAberto.id,
-        tipo: 'entrada',
-        origem: 'contas_receber',
-        categoria: 'Receita / Mensalidade',
-        descricao: `Recebimento: ${parcelaSelecionada.devedor_nome || associadoNome} - ${parcelaSelecionada.descricao}`,
-        valor: valorEfetivo,
-        forma_pagamento: formaPagamentoEfetiva as any,
-        data_movimentacao: liquidacaoISO,
-        referencia_id: parcelaSelecionada.id,
-        documento_ref: `Parc. ${parcelaSelecionada.numero_parcela}/${parcelaSelecionada.total_parcelas || 1}`,
-        operador_nome: state.user?.nome || loteAberto.operador_nome || 'Sistema',
-        observacao: observacaoRecebimento
-      });
+      // A baixa acima já está gravada. Se a movimentação de caixa for recusada, o
+      // recebimento NÃO se desfaz — o operador precisa saber o que valeu e o que faltou,
+      // e o recibo continua legítimo porque a parcela está liquidada de fato.
+      let caixaLancado = true;
+      try {
+        await registrarMovimentacao(state.isOnline, {
+          tenant_id: tenantId,
+          lote_id: loteAberto.id,
+          tipo: 'entrada',
+          origem: 'contas_receber',
+          categoria: 'Receita / Mensalidade',
+          descricao: `Recebimento: ${parcelaSelecionada.devedor_nome || associadoNome} - ${parcelaSelecionada.descricao}`,
+          valor: valorEfetivo,
+          forma_pagamento: formaPagamentoEfetiva as any,
+          data_movimentacao: liquidacaoISO,
+          referencia_id: parcelaSelecionada.id,
+          documento_ref: `Parc. ${parcelaSelecionada.numero_parcela}/${parcelaSelecionada.total_parcelas || 1}`,
+          operador_nome: state.user?.nome || loteAberto.operador_nome || 'Sistema',
+          observacao: observacaoRecebimento
+        });
+      } catch (errCaixa: any) {
+        caixaLancado = false;
+        console.error('Movimentação de caixa recusada após a baixa da parcela:', errCaixa);
+        toast.error(avisoLiquidacaoSemCaixa('recebimento', errCaixa?.message), 12000);
+      }
 
-      toast.success(`Recebimento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
+      if (caixaLancado) {
+        toast.success(`Recebimento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
+      }
       onReciboGerado?.(
         montarReciboDeRecebimento(
           parcelaSelecionada,
