@@ -8,4 +8,5 @@ coverage/
 *.bak
 .env*
 !.env.example
+!.env.homologacao.example
 supabase/.temp/

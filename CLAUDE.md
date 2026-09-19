@@ -178,6 +178,125 @@ Para conferir se os dois lados batem, compare **por nome**, não por número: a 
 construção quando o arquivo não foi renomeado, e comparar por número produz falso alarme (foi o que
 aconteceu na conferência de 08/09 — 7 "divergências" que, por nome, eram 1).
 
+## Existe um segundo projeto Supabase, de homologação — e reconstruí-lo achou um buraco
+
+Criado em 19/09/2026: `SistemaPaxTaquari-Homologacao` (`rwbqkehwwdbdhcgcfcgf`), mesma região da
+produção (`sa-east-1`), plano free, **US$ 0/mês**. Ele existe para destravar o que este arquivo
+registra em vários lugares como "deixado de fora por falta de UI logada" — a decomposição dos god
+components, a migração para Zod nas telas grandes e os testes de fluxo.
+
+Como apontar o app para lá: `cp .env.homologacao.example .env.local && npm run dev`. Os cinco
+usuários semeados e a senha estão no cabeçalho daquele arquivo. **Nenhum dado de produção foi
+copiado**: o banco é `supabase/migrations/` + `supabase/seed-homologacao.sql`, e pode ser apagado e
+recriado a qualquer momento.
+
+### O replay das migrations é o teste, não a preparação
+
+Reconstruir o schema do zero não é só encher um banco — é a única forma de perguntar se o
+repositório ainda descreve a produção. A resposta foi **quase**, e o "quase" é o achado:
+
+```
+ERROR: 42883: function public.rls_auto_enable() does not exist
+```
+
+`public.rls_auto_enable()` e o event trigger `ensure_rls` existem em produção, mas **nenhuma
+migration os criava**. A única que os citava é
+`20260910010924_revoke_execute_handle_new_user_e_rls_auto_enable`, que apenas **revoga** `EXECUTE`
+deles. Foram criados à mão, fora do histórico — e são justamente a rede que habilita RLS em toda
+tabela nova, que este arquivo descreve como "sem `rls_auto_enable` toda tabela criada dali em
+diante nasce sem RLS".
+
+Consequência prática: um `supabase db push` contra um banco vazio parava na 55ª migration, e o
+ambiente resultante nasceria sem essa rede. A migration `20260919133555` fecha isso — aplicada à
+produção como **no-op** conferido antes e depois (mesmo `pg_get_functiondef`, mesma ACL
+`{postgres=X/postgres,service_role=X/postgres}`, 1 event trigger, 0 tabelas sem RLS).
+
+**A regra**: o que existe no banco e não existe em migration nenhuma é invisível até alguém tentar
+reconstruir. Não dá para achar isso lendo o repositório — só reconstruindo.
+
+### O que o repositório ainda não reconstrói sozinho
+
+Pendência deliberada, e ela tem ordem: a migration nova roda **depois** da `20260910010924`, então
+um rebuild do zero ainda para lá. Corrigir exige uma de duas coisas, e as duas são decisão sua:
+
+1. Tornar o `revoke` da `20260910010924` tolerante à ausência da função — **editar migration já
+   aplicada**, o que este arquivo proíbe em "uma migration aplicada, um arquivo".
+2. Assumir que um rebuild começa criando a função antes do replay, e documentar isso no runbook.
+
+Enquanto nenhuma das duas for escolhida, quem reconstruir precisa criar `rls_auto_enable` à mão
+antes de rodar o replay — foi o que se fez aqui.
+
+### O que a comparação provou, e como ela foi feita
+
+Contagem não prova nada: comparar por **digest do conteúdo** prova. Rodando a mesma consulta nos
+dois bancos e comparando `md5(string_agg(...))`:
+
+| | produção | homologação |
+|---|---|---|
+| colunas (645) | `dafa9011…` | `dafa9011…` |
+| constraints | `c899b262…` | `c899b262…` |
+| índices (143) | `a4aec0d2…` | `a4aec0d2…` |
+| policies (58) | `0ba17e1e…` | `0ba17e1e…` |
+| RLS ligada por tabela | `78089d69…` | `78089d69…` |
+| triggers (13) | `90078b4f…` | `90078b4f…` |
+| funções (22) | `ccad392c…` | `fbd80099…` ❌ |
+
+Seis de sete idênticos **byte a byte**. As funções divergiam por duas coisas, ambas cosméticas, e
+achá-las exigiu normalizar em camadas — cada camada respondendo a uma pergunta diferente:
+
+- **13 funções da produção têm CRLF dentro do corpo**, os 70 arquivos do repositório estão em LF.
+  Ou seja: o que está gravado em produção **não veio desses arquivos** — veio de um editor Windows,
+  provavelmente colado no SQL editor do painel.
+- **`has_tenant_access` em produção não tem os comentários** que o arquivo da migration traz. Mesma
+  lógica, corpo diferente.
+
+Ignorando `\r`, espaços e comentários, as **22 de 22** batem: `has_tenant_access` fecha em
+`9386880a…` dos dois lados. O schema é o mesmo; o que diverge é o texto-fonte guardado.
+
+**A regra para a próxima comparação de schema**: normalize em camadas e diga qual camada fez a
+diferença sumir. "Os hashes batem" depois de apagar tudo que incomoda não prova nada; o que informa
+é *qual* normalização foi necessária — foi ela que revelou que a produção não nasceu do repositório.
+
+### O isolamento foi exercitado com login de verdade
+
+Com os cinco usuários semeados, simulando o JWT real de cada um (`set role authenticated` +
+`request.jwt.claims`), contando o que cada um enxerga e tentando uma escrita em `planos_pax`:
+
+| papel | e-mail | associados | parcelas | escreve plano |
+|---|---|---|---|---|
+| super_admin | `super@` | 4 (as duas empresas) | 24 | sim |
+| admin | `admin.pax@` | 3 | 24 | sim |
+| admin | `admin.fun@` | **1** | **0** | sim |
+| gerente | `gerente.pax@` | 3 | 24 | **42501** |
+| funcionario | `func.pax@` | 3 | 24 | **42501** |
+| anônimo | — | **0** | — | — |
+
+É a primeira vez que a RLS por módulo da migration `20260919001244` é exercida num banco
+reconstruído do zero: o gerente e o funcionário **leem** `planos_pax` e são **recusados** ao gravar,
+exatamente como desenhado.
+
+**Um aviso de método**: a primeira rodada desse teste reportou "nenhum admin consegue escrever", e
+era defeito do teste — as linhas da rodada anterior tinham ficado gravadas e a segunda tentativa
+batia em `23505 duplicate key`, não em RLS. Capturar o `SQLSTATE` em vez de só `true/false` foi o
+que separou uma coisa da outra. **Num teste de permissão, guarde o código do erro**: `42501` é a
+policy recusando, `23505` é você.
+
+### Decisões da semente
+
+- **`categorias_fornecedor` precisa ser semeada aqui.** O backfill da `20260918010937` roda antes de
+  existir qualquer tenant num banco novo, então não semeia nada — a semente refaz a lista modelo.
+  É o mesmo motivo pelo qual `centros_custo` fica vazia: o backfill dela depende de já haver plano
+  contábil.
+- **O plano de contas NÃO é semeado de propósito.** Ele é constante do frontend copiada pela tela
+  (`semearPlanoPadrao`); replicá-lo em SQL criaria uma segunda fonte para a mesma lista. Sem conta
+  analítica, a isenção do trigger `exige_conta_contabil` vale e o lançamento nasce sem conta — que
+  é exatamente o estado de uma empresa nova, e um caminho que vale poder exercitar na tela.
+- **`credenciados_procedimentos` tem `valor`, não `valor_acordado`.** O `CREATE TABLE IF NOT EXISTS`
+  posterior, que trazia `valor_acordado`/`valor_repasse`, já era inerte quando rodou. A semente
+  tropeçou nisso — é o tipo de coisa que só aparece escrevendo contra o schema real.
+- **Os CPFs não passam na validação de dígito verificador**, de propósito: ninguém os confunde com
+  pessoa real.
+
 ### O bug recorrente: campo no TypeScript sem a coluna correspondente no banco
 
 Já aconteceu duas vezes (`documentos_padroes` e `atendimentos`): alguém adiciona um campo opcional
