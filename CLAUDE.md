@@ -3031,6 +3031,52 @@ Ver `financeiroService.test.ts` (`getParcelasReceber`, `registrarRecebimento`,
 `estornarRecebimento`...), `requisicoesService.test.ts` e `faturamentoService.test.ts` como
 referência do padrão ao testar um service novo.
 
+### Quando o service se chama por dentro, o mock precisa de estado (`caixasService`)
+
+`caixasService.test.ts` (77 testes, 19/09/2026) cobriu o último service grande sem nenhuma
+asserção — 690 linhas com as duas funções puras do módulo (`gerarCodigoLote`,
+`calcularResumoFluxoCaixa`) e todo o caminho offline de lote, movimentação, estorno,
+reabertura, exclusão e integração com o financeiro. Três coisas dele valem como regra para o
+próximo service:
+
+- **Um `mockResolvedValueOnce` por chamada não sustenta service que se chama por dentro.**
+  `registrarMovimentacao` grava a movimentação e em seguida `recalcularTotaisLote` relê
+  **todas** as do lote para somar; `estornarMovimentacaoCaixa` marca a linha e recalcula o
+  saldo a partir dela. Mockando por chamada, o teste passa a depender da ordem interna das
+  leituras e quebra em qualquer refatoração que não muda comportamento nenhum. O que o
+  arquivo usa é um **IndexedDB falso com estado de verdade** — um `Map` por store, com
+  `getFromIDB`/`getAllFromIDB`/`saveToIDB`/`deleteFromIDB` ligados nele. Aí o encadeamento
+  roda inteiro e a asserção é sobre o que **ficou gravado**, que é a pergunta que interessa:
+  o estorno de R$ 50 num lote de R$ 100 + 50 + 30 deixa o saldo esperado em R$ 130.
+- **Suíte que passa de primeira não provou nada ainda — mute o código e exija que ela
+  reprove.** As 77 passaram na primeira execução, o que é tão compatível com "cobre" quanto
+  com "não mede". Sete mutações no service (tirar o `!m.estornado` da soma, tirar o filtro de
+  `tenant_id`, tirar a checagem de `referencia_id` já processada, fazer a herança de conta
+  devolver `null`, aceitar estorno em lote fechado, aceitar segundo lote aberto, parar de
+  filtrar por `status` na sincronização) foram cada uma reprovada pela suíte. **A primeira
+  tentativa da quarta foi um no-op meu** (`null ?? await f()` devolve `f()`, então o
+  comportamento não mudou e a suíte passou) — e o resultado "passou" quase virou a conclusão
+  "o teste não cobre". Quando uma mutação não reprova, **confirme primeiro que ela mudou
+  mesmo o comportamento**; é o equivalente, do lado do teste, de guardar o `SQLSTATE` num
+  teste de permissão.
+- **O que o teste trava é a decisão, não a linha.** Os casos com nome longo são os que
+  registram uma escolha: o lote `auditado` conta como fechado porque o critério é
+  `status !== 'aberto'` (e a soma dos dois contadores tem de bater com o total da lista); a
+  saída entra **negativa** nos totais por forma de pagamento porque ali a pergunta é "quanto
+  sobrou na gaveta", não "quanto saiu"; `getLotesCaixa` com `'all'` **não filtra**, que é o
+  fundo falso que levou a movimentação para o caixa de outra empresa; e a sincronização é
+  idempotente por `referencia_id`, senão rodar de novo traz o mesmo recebimento duas vezes.
+
+**Achado que ficou de fora de propósito**: no caminho **online**, `abrirLoteCaixa`,
+`fecharLoteCaixa`, `registrarMovimentacao` e `estornarMovimentacaoCaixa` tratam o `error`
+devolvido pelo Supabase com `console.warn`, gravam no IndexedDB e **não enfileiram na fila de
+sync** — o registro nunca sobe, a tela diz sucesso e, no caso do lote, a auditoria registra a
+abertura. É a mesma armadilha que este arquivo documenta em `saveAtendimento` ("recusa do
+Postgres e queda de rede não podem terminar igual"), no único service que ainda a tem inteira;
+`reabrirLoteCaixa`, no mesmo arquivo, já lança. Não foi corrigido aqui porque mudar isso é
+mudar comportamento de gravação de quatro caminhos de caixa, não acrescentar teste — e um
+teste que fixasse o comportamento atual carimbaria a perda silenciosa como esperada.
+
 **Conferindo a impressão de verdade**: o CSS de impressão não é observável por teste unitário — só
 dá para checar que a string gerada contém a regra certa (é o que `documentoPrintStyles.test.ts` faz).
 O que o navegador realmente produz precisa de um navegador. Este ambiente tem Chromium pré-instalado
