@@ -4,13 +4,7 @@ import { supabase, registrarAuditoria } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
 import { DocumentoPadrao, DocumentoPadraoInsert, DocumentoPadraoUpdate } from '../types/documentos';
-
-/** Extrai o nome da coluna ausente de um erro PGRST204 do PostgREST (ex.: "Could not find the 'foo' column of 'bar' in the schema cache"). */
-function extrairColunaAusente(message: string | undefined): string | null {
-  if (!message) return null;
-  const match = message.match(/'([^']+)'\s+column/);
-  return match ? match[1] : null;
-}
+import { RecusaDoServidor, explicarRecusa } from '../utils/recusaDoServidor';
 
 export function useDocumentosPadroes() {
   const [documentos, setDocumentos] = useState<DocumentoPadrao[]>([]);
@@ -106,35 +100,22 @@ export function useDocumentosPadroes() {
       };
 
       if (isOnline) {
-        const payloadToTry: any = { ...docPayload };
-
-        let { data: resData, error: err } = await supabase
+        // Uma tentativa, um payload. Até 19/09/2026 este bloco respondia ao `PGRST204`
+        // **apagando a coluna que faltava e reinserindo**, até 12 vezes: o documento era
+        // gravado sem o campo, a tela dizia "salvo com sucesso" e o dado do usuário sumia
+        // sem erro nenhum — é este arquivo que o CLAUDE.md cita ao descrever essa perda.
+        // Um retry que muda o dado enviado não é tolerância a falha: é corromper o registro
+        // para conseguir gravá-lo. O `PGRST204` é justamente o único sinal de que falta uma
+        // migration, e engoli-lo escondia o defeito seguinte.
+        const { data: resData, error: err } = await supabase
           .from('documentos_padroes')
-          .insert([payloadToTry])
+          .insert([docPayload])
           .select()
           .single();
 
-        // Se colunas não existirem no cache do PostgREST (ambiente sem a migration mais recente),
-        // remove a coluna ausente e retenta, até funcionar ou esgotar as colunas opcionais.
-        let tentativas = 0;
-        while (err && err.code === 'PGRST204' && tentativas < 12) {
-          const coluna = extrairColunaAusente(err.message);
-          if (!coluna || !(coluna in payloadToTry)) break;
-          delete payloadToTry[coluna];
-          if (coluna === 'criado_em') delete payloadToTry.atualizado_em;
-          const retryRes = await supabase
-            .from('documentos_padroes')
-            .insert([payloadToTry])
-            .select()
-            .single();
-          resData = retryRes.data;
-          err = retryRes.error;
-          tentativas++;
-        }
-
         if (err) {
           console.error('Erro ao inserir modelo de documento no Supabase:', err);
-          throw new Error(`Erro ao salvar modelo no banco: ${err.message}`);
+          throw new RecusaDoServidor(explicarRecusa('documentos_padroes', err));
         }
         if (resData) {
           const formatted = {
@@ -176,34 +157,18 @@ export function useDocumentosPadroes() {
       }
 
       if (isOnline) {
-        const payloadToTry: any = { ...updatePayload };
-        let { data: updated, error: err } = await supabase
+        // Uma tentativa, um payload — ver a nota em `criar`. Aqui o campo em risco é o
+        // `conteudo`: o modelo inteiro que o operador acabou de reescrever.
+        const { data: updated, error: err } = await supabase
           .from('documentos_padroes')
-          .update(payloadToTry)
+          .update(updatePayload)
           .eq('id', id)
           .select()
           .single();
 
-        let tentativas = 0;
-        while (err && err.code === 'PGRST204' && tentativas < 12) {
-          const coluna = extrairColunaAusente(err.message);
-          if (!coluna || !(coluna in payloadToTry)) break;
-          delete payloadToTry[coluna];
-          if (coluna === 'atualizado_em') delete payloadToTry.criado_em;
-          const retryRes = await supabase
-            .from('documentos_padroes')
-            .update(payloadToTry)
-            .eq('id', id)
-            .select()
-            .single();
-          updated = retryRes.data;
-          err = retryRes.error;
-          tentativas++;
-        }
-
         if (err) {
           console.error('Erro ao atualizar modelo de documento no Supabase:', err);
-          throw new Error(`Erro ao atualizar modelo no banco: ${err.message}`);
+          throw new RecusaDoServidor(explicarRecusa('documentos_padroes', err));
         }
         if (updated) {
           const formatted = {
