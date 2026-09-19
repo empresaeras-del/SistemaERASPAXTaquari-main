@@ -38,6 +38,8 @@ import {
   Despesa 
 } from '../services/financeiroService';
 import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
+import { tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
+import { avisoLiquidacaoSemCaixa } from '../utils/avisoLiquidacaoSemCaixa';
 import { usePlanoContabil } from '../hooks/usePlanoContabil';
 import { useCentrosCusto } from '../hooks/useCentrosCusto';
 import { indicePorLancamento, parcelaCasaClassificacao } from '../utils/filtrosClassificacao';
@@ -256,9 +258,18 @@ export const ContasPagarPage: React.FC = () => {
     e.preventDefault();
     if (!parcelaSelecionada) return;
 
+    // O lote precisa ser o DESTA empresa. `getLotesCaixa` trata 'all' como "sem filtro",
+    // então o super_admin sem empresa escolhida pegaria o lote aberto de outra e o
+    // pagamento cairia no caixa dela — o mesmo defeito já corrigido do lado do recebimento.
+    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
+    if (!tenantId) {
+      toast.error(MENSAGEM_TENANT_INDEFINIDO);
+      return;
+    }
+
     setCheckingLote(true);
     try {
-      const activeLote = await getLoteAbertoAtivo(state.isOnline, state.empresaSelecionada || 'tenant-default');
+      const activeLote = await getLoteAbertoAtivo(state.isOnline, tenantId);
       if (!activeLote) {
         setLoteAberto(null);
         setModalStage('bloqueio');
@@ -281,6 +292,15 @@ export const ContasPagarPage: React.FC = () => {
     }
     if (!parcelaSelecionada || !loteAberto) return;
 
+    // A empresa da movimentação é a MESMA do lote já aberto, não a do seletor do topo:
+    // é nela que o dinheiro está saindo. Resolver de novo pelo seletor abriria espaço para
+    // as duas discordarem se a seleção mudar entre abrir o modal e confirmar a baixa.
+    const tenantId = tenantDeEscrita(loteAberto.tenant_id, state.user?.tenant_id);
+    if (!tenantId) {
+      toast.error(MENSAGEM_TENANT_INDEFINIDO);
+      return;
+    }
+
     setSubmittingBaixa(true);
     try {
       await registrarPagamento(state.isOnline, parcelaSelecionada.id, {
@@ -292,9 +312,12 @@ export const ContasPagarPage: React.FC = () => {
         observacao: observacaoPagamento
       });
 
-      // Registra a movimentação financeira diretamente no Lote de Caixa Aberto
-      await registrarMovimentacao(state.isOnline, {
-        tenant_id: state.empresaSelecionada || 'tenant-default',
+      // Registra a movimentação financeira diretamente no Lote de Caixa Aberto.
+      // A baixa acima já valeu: uma recusa aqui não a desfaz, e o aviso diz o que faltou.
+      let caixaLancado = true;
+      try {
+        await registrarMovimentacao(state.isOnline, {
+        tenant_id: tenantId,
         lote_id: loteAberto.id,
         tipo: 'saida',
         origem: 'contas_pagar',
@@ -307,9 +330,16 @@ export const ContasPagarPage: React.FC = () => {
         documento_ref: `Parc. ${parcelaSelecionada.numero_parcela}/${parcelaSelecionada.total_parcelas || 1}`,
         operador_nome: state.user?.nome || loteAberto.operador_nome || 'Sistema',
         observacao: observacaoPagamento
-      });
+        });
+      } catch (errCaixa: any) {
+        caixaLancado = false;
+        console.error('Movimentação de caixa recusada após a baixa da parcela:', errCaixa);
+        toast.error(avisoLiquidacaoSemCaixa('pagamento', errCaixa?.message), { duration: 12000 });
+      }
 
-      toast.success(`Pagamento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
+      if (caixaLancado) {
+        toast.success(`Pagamento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
+      }
       setShowBaixaModal(false);
       loadData();
     } catch (err: any) {

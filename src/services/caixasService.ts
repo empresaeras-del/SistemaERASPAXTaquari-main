@@ -17,6 +17,51 @@ import {
   estornarPagamento
 } from './financeiroService';
 import { FormaPagamento } from '../types/financeiro';
+import { RecusaDoServidor, explicarRecusa } from '../utils/recusaDoServidor';
+
+/**
+ * Escreve no Supabase separando **recusa** de **queda de rede**, que é a regra que o
+ * CLAUDE.md fixa desde `saveAtendimento` e que este service era o último a não aplicar.
+ *
+ * Até 19/09/2026 os quatro caminhos de escrita de caixa tratavam o `error` devolvido pelo
+ * cliente com `console.warn`, gravavam no IndexedDB e **não enfileiravam nada**: o lote, a
+ * movimentação ou o estorno ficavam só no navegador de quem operou, a tela dizia sucesso e,
+ * no caso do lote, a auditoria registrava a abertura de um lote que o servidor havia
+ * recusado. Ninguém lê o console de um operador.
+ *
+ * - **`error` devolvido** é recusa (constraint, RLS, coluna inexistente, `CHECK`). Repetir
+ *   amanhã com o mesmo payload dá o mesmo resultado, então enfileirar só adia a perda: a
+ *   função **lança** e quem chamou mostra o motivo ao operador.
+ * - **Exceção lançada** é rede fora. Aí o caso offline-first é legítimo: devolve
+ *   `'sem_rede'`, e o chamador grava no cache e enfileira.
+ *
+ * O invariante que isso estabelece, e que os testes cobram: **ou a escrita subiu, ou ela
+ * está na fila** — nunca nenhum dos dois.
+ */
+type ResultadoDaEscrita = 'aceito' | 'sem_rede';
+
+const escreverNoServidor = async (
+  tabela: string,
+  executar: () => PromiseLike<{ error: any }>,
+): Promise<ResultadoDaEscrita> => {
+  let recusa: any = null;
+  try {
+    const { error } = await executar();
+    if (error) recusa = error;
+  } catch (err) {
+    // Rede fora: o dado não se perde, vai para o cache e para a fila.
+    console.warn(`Sem rede ao gravar em '${tabela}'; o registro vai para a fila de sync.`, err);
+    return 'sem_rede';
+  }
+
+  // Lançado FORA do try: dentro dele a recusa cairia no `catch` que trata rede, e voltaria
+  // a ser engolida por um caminho novo.
+  if (recusa) {
+    console.error(`O servidor recusou a gravação em '${tabela}':`, recusa);
+    throw new RecusaDoServidor(explicarRecusa(tabela, recusa));
+  }
+  return 'aceito';
+};
 
 // helper format codigo lote
 export const gerarCodigoLote = (indexNumber: number = 1): string => {
@@ -105,17 +150,18 @@ export const abrirLoteCaixa = async (
     atualizado_em: new Date().toISOString()
   };
 
-  if (isOnline) {
-    try {
-      const { error } = await supabase.from('lotes_caixa').insert(novoLote);
-      if (error) console.warn('Falha no Supabase ao abrir lote, mantendo IDB:', error);
-    } catch (e) {
-      console.warn('Erro ao abrir lote no Supabase:', e);
-    }
-    await saveToIDB('lotes_caixa', novoLote);
+  const aceito = isOnline
+    ? (await escreverNoServidor('lotes_caixa', () =>
+        supabase.from('lotes_caixa').insert(novoLote))) === 'aceito'
+    : false;
+
+  await saveToIDB('lotes_caixa', novoLote);
+
+  if (aceito) {
     await registrarAuditoria('Abertura de Lote de Caixa', { lote_id: novoLote.id, codigo: novoLote.codigo_lote });
   } else {
-    await saveToIDB('lotes_caixa', novoLote);
+    // Sem rede o lote existe só aqui até subir — e a auditoria não afirma uma abertura que
+    // o servidor ainda não conhece.
     await addToSyncQueue({ storeName: 'lotes_caixa', action: 'update', data: novoLote });
   }
 
@@ -168,23 +214,22 @@ export const fecharLoteCaixa = async (
     atualizado_em: new Date().toISOString()
   };
 
-  if (isOnline) {
-    try {
-      const { error } = await supabase.from('lotes_caixa').upsert(loteAtualizado);
-      if (error) console.warn('Falha no Supabase ao fechar lote, salvando IDB:', error);
-    } catch (e) {
-      console.warn('Erro Supabase ao fechar lote:', e);
-    }
-    await saveToIDB('lotes_caixa', loteAtualizado);
-    await registrarAuditoria('Fechamento de Lote de Caixa', { 
-      lote_id: lote.id, 
+  const aceito = isOnline
+    ? (await escreverNoServidor('lotes_caixa', () =>
+        supabase.from('lotes_caixa').upsert(loteAtualizado))) === 'aceito'
+    : false;
+
+  await saveToIDB('lotes_caixa', loteAtualizado);
+
+  if (aceito) {
+    await registrarAuditoria('Fechamento de Lote de Caixa', {
+      lote_id: lote.id,
       codigo: lote.codigo_lote,
       saldo_esperado: saldoEsperado,
       saldo_informado: saldoInformado,
       diferenca
     });
   } else {
-    await saveToIDB('lotes_caixa', loteAtualizado);
     await addToSyncQueue({ storeName: 'lotes_caixa', action: 'update', data: loteAtualizado });
   }
 
@@ -220,9 +265,17 @@ export const recalcularTotaisLote = async (
   };
 
   await saveToIDB('lotes_caixa', loteAtualizado);
+
+  // **Este é o único caminho de escrita deste service que pode falhar calado, e é de
+  // propósito.** `saldo_entradas`/`saldo_saidas`/`saldo_esperado` são cache derivado: o
+  // fechamento do lote os recalcula do zero a partir das movimentações, ignorando o que
+  // estiver gravado aqui. Uma falha neste upsert atrasa um número da tela, não perde
+  // registro nenhum — e lançar faria a movimentação que o servidor JÁ ACEITOU ser reportada
+  // ao operador como se tivesse falhado, que é o erro mais caro dos dois.
   if (isOnline) {
     try {
-      await supabase.from('lotes_caixa').upsert(loteAtualizado);
+      const { error } = await supabase.from('lotes_caixa').upsert(loteAtualizado);
+      if (error) console.warn('Os totais do lote não subiram (serão recalculados no fechamento):', error);
     } catch (e) {
       console.warn('Erro ao atualizar totais do lote no Supabase:', e);
     }
@@ -353,16 +406,13 @@ export const registrarMovimentacao = async (
     );
   }
 
-  if (isOnline) {
-    try {
-      const { error } = await supabase.from('movimentacoes_caixa').insert(novaMov);
-      if (error) console.warn('Supabase movimentacao insert error:', error);
-    } catch (e) {
-      console.warn('Erro ao inserir movimentacao no Supabase:', e);
-    }
-    await saveToIDB('movimentacoes_caixa', novaMov);
-  } else {
-    await saveToIDB('movimentacoes_caixa', novaMov);
+  const aceito = isOnline
+    ? (await escreverNoServidor('movimentacoes_caixa', () =>
+        supabase.from('movimentacoes_caixa').insert(novaMov))) === 'aceito'
+    : false;
+
+  await saveToIDB('movimentacoes_caixa', novaMov);
+  if (!aceito) {
     await addToSyncQueue({ storeName: 'movimentacoes_caixa', action: 'update', data: novaMov });
   }
 
@@ -415,16 +465,13 @@ export const estornarMovimentacaoCaixa = async (
     estornado: true, 
     observacao: (mov.observacao ? mov.observacao + ' | ' : '') + 'ESTORNADO: ' + observacao 
   };
+  const aceito = isOnline
+    ? (await escreverNoServidor('movimentacoes_caixa', () =>
+        supabase.from('movimentacoes_caixa').upsert(movAtualizada))) === 'aceito'
+    : false;
+
   await saveToIDB('movimentacoes_caixa', movAtualizada);
-  
-  if (isOnline) {
-    try {
-      const { error } = await supabase.from('movimentacoes_caixa').upsert(movAtualizada);
-      if (error) console.warn('Supabase update mov error:', error);
-    } catch (e) {
-      console.warn('Erro ao atualizar movimentacao no Supabase:', e);
-    }
-  } else {
+  if (!aceito) {
     await addToSyncQueue({ storeName: 'movimentacoes_caixa', action: 'update', data: movAtualizada as any });
   }
 

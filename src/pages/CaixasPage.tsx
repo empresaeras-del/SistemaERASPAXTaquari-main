@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { getLotesCaixa, reabrirLoteCaixa, getMovimentacoesCaixa, abrirLoteCaixa, registrarMovimentacao, estornarMovimentacaoCaixa, fecharLoteCaixa, recalcularTotaisLote } from '../services/caixasService';
+import { getLotesCaixa, reabrirLoteCaixa, getMovimentacoesCaixa, abrirLoteCaixa, registrarMovimentacao, estornarMovimentacaoCaixa, fecharLoteCaixa, recalcularTotaisLote, sincronizarLancamentosFinanceiros } from '../services/caixasService';
+import { tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 import { getEmpresaById, Empresa } from '../services/empresasService';
 import { LoteCaixa, MovimentacaoCaixa } from '../types/caixas';
 import toast from 'react-hot-toast';
@@ -185,10 +186,18 @@ export const CaixasPage: React.FC = () => {
       toast.error("Operação de caixa bloqueada no Modo de Visualização (Offline).");
       return;
     }
+    // `getTenantId()` cai para o literal 'tenant-1' quando não há empresa escolhida. Como
+    // FILTRO DE LEITURA isso é só uma lista vazia; como dono de um lote de caixa seria um
+    // registro carimbado com uma empresa que não existe — ver "Nunca invente um tenant_id".
+    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
+    if (!tenantId) {
+      toast.error(MENSAGEM_TENANT_INDEFINIDO);
+      return;
+    }
     try {
       setLoading(true);
       await abrirLoteCaixa(state.isOnline, {
-        tenant_id: getTenantId(),
+        tenant_id: tenantId,
         terminal_caixa: 'Caixa Principal',
         operador_id: state.user?.id || '',
         operador_nome: state.user?.nome || '',
@@ -271,12 +280,46 @@ export const CaixasPage: React.FC = () => {
     }
   };
   
+  /**
+   * Varre as parcelas já liquidadas que ainda não têm movimentação e lança as que faltam.
+   *
+   * Até 19/09/2026 este botão era um `setTimeout` de 1,5s que anunciava
+   * "Integração concluída com sucesso!" sem chamar nada — e
+   * `sincronizarLancamentosFinanceiros` não tinha chamador nenhum no app. O texto ao lado
+   * afirmava que a integração era "em tempo real", o que é verdade no caminho feliz e
+   * deixava de ser exatamente quando a movimentação falhava: era aqui que o operador
+   * deveria recuperá-la, e era aqui que nada acontecia.
+   *
+   * A função é idempotente por `referencia_id`, então rodar de novo não duplica lançamento.
+   */
   const handleSyncFinancials = async () => {
+    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
+    if (!tenantId) {
+      toast.error(MENSAGEM_TENANT_INDEFINIDO);
+      return;
+    }
     setSyncing(true);
-    setTimeout(() => {
+    try {
+      const { novosContasReceber, novosContasPagar } = await sincronizarLancamentosFinanceiros(
+        state.isOnline,
+        tenantId,
+        state.user?.nome || 'Sistema Financeiro',
+      );
+      const total = novosContasReceber + novosContasPagar;
+      if (total === 0) {
+        toast.success('Nada a integrar: todo recebimento e pagamento liquidado já está no caixa.');
+      } else {
+        toast.success(
+          `Integração concluída: ${novosContasReceber} recebimento(s) e ${novosContasPagar} ` +
+          'pagamento(s) lançados no caixa.',
+        );
+      }
+      await loadData();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao integrar os lançamentos financeiros');
+    } finally {
       setSyncing(false);
-      toast.success("Integração concluída com sucesso!");
-    }, 1500);
+    }
   };
 
   const handleViewLoteDetails = async (lote: LoteCaixa, autoPrint: boolean = false) => {
@@ -546,7 +589,8 @@ export const CaixasPage: React.FC = () => {
             </button>
           </div>
           <div className="text-center p-8 text-text-subtle">
-            As movimentações financeiras já estão integradas em tempo real com os lotes de caixa abertos.
+            As baixas do financeiro são lançadas no caixa na hora. Use o botão acima quando
+            alguma não tiver subido — a integração ignora o que já está lançado.
           </div>
         </div>
       )}
