@@ -3167,6 +3167,90 @@ ser exatamente quando a movimentação falha. Ele agora chama a função de verd
 lançamentos trouxe. **Um botão que relata sucesso sem fazer nada é pior que um botão
 ausente**: ele é a razão pela qual ninguém procurou o problema antes.
 
+### Os seis hooks de cadastro, e o harness que eles compartilham
+
+Fechado em 20/09/2026. `useFornecedores` (19), `useItensFunerarios` (18), `useProcedimentos`
+(14), `useCredenciados` (14), `usePlanosPax` (17) e o par `useCentrosCusto`/
+`useCategoriasFornecedor` (14) passaram a ter teste. `src/test/harnessDeHook.ts` é o IDB falso
+com estado + o Supabase que **registra a chamada**, num lugar só: seis cópias do mesmo mock
+seriam a duplicação que este arquivo combate em toda outra seção.
+
+Duas armadilhas do harness valem para o próximo:
+
+- **`order()` devolve o próprio builder, não uma Promise.** Há consultas com
+  `.order(...).order(...)` no projeto; como o builder é thenable, `await query.order(...)`
+  continua resolvendo.
+- **O usuário vem de lugares diferentes.** `useItensFunerarios` lê `state.user` do
+  `AppContext`; `useFornecedores`, `useProcedimentos`, `useCredenciados` e `usePlanosPax` leem
+  de `useAuth()`. Mockar o errado faz todo `criar` falhar com "não autenticado" — e os testes
+  que só checam `rejects.toThrow()` passam assim mesmo, vazios.
+
+#### Dois defeitos que os testes acharam, e as correções
+
+- **`useProcedimentos` auditava o que o servidor tinha recusado.** `criar` e `editar` faziam
+  `console.warn` e gravavam no IndexedDB, e a chamada a `registrarAuditoria` ficava **fora**
+  do `if/else` — então a trilha registrava "Criar Procedimento" para uma criação que não
+  aconteceu, e o registro ficava preso no navegador de quem operou. Os três caminhos passaram
+  a lançar `RecusaDoServidor`. É a armadilha de `saveAtendimento` de novo, agora num hook.
+- **`usePlanosPax` gravava o plano e perdia faixas e coberturas em silêncio.** As tabelas
+  filhas só tinham `if (err) console.warn(...)`, nas duas funções. **A faixa etária é o preço
+  do plano**: sem linha em `planos_pax_faixas`, `calcularValor` ignora a idade e o plano cobra
+  outro valor; sem cobertura, todo item vira "fora da cobertura" no atendimento. E o cache
+  local guardava as três juntas, então o navegador de quem criou mostrava o plano certo e o de
+  todos os outros, errado. `utils/avisoPlanoIncompleto.ts` monta a frase que diz o que o
+  genérico não diz: **o plano existe** (repetir cria um duplicado), o que faltou, e que basta
+  abrir e salvar de novo. Mesma escolha de `avisoLiquidacaoSemCaixa`.
+
+#### A co-participação que nunca chegava ao servidor (migration `20260920141609`)
+
+Achado pelo teste do hook e corrigido na sequência. `credenciados_procedimentos` tinha sete
+colunas, e **nem `valor_exclusivo` nem `valor_coparticipacao` estavam entre elas** (`id`,
+`credenciado_id`, `procedimento_id`, `valor`, `created_at`, `tenant_id`, `empresa_id`).
+`vincularProcedimento` mandava as duas no primeiro upsert, levava `PGRST204` **sempre**, e o
+"fallback" reenviava sem elas — a quarta cópia do padrão que este arquivo classifica como
+*corromper o registro para conseguir gravá-lo*.
+
+Não era risco adormecido: a co-participação digitada em `ProcedimentosCredenciado.tsx` **nunca
+chegava ao servidor**. Ficava só no IndexedDB de quem digitou — a tela dele mostrava o número, a
+de todos os outros mostrava vazio — e é ela que vira conta a receber quando a guia é emitida.
+
+**Só `valor_coparticipacao` foi criada.** A outra saída seria criar também `valor_exclusivo`, e
+ela reintroduziria exatamente o par de colunas duplicadas que a migration `20260915132838`
+acabou de eliminar: o hook já grava o valor exclusivo em `valor`, que é a coluna canônica do
+preço. Agora o payload leva `valor` + `valor_coparticipacao`, e o nome que não é coluna some do
+caminho de escrita — inclusive em `atualizarValorProcedimento`, que o traduz antes de enviar em
+vez de mandá-lo para levar `PGRST204`. O `COMMENT` de `valor` registra a decisão para a próxima
+pessoa que for tentada a criar `valor_exclusivo` ao lado dela.
+
+**As 29 linhas anteriores ficaram com `0`, e isso está escrito no `COMMENT` da coluna nova**:
+não é "sem co-participação", é "nunca gravado". Quem precisar do valor certo tem de reabrir o
+credenciado e informar de novo — não há de onde fazer backfill, porque o dado só existiu no
+IndexedDB de cada navegador.
+
+Duas coisas do método valem como regra:
+
+- **O teste que travava o defeito virou o teste que trava a correção.** Ele já media o
+  comportamento (`tentativas === 2`, segundo payload sem a co-participação) em vez de
+  descrevê-lo, então bastou inverter a expectativa: uma tentativa, payload completo, recusa
+  lançando. As quatro mutações (voltar a mandar `valor_exclusivo`, trocar o `throw` por
+  `warn`, parar de enfileirar sem rede, reintroduzir o reenvio no `atualizar`) reprovam a
+  suíte, cada uma no teste correspondente.
+- **A tela parou de engolir a mensagem.** `handleVincular` vincula num laço, um procedimento
+  por vez; um "Erro ao vincular procedimentos." genérico fazia o operador repetir a seleção
+  inteira e revincular o que já tinha subido. A mensagem passou a dizer quantos entraram, em
+  qual procedimento parou e o que o servidor recusou.
+
+#### Outros dois quirks travados, não corrigidos
+
+- **`useItensFunerarios.desativar` É `excluir`** (`const desativar = excluir`): o operador
+  clica em "desativar" e o item some do banco junto com as coberturas de plano dele, sem
+  pergunta e sem volta. E `reativar` faz `editar(id, { ativo: true })`, que não tem linha para
+  atualizar depois disso — o par é incoerente.
+- **`useFornecedores` não poda o cache com resposta vazia** (`data.length > 0`), a mesma
+  condição que o CLAUDE.md já corrigiu em `financeiroService`: zero linhas é resposta válida,
+  não falha de rede. Um fornecedor excluído em outra máquina sobrevive no IndexedDB local.
+  Podar com segurança exige `utils/mesclagemOfflineFirst.ts`, por onde este hook não passa.
+
 **Conferindo a impressão de verdade**: o CSS de impressão não é observável por teste unitário — só
 dá para checar que a string gerada contém a regra certa (é o que `documentoPrintStyles.test.ts` faz).
 O que o navegador realmente produz precisa de um navegador. Este ambiente tem Chromium pré-instalado

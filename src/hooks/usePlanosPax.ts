@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { avisoPlanoIncompleto } from '../utils/avisoPlanoIncompleto';
 import { registrarAuditoria } from '../lib/supabase';
 import { 
   PlanoPaxCompleto, 
@@ -179,12 +180,20 @@ export function usePlanosPax() {
         
         if (faixasData.length > 0) {
           const { error: errFaixas } = await supabase.from('planos_pax_faixas').insert(faixasData);
-          if (errFaixas) console.warn("Erro ao salvar faixas no Supabase:", errFaixas);
+          if (errFaixas) {
+            // O plano JÁ está gravado — ver `utils/avisoPlanoIncompleto.ts`. Calar aqui fazia
+            // o plano nascer sem preço por idade, com a tela dizendo sucesso.
+            console.error("O servidor recusou as faixas do plano:", errFaixas);
+            throw new Error(avisoPlanoIncompleto('faixas', errFaixas.message));
+          }
         }
         
         if (coberturasData.length > 0) {
           const { error: errCoberturas } = await supabase.from('planos_pax_coberturas').insert(coberturasData);
-          if (errCoberturas) console.warn("Erro ao salvar coberturas no Supabase:", errCoberturas);
+          if (errCoberturas) {
+            console.error("O servidor recusou as coberturas do plano:", errCoberturas);
+            throw new Error(avisoPlanoIncompleto('coberturas', errCoberturas.message));
+          }
         }
         
         await registrarAuditoria('Criar Plano', { id: planoId, nome: dbPlanoPayload.nome });
@@ -284,13 +293,19 @@ export function usePlanosPax() {
         await supabase.from('planos_pax_faixas').delete().eq('plano_id', id);
         if (faixasData.length > 0) {
           const { error: errFaixas } = await supabase.from('planos_pax_faixas').insert(faixasData);
-          if (errFaixas) console.warn("Erro ao atualizar faixas no Supabase:", errFaixas);
+          if (errFaixas) {
+            console.error("O servidor recusou as faixas do plano:", errFaixas);
+            throw new Error(avisoPlanoIncompleto('faixas', errFaixas.message));
+          }
         }
         
         await supabase.from('planos_pax_coberturas').delete().eq('plano_id', id);
         if (coberturasData.length > 0) {
           const { error: errCoberturas } = await supabase.from('planos_pax_coberturas').insert(coberturasData);
-          if (errCoberturas) console.warn("Erro ao atualizar coberturas no Supabase:", errCoberturas);
+          if (errCoberturas) {
+            console.error("O servidor recusou as coberturas do plano:", errCoberturas);
+            throw new Error(avisoPlanoIncompleto('coberturas', errCoberturas.message));
+          }
         }
         
         await registrarAuditoria('Editar Plano', { 

@@ -6,6 +6,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Procedimento, ProcedimentoInsert, ProcedimentoUpdate } from '../types/procedimentos';
 import { registrarAuditoria } from '../lib/supabase';
+import { RecusaDoServidor, explicarRecusa } from '../utils/recusaDoServidor';
 
 export function useProcedimentos() {
   const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
@@ -92,12 +93,16 @@ export function useProcedimentos() {
         .insert([newItem])
         .select()
         .single();
+      // A recusa do servidor LANÇA. Até 20/09/2026 este bloco fazia `console.warn` e gravava
+      // no IndexedDB: o procedimento ficava preso no navegador de quem operou, invisível para
+      // o resto da empresa, e a tela dizia sucesso — a armadilha de `saveAtendimento`. Pior,
+      // a auditoria ficava FORA do if/else e registrava "Criar Procedimento" mesmo assim,
+      // deixando a trilha afirmando o contrário do que aconteceu.
       if (err) {
-        console.warn('Supabase insert failed, saving to IDB only.', err);
-        await saveToIDB('procedimentos', newItem);
-      } else {
-        await saveToIDB('procedimentos', inserted);
+        console.error('O servidor recusou a criação do procedimento:', err);
+        throw new RecusaDoServidor(explicarRecusa('procedimentos', err));
       }
+      await saveToIDB('procedimentos', inserted);
       await registrarAuditoria('Criar Procedimento', { id: newItem.id, descricao: newItem.descricao });
       await carregarProcedimentos();
     } catch (err: any) {
@@ -124,14 +129,12 @@ export function useProcedimentos() {
         .eq('id', id)
         .select()
         .single();
+      // Ver a nota em `criar`: recusa lança, e a auditoria só registra o que de fato subiu.
       if (err) {
-        console.warn('Supabase update failed, attempting IDB update.', err);
-        if (existing) {
-          await saveToIDB('procedimentos', { ...existing, ...payload });
-        }
-      } else {
-        await saveToIDB('procedimentos', updated);
+        console.error('O servidor recusou a edição do procedimento:', err);
+        throw new RecusaDoServidor(explicarRecusa('procedimentos', err));
       }
+      await saveToIDB('procedimentos', updated);
       await registrarAuditoria('Editar Procedimento', { id, descricao: data.descricao });
       await carregarProcedimentos();
     } catch (err: any) {
@@ -168,7 +171,11 @@ export function useProcedimentos() {
 
       const { error: err } = await supabase.from('procedimentos').delete().eq('id', id);
       if (err) {
-        console.warn('Supabase delete failed, attempting IDB delete.', err);
+        // Sumir do cache local um registro que o servidor recusou apagar faria a lista
+        // "esquecê-lo" só nesta máquina, e ele reapareceria no próximo carregamento — com o
+        // operador convencido de já ter excluído.
+        console.error('O servidor recusou a exclusão do procedimento:', err);
+        throw new RecusaDoServidor(explicarRecusa('procedimentos', err));
       }
       await deleteFromIDB('procedimentos', id);
       await registrarAuditoria('Excluir Procedimento', { id });
