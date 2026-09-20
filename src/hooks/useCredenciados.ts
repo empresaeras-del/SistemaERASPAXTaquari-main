@@ -5,6 +5,7 @@ import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb'
 import { addToSyncQueue } from '../lib/syncService';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { RecusaDoServidor, explicarRecusa } from '../utils/recusaDoServidor';
 import { Credenciado, CredenciadoInsert, CredenciadoUpdate, CredenciadoPlano, CredenciadoPlanoInsert, CredenciadoProcedimento, CredenciadoProcedimentoInsert, CredenciadoProcedimentoUpdate } from '../types/credenciados';
 
 export function useCredenciados() {
@@ -168,6 +169,13 @@ export function useCredenciados() {
   };
 
 
+  /**
+   * O valor exclusivo do procedimento é gravado em `valor`, que é a coluna canônica do preço —
+   * NÃO existe `valor_exclusivo` no banco, e criá-la reintroduziria o par de colunas duplicadas
+   * que a migration `20260915132838` eliminou. A co-participação ganhou coluna própria em
+   * `20260920141609`; até lá ela era enviada, recusada com `PGRST204` em toda gravação, e o
+   * "fallback" reenviava sem ela — o valor digitado pelo operador ficava só no IndexedDB dele.
+   */
   const vincularProcedimento = async (data: CredenciadoProcedimentoInsert) => {
     try {
       const allIDB = await getAllFromIDB<any>('credenciados_procedimentos');
@@ -180,53 +188,57 @@ export function useCredenciados() {
         id: itemId,
         credenciado_id: data.credenciado_id,
         procedimento_id: data.procedimento_id,
-        valor_exclusivo: data.valor_exclusivo ?? existingInIDB?.valor_exclusivo ?? 0,
+        // `existingInIDB?.valor_exclusivo` só aparece em cache gravado antes desta correção.
+        valor: data.valor_exclusivo ?? existingInIDB?.valor ?? existingInIDB?.valor_exclusivo ?? 0,
         valor_coparticipacao: data.valor_coparticipacao ?? existingInIDB?.valor_coparticipacao ?? 0,
-        valor: data.valor_exclusivo ?? existingInIDB?.valor ?? 0,
         created_at: existingInIDB?.created_at || new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
+      let aceito = false;
+
       if (isOnline) {
+        // Recusa do servidor e queda de rede não podem terminar igual: `error` devolvido é
+        // recusa (repetir amanhã com o mesmo payload dá o mesmo resultado, então lança e não
+        // enfileira); exceção lançada é rede fora, e aí vale o caminho offline-first.
+        let recusa: any = null;
         try {
           const { data: inserted, error: err } = await supabase
             .from('credenciados_procedimentos')
-            .upsert({
-              id: newItem.id,
-              credenciado_id: newItem.credenciado_id,
-              procedimento_id: newItem.procedimento_id,
-              valor_exclusivo: newItem.valor_exclusivo,
-              valor_coparticipacao: newItem.valor_coparticipacao,
-              valor: newItem.valor
-            }, { onConflict: 'credenciado_id,procedimento_id' })
+            .upsert(
+              {
+                id: newItem.id,
+                credenciado_id: newItem.credenciado_id,
+                procedimento_id: newItem.procedimento_id,
+                valor: newItem.valor,
+                valor_coparticipacao: newItem.valor_coparticipacao
+              },
+              { onConflict: 'credenciado_id,procedimento_id' }
+            )
             .select()
             .single();
 
           if (err) {
-            // Fallback se colunas valor_exclusivo / valor_coparticipacao não existirem na tabela
-            const { data: insertedFallback, error: errFallback } = await supabase
-              .from('credenciados_procedimentos')
-              .upsert({
-                id: newItem.id,
-                credenciado_id: newItem.credenciado_id,
-                procedimento_id: newItem.procedimento_id,
-                valor: newItem.valor
-              }, { onConflict: 'credenciado_id,procedimento_id' })
-              .select()
-              .single();
-
-            if (!errFallback && insertedFallback) {
-              newItem.id = insertedFallback.id || newItem.id;
-            }
-          } else if (inserted) {
-            newItem.id = inserted.id || newItem.id;
+            recusa = err;
+          } else {
+            if (inserted) newItem.id = inserted.id || newItem.id;
+            aceito = true;
           }
         } catch (errSupabase) {
-          console.warn('Falha no Supabase ao vincular procedimento, mantendo no IDB:', errSupabase);
+          console.warn('Sem rede ao vincular procedimento, mantendo no IDB e enfileirando:', errSupabase);
+        }
+
+        // Relançada FORA do try, senão cairia no próprio catch que trata rede.
+        if (recusa) {
+          console.error('O servidor recusou o vínculo do procedimento:', recusa);
+          throw new RecusaDoServidor(explicarRecusa('credenciados_procedimentos', recusa));
         }
       }
 
       await saveToIDB('credenciados_procedimentos', newItem);
+      if (!aceito) {
+        await addToSyncQueue({ storeName: 'credenciados_procedimentos', action: 'insert', data: newItem });
+      }
     } catch (err: any) {
       console.error('Erro ao vincular procedimento:', err);
       throw new Error(err.message || 'Erro ao vincular procedimento.');
@@ -251,26 +263,30 @@ export function useCredenciados() {
 
   const atualizarValorProcedimento = async (id: string, data: CredenciadoProcedimentoUpdate) => {
     try {
+      // `valor_exclusivo` não é coluna: ele vira `valor`, e sai do payload em vez de ser
+      // enviado para levar `PGRST204` e disparar um reenvio que descarta a co-participação.
+      const { valor_exclusivo, ...resto } = data as any;
       const payload: any = {
-        ...data,
-        valor: data.valor_exclusivo ?? (data as any).valor
+        ...resto,
+        valor: valor_exclusivo ?? (data as any).valor
       };
 
       if (isOnline) {
+        let recusa: any = null;
         try {
           const { error: err } = await supabase
             .from('credenciados_procedimentos')
             .update(payload)
             .eq('id', id);
 
-          if (err) {
-            await supabase
-              .from('credenciados_procedimentos')
-              .update({ valor: payload.valor })
-              .eq('id', id);
-          }
+          if (err) recusa = err;
         } catch (err) {
-          console.warn('Falha no Supabase ao atualizar valor de procedimento:', err);
+          console.warn('Sem rede ao atualizar valor de procedimento, mantendo no IDB:', err);
+        }
+
+        if (recusa) {
+          console.error('O servidor recusou a atualização do valor do procedimento:', recusa);
+          throw new RecusaDoServidor(explicarRecusa('credenciados_procedimentos', recusa));
         }
       }
 

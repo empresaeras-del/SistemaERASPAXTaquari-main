@@ -61,25 +61,37 @@ export const ProcedimentosCredenciado: React.FC<ProcedimentosCredenciadoProps> =
     try {
       // Create links for all selected
       const procs = Array.from(selectedProcIds).map(id => procedimentos.find(p => p.id === id)).filter(Boolean);
-      
+      let vinculados = 0;
+
       for (const proc of procs) {
         if (proc) {
-          await vincularProcedimento({
-            credenciado_id: credenciadoId,
-            procedimento_id: proc.id,
-            valor_exclusivo: proc.valor_padrao || 0,
-            valor_coparticipacao: proc.coparticipacao || 0
-          });
+          try {
+            await vincularProcedimento({
+              credenciado_id: credenciadoId,
+              procedimento_id: proc.id,
+              valor_exclusivo: proc.valor_padrao || 0,
+              valor_coparticipacao: proc.coparticipacao || 0
+            });
+            vinculados += 1;
+          } catch (err: any) {
+            // O laço vincula um por um: dizer só "erro ao vincular" faria o operador repetir a
+            // seleção inteira e revincular o que já subiu. A mensagem nomeia o procedimento que
+            // parou e quantos já entraram, e carrega a recusa do servidor em vez de escondê-la.
+            await loadVinculados();
+            throw new Error(
+              `${vinculados} de ${procs.length} vinculados. Parou em "${proc.descricao || proc.codigo_tuss || proc.id}": ${err?.message || 'erro desconhecido'}`
+            );
+          }
         }
       }
-      
+
       toast.success(`${selectedProcIds.size} procedimentos vinculados com sucesso!`);
       setIsLinking(false);
       setSelectedProcIds(new Set());
       setSearchTermProc('');
       await loadVinculados();
-    } catch (err) {
-      toast.error('Erro ao vincular procedimentos.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao vincular procedimentos.');
     }
   };
 
@@ -112,8 +124,8 @@ export const ProcedimentosCredenciado: React.FC<ProcedimentosCredenciadoProps> =
       toast.success('Valores atualizados com sucesso!');
       setEditingId(null);
       await loadVinculados();
-    } catch (err) {
-      toast.error('Erro ao atualizar valores.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao atualizar valores.');
     }
   };
 

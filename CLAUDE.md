@@ -3201,24 +3201,44 @@ Duas armadilhas do harness valem para o próximo:
   genérico não diz: **o plano existe** (repetir cria um duplicado), o que faltou, e que basta
   abrir e salvar de novo. Mesma escolha de `avisoLiquidacaoSemCaixa`.
 
-#### O defeito ATIVO que ficou travado por teste, não corrigido
+#### A co-participação que nunca chegava ao servidor (migration `20260920141609`)
 
-`credenciados_procedimentos` tem sete colunas, e **`valor_exclusivo` e `valor_coparticipacao`
-não estão entre elas** (conferido no banco: `id`, `credenciado_id`, `procedimento_id`, `valor`,
-`created_at`, `tenant_id`, `empresa_id`). `vincularProcedimento` manda as duas no primeiro
-upsert, leva `PGRST204` **sempre**, e o "fallback" reenvia sem elas — a quarta cópia do padrão
-que este arquivo classifica como *corromper o registro para conseguir gravá-lo*.
+Achado pelo teste do hook e corrigido na sequência. `credenciados_procedimentos` tinha sete
+colunas, e **nem `valor_exclusivo` nem `valor_coparticipacao` estavam entre elas** (`id`,
+`credenciado_id`, `procedimento_id`, `valor`, `created_at`, `tenant_id`, `empresa_id`).
+`vincularProcedimento` mandava as duas no primeiro upsert, levava `PGRST204` **sempre**, e o
+"fallback" reenviava sem elas — a quarta cópia do padrão que este arquivo classifica como
+*corromper o registro para conseguir gravá-lo*.
 
-Consequência hoje, não um risco adormecido: a co-participação que o operador digita em
-`ProcedimentosCredenciado.tsx` **nunca chega ao servidor**. Ela fica só no IndexedDB de quem
-digitou — a tela dele mostra o número, a de todos os outros mostra vazio — e é ela que vira
-conta a receber quando a guia é emitida.
+Não era risco adormecido: a co-participação digitada em `ProcedimentosCredenciado.tsx` **nunca
+chegava ao servidor**. Ficava só no IndexedDB de quem digitou — a tela dele mostrava o número, a
+de todos os outros mostrava vazio — e é ela que vira conta a receber quando a guia é emitida.
 
-Corrigir exige **migration** (a coluna que falta), mais a escolha entre criar
-`valor_exclusivo` ao lado de `valor` — o que reintroduziria o par de colunas duplicadas que a
-migration `20260915132838` acabou de eliminar — ou parar de enviar `valor_exclusivo` e deixar
-`valor` como canônico. É decisão de schema, não limpeza de hook, e por isso o teste trava o
-comportamento atual em vez de descrevê-lo.
+**Só `valor_coparticipacao` foi criada.** A outra saída seria criar também `valor_exclusivo`, e
+ela reintroduziria exatamente o par de colunas duplicadas que a migration `20260915132838`
+acabou de eliminar: o hook já grava o valor exclusivo em `valor`, que é a coluna canônica do
+preço. Agora o payload leva `valor` + `valor_coparticipacao`, e o nome que não é coluna some do
+caminho de escrita — inclusive em `atualizarValorProcedimento`, que o traduz antes de enviar em
+vez de mandá-lo para levar `PGRST204`. O `COMMENT` de `valor` registra a decisão para a próxima
+pessoa que for tentada a criar `valor_exclusivo` ao lado dela.
+
+**As 29 linhas anteriores ficaram com `0`, e isso está escrito no `COMMENT` da coluna nova**:
+não é "sem co-participação", é "nunca gravado". Quem precisar do valor certo tem de reabrir o
+credenciado e informar de novo — não há de onde fazer backfill, porque o dado só existiu no
+IndexedDB de cada navegador.
+
+Duas coisas do método valem como regra:
+
+- **O teste que travava o defeito virou o teste que trava a correção.** Ele já media o
+  comportamento (`tentativas === 2`, segundo payload sem a co-participação) em vez de
+  descrevê-lo, então bastou inverter a expectativa: uma tentativa, payload completo, recusa
+  lançando. As quatro mutações (voltar a mandar `valor_exclusivo`, trocar o `throw` por
+  `warn`, parar de enfileirar sem rede, reintroduzir o reenvio no `atualizar`) reprovam a
+  suíte, cada uma no teste correspondente.
+- **A tela parou de engolir a mensagem.** `handleVincular` vincula num laço, um procedimento
+  por vez; um "Erro ao vincular procedimentos." genérico fazia o operador repetir a seleção
+  inteira e revincular o que já tinha subido. A mensagem passou a dizer quantos entraram, em
+  qual procedimento parou e o que o servidor recusou.
 
 #### Outros dois quirks travados, não corrigidos
 

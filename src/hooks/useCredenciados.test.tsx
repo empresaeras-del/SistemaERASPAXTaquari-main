@@ -187,11 +187,15 @@ describe('editar', () => {
 });
 
 // ============================================================================
-// Os valores por procedimento — onde o dado do operador some hoje
+// Os valores por procedimento
 // ============================================================================
 
 describe('vincularProcedimento', () => {
-  it('manda ao servidor os valores exclusivo e de co-participação', async () => {
+  it('o preço vai em `valor` e a co-participação em coluna própria', async () => {
+    // Até 20/09/2026 o payload mandava `valor_exclusivo` — que NUNCA foi coluna — e por isso
+    // levava `PGRST204` em toda gravação. O preço é gravado em `valor`, que é a coluna
+    // canônica; criar `valor_exclusivo` ao lado dela reintroduziria o par de colunas
+    // duplicadas que a migration `20260915132838` eliminou.
     const { result } = await montar();
     await act(async () => {
       await result.current.vincularProcedimento({
@@ -202,49 +206,65 @@ describe('vincularProcedimento', () => {
       } as any);
     });
 
-    const upsert = servidor.escritasEm('credenciados_procedimentos')[0];
-    expect(upsert.payload.valor_exclusivo).toBe(350);
-    expect(upsert.payload.valor_coparticipacao).toBe(80);
+    const escritas = servidor.escritasEm('credenciados_procedimentos');
+    expect(escritas).toHaveLength(1);
+    expect(escritas[0].payload.valor).toBe(350);
+    expect(escritas[0].payload.valor_coparticipacao).toBe(80);
+    expect(escritas[0].payload).not.toHaveProperty('valor_exclusivo');
   });
 
-  it('`valor` é o exclusivo — é ele que a tabela do banco guarda', async () => {
-    const { result } = await montar();
-    await act(async () => {
-      await result.current.vincularProcedimento({
-        credenciado_id: 'cr-1',
-        procedimento_id: 'pr-1',
-        valor_exclusivo: 350,
-        valor_coparticipacao: 80,
-      } as any);
-    });
-
-    expect(servidor.escritasEm('credenciados_procedimentos')[0].payload.valor).toBe(350);
-  });
-
-  it('DEFEITO ATIVO: recusado por coluna ausente, ele REENVIA sem a co-participação', async () => {
-    // Este não é um risco adormecido — está acontecendo em produção agora.
-    //
-    // `credenciados_procedimentos` tem exatamente sete colunas, e **nenhuma delas é
-    // `valor_exclusivo` ou `valor_coparticipacao`** (conferido no banco: id, credenciado_id,
-    // procedimento_id, valor, created_at, tenant_id, empresa_id). Então o primeiro upsert
-    // falha SEMPRE com `PGRST204`, o fallback abaixo sempre roda, e a co-participação que o
-    // operador digitou em `ProcedimentosCredenciado.tsx` **nunca chega ao servidor**.
-    //
-    // O cache local guarda o valor, então a tela de quem digitou mostra o número certo e a de
-    // todos os outros mostra vazio — e é a co-participação que vira conta a receber quando a
-    // guia é emitida.
-    //
-    // É a quarta cópia do padrão que o CLAUDE.md classifica: *um retry que muda o dado
-    // enviado não é tolerância a falha, é corromper o registro para conseguir gravá-lo.*
-    // Travado aqui com o comportamento atual para que a correção seja deliberada — ela exige
-    // migration (a coluna que falta), não só mexer no hook.
+  it('uma tentativa só: a recusa lança em vez de reenviar sem a co-participação', async () => {
+    // O comportamento antigo era a quarta cópia do padrão que o CLAUDE.md classifica — *um
+    // retry que muda o dado enviado não é tolerância a falha, é corromper o registro para
+    // conseguir gravá-lo*. Ele reenviava sem a co-participação, e ela é justamente o que vira
+    // conta a receber quando a guia é emitida: ficava só no IndexedDB de quem digitou, a tela
+    // dele mostrava o número e a de todos os outros, vazio.
     let tentativas = 0;
-    servidor.definirEscrita('credenciados_procedimentos', (payload) => {
+    servidor.definirEscrita('credenciados_procedimentos', () => {
       tentativas += 1;
-      return 'valor_coparticipacao' in payload
-        ? { data: null, error: recusaColunaAusente('credenciados_procedimentos', 'valor_coparticipacao') }
-        : { data: payload, error: null };
+      return {
+        data: null,
+        error: recusaColunaAusente('credenciados_procedimentos', 'valor_coparticipacao'),
+      };
     });
+    const { result } = await montar();
+
+    await expect(
+      result.current.vincularProcedimento({
+        credenciado_id: 'cr-1',
+        procedimento_id: 'pr-1',
+        valor_exclusivo: 350,
+        valor_coparticipacao: 80,
+      } as any),
+    ).rejects.toThrow(/valor_coparticipacao/);
+
+    expect(tentativas).toBe(1);
+  });
+
+  it('a recusa não deixa cache mentindo nem tarefa na fila', async () => {
+    // Recusa não é queda de rede: repetir amanhã com o mesmo payload dá o mesmo resultado,
+    // então enfileirar só adiaria a perda — e o cache local afirmaria um vínculo que o
+    // servidor não tem.
+    servidor.definirEscrita('credenciados_procedimentos', {
+      data: null,
+      error: recusaColunaAusente('credenciados_procedimentos', 'valor_coparticipacao'),
+    });
+    const { result } = await montar();
+
+    await expect(
+      result.current.vincularProcedimento({
+        credenciado_id: 'cr-1',
+        procedimento_id: 'pr-1',
+        valor_coparticipacao: 80,
+      } as any),
+    ).rejects.toThrow();
+
+    expect(banco.guardados('credenciados_procedimentos')).toHaveLength(0);
+    expect(mockFila).not.toHaveBeenCalled();
+  });
+
+  it('sem rede, guarda no cache E enfileira — nunca nenhum dos dois', async () => {
+    servidor.derrubarRede('credenciados_procedimentos');
     const { result } = await montar();
 
     await act(async () => {
@@ -256,13 +276,10 @@ describe('vincularProcedimento', () => {
       } as any);
     });
 
-    expect(tentativas).toBe(2);
-    const segunda = servidor.escritasEm('credenciados_procedimentos')[1];
-    expect(segunda.payload).not.toHaveProperty('valor_coparticipacao');
-    expect(segunda.payload.valor).toBe(350);
-
-    // E o cache local fica com o valor que o servidor não tem — a tela mente para quem digitou.
-    expect(banco.guardados('credenciados_procedimentos')[0].valor_coparticipacao).toBe(80);
+    expect(banco.guardados('credenciados_procedimentos')).toHaveLength(1);
+    expect(mockFila).toHaveBeenCalledWith(
+      expect.objectContaining({ storeName: 'credenciados_procedimentos' }),
+    );
   });
 
   it('revincular o mesmo par reaproveita o id, em vez de criar uma segunda linha', async () => {
@@ -290,7 +307,6 @@ describe('vincularProcedimento', () => {
         credenciado_id: 'cr-1',
         procedimento_id: 'pr-1',
         valor: 100,
-        valor_exclusivo: 100,
         valor_coparticipacao: 25,
       },
     ]);
@@ -304,8 +320,32 @@ describe('vincularProcedimento', () => {
     });
 
     const salvo = banco.guardado('credenciados_procedimentos', 'cp-1')!;
-    expect(salvo.valor_exclusivo).toBe(100);
+    expect(salvo.valor).toBe(100);
     expect(salvo.valor_coparticipacao).toBe(25);
+  });
+
+  it('cache gravado antes da correção ainda entrega o preço, por `valor_exclusivo`', async () => {
+    // Linha escrita pelo caminho antigo: ela tem `valor_exclusivo` e `valor` pode estar em 0.
+    // Herdar do nome legado é o que impede a revinculação de zerar o preço de quem já usava.
+    banco.semear('credenciados_procedimentos', [
+      {
+        id: 'cp-1',
+        credenciado_id: 'cr-1',
+        procedimento_id: 'pr-1',
+        valor_exclusivo: 180,
+        valor_coparticipacao: 40,
+      },
+    ]);
+    const { result } = await montar();
+
+    await act(async () => {
+      await result.current.vincularProcedimento({
+        credenciado_id: 'cr-1',
+        procedimento_id: 'pr-1',
+      } as any);
+    });
+
+    expect(servidor.escritasEm('credenciados_procedimentos')[0].payload.valor).toBe(180);
   });
 
   it('offline, guarda o vínculo no cache sem tentar o servidor', async () => {
@@ -322,6 +362,50 @@ describe('vincularProcedimento', () => {
 
     expect(servidor.escritasEm('credenciados_procedimentos')).toHaveLength(0);
     expect(banco.guardados('credenciados_procedimentos')).toHaveLength(1);
+    expect(mockFila).toHaveBeenCalled();
+  });
+});
+
+describe('atualizarValorProcedimento', () => {
+  it('traduz `valor_exclusivo` para `valor` e não envia o nome que não é coluna', async () => {
+    banco.semear('credenciados_procedimentos', [
+      { id: 'cp-1', credenciado_id: 'cr-1', procedimento_id: 'pr-1', valor: 100 },
+    ]);
+    const { result } = await montar();
+
+    await act(async () => {
+      await result.current.atualizarValorProcedimento('cp-1', {
+        valor_exclusivo: 260,
+        valor_coparticipacao: 35,
+      } as any);
+    });
+
+    const update = servidor.escritasEm('credenciados_procedimentos')[0];
+    expect(update.payload.valor).toBe(260);
+    expect(update.payload.valor_coparticipacao).toBe(35);
+    expect(update.payload).not.toHaveProperty('valor_exclusivo');
+  });
+
+  it('a recusa lança em vez de reenviar só o preço, descartando a co-participação', async () => {
+    banco.semear('credenciados_procedimentos', [
+      { id: 'cp-1', credenciado_id: 'cr-1', procedimento_id: 'pr-1', valor: 100 },
+    ]);
+    let tentativas = 0;
+    servidor.definirEscrita('credenciados_procedimentos', () => {
+      tentativas += 1;
+      return {
+        data: null,
+        error: recusaColunaAusente('credenciados_procedimentos', 'valor_coparticipacao'),
+      };
+    });
+    const { result } = await montar();
+
+    await expect(
+      result.current.atualizarValorProcedimento('cp-1', { valor_coparticipacao: 35 } as any),
+    ).rejects.toThrow(/valor_coparticipacao/);
+
+    expect(tentativas).toBe(1);
+    expect(banco.guardado('credenciados_procedimentos', 'cp-1')?.valor).toBe(100);
   });
 });
 
