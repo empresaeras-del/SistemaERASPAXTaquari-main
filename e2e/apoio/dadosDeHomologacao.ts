@@ -55,6 +55,54 @@ const parcelasDoJoao = () =>
     };
   });
 
+/** Ids fixos da Ata de Ocorrências, espelhando o bloco final de `seed-homologacao.sql`. */
+export const LOG_CRIAR_ASSOCIADO = 'ad100000-0000-4000-8000-000000000001';
+export const LOG_EDITAR_ASSOCIADO = 'ad100000-0000-4000-8000-000000000002';
+export const LOG_EXCLUIR_FORNECEDOR = 'ad100000-0000-4000-8000-000000000003';
+export const LOG_DE_OUTRA_EMPRESA = 'ad100000-0000-4000-8000-000000000004';
+export const LOG_SEM_EMPRESA = 'ad100000-0000-4000-8000-000000000005';
+
+const horasAtras = (n: number) => new Date(Date.now() - n * 3_600_000).toISOString();
+
+/**
+ * As cinco linhas cobrem o que a tela precisa distinguir: dois autores na mesma empresa (a
+ * contagem de operadores), um diff com `dados_anteriores`/`dados_novos`, uma linha de **outra**
+ * empresa (que o admin da PAX não pode ver) e uma com `tenant_id = 'system'`, que só o
+ * super_admin alcança.
+ */
+const logsDeAuditoria = () => [
+  {
+    id: LOG_CRIAR_ASSOCIADO, tenant_id: EMPRESA_PAX,
+    usuario_id: 'aaaaaaaa-0000-4000-8000-000000000002', acao: 'Criar Associado',
+    detalhes: { id: ASSOCIADO_JOAO, usuario: 'ADMIN PAX', dados_novos: { nome: 'JOAO BATISTA SOUZA', cpf: '000.000.000-02', status: 'ativo' } },
+    created_at: horasAtras(2),
+  },
+  {
+    id: LOG_EDITAR_ASSOCIADO, tenant_id: EMPRESA_PAX,
+    usuario_id: 'aaaaaaaa-0000-4000-8000-000000000003', acao: 'Editar Associado',
+    detalhes: { id: ASSOCIADO_MARIA, usuario: 'GERENTE PAX', dados_anteriores: { telefone: '(67) 99999-0000', status: 'ativo' }, dados_novos: { telefone: '(67) 99999-0001', status: 'ativo' } },
+    created_at: horasAtras(24),
+  },
+  {
+    id: LOG_EXCLUIR_FORNECEDOR, tenant_id: EMPRESA_PAX,
+    usuario_id: 'aaaaaaaa-0000-4000-8000-000000000002', acao: 'Excluir Fornecedor e Despesas Vinculadas',
+    detalhes: { id: 'f0000000-0000-4000-8000-000000000009', usuario: 'ADMIN PAX' },
+    created_at: horasAtras(24 * 3),
+  },
+  {
+    id: LOG_DE_OUTRA_EMPRESA, tenant_id: EMPRESA_FUNERARIA,
+    usuario_id: 'aaaaaaaa-0000-4000-8000-000000000005', acao: 'Criar Plano PAX',
+    detalhes: { id: 'bbbbbbbb-0000-4000-8000-000000000009', usuario: 'ADMIN FUNERARIA', dados_novos: { nome: 'Plano da Outra Empresa' } },
+    created_at: horasAtras(24 * 5),
+  },
+  {
+    id: LOG_SEM_EMPRESA, tenant_id: 'system',
+    usuario_id: 'aaaaaaaa-0000-4000-8000-000000000001', acao: 'Reabertura Lote Caixa',
+    detalhes: { codigo: 'LOTE-HML-0001', usuario: 'SUPER ADMIN HOMOLOGACAO', justificativa: 'Conferencia de homologacao' },
+    created_at: horasAtras(24 * 10),
+  },
+];
+
 export const montarBancoDeHomologacao = (): Banco => {
   const banco: Banco = new Map();
 
@@ -122,7 +170,7 @@ export const montarBancoDeHomologacao = (): Banco => {
   banco.set('movimentacoes_caixa', []);
   banco.set('requisicoes', []);
   banco.set('atendimentos', []);
-  banco.set('auditoria', []);
+  banco.set('auditoria', logsDeAuditoria());
   banco.set('notificacoes', []);
   banco.set('fornecedores', []);
   banco.set('categorias_fornecedor', []);
