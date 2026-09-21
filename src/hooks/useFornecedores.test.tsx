@@ -28,9 +28,11 @@ vi.mock('../lib/supabase', () => ({
   supabase: { from: vi.fn() },
   registrarAuditoria: vi.fn(),
 }));
+vi.mock('../lib/syncService', () => ({ getSyncQueue: vi.fn() }));
 
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { supabase, registrarAuditoria } from '../lib/supabase';
+import { getSyncQueue } from '../lib/syncService';
 import { useFornecedores } from './useFornecedores';
 
 const idb = {
@@ -41,6 +43,7 @@ const idb = {
 };
 const mockFrom = vi.mocked(supabase.from);
 const mockAuditoria = vi.mocked(registrarAuditoria);
+const mockFilaDeSync = vi.mocked(getSyncQueue);
 
 const banco = criarBancoLocal();
 const servidor = criarSupabaseFalso();
@@ -73,14 +76,30 @@ beforeEach(() => {
   Object.values(idb).forEach((m) => m.mockReset());
   mockFrom.mockReset();
   mockAuditoria.mockReset();
+  mockFilaDeSync.mockReset();
 
   banco.ligar(idb);
   mockFrom.mockImplementation(((t: string) => servidor.from(t)) as any);
   mockAuditoria.mockImplementation((async () => undefined) as any);
+  mockFilaDeSync.mockImplementation((async () => []) as any);
   vi.setSystemTime(new Date('2026-09-20T12:00:00Z'));
 });
 
 afterEach(() => vi.useRealTimers());
+
+/**
+ * Semeia o registro nos **dois** lados — cache e servidor —, que é o estado normal de um
+ * fornecedor já sincronizado.
+ *
+ * Desde que a resposta vazia passou a podar o cache, semear só o local descreve outra coisa:
+ * um registro que o servidor não tem mais. O hook então o apaga, que é justamente o defeito
+ * corrigido — e é por isso que os testes de listagem precisam dos dois lados para falar do
+ * que querem falar.
+ */
+const semearSincronizado = (registros: Registro[]) => {
+  banco.semear('fornecedores', registros);
+  servidor.definirLeitura('fornecedores', { data: registros });
+};
 
 const montar = async () => {
   const utils = renderHook(() => useFornecedores());
@@ -126,7 +145,7 @@ describe('criar — a recusa do servidor', () => {
   });
 
   it('editar também lança, e não sobrescreve o registro bom que estava no cache', async () => {
-    banco.semear('fornecedores', [fornecedor({ razao_social: 'NOME BOM' })]);
+    semearSincronizado([fornecedor({ razao_social: 'NOME BOM' })]);
     servidor.definirEscrita('fornecedores', { data: null, error: recusaDominio('x') });
     const { result } = await montar();
 
@@ -234,7 +253,7 @@ describe('offline', () => {
 
 describe('listagem', () => {
   it('filtra por empresa e esconde o excluído', async () => {
-    banco.semear('fornecedores', [
+    semearSincronizado([
       fornecedor({ id: 'a', empresa_id: 'emp-1', tenant_id: 'emp-1' }),
       fornecedor({ id: 'b', empresa_id: 'emp-2', tenant_id: 'emp-2' }),
       fornecedor({ id: 'c', empresa_id: 'emp-1', tenant_id: 'emp-1', deleted_at: 'x' }),
@@ -244,7 +263,7 @@ describe('listagem', () => {
   });
 
   it('a busca varre razão social, fantasia, código, documento, contato e cidade', async () => {
-    banco.semear('fornecedores', [
+    semearSincronizado([
       fornecedor({ id: 'a', razao_social: 'ALFA LTDA', nome_fantasia: 'Alfa' }),
       fornecedor({ id: 'b', razao_social: 'BETA LTDA', nome_fantasia: 'Beta', cidade: 'COXIM' }),
     ]);
@@ -255,7 +274,7 @@ describe('listagem', () => {
   });
 
   it('"todas"/"todos" não filtram nada — são o estado neutro do seletor', async () => {
-    banco.semear('fornecedores', [
+    semearSincronizado([
       fornecedor({ id: 'a', categoria: 'Urnas e Caixões', status: 'ativo' }),
       fornecedor({ id: 'b', categoria: 'Floricultura', status: 'inativo' }),
     ]);
@@ -265,21 +284,95 @@ describe('listagem', () => {
       result.current.setFiltros({ categoria: 'todas', status: 'todos', tipo_fornecedor: 'todos' } as any));
     await waitFor(() => expect(result.current.fornecedores).toHaveLength(2));
   });
+});
 
-  it('QUIRK conhecido: resposta remota VAZIA não atualiza o cache', async () => {
-    // O guard é `if (!error && data && data.length > 0)`. O CLAUDE.md já registra, para
-    // `financeiroService`, que **zero linhas é resposta válida, não falha de rede** — aqui
-    // isso significa que um fornecedor excluído em outra máquina sobrevive no IndexedDB
-    // local, porque a resposta vazia do servidor nunca chega a podar nada.
-    //
-    // Documentado, não corrigido: a poda segura exige `utils/mesclagemOfflineFirst.ts`, que
-    // distingue "criado offline" de "excluído no servidor" pela fila de sync — e este hook
-    // não passa por lá. Ligar isso é mudança de comportamento de leitura, não teste.
+// ============================================================================
+// A poda do cache: zero linhas é resposta válida, não falha de rede
+// ============================================================================
+
+describe('a resposta remota vazia poda o cache', () => {
+  /**
+   * O guard era `if (!error && data && data.length > 0)`, o mesmo que `financeiroService`
+   * já tinha corrigido nos quatro getters dele: exigir `length > 0` fazia "a empresa não tem
+   * mais nenhum fornecedor" cair no ramo de falha e servir o cache — e era ali que o
+   * fornecedor excluído em outra máquina sobrevivia, no IndexedDB de quem nunca soube.
+   */
+  it('o fornecedor que o servidor não tem mais sai da lista E do cache', async () => {
     banco.semear('fornecedores', [fornecedor({ id: 'fantasma' })]);
     servidor.definirLeitura('fornecedores', { data: [] });
     const { result } = await montar();
 
-    expect(result.current.fornecedores.map((f) => f.id)).toEqual(['fantasma']);
+    expect(result.current.fornecedores).toEqual([]);
+    expect(banco.guardados('fornecedores')).toHaveLength(0);
+  });
+
+  it('SALVAGUARDA: com tarefa pendente na fila de sync, o local é preservado', async () => {
+    // É a fila que distingue "criado offline, ainda não subiu" de "excluído no servidor" —
+    // sem ela, o registro que o operador acabou de cadastrar sem rede sumiria da tela.
+    banco.semear('fornecedores', [fornecedor({ id: 'novo-offline' })]);
+    servidor.definirLeitura('fornecedores', { data: [] });
+    mockFilaDeSync.mockImplementation((async () => [
+      { storeName: 'fornecedores', data: { id: 'novo-offline' } },
+    ]) as any);
+    const { result } = await montar();
+
+    expect(result.current.fornecedores.map((f) => f.id)).toEqual(['novo-offline']);
+    expect(banco.guardados('fornecedores')).toHaveLength(1);
+  });
+
+  it('SALVAGUARDA: tarefa pendente de OUTRO store não preserva nada', async () => {
+    banco.semear('fornecedores', [fornecedor({ id: 'fantasma' })]);
+    servidor.definirLeitura('fornecedores', { data: [] });
+    mockFilaDeSync.mockImplementation((async () => [
+      { storeName: 'despesas', data: { id: 'fantasma' } },
+    ]) as any);
+    await montar();
+
+    expect(banco.guardados('fornecedores')).toHaveLength(0);
+  });
+
+  it('SALVAGUARDA: a leitura que FALHOU não poda nada', async () => {
+    // Se o Supabase recusou ou caiu, "ausente na resposta" não significa coisa nenhuma —
+    // podar ali apagaria o cache inteiro.
+    banco.semear('fornecedores', [fornecedor({ id: 'f-1' })]);
+    servidor.definirLeitura('fornecedores', { data: null, error: { message: 'sem rede' } });
+    const { result } = await montar();
+
+    expect(result.current.fornecedores.map((f) => f.id)).toEqual(['f-1']);
+    expect(banco.guardados('fornecedores')).toHaveLength(1);
+  });
+
+  it('SALVAGUARDA: o fornecedor de OUTRA empresa não é podado ao trocar de empresa', async () => {
+    // A consulta filtra por empresa, então o registro da outra está legitimamente fora da
+    // resposta. Podá-lo apagaria o cache da outra empresa a cada troca no seletor do topo.
+    banco.semear('fornecedores', [
+      fornecedor({ id: 'da-outra', empresa_id: 'emp-2', tenant_id: 'emp-2' }),
+    ]);
+    servidor.definirLeitura('fornecedores', { data: [] });
+    await montar();
+
+    expect(banco.guardados('fornecedores').map((f) => f.id)).toEqual(['da-outra']);
+  });
+
+  it('o registro SEM empresa nenhuma também fica — a consulta filtrada nunca o traria', async () => {
+    // É o caso da lista de demonstração do botão "Exemplos": ela nasce só no IndexedDB, sem
+    // `empresa_id` nem `tenant_id`, e o caminho de escrita atual carimba as duas colunas —
+    // então um registro assim nunca esteve no servidor para ter sido excluído de lá.
+    banco.semear('fornecedores', [
+      fornecedor({ id: 'forn-001', empresa_id: undefined, tenant_id: undefined }),
+    ]);
+    servidor.definirLeitura('fornecedores', { data: [] });
+    await montar();
+
+    expect(banco.guardados('fornecedores').map((f) => f.id)).toEqual(['forn-001']);
+  });
+
+  it('offline, não poda: o servidor nem foi consultado', async () => {
+    estado.isOnline = false;
+    banco.semear('fornecedores', [fornecedor({ id: 'f-1' })]);
+    const { result } = await montar();
+
+    expect(result.current.fornecedores.map((f) => f.id)).toEqual(['f-1']);
   });
 });
 
@@ -293,7 +386,7 @@ describe('excluir', () => {
     // a cascata não pergunta nada e alcança **parcela já paga** — a mesma classe do
     // `softDeleteAssociado`, que em 14/09 passou a recusar quando há histórico. Ver a nota
     // ao fim deste arquivo.
-    banco.semear('fornecedores', [fornecedor()]);
+    semearSincronizado([fornecedor()]);
     banco.semear('despesas', [
       { id: 'd1', fornecedor_id: 'f-1' },
       { id: 'd2', fornecedor_id: 'outro' },
@@ -303,6 +396,9 @@ describe('excluir', () => {
       { id: 'p2', despesa_id: 'd2', status: 'pendente' },
     ]);
     const { result } = await montar();
+    // Depois do `delete` o servidor não devolve mais a linha — e `excluir` termina chamando
+    // o recarregamento, que agora relê o servidor de verdade.
+    servidor.definirLeitura('fornecedores', { data: [] });
 
     await act(async () => {
       await result.current.excluir('f-1');
@@ -314,7 +410,7 @@ describe('excluir', () => {
   });
 
   it('registra auditoria da exclusão quando online', async () => {
-    banco.semear('fornecedores', [fornecedor()]);
+    semearSincronizado([fornecedor()]);
     const { result } = await montar();
 
     await act(async () => {
@@ -344,7 +440,7 @@ describe('excluir', () => {
 
 describe('alterarStatus', () => {
   it('passa pelo mesmo caminho de editar — a regra do tenant vale igual', async () => {
-    banco.semear('fornecedores', [fornecedor({ status: 'ativo' })]);
+    semearSincronizado([fornecedor({ status: 'ativo' })]);
     const { result } = await montar();
 
     await act(async () => {
@@ -357,7 +453,7 @@ describe('alterarStatus', () => {
   });
 
   it('a recusa do status sobe para a tela em vez de virar sucesso silencioso', async () => {
-    banco.semear('fornecedores', [fornecedor()]);
+    semearSincronizado([fornecedor()]);
     servidor.definirEscrita('fornecedores', {
       data: null,
       error: recusaDominio('fornecedores_status_check'),

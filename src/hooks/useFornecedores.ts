@@ -11,6 +11,8 @@ import {
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { getSyncQueue } from '../lib/syncService';
+import { mesclarComCacheLocal, idsPendentesDeSync } from '../utils/mesclagemOfflineFirst';
 
 // Sample mock data for initial seed when empty
 const SEED_FORNECEDORES: Fornecedor[] = [
@@ -158,6 +160,22 @@ export function useFornecedores() {
     return user?.tenant_id || empresaSelecionada;
   };
 
+  /**
+   * O registro está dentro do escopo da consulta remota — ou seja, o servidor **deveria**
+   * tê-lo devolvido, e a ausência dele na resposta significa exclusão em outra sessão.
+   *
+   * É o mesmo predicado do `.or(...)` da consulta: ela casa por `empresa_id` OU `tenant_id`.
+   * Quem não tem nenhum dos dois fica de fora — com filtro de empresa a consulta nunca o
+   * traria, e o caminho de escrita atual carimba as duas colunas, então um registro sem
+   * empresa nenhuma é dado local (a lista de demonstração) que o servidor nunca teve.
+   */
+  const noEscopoDaConsulta = (f: any): boolean => {
+    const empresaDoRegistro = f?.empresa_id || f?.tenant_id;
+    if (!empresaDoRegistro) return false;
+    if (!empresaSelecionada || empresaSelecionada === 'all') return true;
+    return f.empresa_id === empresaSelecionada || f.tenant_id === empresaSelecionada;
+  };
+
   const carregarFornecedores = async () => {
     setLoading(true);
     try {
@@ -168,9 +186,25 @@ export function useFornecedores() {
             query = query.or(`empresa_id.eq.${empresaSelecionada},tenant_id.eq.${empresaSelecionada}`);
           }
           const { data, error } = await query.order('created_at', { ascending: false });
-          if (!error && data && data.length > 0) {
+          // `!error && data` já é sucesso, mesmo com zero linhas. Exigir `length > 0` tratava
+          // "a empresa não tem mais nenhum fornecedor" como falha de rede, e era por aí que o
+          // fornecedor excluído em outra máquina sobrevivia no IndexedDB local — a mesma
+          // correção que `financeiroService` recebeu nos quatro getters dele.
+          if (!error && data) {
             for (const item of data) {
               await saveToIDB('fornecedores', item);
+            }
+            // Só preserva o local ausente no servidor quando a fila de sync justifica; o
+            // resto foi excluído em outra sessão e sai do cache, que assim se cura sozinho.
+            // As duas salvaguardas de `mesclagemOfflineFirst` valem aqui: isto roda apenas
+            // no ramo de sucesso, e só alcança quem está no escopo da consulta.
+            const { orfaosParaRemover } = mesclarComCacheLocal({
+              remotos: (data as any[]).map((f) => ({ ...f, id: String(f.id) })),
+              locais: (await getAllFromIDB<Fornecedor>('fornecedores')).filter(noEscopoDaConsulta) as any[],
+              pendentesDeSync: idsPendentesDeSync(await getSyncQueue(), 'fornecedores'),
+            });
+            for (const orfaoId of orfaosParaRemover) {
+              await deleteFromIDB('fornecedores', orfaoId);
             }
           }
         } catch (e) {
