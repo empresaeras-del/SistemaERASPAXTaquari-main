@@ -3282,16 +3282,65 @@ Duas coisas do método valem como regra:
   inteira e revincular o que já tinha subido. A mensagem passou a dizer quantos entraram, em
   qual procedimento parou e o que o servidor recusou.
 
-#### Outros dois quirks travados, não corrigidos
+#### Os outros dois quirks, fechados em 21/09/2026
 
-- **`useItensFunerarios.desativar` É `excluir`** (`const desativar = excluir`): o operador
-  clica em "desativar" e o item some do banco junto com as coberturas de plano dele, sem
-  pergunta e sem volta. E `reativar` faz `editar(id, { ativo: true })`, que não tem linha para
-  atualizar depois disso — o par é incoerente.
-- **`useFornecedores` não poda o cache com resposta vazia** (`data.length > 0`), a mesma
-  condição que o CLAUDE.md já corrigiu em `financeiroService`: zero linhas é resposta válida,
-  não falha de rede. Um fornecedor excluído em outra máquina sobrevive no IndexedDB local.
-  Podar com segurança exige `utils/mesclagemOfflineFirst.ts`, por onde este hook não passa.
+Os dois estavam travados por teste como "documentado, não corrigido". A decisão de produto
+que faltava foi tomada, e o teste que descrevia o defeito virou o teste que trava a correção
+— em ambos bastou inverter a expectativa, porque eles já **mediam** o comportamento.
+
+**1. `desativar` era `excluir`, e é o único botão que a tela oferece.**
+`const desativar = excluir` no fim do hook: o operador clicava em "desativar", o item sumia do
+Postgres junto com as coberturas de plano que apontavam para ele — irreversível, sem pergunta —
+e o toast dizia "Item desativado.". `reativar`, que faz um `update`, não tinha linha para
+atualizar depois disso. É a mesma classe do `softDeleteAssociado`, que em 14/09 deixou de
+apagar histórico; aqui o histórico é a cobertura do plano, que é o que diz se o item está
+incluso.
+
+Três decisões valem como regra:
+
+- **A correção NÃO passa por `editar`, e essa é a parte que não é óbvia.** `editar` recarimba
+  `empresa_id`/`tenant_id` a cada chamada, caindo no literal `'emp-001'` quando não há empresa
+  resolvida — desativar um item por lá o **moveria de empresa**, que é a classe de defeito que
+  `utils/tenant.ts` existe para fechar e que a PR anterior acabou de corrigir em
+  `tenantDeEscrita`. Seria trocar um hard delete por um vazamento silencioso. `alterarAtivo`
+  manda dois campos, `ativo` e `updated_at`, e há teste exigindo que o payload não tenha mais
+  nenhum. **Ao reaproveitar um `editar` genérico para mudar um campo só, confira o que ele
+  carimba de brinde.**
+- **A recusa do servidor sobe** (`RecusaDoServidor` + `explicarRecusa`), em vez de desativar só
+  no navegador de quem clicou. `reativar` ganhou o mesmo tratamento — ela já passava por
+  `editar` e já recarimbava o tenant.
+- **`excluir` continua existindo e não tem chamador nenhum na UI.** É a ação destrutiva
+  explícita; o que a tela oferece é o par reversível. Quem precisar apagar de fato passa por
+  uma decisão, não por um toggle.
+
+**2. `useFornecedores` agora poda o cache com resposta vazia.** O guard era
+`if (!error && data && data.length > 0)` — a mesma condição que `financeiroService` já tinha
+perdido nos quatro getters dele: **zero linhas é resposta válida, não falha de rede**. Exigir
+`length > 0` fazia "a empresa não tem mais nenhum fornecedor" cair no ramo de falha e servir o
+cache, que é exatamente onde o fornecedor excluído em outra máquina sobrevivia.
+
+A poda é `utils/mesclagemOfflineFirst.ts`, com as duas salvaguardas dele valendo — roda só no
+ramo de sucesso, e respeita o escopo da consulta. O que este hook acrescentou foi uma terceira
+condição de escopo, e ela é a parte que vale como regra:
+
+- **O escopo da poda é o predicado da CONSULTA, não o do filtro de leitura.** A consulta casa
+  por `empresa_id` **OU** `tenant_id` (é um `.or(...)`), enquanto `registroPertenceAoTenant`
+  olha só `tenant_id` e trata tenant vazio como catálogo compartilhado — ou seja, podável. Um
+  registro sem empresa nenhuma jamais seria devolvido por uma consulta filtrada, então a
+  ausência dele não prova exclusão. `noEscopoDaConsulta` responde "o servidor deveria tê-lo
+  devolvido?", que é outra pergunta. Na prática isso é o que preserva a lista de demonstração
+  do botão "Exemplos", que nasce só no IndexedDB e sem empresa — e o caminho de escrita atual
+  carimba as duas colunas, então um registro assim nunca esteve no servidor.
+
+**O teste de listagem precisou dos dois lados.** Os casos de filtro semeavam só o cache local
+e passavam **por causa do quirk**: descreviam um fornecedor que o servidor não tem mais. Com a
+poda, semear só o local significa outra coisa, e eles passaram a usar `semearSincronizado`.
+**Quando uma correção de leitura quebra um teste de filtro, olhe o que o teste estava
+afirmando sem querer.**
+
+As sete mutações (voltar `const desativar = excluir`, recarimbar o tenant no payload, trocar o
+`throw` por `warn`, restaurar o `length > 0`, ignorar a fila de sync, podar fora do escopo da
+consulta e podar com a leitura falhada) reprovam a suíte, cada uma no teste correspondente.
 
 ### Os três fluxos críticos, no navegador (Playwright)
 

@@ -13,6 +13,7 @@ import {
 import { PlanoPaxCobertura, PlanoPaxCompleto } from '../types/planosPax';
 import { getFromIDB, saveToIDB, getAllFromIDB, deleteFromIDB } from '../lib/idb';
 import { useAppContext } from '../context/AppContext';
+import { RecusaDoServidor, explicarRecusa } from '../utils/recusaDoServidor';
 
 export async function getCoberturasDoItem(itemId: string, isOnline: boolean): Promise<PlanoPaxCobertura[]> {
   if (isOnline) {
@@ -268,6 +269,11 @@ export function useItensFunerarios() {
     }
   };
 
+  /**
+   * Apaga a linha e as coberturas de plano que apontam para ela. É a ação destrutiva
+   * explícita — **nenhuma tela a chama hoje**, e é assim que deve ser: o que a tela de itens
+   * oferece é o par `desativar`/`reativar`, que preserva as coberturas já cadastradas.
+   */
   const excluir = async (id: string) => {
     try {
       if (isOnline) {
@@ -293,11 +299,57 @@ export function useItensFunerarios() {
     }
   };
 
-  const reativar = async (id: string) => {
-    await editar(id, { ativo: true });
+  /**
+   * Liga e desliga o `ativo` — e de propósito **não** passa por `editar`.
+   *
+   * Duas razões, e as duas já eram defeito antes desta função existir:
+   *
+   * - `desativar` era literalmente `excluir` (`const desativar = excluir`). O operador
+   *   clicava em "desativar" — o único botão que a tela oferece — e o item sumia do Postgres
+   *   junto com as coberturas de plano que apontavam para ele, sem pergunta e sem volta,
+   *   enquanto o toast dizia "Item desativado.". E `reativar` não tinha linha para atualizar
+   *   depois disso.
+   * - `editar` **recarimba** `empresa_id`/`tenant_id` a cada chamada, caindo no literal
+   *   `'emp-001'` quando não há empresa resolvida. Mudar o status por lá moveria o item de
+   *   empresa — a classe de defeito que `utils/tenant.ts` existe para fechar. O payload aqui
+   *   tem dois campos, e nenhum deles é tenant.
+   */
+  const alterarAtivo = async (id: string, ativo: boolean) => {
+    const payload = { ativo, updated_at: new Date().toISOString() };
+    const existente = await getFromIDB<ItemFunerario>('itens_funerarios', id);
+
+    let doServidor: ItemFunerario | null = null;
+    if (isOnline) {
+      const { data: atualizado, error: err } = await supabase
+        .from('itens_funerarios')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+      // Recusa do servidor não pode terminar como queda de rede: repetir amanhã com o mesmo
+      // payload dá o mesmo resultado, então gravar só no cache seria perda silenciosa.
+      if (err) throw new RecusaDoServidor(explicarRecusa('itens_funerarios', err));
+      doServidor = (atualizado as ItemFunerario) || null;
+    }
+
+    if (existente || doServidor) {
+      await saveToIDB('itens_funerarios', {
+        ...(existente || ({} as ItemFunerario)),
+        ...(doServidor || payload),
+        id,
+      });
+    }
+
+    await carregarItens();
   };
 
-  const desativar = excluir;
+  const reativar = async (id: string) => {
+    await alterarAtivo(id, true);
+  };
+
+  const desativar = async (id: string) => {
+    await alterarAtivo(id, false);
+  };
 
   const reordenar = async (ids: string[]) => {
     try {

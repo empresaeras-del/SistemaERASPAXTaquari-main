@@ -294,29 +294,6 @@ describe('excluir', () => {
     expect(update?.payload.ativo).toBe(false);
   });
 
-  it('QUIRK conhecido: `desativar` É `excluir` — apaga a linha, não muda um campo', async () => {
-    // `const desativar = excluir` no final do hook. O operador clica em "desativar" e o item
-    // some do banco junto com as coberturas de plano dele — irreversível, sem pergunta.
-    // Pior: `reativar` faz `editar(id, { ativo: true })`, que não tem linha para atualizar
-    // depois que `desativar` rodou. O par é incoerente.
-    //
-    // Documentado, não corrigido: trocar a cascata por `ativo: false` muda o que o botão faz
-    // com dado existente — decisão de produto, do mesmo tipo que a de `softDeleteAssociado`,
-    // que em 14/09 passou a recusar a exclusão quando há histórico.
-    banco.semear('itens_funerarios', [item()]);
-    const { result } = await montar();
-
-    // As duas chaves são literalmente a mesma função no retorno do hook.
-    expect(result.current.desativar).toBe(result.current.excluir);
-
-    await act(async () => {
-      await result.current.desativar('i-1');
-    });
-
-    expect(banco.guardados('itens_funerarios')).toHaveLength(0);
-    expect(servidor.escritasEm('itens_funerarios').map((c) => c.operacao)).toEqual(['delete']);
-  });
-
   it('offline, some do cache sem tentar o servidor nem auditar', async () => {
     estado.isOnline = false;
     banco.semear('itens_funerarios', [item()]);
@@ -329,6 +306,86 @@ describe('excluir', () => {
     expect(servidor.escritasEm('itens_funerarios')).toHaveLength(0);
     expect(mockAuditoria).not.toHaveBeenCalled();
     expect(banco.guardados('itens_funerarios')).toHaveLength(0);
+  });
+});
+
+describe('desativar / reativar', () => {
+  /**
+   * Até 21/09/2026, `desativar` era literalmente `excluir` (`const desativar = excluir`) — e
+   * é o **único** botão que a tela de itens oferece. O operador clicava em "desativar", o
+   * item sumia do Postgres junto com as coberturas de plano dele, e o toast dizia
+   * "Item desativado.". `reativar`, que faz um `update`, não tinha linha para atualizar
+   * depois disso.
+   */
+  it('desativar muda o `ativo` — não apaga a linha nem as coberturas de plano', async () => {
+    banco.semear('itens_funerarios', [item()]);
+    const { result } = await montar();
+
+    await act(async () => {
+      await result.current.desativar('i-1');
+    });
+
+    expect(servidor.escritasEm('itens_funerarios').map((c) => c.operacao)).toEqual(['update']);
+    expect(servidor.escritasEm('planos_pax_coberturas')).toHaveLength(0);
+    expect(banco.guardado('itens_funerarios', 'i-1')?.ativo).toBe(false);
+  });
+
+  it('o payload tem dois campos, e nenhum deles é o tenant', async () => {
+    // `editar` recarimba `empresa_id`/`tenant_id` a cada chamada e cai no literal
+    // `'emp-001'` sem empresa resolvida — passar a desativação por lá moveria o item de
+    // empresa. Com o seletor em `'all'` (o estado do super_admin) é onde isso apareceria.
+    estado.empresaSelecionada = 'all';
+    banco.semear('itens_funerarios', [item({ empresa_id: 'emp-1', tenant_id: 'emp-1' })]);
+    const { result } = await montar();
+
+    await act(async () => {
+      await result.current.desativar('i-1');
+    });
+
+    const payload = servidor.escritasEm('itens_funerarios')[0].payload;
+    expect(Object.keys(payload).sort()).toEqual(['ativo', 'updated_at']);
+    expect(banco.guardado('itens_funerarios', 'i-1')?.tenant_id).toBe('emp-1');
+  });
+
+  it('reativar é o inverso — e agora existe linha para ele atualizar', async () => {
+    banco.semear('itens_funerarios', [item({ ativo: false })]);
+    const { result } = await montar();
+
+    await act(async () => {
+      await result.current.reativar('i-1');
+    });
+
+    const escritas = servidor.escritasEm('itens_funerarios');
+    expect(escritas.map((c) => c.operacao)).toEqual(['update']);
+    expect(escritas[0].payload.ativo).toBe(true);
+    expect(banco.guardado('itens_funerarios', 'i-1')?.ativo).toBe(true);
+  });
+
+  it('a recusa do servidor sobe, em vez de desativar só no navegador de quem clicou', async () => {
+    banco.semear('itens_funerarios', [item()]);
+    servidor.definirEscrita('itens_funerarios', {
+      data: null,
+      error: recusaColunaAusente('itens_funerarios', 'ativo'),
+    });
+    const { result } = await montar();
+
+    await expect(result.current.desativar('i-1')).rejects.toThrow(/ativo/);
+    expect(banco.guardado('itens_funerarios', 'i-1')?.ativo).toBe(true);
+  });
+
+  it('offline, muda o cache sem tentar o servidor', async () => {
+    estado.isOnline = false;
+    banco.semear('itens_funerarios', [item()]);
+    const { result } = await montar();
+
+    await act(async () => {
+      await result.current.desativar('i-1');
+    });
+
+    expect(servidor.escritasEm('itens_funerarios')).toHaveLength(0);
+    const salvo = banco.guardado('itens_funerarios', 'i-1')!;
+    expect(salvo.ativo).toBe(false);
+    expect(salvo.nome).toBe('URNA PADRAO');
   });
 });
 
