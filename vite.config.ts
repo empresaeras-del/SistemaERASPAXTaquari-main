@@ -63,7 +63,10 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: true,
+          // Em dev o service worker serve o bundle anterior de um cache — no navegador de quem
+          // desenvolve isso é conveniência, mas nos testes de fluxo (Playwright) faz a suíte
+          // rodar contra código que não é o do commit. O `playwright.config.ts` desliga por aqui.
+          enabled: process.env.VITE_DISABLE_PWA !== 'true',
         },
       }),
     ],
@@ -98,6 +101,10 @@ export default defineConfig(() => {
       globals: true,
       setupFiles: ['./src/test/setup.ts'],
       css: false,
+      // Restrito a `src/` de propósito: o padrão do Vitest é `**/*.{test,spec}.*`, que varreria
+      // `e2e/` e tentaria rodar os specs do Playwright dentro do jsdom — eles falhariam por
+      // `test.describe()` fora de um runner do Playwright, e a CI ficaria vermelha sem motivo.
+      include: ['src/**/*.{test,spec}.{ts,tsx}'],
     },
   };
 });

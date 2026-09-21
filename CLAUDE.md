@@ -3251,6 +3251,120 @@ Duas coisas do método valem como regra:
   não falha de rede. Um fornecedor excluído em outra máquina sobrevive no IndexedDB local.
   Podar com segurança exige `utils/mesclagemOfflineFirst.ts`, por onde este hook não passa.
 
+### Os três fluxos críticos, no navegador (Playwright)
+
+Fechado em 21/09/2026. `e2e/` cobre **cadastrar associado com plano**, **receber uma parcela** e
+**emitir uma guia** de ponta a ponta — os três que este arquivo listava como bloqueados "por
+falta de UI logada", e que a criação do projeto de homologação existia para destravar.
+
+**A rede deste ambiente bloqueia `*.supabase.co`** (CONNECT 403 no proxy de saída, produção e
+homologação igualmente) e não há daemon Docker. Então a suíte roda contra **dois alvos**, e o
+padrão é o que funciona em qualquer lugar:
+
+```bash
+npm run e2e                 # dublê de servidor em memória (padrão)
+npm run e2e:homologacao     # o Supabase de homologação de verdade
+```
+
+`e2e/apoio/dubleDoServidor.ts` é um PostgREST em memória instalado com `page.route`, semeado com
+os **mesmos ids fixos** de `supabase/seed-homologacao.sql` — por isso o mesmo spec aponta para o
+mesmo registro nos dois alvos. Ele prova a tela e o payload; **não** prova RLS, constraint nem
+`PGRST204`. As asserções que só valem contra ele ficam atrás de `test.skip(!contraODuble, ...)`,
+explícitas em vez de silenciadas.
+
+Cinco decisões valem como regra:
+
+- **O dublê LANÇA no operador PostgREST que não conhece**, em vez de ignorar o filtro. Um dublê
+  que responde `[]` para o que não entendeu deixa o teste verde sem ter exercido nada — é o
+  guarda que não acha o que deveria checar, de novo. Quando a suíte alcançar uma tela que usa
+  `cs.` ou `fts.`, o erro diz qual operador falta.
+- **O config recusa subir se a URL for a de produção.** Estes testes cadastram associado e
+  **liquidam parcela**, que este arquivo trata como irreversível. Um `.env` apontado para o lugar
+  errado por engano é o acidente que a trava existe para impedir.
+- **As asserções fortes são sobre o payload que SAIU**, não sobre o que a tela mostra. Quase todo
+  defeito grave deste repositório foi um payload errado saindo calado — o `plano_pax_id` anulado
+  no retry, o `fornecedor_id` desestruturado para fora, o `''` numa coluna `date`. O dublê
+  registra cada chamada, então o teste pergunta *com o quê*, não só *se*.
+- **O `WelcomeModal` é fechado clicando no X, não semeando `sessionStorage`.** Ele é um overlay
+  `fixed inset-0` com `backdrop-blur` que intercepta o clique em qualquer botão por baixo, e todo
+  fluxo que loga passa por ele. Semear a chave desligaria a tela em vez de passar por ela; do
+  jeito que está, o dia em que ele quebrar os fluxos falham nele. `entrar.spec.ts` cobre o modal
+  em si, para os outros três não precisarem afirmar nada sobre ele.
+- **Os seletores saem do texto que o operador lê** — placeholder, rótulo, a opção que o `<select>`
+  oferece —, nunca de classe do Tailwind nem de `nth()`. A tela de Requisições tem cinco selects
+  (dois são filtros da listagem por baixo do modal): um índice passaria a preencher outro campo em
+  silêncio no dia em que alguém acrescentasse um filtro.
+
+#### Duas asserções que passavam sem provar nada
+
+As duas foram pegas antes do commit, e as duas são a mesma armadilha:
+
+- **"o nome do associado está na tela"** passava com **zero** escritas no servidor — o nome estava
+  no cabeçalho do próprio formulário, ainda aberto. Corrigido esperando o modal fechar e
+  procurando dentro de `main`.
+- **"R$ 140,00 e o nome estão visíveis"** casava com o `<option>` do select por baixo do diálogo
+  de cobrança. Corrigido escopando ao diálogo (`.filter({ hasText: 'Gerar cobrança?' })`).
+
+**Ao afirmar que algo apareceu, pergunte de onde aquele texto veio.** Numa página com modal
+aberto, o mesmo texto costuma existir em dois lugares, e o errado é o que não prova nada.
+
+E um detalhe do método que vale repetir: **o dump do `innerText` mostra o texto já transformado
+pelo CSS**. O "PARCELA 4/12" que se lê na tela é `text-transform: uppercase`; casar pelo que se vê
+quebra, porque no DOM está minúsculo.
+
+#### As mutações, e as duas que foram no-op
+
+A regra deste arquivo ("suíte que passa de primeira não provou nada") valeu de novo, e as duas
+primeiras tentativas foram no-ops meus — o mesmo erro que `caixasService.test.ts` já registra:
+
+| Mutação | Resultado |
+| --- | --- |
+| `associadoToSave.plano_pax_id = undefined` | **no-op**: o payload remoto é `associadoDataSupabase`, outro objeto |
+| `state.empresaSelecionada \|\| 'tenant-1'` no lote | **no-op**: com admin a empresa já está resolvida, e `x \|\| lit` devolve `x` |
+| `associadoDataSupabase.plano_pax_id = null` | reprova: *"o associado foi gravado SEM plano"* |
+| o mesmo `\|\| 'tenant-1'`, depois do teste de super_admin | reprova |
+| `onCancel` volta a gerar a cobrança | reprova: *"não gerar criou cobrança assim mesmo"* |
+| `valor_coparticipacao: 0` na grade da guia | reprova |
+
+**A segunda linha é o achado de método**: um literal de fallback só é alcançável no estado em que
+o valor da esquerda falta. Testar com um admin — que sempre tem empresa — não exercita nenhum
+`|| 'literal'` deste repositório. Foi escrever o caso do **super_admin** que deu mordida à mutação.
+
+#### O defeito que o super_admin revelou, travado e não corrigido
+
+Escrevendo esse caso, o teste achou um defeito ativo: **o super_admin com o seletor em `'all'`
+abre lote de caixa com `tenant_id = 'default'`**. `tenantDeEscrita('all', 'default')` cai no
+segundo ramo, porque `'default'` — o `tenant_id` do próprio super_admin — **não** está em
+`TENANTS_LEGADOS_CORINGA` e passa em `ehTenantUtilizavel`.
+
+É a mesma classe do `'system'` da Ata de Ocorrências, na variante que **esconde**: nenhum admin
+enxerga esse lote (`has_tenant_access('default')` é falso para todos) e o dinheiro recebido nele
+não aparece no caixa de ninguém. O princípio já está escrito neste arquivo, em
+`utils/escopoAuditoria.ts` — *"o `tenant_id` do próprio super_admin nunca vira filtro; ele é
+`'default'` em produção"* —, só que `tenantDeEscrita` não conhece a exceção.
+
+**Armado, nunca disparado.** Conferido em produção: o super_admin é mesmo `'default'`, e nenhuma
+linha de `lotes_caixa`, `movimentacoes_caixa`, `receitas`, `despesas`, `parcelas_receber` ou
+`associados` carrega esse tenant — na prática ele escolhe a empresa antes de gravar. Basta não
+escolher uma vez.
+
+Corrigir é acrescentar `'default'` à lista de inutilizáveis, e isso muda **34 call sites** de uma
+vez: o super_admin passaria a ser recusado em toda gravação enquanto não escolhesse a empresa. É
+decisão de produto sobre um papel inteiro, não limpeza — por isso o teste trava o comportamento
+atual (`DEFEITO ARMADO: ...`) em vez de descrevê-lo. Quando a correção vier, ele reprova e obriga
+a mudança a ser deliberada.
+
+#### Dois detalhes de configuração que não são óbvios
+
+- **O `include` do Vitest passou a ser `src/**`.** O padrão dele é `**/*.{test,spec}.*`, que
+  varreria `e2e/` e tentaria rodar os specs do Playwright dentro do jsdom — falhariam por
+  `test.describe()` fora do runner certo, e a CI ficaria vermelha sem nada ter quebrado.
+- **O service worker do PWA é desligado em dev pelos testes** (`VITE_DISABLE_PWA`). Ele serve o
+  bundle anterior de um cache: no navegador de quem desenvolve isso é conveniência, na suíte faz
+  os testes rodarem contra código que não é o do commit.
+- **A suíte roda com `workers: 1`.** Os três fluxos compartilham o banco e o schema só permite
+  **um** lote de caixa aberto por empresa: em paralelo eles se recusariam mutuamente.
+
 **Conferindo a impressão de verdade**: o CSS de impressão não é observável por teste unitário — só
 dá para checar que a string gerada contém a regra certa (é o que `documentoPrintStyles.test.ts` faz).
 O que o navegador realmente produz precisa de um navegador. Este ambiente tem Chromium pré-instalado
