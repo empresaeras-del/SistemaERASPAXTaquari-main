@@ -42,6 +42,9 @@ Docker). As obrigatórias são `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. *
 | `npm test` | Roda a suíte de testes uma vez (Vitest) |
 | `npm run test:watch` | Vitest em modo watch |
 | `npm run test:ui` | Vitest com UI interativa |
+| `npm run e2e` | Testes de fluxo (Playwright) contra o dublê de servidor |
+| `npm run e2e:homologacao` | Os mesmos testes contra o Supabase de homologação |
+| `npm run e2e:ui` | Playwright em modo interativo |
 
 CI (`.github/workflows/ci.yml`) roda `typecheck`, `lint` e `build` em todo PR/push para `main`.
 
@@ -52,8 +55,30 @@ ficam ao lado do código que testam (`*.test.ts`). A cobertura hoje é deliberad
 módulos de maior risco de regressão silenciosa — o motor de edição de tabelas dos Documentos
 Padrões (`utils/tableGridModel.ts`), a resolução de variáveis `{{...}}` dos documentos
 (`utils/documentoVariaveis.ts`), a sanitização de HTML (`utils/sanitizeHtml.ts`) e as funções de
-normalização do financeiro (`services/financeiroService.ts`). Ainda não há testes de componente/UI;
-ao adicionar uma tela nova ou mexer numa dessas áreas, adicione um teste correspondente.
+normalização do financeiro (`services/financeiroService.ts`). Ao adicionar uma tela nova ou mexer
+numa dessas áreas, adicione um teste correspondente.
+
+### Testes de fluxo (Playwright)
+
+`e2e/` cobre os três caminhos críticos de ponta a ponta, no navegador: **cadastrar associado com
+plano**, **receber uma parcela** e **emitir uma guia**. É a camada que a suíte de unidade não
+alcança — que as etapas do formulário navegam, que os modais abrem, e sobretudo **qual payload sai
+quando o operador clica**.
+
+Eles rodam contra dois alvos, e o padrão não precisa de rede nem de segredo:
+
+```bash
+npm run e2e                 # dublê de servidor em memória (padrão) — roda em qualquer lugar
+npm run e2e:homologacao     # o Supabase de homologação de verdade
+```
+
+O **dublê** (`e2e/apoio/dubleDoServidor.ts`) é um PostgREST em memória instalado com
+`page.route`, semeado com os mesmos ids fixos de `supabase/seed-homologacao.sql`. Ele prova a UI
+e o payload; **não** prova RLS, constraint nem `PGRST204` — para isso existe o modo
+`homologacao`, que precisa de rede até `*.supabase.co`.
+
+O `playwright.config.ts` lê as credenciais de `.env.homologacao.example` e **recusa subir** se a
+URL apontar para o projeto de produção: estes testes gravam dados.
 
 ## Banco de dados (Supabase)
 
