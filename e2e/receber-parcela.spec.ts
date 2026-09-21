@@ -94,38 +94,55 @@ test('parcela liquidada perde editar e excluir na tela', async ({ sessao: { page
   await expect(emAberto.getByRole('button', { name: 'Receber' })).toHaveCount(1);
 });
 
-test('DEFEITO ARMADO: super_admin sem empresa abre o caixa com o tenant "default"', async ({
+test('super_admin sem empresa escolhida NÃO abre caixa — recusa em vez de carimbar', async ({
   sessao: { page, servidor },
 }) => {
   /**
-   * Achado por este teste, e ele é o único caminho desta suíte que o alcança.
+   * Este é o estado em que o defeito existia, e nenhum outro teste desta suíte o alcança: o
+   * super_admin entra com o seletor do topo em `'all'`, então `tenantDeEscrita` não tem a
+   * empresa da tela e caía no `tenant_id` do próprio usuário — `'default'`, que não é empresa
+   * nenhuma. O lote nascia invisível para todas elas (`has_tenant_access('default')` é falso
+   * para todo mundo) e o dinheiro recebido nele não aparecia no caixa de ninguém.
    *
-   * O super_admin entra com o seletor do topo em `'all'`, e `tenantDeEscrita('all', 'default')`
-   * cai no segundo ramo: `'default'` é o `tenant_id` do próprio super_admin e **não** está em
-   * `TENANTS_LEGADOS_CORINGA`, então passa em `ehTenantUtilizavel`. O lote de caixa nasce
-   * carimbado com um valor que não é empresa nenhuma.
+   * Achado por este teste em 21/09/2026, com 13 linhas de `auditoria` e 12 de `notificacoes`
+   * já gravadas assim em produção. Corrigido em `utils/tenant.ts`: `'default'` deixou de ser
+   * um tenant utilizável, `tenantDeEscrita` devolve `null`, e a tela recusa.
    *
-   * É a mesma classe do `'system'` da Ata de Ocorrências, na variante que ESCONDE: nenhum admin
-   * enxerga esse lote (a RLS avalia `has_tenant_access('default')`, falso para todos), e o
-   * dinheiro recebido nele não aparece no caixa de ninguém. O CLAUDE.md já registra o princípio
-   * em `utils/escopoAuditoria.ts` — "o `tenant_id` do próprio super_admin nunca vira filtro, ele
-   * é `'default'` em produção" —, mas `tenantDeEscrita` não conhece a exceção.
-   *
-   * **Armado, nunca disparado**: conferido em produção, o super_admin é de fato `'default'` e
-   * NENHUMA linha de `lotes_caixa`, `movimentacoes_caixa`, `receitas`, `despesas`,
-   * `parcelas_receber` ou `associados` tem esse tenant — na prática ele sempre escolhe a
-   * empresa antes de gravar. Basta não escolher uma vez.
-   *
-   * Corrigir é acrescentar `'default'` à lista de tenants inutilizáveis, e isso muda o
-   * comportamento de 34 call sites de uma vez: o super_admin passaria a ser RECUSADO em toda
-   * gravação enquanto não escolhesse a empresa. É decisão de produto sobre um papel inteiro,
-   * não limpeza — por isso o teste trava o comportamento atual em vez de descrevê-lo. Quando a
-   * correção vier, ele reprova e obriga a mudança a ser deliberada.
+   * Uma mutação que reintroduza um `|| 'literal'` passa em todos os outros testes daqui,
+   * porque o admin sempre tem a empresa resolvida e `x || lit` devolve o mesmo `x`. Só este
+   * caso separa as duas versões do código.
    */
   await entrar(page, USUARIOS.superAdmin);
 
   // O seletor do topo confirma o estado: é ele que vale `'all'`.
   await expect(page.locator('select:visible').first()).toHaveValue('all');
+
+  await irPara(page, '/financeiro/caixas');
+  await page.getByRole('button', { name: 'Abrir Caixa' }).click();
+  await page.locator('input[type="number"]:visible').fill('100');
+  await page.getByRole('button', { name: 'Abrir Lote' }).click();
+
+  // A recusa é visível e diz o que fazer — não um erro genérico nem um silêncio.
+  await expect(page.getByText(/Selecione a empresa no topo da tela/i)).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByText(/Caixa Atual: Nenhum caixa aberto/)).toBeVisible();
+
+  test.skip(!contraODuble, 'as asserções sobre o que foi gravado só valem contra o dublê');
+
+  // O ponto: nenhum lote existe. Nem com tenant inventado, nem com o do super_admin.
+  expect(servidor!.linhas('lotes_caixa'), 'um lote foi aberto mesmo sem empresa').toHaveLength(0);
+});
+
+test('super_admin COM empresa escolhida abre o caixa normalmente', async ({
+  sessao: { page, servidor },
+}) => {
+  // A outra metade da correção, e ela é o que impede a mudança de virar "o super_admin não
+  // grava mais nada": escolher a empresa no seletor do topo resolve, e o lote nasce com o
+  // tenant dela. Sem este caso, um `return` cedo demais passaria despercebido.
+  await entrar(page, USUARIOS.superAdmin);
+
+  await page.locator('select:visible').first().selectOption(EMPRESA_PAX);
 
   await irPara(page, '/financeiro/caixas');
   await page.getByRole('button', { name: 'Abrir Caixa' }).click();
@@ -138,9 +155,5 @@ test('DEFEITO ARMADO: super_admin sem empresa abre o caixa com o tenant "default
 
   const lotes = servidor!.linhas('lotes_caixa');
   expect(lotes).toHaveLength(1);
-
-  // O comportamento de hoje. Se algum dia isto virar `MENSAGEM_TENANT_INDEFINIDO`, ou se o
-  // valor mudar para outro literal, este teste reprova — que é exatamente o que se quer.
-  expect(lotes[0].tenant_id).toBe('default');
-  expect(lotes[0].tenant_id).not.toBe(EMPRESA_PAX);
+  expect(lotes[0].tenant_id).toBe(EMPRESA_PAX);
 });

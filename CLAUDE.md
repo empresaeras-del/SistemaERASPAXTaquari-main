@@ -63,6 +63,48 @@ Sobra do estado anterior, deliberadamente não mexida: várias telas ainda passa
 valor não casa com nada — o resultado é uma lista vazia, não a lista de todo mundo —, então não é
 mais ambíguo, só verboso.
 
+### O tenant do super_admin também não é empresa (`'default'`)
+
+Fechado em 21/09/2026, e é a mesma regra acima fechando o **terceiro** buraco: o super_admin tem
+`tenant_id = 'default'`, e esse valor não identifica empresa nenhuma — ele existe porque a conta
+precisa de algo na coluna. Com o seletor do topo em `'all'` (o estado em que o super_admin entra),
+`tenantDeEscrita('all', 'default')` não tinha a empresa da tela e caía no tenant do usuário.
+
+Resultado: lote de caixa, receita ou notificação nascendo carimbada com `'default'` e **invisível
+para todas as empresas**, porque `has_tenant_access('default')` é falso para todo mundo. O
+dinheiro recebido num lote desses não aparecia no caixa de ninguém.
+
+**É a variante que ESCONDE, não a que vaza**, e por isso `'default'` **não** entrou em
+`TENANTS_LEGADOS_CORINGA`: aqueles dois tornavam o registro legível por todas as empresas; este o
+torna ilegível por todas. Mesma causa — carimbar um tenant que ninguém determinou —, sintomas
+opostos, exatamente como o `'system'` da Ata de Ocorrências. A distinção está preservada em
+`TENANT_DO_SUPER_ADMIN`, uma constante própria que `ehTenantUtilizavel` passou a recusar junto.
+
+Três coisas valem como regra:
+
+- **A medição veio antes do corte, e ela mudou o desenho.** Varrendo produção por todo `tenant_id`
+  que não é id de empresa: **13 linhas de `auditoria`** e **12 de `notificacoes`** já tinham
+  nascido com `'default'` — o caminho não era teórico. Apareceram também `notificacoes` com `'1'`
+  (lixo de código antigo, não generalizável) e com `'all'`, que é **legítimo**: `'all'` é o
+  marcador de transmissão a todos que as notificações usam de propósito. Sem essa varredura, um
+  corte "todo literal que não é uuid" teria quebrado as notificações gerais.
+- **`'system'` ficou de fora, e isso é deliberado.** São 351 linhas de auditoria gravadas com ele
+  como marcador de último caso, documentado no `COMMENT` da coluna. Mexer nele muda o que a Ata de
+  Ocorrências mostra — é outra decisão, não parte desta.
+- **A comparação é por valor inteiro, nunca por prefixo.** Uma empresa chamada `default-sul` é uma
+  empresa de verdade e continua gravável; há teste travando isso, e uma mutação para `startsWith`
+  reprova nele.
+
+O efeito é o pretendido em 34 call sites de uma vez: o super_admin passa a ser **recusado** com
+`MENSAGEM_TENANT_INDEFINIDO` enquanto não escolher a empresa no seletor do topo. As três rotinas
+de aviso (`useNotifications`, `useAvisoInadimplencia`, `useAvisoCadastrosIncompletos`) já tratavam
+`null` com um `return` limpo — elas simplesmente deixam de criar a notificação, que antes nascia
+invisível de qualquer forma.
+
+**Os dois lados estão travados por teste**, e o segundo é o que impede a correção de virar "o
+super_admin não grava mais nada": um e2e exige a recusa sem empresa escolhida, e outro exige que
+**com** a empresa escolhida o lote nasça normalmente, com o tenant dela.
+
 ## Padrão offline-first
 
 Praticamente todo `service` segue o mesmo formato:
@@ -3330,29 +3372,21 @@ primeiras tentativas foram no-ops meus — o mesmo erro que `caixasService.test.
 o valor da esquerda falta. Testar com um admin — que sempre tem empresa — não exercita nenhum
 `|| 'literal'` deste repositório. Foi escrever o caso do **super_admin** que deu mordida à mutação.
 
-#### O defeito que o super_admin revelou, travado e não corrigido
+#### O defeito que o super_admin revelou — e a correção
 
 Escrevendo esse caso, o teste achou um defeito ativo: **o super_admin com o seletor em `'all'`
-abre lote de caixa com `tenant_id = 'default'`**. `tenantDeEscrita('all', 'default')` cai no
+abria lote de caixa com `tenant_id = 'default'`**. `tenantDeEscrita('all', 'default')` caía no
 segundo ramo, porque `'default'` — o `tenant_id` do próprio super_admin — **não** está em
-`TENANTS_LEGADOS_CORINGA` e passa em `ehTenantUtilizavel`.
+`TENANTS_LEGADOS_CORINGA` e passava em `ehTenantUtilizavel`.
 
 É a mesma classe do `'system'` da Ata de Ocorrências, na variante que **esconde**: nenhum admin
 enxerga esse lote (`has_tenant_access('default')` é falso para todos) e o dinheiro recebido nele
-não aparece no caixa de ninguém. O princípio já está escrito neste arquivo, em
+não aparece no caixa de ninguém. O princípio já estava escrito neste arquivo, em
 `utils/escopoAuditoria.ts` — *"o `tenant_id` do próprio super_admin nunca vira filtro; ele é
-`'default'` em produção"* —, só que `tenantDeEscrita` não conhece a exceção.
+`'default'` em produção"* —, só que `tenantDeEscrita` não conhecia a exceção.
 
-**Armado, nunca disparado.** Conferido em produção: o super_admin é mesmo `'default'`, e nenhuma
-linha de `lotes_caixa`, `movimentacoes_caixa`, `receitas`, `despesas`, `parcelas_receber` ou
-`associados` carrega esse tenant — na prática ele escolhe a empresa antes de gravar. Basta não
-escolher uma vez.
-
-Corrigir é acrescentar `'default'` à lista de inutilizáveis, e isso muda **34 call sites** de uma
-vez: o super_admin passaria a ser recusado em toda gravação enquanto não escolhesse a empresa. É
-decisão de produto sobre um papel inteiro, não limpeza — por isso o teste trava o comportamento
-atual (`DEFEITO ARMADO: ...`) em vez de descrevê-lo. Quando a correção vier, ele reprova e obriga
-a mudança a ser deliberada.
+Ver a seção **"O tenant do super_admin também não é empresa"**, logo acima, para a correção e a
+medição que a autorizou.
 
 #### Dois detalhes de configuração que não são óbvios
 

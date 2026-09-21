@@ -34,6 +34,25 @@
 export const TENANTS_LEGADOS_CORINGA = ['default_tenant', 'empresa_padrao'] as const;
 
 /**
+ * O `tenant_id` do super_admin, e **não é empresa nenhuma**.
+ *
+ * Ele existe porque a conta precisa de um valor na coluna, não porque o super_admin pertença
+ * a alguma empresa — ele enxerga todas. O problema é o outro lado: como `'all'` (o sentinela
+ * do seletor do topo) não é utilizável, `tenantDeEscrita` caía no tenant do usuário, e este
+ * valor passava. Um lote de caixa, uma receita ou uma notificação nascia carimbada com
+ * `'default'` e **invisível para todas as empresas**, porque `has_tenant_access('default')` é
+ * falso para todo mundo.
+ *
+ * Não está em `TENANTS_LEGADOS_CORINGA` de propósito: aqueles VAZAVAM o registro para todas
+ * as empresas, este o ESCONDE de todas. São defeitos opostos, com a mesma causa — carimbar um
+ * tenant que ninguém determinou —, e é a mesma classe do `'system'` da Ata de Ocorrências.
+ *
+ * Achado pelo teste de fluxo do Playwright (21/09/2026) e medido em produção antes da
+ * correção: 13 linhas de `auditoria` e 12 de `notificacoes` já tinham nascido assim.
+ */
+export const TENANT_DO_SUPER_ADMIN = 'default';
+
+/**
  * Sentinela de *ausência de filtro por tenant*, usada pelos services e pelo seletor de
  * empresa das telas administrativas. Nunca é o tenant de um registro.
  */
@@ -51,11 +70,19 @@ export const ehTenantCoringaLegado = (valor?: string | null): boolean =>
 
 /**
  * `true` quando o valor identifica **uma** empresa: não é vazio, não é o sentinela de
- * "sem filtro" e não é um dos coringas legados.
+ * "sem filtro", não é um dos coringas legados e não é o tenant do super_admin.
+ *
+ * A comparação é por valor inteiro, nunca por prefixo: uma empresa chamada `default-sul` é
+ * uma empresa de verdade.
  */
 export const ehTenantUtilizavel = (valor?: string | null): boolean => {
   const v = normalizar(valor);
-  return v !== '' && v !== TENANT_SEM_FILTRO && !ehTenantCoringaLegado(v);
+  return (
+    v !== '' &&
+    v !== TENANT_SEM_FILTRO &&
+    v !== TENANT_DO_SUPER_ADMIN &&
+    !ehTenantCoringaLegado(v)
+  );
 };
 
 /**
