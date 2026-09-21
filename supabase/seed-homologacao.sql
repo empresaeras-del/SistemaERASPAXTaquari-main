@@ -191,4 +191,39 @@ select r.tenant_id, r.id, n,
  where r.id in ('4ece1700-0000-4000-8000-000000000001','4ece1700-0000-4000-8000-000000000002')
    and not exists (select 1 from public.parcelas_receber p where p.receita_id = r.id and p.numero_parcela = n);
 
+
+-- ---------------------------------------------------------------- ata de ocorrencias
+-- Linhas de auditoria semeadas para o e2e da Ata de Ocorrencias ter o que listar.
+-- ATENCAO: este bloco tem gemeo em e2e/apoio/dadosDeHomologacao.ts, com os MESMOS ids.
+-- Se divergirem, o mesmo spec passa num alvo e falha no outro.
+--
+-- As cinco cobrem o que a tela precisa distinguir:
+--   1 e 2  PAX, autores diferentes  -> a contagem de operadores
+--   2      dados_anteriores/novos   -> o visualizador de diff tem o que mostrar
+--   4      outra empresa            -> o admin da PAX NAO pode ve-la
+--   5      tenant 'system'          -> so o super_admin ve; alimenta o PDF de reaberturas
+insert into public.auditoria (id, tenant_id, usuario_id, acao, detalhes, created_at) values
+  ('ad100000-0000-4000-8000-000000000001'::uuid, '11111111-1111-4111-8111-111111111111',
+   'aaaaaaaa-0000-4000-8000-000000000002', 'Criar Associado',
+   '{"id":"a5500000-0000-4000-8000-000000000002","usuario":"ADMIN PAX","dados_novos":{"nome":"JOAO BATISTA SOUZA","cpf":"000.000.000-02","status":"ativo"}}'::jsonb,
+   now() - interval '2 hours'),
+  ('ad100000-0000-4000-8000-000000000002'::uuid, '11111111-1111-4111-8111-111111111111',
+   'aaaaaaaa-0000-4000-8000-000000000003', 'Editar Associado',
+   '{"id":"a5500000-0000-4000-8000-000000000001","usuario":"GERENTE PAX","dados_anteriores":{"telefone":"(67) 99999-0000","status":"ativo"},"dados_novos":{"telefone":"(67) 99999-0001","status":"ativo"}}'::jsonb,
+   now() - interval '1 day'),
+  ('ad100000-0000-4000-8000-000000000003'::uuid, '11111111-1111-4111-8111-111111111111',
+   'aaaaaaaa-0000-4000-8000-000000000002', 'Excluir Fornecedor e Despesas Vinculadas',
+   '{"id":"f0000000-0000-4000-8000-000000000009","usuario":"ADMIN PAX"}'::jsonb,
+   now() - interval '3 days'),
+  ('ad100000-0000-4000-8000-000000000004'::uuid, '22222222-2222-4222-8222-222222222222',
+   'aaaaaaaa-0000-4000-8000-000000000005', 'Criar Plano PAX',
+   '{"id":"bbbbbbbb-0000-4000-8000-000000000009","usuario":"ADMIN FUNERARIA","dados_novos":{"nome":"Plano da Outra Empresa"}}'::jsonb,
+   now() - interval '5 days'),
+  ('ad100000-0000-4000-8000-000000000005'::uuid, 'system',
+   'aaaaaaaa-0000-4000-8000-000000000001', 'Reabertura Lote Caixa',
+   '{"codigo":"LOTE-HML-0001","usuario":"SUPER ADMIN HOMOLOGACAO","justificativa":"Conferencia de homologacao"}'::jsonb,
+   now() - interval '10 days')
+on conflict (id) do nothing;
+
+
 commit;

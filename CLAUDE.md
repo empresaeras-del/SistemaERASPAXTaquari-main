@@ -2328,10 +2328,24 @@ cegas num arquivo sem cobertura de teste.
 
 ## "God components" conhecidos
 
-Alguns arquivos concentram dados + validação + UI num único componente grande demais para revisar
-ou testar com conforto: `components/associados/AssociadoMensalidadesTab.tsx`,
-`services/financeiroService.ts`, `pages/Configuracoes.tsx`, `pages/Auditoria.tsx`.
-`pages/Associados.tsx` saiu dessa lista — ver "Associados.tsx: decomposição concluída" abaixo.
+**Estado medido em 21/09/2026** — a lista abaixo já esteve desatualizada em dois dos quatro
+nomes, e o número é o que decide, não a memória:
+
+| Arquivo | Linhas hoje | Situação |
+|---|---|---|
+| `components/associados/AssociadoFormModal.tsx` | 2009 | **o maior do projeto, e nunca esteve nesta lista** |
+| `services/financeiroService.ts` | 1913 | não decomposto **de propósito** — ver a nota abaixo |
+| `components/documentos/VisualizadorDocumentoPadraoModal.tsx` | 1912 | nunca esteve na lista |
+| `pages/ContasReceberPage.tsx` | 1574 | nunca esteve na lista |
+| `components/associados/AssociadoMensalidadesTab.tsx` | 957 | já decomposto |
+| `pages/Configuracoes.tsx` | 191 | já decomposto (`components/configuracoes/`) |
+| `pages/Auditoria.tsx` | **87** | decomposto em 21/09 — ver a seção própria abaixo |
+
+**A lição de método vale mais que a tabela: uma lista de dívidas técnicas envelhece.** Duas das
+quatro entradas originais já tinham sido resolvidas em rodadas que não atualizaram esta seção, e
+o arquivo mais pesado do projeto nunca foi citado aqui. **Antes de escolher o que decompor,
+meça** (`find src -name "*.tsx" -o -name "*.ts" | grep -v test | xargs wc -l | sort -rn | head`)
+em vez de ler esta lista.
 
 Uma rodada de decomposição **parcial** foi feita sem acesso a UI logada (este ambiente não tem
 `.env` com credenciais reais de Supabase, então não dá para clicar na tela e confirmar visualmente
@@ -2362,6 +2376,15 @@ Fisicamente dividir o arquivo em módulos menores (`receitasService.ts`,
 `despesasService.ts`...) é uma mudança estrutural de risco bem maior — o arquivo é importado por
 ~15 outros — e foi deixada de fora desta rodada por não caber no critério "validável sem UI".
 
+**Reavaliado em 21/09/2026, e a conclusão continua a mesma — por um motivo diferente.** O
+critério antigo ("validável sem UI") já não vale: a suíte Playwright cobre os fluxos que passam
+por ele. O que mudou é que a justificativa para dividi-lo ficou mais fraca, não mais forte:
+partir um arquivo em `receitasService.ts`/`despesasService.ts` **não remove acoplamento nenhum**
+— os mesmos ~15 importadores continuam, com um `import` a mais cada. Seria mover linhas entre
+arquivos e mexer em 15 pontos de importação para um ganho de navegação. Um service grande
+**com teste** não é a mesma dívida que um componente grande sem teste: aqui o problema original
+(superfície de lógica não coberta) foi resolvido pelos testes, não pela divisão.
+
 **Achado incidental**: a extração de `getActionConfig` em `Auditoria.tsx` revelou dois quirks
 pré-existentes de classificação (não introduzidos por esta extração, confirmados contra
 `origin/main` antes de mexer, e preservados de propósito): a checagem de "criação" vem antes da de
@@ -2371,12 +2394,12 @@ em vez de `update`. Documentado nos testes (`auditoriaHelpers.test.ts`) em vez d
 — mudar a ordem das checagens é uma decisão de produto (qual categoria deveria "vencer"), não uma
 limpeza de código.
 
-**Ainda não decomposto nesta rodada** (fica para quando houver acesso a UI logada para verificar
-visualmente): a estrutura JSX/renderização de `AssociadoMensalidadesTab.tsx`, `Configuracoes.tsx` e
-`Auditoria.tsx` continua nos arquivos originais — a extração acima reduziu o tamanho e a superfície
-de lógica não testada, mas não quebrou esses três em subcomponentes menores. Isso segue sendo o
-próximo passo para eles, quando um ambiente com credenciais reais de Supabase estiver disponível
-para navegar as telas depois da mudança. `Associados.tsx` já não se enquadra mais aqui — ver abaixo.
+**O bloqueio que esta seção citava acabou.** Ela dizia, em três lugares, que decompor a
+estrutura JSX ficava "para quando houver acesso a UI logada" — e as três telas nomeadas
+(`AssociadoMensalidadesTab.tsx`, `Configuracoes.tsx`, `Auditoria.tsx`) já estão decompostas. O
+que destravou foi a suíte Playwright: **o que faltava não era o acesso à tela, era poder afirmar
+depois que nada mudou.** Ver "Auditoria.tsx: a decomposição com rede de segurança" abaixo para o
+roteiro.
 
 ### Associados.tsx: decomposição concluída
 
@@ -2403,6 +2426,85 @@ precisam ter o tipo alinhado em cada um deles (ex.: `planos` é `PlanoPaxResumo[
 tanto em `AssociadosListTable.tsx` quanto em `AssociadosListGrid.tsx`, porque é isso que
 `useAssociadosState.ts` de fato expõe) — um mismatch aqui só aparece no `tsc`, não no lint nem em
 runtime.
+
+### Auditoria.tsx: a decomposição com rede de segurança
+
+Fechado em 21/09/2026. `pages/Auditoria.tsx` saiu de **1318 para 87 linhas** — a página agora só
+monta o layout. O que mudou de verdade não é o número: é que esta foi a primeira decomposição de
+JSX feita com como **provar** que nada quebrou.
+
+| Onde foi parar | Linhas | O que decide |
+|---|---|---|
+| `pages/Auditoria.tsx` | 87 | só o layout e os dois modos (tela / folha) |
+| `hooks/useAuditoriaState.ts` | 251 | estado, carga, escopo, filtros, as três exportações |
+| `utils/relatorioAuditoria.ts` | 165 | **o quê** sai no relatório (puro, 16 testes) |
+| `utils/relatorioAuditoriaPdf.ts` | 218 | **como** o papel fica, com `jspdf` dinâmico |
+| `components/auditoria/` (7 arquivos) | 967 | cada pedaço de UI |
+
+#### O e2e veio ANTES, e é isso que torna a decomposição verificável
+
+`e2e/auditoria.spec.ts` (5 casos) foi escrito contra o arquivo **monolítico** e passou nele.
+Só depois a decomposição começou. Sem essa ordem, uma suíte verde no fim não distingue "nada
+quebrou" de "o teste não mede nada".
+
+E a linha de base foi **conferida por mutação**, como manda a regra deste arquivo:
+
+| Mutação no código original | Resultado |
+| --- | --- |
+| `tenantDaConsulta = 'all'` (escopo global para todos) | reprova 2 casos |
+| tirar `mascararValorDeCampo` de `formatValueDisplay` | **no-op**: a folha não passa por ali |
+| trocar a 1ª chamada em `valorDoDiffParaTexto` | **no-op**: o papel usa a 2ª |
+| `mascararValorDeCampo` devolve o valor intacto | reprova 1 caso |
+
+**As duas do meio são o achado de método.** Concluir "o teste não cobre a máscara" depois da
+primeira teria sido errado — a mutação é que não mudava o caminho que o teste exercita. É o
+mesmo erro que `caixasService.test.ts` já registra: *quando uma mutação não reprova, confirme
+primeiro que ela mudou o comportamento.*
+
+Os logs semeados ficaram em `supabase/seed-homologacao.sql` **e** em
+`e2e/apoio/dadosDeHomologacao.ts`, com os mesmos ids — as cinco linhas cobrem dois autores na
+mesma empresa (a contagem de operadores), um diff, uma linha de **outra** empresa e uma com
+`tenant_id = 'system'`. Sem as duas últimas o isolamento não seria exercido por teste nenhum.
+
+#### As três saídas discordavam, e ninguém tinha notado
+
+A extração revelou o que uma leitura do arquivo não revela: folha em tela, CSV e PDF montavam
+**cada um** o próprio cabeçalho de filtros e a própria linha de tabela, e já divergiam:
+
+- a folha imprimia `Todos os Usuários`, o PDF imprimia `Todos os Operadores`;
+- o PDF resolvia o operador por id **ou e-mail**, a folha só por id — um filtro por e-mail saía
+  identificado no PDF e como um **uuid cru** na folha;
+- um log sem usuário era `Desconhecido` no CSV e `Sistema` no PDF: duas saídas do mesmo
+  relatório discordando sobre quem fez a ação.
+
+`utils/relatorioAuditoria.ts` passou a decidir isso uma vez (`rotulosDeFiltro`,
+`linhasDoRelatorio`), e os três renderizadores leem de lá — a mesma divisão da Ficha de Cadastro
+e da Demonstração Contábil. O terceiro item **mudou a saída do CSV** (passou a dizer `Sistema`),
+e é a única mudança de comportamento desta rodada: unificar era o ponto. Há teste exigindo que o
+CSV e o PDF citem o mesmo nome.
+
+**A máscara de CPF agora é aplicada na montagem da linha**, não em cada renderizador — a regra
+que este arquivo já fixa para os relatórios financeiros, valendo aqui também. E `detalhes`
+(mascarado, vai ao papel) e `detalhesBrutos` (o payload como está gravado, que é a coluna "JSON
+Bruto") são campos separados, com teste travando a diferença.
+
+#### `jspdf` saiu do carregamento da rota
+
+`Auditoria.tsx` tinha `import { jsPDF } from 'jspdf'` **estático no topo** — os ~391 KB entravam
+como dependência da rota, para quem só abre a tela para conferir um log. Movido para import
+dinâmico dentro de `relatorioAuditoriaPdf.ts`, conferido no `dist` como manda esta seção: o
+chunk da rota ficou em **52 KB** e `jspdf.es.min` (391 KB) aparece como `import("./jspdf...")`,
+carregado só quando alguém exporta.
+
+#### O método, para a próxima tela
+
+1. **Meça** quais arquivos são realmente grandes — não confie na lista.
+2. **Escreva o e2e primeiro**, contra o arquivo como está, e prove por mutação que ele mede.
+3. **Fatie verbatim.** Cada componente saiu de um recorte do JSX original, não de uma
+   redigitação; o `tsc` apontou os identificadores que viraram props. Redigitar JSX é onde um
+   `className` se perde sem ninguém ver.
+4. **Deixe o compilador achar a fronteira**: extraia, compile, e a lista de "cannot find name" é
+   exatamente a lista de props.
 
 ## Modal dentro de `<form>`: botão sem `type` é `submit`, e isso salva a tela de fora
 
@@ -3344,7 +3446,9 @@ consulta e podar com a leitura falhada) reprovam a suíte, cada uma no teste cor
 
 ### Os três fluxos críticos, no navegador (Playwright)
 
-Fechado em 21/09/2026. `e2e/` cobre **cadastrar associado com plano**, **receber uma parcela** e
+Fechado em 21/09/2026, e depois estendido com a **Ata de Ocorrências** (`auditoria.spec.ts`),
+escrita como linha de base antes da decomposição daquela tela — ver "Auditoria.tsx: a
+decomposição com rede de segurança". `e2e/` cobre **cadastrar associado com plano**, **receber uma parcela** e
 **emitir uma guia** de ponta a ponta — os três que este arquivo listava como bloqueados "por
 falta de UI logada", e que a criação do projeto de homologação existia para destravar.
 
