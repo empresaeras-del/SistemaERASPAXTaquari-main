@@ -22,14 +22,38 @@ export const CREDENCIADO = 'eeeeeeee-0000-4000-8000-000000000001';
 export const PROCEDIMENTO = 'ffffffff-0000-4000-8000-000000000001';
 export const ASSOCIADO_MARIA = 'a5500000-0000-4000-8000-000000000001';
 export const ASSOCIADO_JOAO = 'a5500000-0000-4000-8000-000000000002';
+export const RECEITA_MARIA = '4ece1700-0000-4000-8000-000000000001';
 export const RECEITA_JOAO = '4ece1700-0000-4000-8000-000000000002';
 
 const hoje = new Date();
-const emMeses = (n: number) => {
-  const d = new Date(hoje);
+
+/**
+ * `base + n meses`, com o mesmo grampo de fim de mês que o Postgres aplica ao
+ * `interval '1 month'` do seed: 31/01 + 1 mês é 28/02, não 03/03.
+ *
+ * O `setMonth` cru do JavaScript transborda, e é ele que estava aqui. Nos dias 1..28 as duas
+ * formas dão o mesmo resultado — então isto não muda nenhuma data semeada hoje —, mas a
+ * fonte declarada deste arquivo é o `.sql`, e é o Postgres que decide o que "mais um mês"
+ * significa.
+ */
+const somarMeses = (base: Date, n: number) => {
+  const d = new Date(base);
+  const diaPedido = d.getDate();
+  d.setDate(1);
   d.setMonth(d.getMonth() + n);
-  return d.toISOString().slice(0, 10);
+  const ultimoDiaDoMes = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(diaPedido, ultimoDiaDoMes));
+  return d;
 };
+
+const somarDias = (base: Date, n: number) => {
+  const d = new Date(base);
+  d.setDate(d.getDate() + n);
+  return d;
+};
+
+const comoData = (d: Date) => d.toISOString().slice(0, 10);
+const emMeses = (n: number) => comoData(somarMeses(hoje, n));
 
 /** As 12 parcelas do João: as três primeiras liquidadas, as demais em aberto. */
 const parcelasDoJoao = () =>
@@ -49,11 +73,58 @@ const parcelasDoJoao = () =>
       devedor_nome: 'JOAO BATISTA SOUZA',
       devedor_cpf_cnpj: '000.000.000-02',
       descricao: `Mensalidade Plano Individual ${n}/12`,
+      forma_pagamento: 'pix',
       data_pagamento: liquidada ? emMeses(n - 3) : null,
       valor_recebido: liquidada ? 60 : null,
       forma_pagamento_efetivo: liquidada ? 'pix' : null,
     };
   });
+
+/**
+ * As 12 parcelas da Maria, derivadas como o `.sql` deriva as dela: cobrança iniciada há 180
+ * dias, uma parcela por mês, liquidada quando venceu antes de `hoje - 30`.
+ *
+ * **Este bloco faltava no dublê.** A receita `4ece1700-…0001` está no
+ * `supabase/seed-homologacao.sql` desde que ele existe, e nunca foi copiada para cá — os dois
+ * alvos discordavam sobre o que a tela de Contas a Receber lista, e nenhum spec acusou porque
+ * nenhum olhava para as parcelas da Maria. O cabeçalho deste arquivo diz que ele é cópia
+ * deliberada do `.sql`; era cópia incompleta.
+ *
+ * O que ela acrescenta, e o João não tem: um **segundo devedor** (sem o qual buscar por nome e
+ * ordenar por devedor não distinguem "filtrou" de "não filtrou") e uma parcela **vencida e em
+ * aberto** — as do João vencem todas no futuro, então o filtro "Vencido" e o indicador do mesmo
+ * nome não tinham uma única linha para achar.
+ */
+const parcelasDaMaria = () => {
+  const inicioCobranca = somarDias(hoje, -180);
+  const corteDeLiquidacao = somarDias(hoje, -30);
+
+  return Array.from({ length: 12 }, (_, i) => {
+    const n = i + 1;
+    const vencimento = somarMeses(inicioCobranca, n - 1);
+    const liquidada = vencimento < corteDeLiquidacao;
+    return {
+      id: `9a4ce1a1-0000-4000-8000-0000000000${String(n).padStart(2, '0')}`,
+      tenant_id: EMPRESA_PAX,
+      receita_id: RECEITA_MARIA,
+      numero_parcela: n,
+      total_parcelas: 12,
+      valor: 100,
+      data_vencimento: comoData(vencimento),
+      status: liquidada ? 'recebido' : 'pendente',
+      tipo_devedor: 'associado',
+      devedor_nome: 'MARIA APARECIDA DA SILVA',
+      devedor_cpf_cnpj: '000.000.000-01',
+      descricao: `Mensalidade Plano Familiar ${n}/12`,
+      // A parcela herda a forma padrão da receita, como o app faz ao gerá-las. É por ela
+      // que o filtro "Forma de Recebimento" tem dois lados: a Maria é boleto, o João é pix.
+      forma_pagamento: 'boleto',
+      data_pagamento: liquidada ? comoData(vencimento) : null,
+      valor_recebido: liquidada ? 100 : null,
+      forma_pagamento_efetivo: liquidada ? 'pix' : null,
+    };
+  });
+};
 
 /** Ids fixos da Ata de Ocorrências, espelhando o bloco final de `seed-homologacao.sql`. */
 export const LOG_CRIAR_ASSOCIADO = 'ad100000-0000-4000-8000-000000000001';
@@ -191,9 +262,10 @@ export const montarBancoDeHomologacao = (): Banco => {
   ]);
 
   banco.set('receitas', [
+    { id: RECEITA_MARIA, tenant_id: EMPRESA_PAX, tipo_devedor: 'associado', associado_id: ASSOCIADO_MARIA, associado_nome: 'MARIA APARECIDA DA SILVA', associado_cpf: '000.000.000-01', associado_plano: 'Plano Familiar', descricao: 'Mensalidade Plano Familiar', categoria: 'Mensalidade', valor_total: 1200, qtd_parcelas: 12, forma_pagamento_padrao: 'boleto', conta_bancaria_id: CONTA_BANCARIA, status: 'ativo', observacoes: 'Semeada para homologacao', criado_em: new Date().toISOString() },
     { id: RECEITA_JOAO, tenant_id: EMPRESA_PAX, tipo_devedor: 'associado', associado_id: ASSOCIADO_JOAO, associado_nome: 'JOAO BATISTA SOUZA', associado_cpf: '000.000.000-02', associado_plano: 'Plano Individual', descricao: 'Mensalidade Plano Individual', categoria: 'Mensalidade', valor_total: 720, qtd_parcelas: 12, forma_pagamento_padrao: 'pix', conta_bancaria_id: CONTA_BANCARIA, status: 'ativo', criado_em: new Date().toISOString() },
   ]);
-  banco.set('parcelas_receber', parcelasDoJoao());
+  banco.set('parcelas_receber', [...parcelasDaMaria(), ...parcelasDoJoao()]);
 
   banco.set('despesas', []);
   banco.set('parcelas_pagar', []);

@@ -2328,18 +2328,20 @@ cegas num arquivo sem cobertura de teste.
 
 ## "God components" conhecidos
 
-**Estado medido em 22/09/2026, depois das duas decomposições do dia** — a lista abaixo já
+**Estado medido em 22/09/2026, depois das três decomposições do dia** — a lista abaixo já
 esteve desatualizada em dois dos quatro
 nomes, e o número é o que decide, não a memória:
 
 | Arquivo | Linhas hoje | Situação |
 |---|---|---|
 | `services/financeiroService.ts` | 1913 | não decomposto **de propósito** — ver a nota abaixo |
-| `pages/ContasReceberPage.tsx` | 1574 | **o maior componente hoje**, nunca decomposto |
-| `pages/RequisicoesPage.tsx` | 1522 | nunca decomposto |
+| `pages/RequisicoesPage.tsx` | 1522 | **o maior componente hoje**, nunca decomposto |
 | `components/associados/CarteirinhaAssociadoModal.tsx` | 1520 | nunca decomposto |
 | `pages/DocumentosPadroesPage.tsx` | 1384 | nunca decomposto |
+| `pages/ContasPagarPage.tsx` | 1333 | nunca decomposto — é a gêmea de Contas a Receber |
+| `components/atendimentos/NovoAtendimentoWizard.tsx` | 1309 | nunca decomposto |
 | `components/associados/AssociadoMensalidadesTab.tsx` | 957 | já decomposto |
+| `pages/ContasReceberPage.tsx` | **258** | decomposto em 22/09 — era 1574, ver a seção própria abaixo |
 | `components/associados/AssociadoFormModal.tsx` | **496** | decomposto em 22/09 — era 2009, ver a seção própria abaixo |
 | `components/documentos/VisualizadorDocumentoPadraoModal.tsx` | **308** | decomposto em 22/09 — era 1912, ver a seção própria abaixo |
 | `pages/Configuracoes.tsx` | 191 | já decomposto (`components/configuracoes/`) |
@@ -2511,6 +2513,13 @@ carregado só quando alguém exporta.
 4. **Deixe o compilador achar a fronteira**: extraia, compile, e a lista de "cannot find name" é
    a lista de props — **mas não a de imports**. Ver a ressalva do `Lock` na seção seguinte.
 
+> **Corrigido em 22/09**, duas vezes: a lista do compilador **não serve nem para as props**
+> (`orientation` colide com `window.orientation`; ver a seção do visualizador), então o
+> classificador sai das declarações do próprio monolito — e **um varredor por `\bnome\b` casa
+> também dentro de string e de comentário**, o que em arquivo escrito em português produz
+> props que não existem no código (ver a seção de `ContasReceberPage.tsx`). O `eslint` é o
+> segundo par de olhos que pega essas: elas aparecem como parâmetro não usado.
+
 ### AssociadoFormModal.tsx: 2009 → 496 linhas, e o que o método precisou aprender
 
 Fechado em 22/09/2026, seguindo o roteiro acima — que saiu dele com duas correções. O maior
@@ -2677,6 +2686,112 @@ revertida, e uma sondagem rápida pegava o transiente. O teste era flaky por med
 que não dura. Esperar o assentamento e afirmar o estado final é o que o tornou determinístico
 (5/5 em três rodadas, nos dois lados). **Quando um teste de UI passa de forma intermitente,
 pergunte se o que ele mede é um estado ou uma passagem.**
+
+### ContasReceberPage.tsx: 1574 → 258 linhas, e o dublê que discordava do seed
+
+Fechado em 22/09/2026, terceira decomposição pelo mesmo roteiro. O maior componente do
+projeto virou um hook de estado e cinco peças de UI; a página só monta.
+
+| Onde foi parar | Linhas | O que guarda |
+|---|---|---|
+| `hooks/useContasReceber.ts` | 633 | carga, filtros, ordenação, os handlers de baixa, exclusão e recibo |
+| `ContasReceberBaixaModal.tsx` | 328 | as três etapas do recebimento: formulário, bloqueio, confirmação |
+| `ContasReceberDetalhesModal.tsx` | 290 | os detalhes da parcela mais os da receita pai |
+| `ContasReceberTabela.tsx` | 195 | cabeçalho ordenável, linhas e botões de ação |
+| `ContasReceberFiltros.tsx` | 123 | a `AdvancedFilterBar` e os seis campos |
+| `ContasReceberCabecalho.tsx` | 102 | título, menu de Relatórios, Nova Receita |
+| `pages/ContasReceberPage.tsx` | **258** | só a moldura, o `getStatusBadge` e os três modais que já eram componentes |
+
+**A fronteira do hook é "não devolve JSX"**, e ela não foi escolhida: o `.ts` não compila com
+`getStatusBadge` dentro. Ele ficou no componente e vai por prop às duas fatias que o usam —
+tabela e detalhes —, em vez de virar duas cópias da mesma regra de cor.
+
+#### As props deixaram de ser `any`
+
+As duas decomposições anteriores tipavam cada prop como `any` (ou `any[]`, para as que sofrem
+`.map`). Aqui elas saem do próprio hook:
+
+```ts
+type EstadoContasReceber = ReturnType<typeof useContasReceber>;
+interface Props extends Pick<EstadoContasReceber, 'sortedParcelas' | 'openDetalhes' | …> { … }
+```
+
+É mecânico, custa uma linha de `import type` por fatia (erasado na compilação, então não cria
+ciclo em runtime) e dá duas coisas que `any` não dá: o `tsc` passa a conferir que o parent
+manda a coisa certa, e os dois `TS7006` que `any` produziria — o `.map` e um setter chamado
+com função (`setX((aberto) => !aberto)`) — deixam de existir em vez de precisarem de remendo.
+**Ao fatiar um componente cujo estado já mora num hook, tipe as props por `Pick` do retorno
+dele**; `any` ali é uma escolha, não um limite da técnica.
+
+#### A ressalva nova: o varredor de nomes não pode olhar strings
+
+O classificador procura cada nome declarado com `\bnome\b` no texto da fatia. Isso pegou três
+props que **não existem no código** daquele bloco:
+
+- `parcelas` no cabeçalho, casando com o rótulo visível `Relação de parcelas`;
+- `parcelas` e `receitas` na tabela e no modal de detalhes, casando com a string
+  `'editar parcelas ou receitas existentes'` de `alertPermissionRestriction`.
+
+É a mesma armadilha que a varredura dos 447 botões já registra — *comentário não é código* —,
+agora numa forma mais escorregadia: **texto que vai para a tela também não é código**, e em
+arquivo em português o nome da variável e a palavra do rótulo são a mesma palavra. O `eslint`
+acusou as cinco como parâmetro não usado; sem esse segundo par de olhos elas teriam entrado
+como props permanentes, e o parent passaria a afirmar uma dependência que não existe.
+
+#### O achado que não era da decomposição: os dois alvos de e2e discordavam
+
+Escrevendo a linha de base, a semente do dublê (`e2e/apoio/dadosDeHomologacao.ts`) mostrou-se
+**cópia incompleta** do `supabase/seed-homologacao.sql`, que o cabeçalho dela declara como
+fonte: a receita da Maria (`4ece1700-…0001`) e as 12 parcelas dela estavam só no `.sql`. O
+mesmo spec veria 12 linhas num alvo e 24 no outro.
+
+Ninguém acusou porque **nenhum spec olhava para as parcelas da Maria** — `receber-parcela`
+trabalha só com as do João, sempre por descrição. A divergência sobreviveu desde que o dublê
+foi escrito.
+
+O que ela escondia importa para qualquer teste de listagem desta tela, e é por isso que a
+correção veio antes do resto: sem a Maria há **um único devedor**, e aí buscar por nome e
+ordenar por devedor não distinguem "filtrou" de "não filtrou"; e as parcelas do João vencem
+todas no futuro, então **o filtro "Vencido" e o indicador do mesmo nome não tinham uma única
+linha para achar**. Com ela, a tela passa a ter 24 parcelas, dois devedores e exatamente uma
+vencida em aberto.
+
+Três decisões da correção:
+
+- **O `.sql` é a fonte, então foi o dublê que mudou** — e as duas metades que faltavam ao
+  `.sql` para o filtro de forma de pagamento ter dois lados (a parcela herdando
+  `forma_pagamento_padrao`, e a Maria em boleto) entraram nos **dois** arquivos na mesma
+  tarefa.
+- **A semente é relativa a `hoje`**, então os números não envelhecem: a Maria fica sempre com
+  5 liquidadas, 1 vencida e 6 a vencer. A conta que garante isso é que 6 meses nunca somam
+  menos de 181 dias, então a 7ª parcela (180 dias atrás + 6 meses) cai sempre no futuro.
+- **`somarMeses` passou a grampear o fim de mês como o `interval '1 month'` do Postgres**
+  (31/01 + 1 mês é 28/02, não 03/03). Nos dias 1..28 as duas formas dão o mesmo resultado, então
+  isto não muda nenhuma data semeada hoje — mas quem decide o que "mais um mês" significa é o
+  banco, que é a fonte declarada.
+
+#### A linha de base, e as duas asserções que passavam sem provar nada
+
+`e2e/contas-receber.spec.ts` (7 casos) cobre o que `receber-parcela.spec.ts` não alcança —
+cabeçalho e menu de relatórios, filtros, os indicadores escrevendo no filtro de status,
+ordenação, o modal de detalhes e a etapa de **bloqueio** do modal de baixa, que nenhum teste
+havia exercitado. Sete mutações no monolito, sete reprovações, cada uma no caso correspondente.
+
+E a mutação do modal de detalhes achou um defeito no teste, não no código: com a busca da
+receita pai desligada, `toContainText('Plano Familiar')` e `toContainText('Mensalidade')`
+**continuavam passando** — as duas palavras estão na descrição da parcela, que a tela já tinha
+em memória (`Mensalidade Plano Familiar 7/12`). Só `R$ 1.200,00`, `(12x)` e a observação da
+receita reprovam. É a regra que este arquivo já registra valendo num terceiro formato: num
+modal que mistura duas fontes, o mesmo texto existe nas duas, e o errado não prova nada.
+
+#### A conferência
+
+As cinco fatias mais o corpo do hook foram comparados linha a linha com o recorte original,
+ignorando só indentação: **1353 linhas idênticas, zero divergências**, conferido de novo depois
+dos comentários de documentação. O `eslint` do conjunto fechou em **0 erros e 14 avisos**,
+contra 19 do monolito sozinho — e os 14 são dívida anterior que veio junto (`any` nas
+assinaturas, o `exhaustive-deps` do `loadData`, e `columns`/`visibleColumns`, que já eram
+código morto antes desta passada e por isso não foram removidos aqui).
 
 ## Modal dentro de `<form>`: botão sem `type` é `submit`, e isso salva a tela de fora
 
@@ -3618,14 +3733,20 @@ consulta e podar com a leitura falhada) reprovam a suíte, cada uma no teste cor
 
 ### Os três fluxos críticos, no navegador (Playwright)
 
-Fechado em 21/09/2026, e depois estendido duas vezes, sempre pelo mesmo motivo: **linha de
-base antes de decompor** — a **Ata de Ocorrências** (`auditoria.spec.ts`, 5 casos) e o
-**formulário de associado em modo de edição** (`editar-associado.spec.ts`, 5 casos) e o
-**visualizador de documento padrão** (`visualizar-documento.spec.ts`, 5 casos). `e2e/`
+Fechado em 21/09/2026, e depois estendido três vezes, sempre pelo mesmo motivo: **linha de
+base antes de decompor** — a **Ata de Ocorrências** (`auditoria.spec.ts`, 5 casos), o
+**formulário de associado em modo de edição** (`editar-associado.spec.ts`, 5 casos), o
+**visualizador de documento padrão** (`visualizar-documento.spec.ts`, 5 casos) e a tela de
+**Contas a Receber** (`contas-receber.spec.ts`, 7 casos). `e2e/`
 cobre **cadastrar associado com plano**, **receber uma parcela** e **emitir uma guia** de
 ponta a ponta — os três que este arquivo listava como bloqueados "por falta de UI logada", e
-que a criação do projeto de homologação existia para destravar —, mais os dois acima. São
-**25 casos** em 6 arquivos.
+que a criação do projeto de homologação existia para destravar —, mais os quatro acima. São
+**32 casos** em 8 arquivos.
+
+**A semente dos dois alvos é cópia deliberada, e já esteve incompleta**: até 22/09/2026 a
+receita da Maria e as 12 parcelas dela existiam só no `.sql`, e nenhum spec acusou porque
+nenhum olhava para elas. Ao acrescentar dado de semente, acrescente nos **dois** arquivos na
+mesma tarefa — ver a seção da decomposição de `ContasReceberPage.tsx`.
 
 **A rede deste ambiente bloqueia `*.supabase.co`** (CONNECT 403 no proxy de saída, produção e
 homologação igualmente) e não há daemon Docker. Então a suíte roda contra **dois alvos**, e o
