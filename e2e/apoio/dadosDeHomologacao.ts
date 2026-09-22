@@ -61,6 +61,7 @@ export const LOG_EDITAR_ASSOCIADO = 'ad100000-0000-4000-8000-000000000002';
 export const LOG_EXCLUIR_FORNECEDOR = 'ad100000-0000-4000-8000-000000000003';
 export const LOG_DE_OUTRA_EMPRESA = 'ad100000-0000-4000-8000-000000000004';
 export const LOG_SEM_EMPRESA = 'ad100000-0000-4000-8000-000000000005';
+export const MODELO_CONTRATO = 'd0c00000-0000-4000-8000-000000000001';
 
 const horasAtras = (n: number) => new Date(Date.now() - n * 3_600_000).toISOString();
 
@@ -100,6 +101,36 @@ const logsDeAuditoria = () => [
     usuario_id: 'aaaaaaaa-0000-4000-8000-000000000001', acao: 'Reabertura Lote Caixa',
     detalhes: { codigo: 'LOTE-HML-0001', usuario: 'SUPER ADMIN HOMOLOGACAO', justificativa: 'Conferencia de homologacao' },
     created_at: horasAtras(24 * 10),
+  },
+];
+
+/**
+ * Um modelo de documento com variáveis de DOIS módulos — empresa e associado.
+ *
+ * Um modelo sem `{{...}}` não exercita nada do visualizador: ele existe para resolver
+ * variável. E um com variáveis de um módulo só não distingue "resolveu" de "resolveu o
+ * módulo que eu testei", que é a diferença entre o catálogo e o resolver ficarem em
+ * sincronia ou não — a divergência que o CLAUDE.md registra como muda.
+ */
+const modelosDeDocumento = () => [
+  {
+    id: MODELO_CONTRATO,
+    tenant_id: EMPRESA_PAX,
+    empresa_id: EMPRESA_PAX,
+    nome: 'Contrato de Adesao PAX',
+    descricao: 'Modelo de homologacao',
+    tipo: 'contrato_adesao',
+    conteudo:
+      '<p>A empresa {{empresa_nome}}, inscrita no CNPJ {{empresa_cnpj}}, celebra contrato com '
+      + '{{associado_nome}}, portador do CPF {{associado_cpf}}, aderente ao {{plano_nome}}.</p>'
+      + '<p>Valor mensal: {{valor_mensalidade}}.</p>',
+    orientacao: 'retrato',
+    tamanho_papel: 'a4',
+    padrao: true,
+    ativo: true,
+    criado_em: new Date('2026-09-01T12:00:00Z').toISOString(),
+    atualizado_em: new Date('2026-09-01T12:00:00Z').toISOString(),
+    deleted_at: null,
   },
 ];
 
@@ -175,7 +206,7 @@ export const montarBancoDeHomologacao = (): Banco => {
   banco.set('fornecedores', []);
   banco.set('categorias_fornecedor', []);
   banco.set('itens_funerarios', []);
-  banco.set('documentos_padroes', []);
+  banco.set('documentos_padroes', modelosDeDocumento());
   banco.set('planos_contabeis', []);
   banco.set('contas_contabeis', []);
   banco.set('centros_custo', []);

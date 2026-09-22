@@ -2328,18 +2328,20 @@ cegas num arquivo sem cobertura de teste.
 
 ## "God components" conhecidos
 
-**Estado medido em 22/09/2026** — a lista abaixo já esteve desatualizada em dois dos quatro
+**Estado medido em 22/09/2026, depois das duas decomposições do dia** — a lista abaixo já
+esteve desatualizada em dois dos quatro
 nomes, e o número é o que decide, não a memória:
 
 | Arquivo | Linhas hoje | Situação |
 |---|---|---|
 | `services/financeiroService.ts` | 1913 | não decomposto **de propósito** — ver a nota abaixo |
-| `components/documentos/VisualizadorDocumentoPadraoModal.tsx` | 1912 | **o maior do projeto hoje**, nunca decomposto |
-| `pages/ContasReceberPage.tsx` | 1574 | nunca decomposto |
+| `pages/ContasReceberPage.tsx` | 1574 | **o maior componente hoje**, nunca decomposto |
 | `pages/RequisicoesPage.tsx` | 1522 | nunca decomposto |
 | `components/associados/CarteirinhaAssociadoModal.tsx` | 1520 | nunca decomposto |
+| `pages/DocumentosPadroesPage.tsx` | 1384 | nunca decomposto |
 | `components/associados/AssociadoMensalidadesTab.tsx` | 957 | já decomposto |
 | `components/associados/AssociadoFormModal.tsx` | **496** | decomposto em 22/09 — era 2009, ver a seção própria abaixo |
+| `components/documentos/VisualizadorDocumentoPadraoModal.tsx` | **308** | decomposto em 22/09 — era 1912, ver a seção própria abaixo |
 | `pages/Configuracoes.tsx` | 191 | já decomposto (`components/configuracoes/`) |
 | `pages/Auditoria.tsx` | **87** | decomposto em 21/09 — ver a seção própria abaixo |
 
@@ -2556,8 +2558,12 @@ mais o valor, que só existem no widget), a mutação reprova.
   não aparece nela: ele colide com o **`Lock` da Web Locks API**, um global do DOM, então o
   `tsc` aceita calado e o ícone vira outra coisa em runtime — sem erro, sem aviso. O
   classificador passou a tirar os imports de **quem o bloco de fato usa**, cruzado com o que o
-  monolito importava; os que sobram caem depois, no `eslint`. Para as **props** a lista do
-  compilador continua exata, porque um nome de prop não tem homônimo global.
+  monolito importava; os que sobram caem depois, no `eslint`.
+
+  > **Corrigido em 22/09**: esta seção afirmava em seguida que "para as props a lista do
+  > compilador continua exata, porque um nome de prop não tem homônimo global". **É falso**, e
+  > o contraexemplo apareceu na decomposição seguinte: `orientation` é estado do visualizador
+  > de documento **e** `window.orientation` (um `number`). Ver a ressalva na seção dele.
 - **Uma prop que sofre `.map` precisa ser `any[]`, não `any`.** `.map` sobre `any` devolve
   `any` e deixa o callback sem tipo contextual, o que é `TS7006` com `noImplicitAny`.
 
@@ -2585,6 +2591,92 @@ errada. Daí `destravarNavegacao`, que preenche os dois como o operador faria.
 E o save vai além: `handleSave` recusa o cadastro quando **qualquer dependente** tem CPF
 inválido. Por isso o teste de payload usa JOÃO, que não tem dependentes; salvar MARIA exigiria
 corrigir três documentos para exercitar um campo.
+
+### VisualizadorDocumentoPadraoModal.tsx: 1912 → 308 linhas, e dois defeitos achados pela linha de base
+
+Fechado em 22/09/2026. O maior arquivo do projeto virou um hook de estado e quatro peças de
+UI; a página-mãe só monta.
+
+| Onde foi parar | Linhas | O que guarda |
+|---|---|---|
+| `hooks/useVisualizadorDocumento.ts` | 846 | carga das entidades, os 8 handlers de seleção, medição da folha, zoom, orientação, o HTML resolvido |
+| `VisualizadorDocumentoSeletores.tsx` | 622 | os 8 seletores de módulo da barra lateral |
+| `VisualizadorDocumentoToolbar.tsx` | 245 | identificação, orientação, zoom, assinatura, PDF, imprimir |
+| `VisualizadorDocumentoFolha.tsx` | 213 | a folha A4, o cabeçalho/rodapé da empresa e a assinatura livre |
+| `VisualizadorDocumentoVariaveis.tsx` | 135 | busca e campos de ajuste manual das variáveis |
+| `VisualizadorDocumentoPadraoModal.tsx` | **308** | só a moldura do modal e a barra lateral |
+
+#### Três ressalvas ao roteiro, todas achadas por um erro do compilador ou um `assert`
+
+- **Fatia sem raiz única precisa de fragmento.** Três das quatro fatias são blocos JSX
+  **irmãos**, não um elemento raiz: sem `<>…</>` o `tsc` reclama de sintaxe e **não chega a
+  listar nome nenhum**, então o passo seguinte do roteiro (deixar o compilador achar as props)
+  devolve zero e parece ter funcionado. Em volta de uma raiz só o fragmento é inerte.
+- **A lista do compilador não serve nem para as props** — a correção que a seção anterior
+  registra. `orientation` é `useState` do componente **e** `window.orientation`, um `number`
+  do DOM: ele não aparece em "cannot find name", não vira prop, e o componente passa a ler a
+  orientação **da tela** em vez da do documento. Aqui o `tsc` salvou por acidente (os tipos
+  conflitam); com um global tipado `any` teria passado calado. O classificador passou a sair
+  das **declarações do próprio monolito** — o destructuring das props mais todo `const`/`let`
+  do topo do corpo.
+- **Ancore o varredor na indentação.** `^\s*const` engole `const` de dentro de callback e de
+  corpo de `.map` (`emp`, `plano`, `isFilled`), e o parent passa a tentar passar como prop um
+  nome que só existe dentro de uma closure. O topo do corpo do componente está em **dois
+  espaços**.
+
+Duas coisas a mais, específicas de extrair um hook:
+
+- **O destructuring do parâmetro vai verbatim, com os renomes.** O original faz
+  `associados: propAssociados = []` porque o corpo declara um `useState` de mesmo nome logo
+  adiante. Reconstruir a lista a partir das chaves perde o rename, e o corpo passa a ler a
+  prop em vez do estado — em silêncio, porque os dois nomes existem.
+- **O `if (!isOpen) return null` é do COMPONENTE, não do hook.** Movido junto, ele faz o hook
+  devolver `null`, que não se desestrutura; e os hooks internos precisam rodar em toda
+  renderização de qualquer forma.
+
+O corpo do hook e as quatro fatias foram conferidos linha a linha contra o recorte original,
+ignorando só indentação: **1030 + 546 linhas idênticas, zero divergências**.
+
+#### A linha de base achou dois defeitos, e nenhum é da decomposição
+
+`e2e/visualizar-documento.spec.ts` (5 casos) exercita o que este visualizador existe para
+fazer: **resolver `{{variavel}}`**. As asserções são escopadas a `.doc-content` — a barra
+lateral lista cada tag como texto ao lado do nome dela, então `not.toContainText('{{…}}')` no
+modal inteiro **nunca** passa, com ou sem defeito.
+
+Um modelo com variáveis de dois módulos foi semeado nos dois alvos. **Duas tags que eu
+inventei não existiam** nem no resolver nem no catálogo (`{{associado_plano}}`,
+`{{associado_valor_plano}}` — os nomes reais são `{{plano_nome}}` e `{{valor_mensalidade}}`);
+o teste as reprovou de imediato, que é o comportamento certo para a divergência que este
+arquivo classifica como muda.
+
+Quatro mutações, quatro reprovações: tirar `resolverVariaveisAssociado` do payload, cravar a
+folha em retrato, fazer "Limpar Seleções" limpar também os valores, e tornar a substituição
+cega (apagar toda tag restante).
+
+E os dois defeitos, ambos reproduzidos **igual no arquivo monolítico** e travados por teste:
+
+- **Trocar para paisagem grava no servidor e a tela volta para retrato.** O `PATCH` chega com
+  `orientacao: 'paisagem'`, sem erro nenhum — e o efeito de inicialização (deps
+  `[documento, isOpen, modulosDetectados]`) re-roda depois que `editar` recarrega a lista e
+  reaplica `documento.orientacao` do objeto **ainda antigo** que a página segura em
+  `docToPrint`, que ela nunca atualiza a partir da lista recarregada. O operador vê a folha
+  voltar e clica de novo, gravando `'retrato'` por cima.
+- **"Limpar Seleções de Módulos" não devolve as tags à folha.** `handleResetSelections` zera
+  os nove ids e não toca em `placeholderValues`, de onde `renderedHtml` sai. O estado
+  alcançável é imprimir um contrato com o nome do associado anterior.
+
+**Nenhum dos dois foi corrigido aqui**, e isso é deliberado: o primeiro é decisão sobre quem
+manda na orientação depois de salvar, o segundo sobre o que "limpar" significa quando há dois
+botões. Trocar comportamento numa passada de decomposição é exatamente o que torna impossível
+afirmar depois que nada mudou.
+
+**Um aviso de método que custou caro**: a primeira versão do teste de orientação usava
+`toPass`, e ele **às vezes passava** — a folha vira paisagem por um instante antes de ser
+revertida, e uma sondagem rápida pegava o transiente. O teste era flaky por medir um estado
+que não dura. Esperar o assentamento e afirmar o estado final é o que o tornou determinístico
+(5/5 em três rodadas, nos dois lados). **Quando um teste de UI passa de forma intermitente,
+pergunte se o que ele mede é um estado ou uma passagem.**
 
 ## Modal dentro de `<form>`: botão sem `type` é `submit`, e isso salva a tela de fora
 
@@ -3528,11 +3620,12 @@ consulta e podar com a leitura falhada) reprovam a suíte, cada uma no teste cor
 
 Fechado em 21/09/2026, e depois estendido duas vezes, sempre pelo mesmo motivo: **linha de
 base antes de decompor** — a **Ata de Ocorrências** (`auditoria.spec.ts`, 5 casos) e o
-**formulário de associado em modo de edição** (`editar-associado.spec.ts`, 5 casos). `e2e/`
+**formulário de associado em modo de edição** (`editar-associado.spec.ts`, 5 casos) e o
+**visualizador de documento padrão** (`visualizar-documento.spec.ts`, 5 casos). `e2e/`
 cobre **cadastrar associado com plano**, **receber uma parcela** e **emitir uma guia** de
 ponta a ponta — os três que este arquivo listava como bloqueados "por falta de UI logada", e
 que a criação do projeto de homologação existia para destravar —, mais os dois acima. São
-**20 casos** em 5 arquivos.
+**25 casos** em 6 arquivos.
 
 **A rede deste ambiente bloqueia `*.supabase.co`** (CONNECT 403 no proxy de saída, produção e
 homologação igualmente) e não há daemon Docker. Então a suíte roda contra **dois alvos**, e o
