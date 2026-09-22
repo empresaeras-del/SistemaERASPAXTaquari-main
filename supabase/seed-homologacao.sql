@@ -196,6 +196,57 @@ select r.tenant_id, r.id, n,
    and not exists (select 1 from public.parcelas_receber p where p.receita_id = r.id and p.numero_parcela = n);
 
 
+-- ---------------------------------------------------------------- contas a pagar
+-- Duas despesas, uma por fornecedor, para a tela de Contas a Pagar ter o que listar.
+-- ATENCAO: este bloco tem gemeo em e2e/apoio/dadosDeHomologacao.ts, com os MESMOS ids.
+--
+-- O desenho espelha o das receitas e pelo mesmo motivo: DOIS credores (sem o segundo,
+-- buscar por nome e ordenar por credor nao distinguem "filtrou" de "nao filtrou"), formas
+-- de pagamento DIFERENTES (boleto e pix, para o filtro ter dois lados) e uma parcela
+-- VENCIDA EM ABERTO, a unica linha que o filtro "Vencidas" e o indicador podem achar.
+insert into public.despesas (
+  id, tenant_id, tipo_credor, fornecedor_id, fornecedor_nome, fornecedor_cnpj_cpf,
+  credor_nome, credor_cpf_cnpj, descricao, categoria, centro_custo,
+  data_emissao, data_inicio_pagamento, valor_total, qtd_parcelas,
+  forma_pagamento_padrao, conta_bancaria_id, status, observacoes, criado_em
+) values
+  ('de50e5a0-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'fornecedor',
+   'dddddddd-0000-4000-8000-000000000002', 'URNAS EXEMPLO LTDA', '44.444.444/0001-44',
+   'URNAS EXEMPLO LTDA', '44.444.444/0001-44', 'Compra de urnas', 'Materiais', 'OPERACIONAL',
+   current_date - 90, current_date - 90, 3000.00, 6,
+   'boleto', 'cccccccc-0000-4000-8000-000000000001', 'ativo', 'Semeada para homologacao', now()),
+  ('de50e5a0-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'fornecedor',
+   'dddddddd-0000-4000-8000-000000000001', 'CONVENIO EXEMPLO LTDA', '33.333.333/0001-33',
+   'CONVENIO EXEMPLO LTDA', '33.333.333/0001-33', 'Repasse de convenio', 'Servicos', 'ADMINISTRATIVO',
+   current_date + 15, current_date + 15, 1000.00, 4,
+   'pix', 'cccccccc-0000-4000-8000-000000000001', 'ativo', null, now())
+on conflict (id) do nothing;
+
+insert into public.parcelas_pagar (
+  tenant_id, despesa_id, numero_parcela, valor, data_vencimento, status,
+  tipo_credor, credor_nome, credor_cpf_cnpj, descricao, total_parcelas, forma_pagamento,
+  data_pagamento, valor_pago, forma_pagamento_efetivo
+)
+select d.tenant_id, d.id, n,
+       round(d.valor_total / d.qtd_parcelas, 2),
+       (d.data_inicio_pagamento + ((n - 1) * interval '1 month'))::date,
+       case when (d.data_inicio_pagamento + ((n - 1) * interval '1 month'))::date < current_date - 30
+            then 'pago' else 'pendente' end,
+       'fornecedor', d.credor_nome, d.credor_cpf_cnpj,
+       d.descricao || ' ' || n || '/' || d.qtd_parcelas, d.qtd_parcelas, d.forma_pagamento_padrao,
+       case when (d.data_inicio_pagamento + ((n - 1) * interval '1 month'))::date < current_date - 30
+            then (d.data_inicio_pagamento + ((n - 1) * interval '1 month'))::date end,
+       case when (d.data_inicio_pagamento + ((n - 1) * interval '1 month'))::date < current_date - 30
+            then round(d.valor_total / d.qtd_parcelas, 2) end,
+       case when (d.data_inicio_pagamento + ((n - 1) * interval '1 month'))::date < current_date - 30
+            then d.forma_pagamento_padrao end
+  from public.despesas d
+ cross join generate_series(1, 6) as n
+ where d.id in ('de50e5a0-0000-4000-8000-000000000001','de50e5a0-0000-4000-8000-000000000002')
+   and n <= d.qtd_parcelas
+   and not exists (select 1 from public.parcelas_pagar p where p.despesa_id = d.id and p.numero_parcela = n);
+
+
 -- ---------------------------------------------------------------- ata de ocorrencias
 -- Linhas de auditoria semeadas para o e2e da Ata de Ocorrencias ter o que listar.
 -- ATENCAO: este bloco tem gemeo em e2e/apoio/dadosDeHomologacao.ts, com os MESMOS ids.

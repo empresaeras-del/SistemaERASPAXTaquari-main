@@ -25,6 +25,11 @@ export const ASSOCIADO_JOAO = 'a5500000-0000-4000-8000-000000000002';
 export const RECEITA_MARIA = '4ece1700-0000-4000-8000-000000000001';
 export const RECEITA_JOAO = '4ece1700-0000-4000-8000-000000000002';
 
+export const FORNECEDOR_CONVENIO = 'dddddddd-0000-4000-8000-000000000001';
+export const FORNECEDOR_URNAS = 'dddddddd-0000-4000-8000-000000000002';
+export const DESPESA_URNAS = 'de50e5a0-0000-4000-8000-000000000001';
+export const DESPESA_CONVENIO = 'de50e5a0-0000-4000-8000-000000000002';
+
 const hoje = new Date();
 
 /**
@@ -125,6 +130,88 @@ const parcelasDaMaria = () => {
     };
   });
 };
+
+/**
+ * As contas a pagar: duas despesas, uma por fornecedor, derivadas como as receitas.
+ *
+ * **Também faltava no dublê**, e por dois motivos diferentes: os dois `fornecedores` existem no
+ * `.sql` desde sempre e nunca foram copiados para cá (a mesma cópia incompleta da receita da
+ * Maria); e `despesas`/`parcelas_pagar` não existiam em alvo nenhum — a tela de Contas a Pagar
+ * nunca teve uma linha para mostrar em teste.
+ *
+ * O desenho espelha o do lado das receitas, pelo mesmo motivo: **dois credores** (sem o segundo,
+ * buscar por nome e ordenar por credor não distinguem "filtrou" de "não filtrou"), **formas de
+ * pagamento diferentes** (boleto e pix, para o filtro ter dois lados) e **uma parcela vencida em
+ * aberto**, que é a única linha que o filtro "Vencidas" e o indicador do mesmo nome podem achar.
+ */
+const parcelasDeUmaDespesa = (
+  despesaId: string,
+  prefixoId: string,
+  credor: { nome: string; documento: string },
+  opcoes: {
+    qtd: number;
+    valor: number;
+    descricao: string;
+    formaPagamento: string;
+    diasAteAPrimeira: number;
+  },
+) => {
+  const primeiroVencimento = somarDias(hoje, opcoes.diasAteAPrimeira);
+  const corteDeLiquidacao = somarDias(hoje, -30);
+
+  return Array.from({ length: opcoes.qtd }, (_, i) => {
+    const n = i + 1;
+    const vencimento = somarMeses(primeiroVencimento, n - 1);
+    const liquidada = vencimento < corteDeLiquidacao;
+    return {
+      id: `${prefixoId}${String(n).padStart(2, '0')}`,
+      tenant_id: EMPRESA_PAX,
+      despesa_id: despesaId,
+      numero_parcela: n,
+      total_parcelas: opcoes.qtd,
+      valor: opcoes.valor,
+      data_vencimento: comoData(vencimento),
+      status: liquidada ? 'pago' : 'pendente',
+      tipo_credor: 'fornecedor',
+      credor_nome: credor.nome,
+      credor_cpf_cnpj: credor.documento,
+      descricao: `${opcoes.descricao} ${n}/${opcoes.qtd}`,
+      forma_pagamento: opcoes.formaPagamento,
+      data_pagamento: liquidada ? comoData(vencimento) : null,
+      valor_pago: liquidada ? opcoes.valor : null,
+      forma_pagamento_efetivo: liquidada ? opcoes.formaPagamento : null,
+    };
+  });
+};
+
+/**
+ * 6 parcelas do fornecedor de urnas, a primeira vencida há 90 dias: 2 pagas, 1 **vencida em
+ * aberto** (a parcela 3, que cai a ~30 dias atrás) e 3 a vencer.
+ */
+const parcelasDasUrnas = () =>
+  parcelasDeUmaDespesa(DESPESA_URNAS, '9a4ce5a0-0000-4000-8000-0000000000', {
+    nome: 'URNAS EXEMPLO LTDA',
+    documento: '44.444.444/0001-44',
+  }, {
+    qtd: 6,
+    valor: 500,
+    descricao: 'Compra de urnas',
+    formaPagamento: 'boleto',
+    diasAteAPrimeira: -90,
+  });
+
+/** 4 parcelas do convênio, todas futuras — nenhuma paga, nenhuma vencida. */
+const parcelasDoConvenio = () =>
+  parcelasDeUmaDespesa(DESPESA_CONVENIO, '9a4ce5a1-0000-4000-8000-0000000000', {
+    nome: 'CONVENIO EXEMPLO LTDA',
+    documento: '33.333.333/0001-33',
+  }, {
+    qtd: 4,
+    valor: 250,
+    descricao: 'Repasse de convenio',
+    formaPagamento: 'pix',
+    diasAteAPrimeira: 15,
+  });
 
 /** Ids fixos da Ata de Ocorrências, espelhando o bloco final de `seed-homologacao.sql`. */
 export const LOG_CRIAR_ASSOCIADO = 'ad100000-0000-4000-8000-000000000001';
@@ -267,15 +354,22 @@ export const montarBancoDeHomologacao = (): Banco => {
   ]);
   banco.set('parcelas_receber', [...parcelasDaMaria(), ...parcelasDoJoao()]);
 
-  banco.set('despesas', []);
-  banco.set('parcelas_pagar', []);
+  banco.set('despesas', [
+    { id: DESPESA_URNAS, tenant_id: EMPRESA_PAX, tipo_credor: 'fornecedor', fornecedor_id: FORNECEDOR_URNAS, fornecedor_nome: 'URNAS EXEMPLO LTDA', fornecedor_cnpj_cpf: '44.444.444/0001-44', credor_nome: 'URNAS EXEMPLO LTDA', credor_cpf_cnpj: '44.444.444/0001-44', descricao: 'Compra de urnas', categoria: 'Materiais', centro_custo: 'OPERACIONAL', valor_total: 3000, qtd_parcelas: 6, forma_pagamento_padrao: 'boleto', conta_bancaria_id: CONTA_BANCARIA, status: 'ativo', observacoes: 'Semeada para homologacao', criado_em: new Date().toISOString() },
+    { id: DESPESA_CONVENIO, tenant_id: EMPRESA_PAX, tipo_credor: 'fornecedor', fornecedor_id: FORNECEDOR_CONVENIO, fornecedor_nome: 'CONVENIO EXEMPLO LTDA', fornecedor_cnpj_cpf: '33.333.333/0001-33', credor_nome: 'CONVENIO EXEMPLO LTDA', credor_cpf_cnpj: '33.333.333/0001-33', descricao: 'Repasse de convenio', categoria: 'Servicos', centro_custo: 'ADMINISTRATIVO', valor_total: 1000, qtd_parcelas: 4, forma_pagamento_padrao: 'pix', conta_bancaria_id: CONTA_BANCARIA, status: 'ativo', criado_em: new Date().toISOString() },
+  ]);
+  banco.set('parcelas_pagar', [...parcelasDasUrnas(), ...parcelasDoConvenio()]);
   banco.set('lotes_caixa', []);
   banco.set('movimentacoes_caixa', []);
   banco.set('requisicoes', []);
   banco.set('atendimentos', []);
   banco.set('auditoria', logsDeAuditoria());
   banco.set('notificacoes', []);
-  banco.set('fornecedores', []);
+  // Os dois fornecedores do `.sql` — cópia que faltava aqui, como a receita da Maria faltava.
+  banco.set('fornecedores', [
+    { id: FORNECEDOR_CONVENIO, tenant_id: EMPRESA_PAX, empresa_id: EMPRESA_PAX, tipo_pessoa: 'PJ', razao_social: 'CONVENIO EXEMPLO LTDA', nome_fantasia: 'Convenio Exemplo', cnpj_cpf: '33.333.333/0001-33', categoria: 'Convenios Associados', tipo_fornecedor: 'servicos', status: 'ativo', deleted_at: null },
+    { id: FORNECEDOR_URNAS, tenant_id: EMPRESA_PAX, empresa_id: EMPRESA_PAX, tipo_pessoa: 'PJ', razao_social: 'URNAS EXEMPLO LTDA', nome_fantasia: 'Urnas Exemplo', cnpj_cpf: '44.444.444/0001-44', categoria: 'Urnas e Caixões', tipo_fornecedor: 'produtos', status: 'ativo', deleted_at: null },
+  ]);
   banco.set('categorias_fornecedor', []);
   banco.set('itens_funerarios', []);
   banco.set('documentos_padroes', modelosDeDocumento());

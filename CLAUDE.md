@@ -2328,7 +2328,7 @@ cegas num arquivo sem cobertura de teste.
 
 ## "God components" conhecidos
 
-**Estado medido em 22/09/2026, depois das três decomposições do dia** — a lista abaixo já
+**Estado medido em 22/09/2026, depois das quatro decomposições do dia** — a lista abaixo já
 esteve desatualizada em dois dos quatro
 nomes, e o número é o que decide, não a memória:
 
@@ -2338,9 +2338,10 @@ nomes, e o número é o que decide, não a memória:
 | `pages/RequisicoesPage.tsx` | 1522 | **o maior componente hoje**, nunca decomposto |
 | `components/associados/CarteirinhaAssociadoModal.tsx` | 1520 | nunca decomposto |
 | `pages/DocumentosPadroesPage.tsx` | 1384 | nunca decomposto |
-| `pages/ContasPagarPage.tsx` | 1333 | nunca decomposto — é a gêmea de Contas a Receber |
 | `components/atendimentos/NovoAtendimentoWizard.tsx` | 1309 | nunca decomposto |
+| `components/planos-pax/PlanoPaxForm.tsx` | 1250 | nunca decomposto |
 | `components/associados/AssociadoMensalidadesTab.tsx` | 957 | já decomposto |
+| `pages/ContasPagarPage.tsx` | **226** | decomposto em 22/09 — era 1333, ver a seção própria abaixo |
 | `pages/ContasReceberPage.tsx` | **258** | decomposto em 22/09 — era 1574, ver a seção própria abaixo |
 | `components/associados/AssociadoFormModal.tsx` | **496** | decomposto em 22/09 — era 2009, ver a seção própria abaixo |
 | `components/documentos/VisualizadorDocumentoPadraoModal.tsx` | **308** | decomposto em 22/09 — era 1912, ver a seção própria abaixo |
@@ -2792,6 +2793,80 @@ dos comentários de documentação. O `eslint` do conjunto fechou em **0 erros e
 contra 19 do monolito sozinho — e os 14 são dívida anterior que veio junto (`any` nas
 assinaturas, o `exhaustive-deps` do `loadData`, e `columns`/`visibleColumns`, que já eram
 código morto antes desta passada e por isso não foram removidos aqui).
+
+### ContasPagarPage.tsx: 1333 → 226 linhas, e a gêmea que não era idêntica
+
+Fechado em 22/09/2026, logo depois da tela irmã e com os mesmos scripts — adaptados, não
+reescritos. A quarta decomposição pelo roteiro.
+
+| Onde foi parar | Linhas | O que guarda |
+|---|---|---|
+| `hooks/useContasPagar.ts` | 484 | carga, filtros, ordenação, os handlers de baixa, exclusão e comprovante |
+| `ContasPagarBaixaModal.tsx` | 320 | as três etapas do pagamento: formulário, bloqueio, confirmação |
+| `ContasPagarDetalhesModal.tsx` | 248 | os detalhes da parcela mais os da despesa pai |
+| `ContasPagarTabela.tsx` | 159 | cabeçalho ordenável, linhas e botões de ação |
+| `ContasPagarFiltros.tsx` | 138 | a `AdvancedFilterBar` e os **sete** campos |
+| `ContasPagarCabecalho.tsx` | 42 | título, "Exportar PDF", Nova Despesa |
+| `pages/ContasPagarPage.tsx` | **226** | só a moldura, o `getStatusBadge` e os dois modais que já eram componentes |
+
+**Reaproveitar os scripts foi o ponto, e é por isso que a linha de base veio antes mesmo
+assim.** O roteiro já estava mecanizado desde a tela irmã; o que não estava mecanizado — e não
+pode ser — é a pergunta "esta tela faz mesmo a mesma coisa?". As três diferenças abaixo só
+apareceram porque alguém olhou:
+
+- **Sete campos de filtro, não seis**: despesa tem **centro de custo**, receita não.
+- **Um relatório, não dois**: o cabeçalho tem o botão "Exportar PDF" direto, sem o menu de
+  escolha que Contas a Receber ganhou quando o mapa de zonas entrou. Uma decomposição "por
+  simetria" teria posto um menu de um item só.
+- **O relatório recebe `filteredParcelas`, não `sortedParcelas`** — a ordem que o operador vê
+  na tela não é a que sai no papel. Deixado como está; é decisão sobre um relatório em uso.
+
+#### O que a semente precisou antes, e o que ela revelou
+
+**Esta tela nunca teve uma linha em teste nenhum**: `despesas` e `parcelas_pagar` estavam
+vazias nos **dois** alvos. E os dois `fornecedores` do `.sql` nunca tinham sido copiados para o
+dublê — a mesma cópia incompleta que a receita da Maria acabara de expor, agora na segunda
+ocorrência no mesmo arquivo. As duas coisas entraram nos dois arquivos na mesma tarefa.
+
+O desenho da semente repete o do lado das receitas pelos mesmos motivos: dois credores (sem o
+segundo, buscar por nome e ordenar por credor não distinguem "filtrou" de "não filtrou"),
+formas de pagamento diferentes (boleto e pix) e **uma parcela vencida em aberto**, a única
+linha que o filtro "Vencidas" e o indicador do mesmo nome podem achar. Dez parcelas, dois
+credores, 2 pagas, 1 vencida, 7 a vencer — e os números não envelhecem porque tudo é relativo
+a `hoje`.
+
+#### A assimetria que a linha de base achou, e que NÃO foi corrigida
+
+Em 14/09/2026 o lado das receitas trocou os botões `disabled` de parcela liquidada por botões
+**ausentes**, com cadeado e motivo no `title` ("um botão desabilitado convida ao clique e não
+explica nada"), e pôs a recusa no ponto de escrita. **O lado das despesas ficou como estava**, e
+a diferença tem três partes:
+
+1. os botões continuam presentes e `disabled`, sem explicar por quê;
+2. a condição é `status === 'pago'` escrita à mão, não `parcelaLiquidada` — então `'recebido'`,
+   que `ParcelaPagar['status']` declara, passaria batido;
+3. **`excluirParcelaPagar` não tem guarda nenhuma**. A "segurança" aqui é só o atributo
+   `disabled`, e o caminho de escrita segue alcançável pela fila de sync ou por qualquer
+   chamador novo — exatamente o que `utils/statusParcela.ts` existe para impedir.
+
+Corrigir é mudança de comportamento, e numa passada de decomposição isso destrói a capacidade
+de afirmar depois que nada mudou. O teste `QUIRK: parcela paga apenas DESABILITA…` trava o
+estado atual para que a mudança, quando vier, seja deliberada — e a oitava mutação prova que
+ele mede.
+
+#### A conferência
+
+Oito mutações, oito reprovações, cada uma no caso correspondente; nenhum no-op. As cinco fatias
+mais o corpo do hook foram comparados linha a linha com o recorte original, ignorando só
+indentação: **1146 linhas idênticas, zero divergências**, reconferido depois dos comentários. O
+`eslint` do conjunto fechou em **0 erros e 15 avisos**, contra 16 do monolito sozinho — e os 15
+são a mesma dívida anterior da tela irmã (`any` nas assinaturas, o `exhaustive-deps` do
+`loadData`, `columns`/`visibleColumns` mortos, e dois `catch (e)` sem uso).
+
+**Nenhuma prop espúria desta vez**, e isso não é sorte nem correção do script: o varredor
+continua casando dentro de string, mas nesta tela nenhum nome declarado coincide com uma
+palavra de rótulo. O `eslint` continua sendo o que responde por essa classe, e é por isso que
+medir os avisos **antes** faz parte do roteiro.
 
 ## Modal dentro de `<form>`: botão sem `type` é `submit`, e isso salva a tela de fora
 
@@ -3733,20 +3808,26 @@ consulta e podar com a leitura falhada) reprovam a suíte, cada uma no teste cor
 
 ### Os três fluxos críticos, no navegador (Playwright)
 
-Fechado em 21/09/2026, e depois estendido três vezes, sempre pelo mesmo motivo: **linha de
+Fechado em 21/09/2026, e depois estendido quatro vezes, sempre pelo mesmo motivo: **linha de
 base antes de decompor** — a **Ata de Ocorrências** (`auditoria.spec.ts`, 5 casos), o
 **formulário de associado em modo de edição** (`editar-associado.spec.ts`, 5 casos), o
-**visualizador de documento padrão** (`visualizar-documento.spec.ts`, 5 casos) e a tela de
-**Contas a Receber** (`contas-receber.spec.ts`, 7 casos). `e2e/`
+**visualizador de documento padrão** (`visualizar-documento.spec.ts`, 5 casos), a tela de
+**Contas a Receber** (`contas-receber.spec.ts`, 7 casos) e a de **Contas a Pagar**
+(`contas-pagar.spec.ts`, 8 casos). `e2e/`
 cobre **cadastrar associado com plano**, **receber uma parcela** e **emitir uma guia** de
 ponta a ponta — os três que este arquivo listava como bloqueados "por falta de UI logada", e
-que a criação do projeto de homologação existia para destravar —, mais os quatro acima. São
-**32 casos** em 8 arquivos.
+que a criação do projeto de homologação existia para destravar —, mais os cinco acima. São
+**40 casos** em 9 arquivos.
 
-**A semente dos dois alvos é cópia deliberada, e já esteve incompleta**: até 22/09/2026 a
-receita da Maria e as 12 parcelas dela existiam só no `.sql`, e nenhum spec acusou porque
-nenhum olhava para elas. Ao acrescentar dado de semente, acrescente nos **dois** arquivos na
-mesma tarefa — ver a seção da decomposição de `ContasReceberPage.tsx`.
+**A semente dos dois alvos é cópia deliberada, e já esteve incompleta duas vezes**: até
+22/09/2026 a receita da Maria e as 12 parcelas dela existiam só no `.sql`, e os dois
+`fornecedores` também — nenhum spec acusou porque nenhum olhava para eles. Ao acrescentar dado
+de semente, acrescente nos **dois** arquivos na mesma tarefa; ver as seções das decomposições
+de `ContasReceberPage.tsx` e `ContasPagarPage.tsx`.
+
+**E semear é o primeiro passo da linha de base de uma tela nova**: `despesas` e
+`parcelas_pagar` estavam vazias nos dois alvos, então Contas a Pagar não tinha uma única linha
+para mostrar — a tela existia havia meses sem um teste possível.
 
 **A rede deste ambiente bloqueia `*.supabase.co`** (CONNECT 403 no proxy de saída, produção e
 homologação igualmente) e não há daemon Docker. Então a suíte roda contra **dois alvos**, e o
