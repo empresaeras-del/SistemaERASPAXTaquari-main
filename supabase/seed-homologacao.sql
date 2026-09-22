@@ -225,5 +225,21 @@ insert into public.auditoria (id, tenant_id, usuario_id, acao, detalhes, created
    now() - interval '10 days')
 on conflict (id) do nothing;
 
+-- ---------------------------------------------------------------------------
+-- Modelo de documento padrao, com variaveis de DOIS modulos (empresa e associado).
+-- Os mesmos ids de e2e/apoio/dadosDeHomologacao.ts: e o que faz o mesmo spec
+-- apontar para o mesmo registro nos dois alvos.
+-- ---------------------------------------------------------------------------
+insert into public.documentos_padroes
+  (id, tenant_id, empresa_id, nome, descricao, tipo, conteudo, orientacao, tamanho_papel,
+   padrao, ativo, criado_em, atualizado_em)
+values
+  ('d0c00000-0000-4000-8000-000000000001'::uuid, '11111111-1111-4111-8111-111111111111',
+   '11111111-1111-4111-8111-111111111111', 'Contrato de Adesao PAX', 'Modelo de homologacao',
+   'contrato_adesao',
+   '<p>A empresa {{empresa_nome}}, inscrita no CNPJ {{empresa_cnpj}}, celebra contrato com {{associado_nome}}, portador do CPF {{associado_cpf}}, aderente ao {{plano_nome}}.</p><p>Valor mensal: {{valor_mensalidade}}.</p>',
+   'retrato', 'a4', true, true, now(), now())
+on conflict (id) do nothing;
+
 
 commit;
