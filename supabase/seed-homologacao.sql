@@ -157,7 +157,10 @@ insert into public.receitas (
   ('4ece1700-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'associado',
    'a5500000-0000-4000-8000-000000000001', 'MARIA APARECIDA DA SILVA', '000.000.000-01', 'Plano Familiar',
    'Mensalidade Plano Familiar', 'Mensalidade', current_date - 180, current_date - 180, 1200.00, 12,
-   'pix', 'cccccccc-0000-4000-8000-000000000001', 'ativo', now()),
+   -- Boleto de proposito: o filtro "Forma de Recebimento" da tela de Contas a Receber so
+   -- distingue "filtrou" de "nao filtrou" se as duas receitas semeadas tiverem formas
+   -- diferentes. A parcela herda esta, como o app faz ao gera-las.
+   'boleto', 'cccccccc-0000-4000-8000-000000000001', 'ativo', now()),
   ('4ece1700-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'associado',
    'a5500000-0000-4000-8000-000000000002', 'JOAO BATISTA SOUZA', '000.000.000-02', 'Plano Individual',
    'Mensalidade Plano Individual', 'Mensalidade', current_date - 90, current_date - 90, 720.00, 12,
@@ -167,7 +170,7 @@ on conflict (id) do nothing;
 -- 12 parcelas por receita; as vencidas antes de hoje ficam pagas, o resto pendente.
 insert into public.parcelas_receber (
   tenant_id, receita_id, numero_parcela, valor, data_vencimento, status,
-  tipo_devedor, devedor_nome, devedor_cpf_cnpj, descricao, total_parcelas,
+  tipo_devedor, devedor_nome, devedor_cpf_cnpj, descricao, total_parcelas, forma_pagamento,
   data_pagamento, valor_recebido, valor_pago, recebido_em, forma_pagamento_efetivo
 )
 select r.tenant_id, r.id, n,
@@ -176,6 +179,7 @@ select r.tenant_id, r.id, n,
        case when (r.data_inicio_cobranca + ((n - 1) * interval '1 month'))::date < current_date - 30
             then 'recebido' else 'pendente' end,
        'associado', r.associado_nome, r.associado_cpf, r.descricao || ' ' || n || '/' || r.qtd_parcelas, r.qtd_parcelas,
+       r.forma_pagamento_padrao,
        case when (r.data_inicio_cobranca + ((n - 1) * interval '1 month'))::date < current_date - 30
             then (r.data_inicio_cobranca + ((n - 1) * interval '1 month'))::date end,
        case when (r.data_inicio_cobranca + ((n - 1) * interval '1 month'))::date < current_date - 30

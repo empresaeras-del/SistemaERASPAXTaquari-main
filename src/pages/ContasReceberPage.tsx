@@ -1,563 +1,101 @@
-import { useColumnVisibility } from '../hooks/useColumnVisibility';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { AdvancedFilterBar } from '../components/layout/AdvancedFilterBar';
-import { useAppContext } from '../context/AppContext';
-import { getContasBancariasAtivas } from '../services/contasBancariasService';
-import { ContaBancaria } from '../types/contasBancarias';
-import { useConfirm } from '../context/ConfirmContext';
-import {
-  getParcelasReceber,
-  getReceitas,
-  ParcelaReceber,
-  registrarRecebimento,
-  excluirParcelaReceber,
-  excluirReceita,
-  getReceitaById,
-  Receita
-} from '../services/financeiroService';
-import { getLoteAbertoAtivo, registrarMovimentacao } from '../services/caixasService';
-import { usePlanoContabil } from '../hooks/usePlanoContabil';
-import { indicePorLancamento, parcelaCasaClassificacao } from '../utils/filtrosClassificacao';
-import { getEmpresaById, Empresa } from '../services/empresasService';
-import { getAssociados, Associado } from '../services/associadosService';
+import React from 'react';
+
 import { RelatorioContasReceberModal } from '../components/financeiro/RelatorioContasReceberModal';
 import { RelatorioMapaCalorModal } from '../components/financeiro/RelatorioMapaCalorModal';
-import { VisualizadorReciboModal, ReciboDados } from '../components/financeiro/VisualizadorReciboModal';
-import { avisoLiquidacaoSemCaixa } from '../utils/avisoLiquidacaoSemCaixa';
-import { montarReciboDeRecebimento } from '../utils/reciboRecebimento';
-import { MENSAGEM_TENANT_INDEFINIDO, tenantDeEscrita } from '../utils/tenant';
+import { VisualizadorReciboModal } from '../components/financeiro/VisualizadorReciboModal';
+
 import { IndicadoresContasReceber } from '../components/financeiro/IndicadoresContasReceber';
-import { LoteCaixa } from '../types/caixas';
-import { canDelete, canEditFinanceiro, alertPermissionRestriction } from '../utils/permissions';
-import {
-   Search,
-  Plus,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  X,
-  Eye,
-  Pencil,
-  Trash2,
-  DollarSign,
-  FileText,
-  User,
-  Calendar,
-  CreditCard,
-  Building2,
-  AlertTriangle,
-  Lock,
-  Wallet,
-  ArrowRight,
-  ShieldAlert
-, ChevronUp, ChevronDown, Printer, MessageCircle, MapPin } from "lucide-react";
-import { format } from 'date-fns';
-import { parseLocalDate, formatLocalDate, formatLocalDateTime, isDateBeforeToday, isDateToday } from '../utils/dateUtils';
-import { useNavigate, useLocation } from 'react-router-dom';
-import toast from 'react-hot-toast';
-import { sendWhatsAppMessage, generateCobrançaTemplate } from '../utils/whatsapp';
-import { MENSAGEM_PARCELA_LIQUIDADA, parcelaLiquidada } from '../utils/statusParcela';
 
+import { isDateBeforeToday } from '../utils/dateUtils';
+
+
+import { useContasReceber } from '../hooks/useContasReceber';
+import { ContasReceberCabecalho } from '../components/financeiro/ContasReceberCabecalho';
+import { ContasReceberFiltros } from '../components/financeiro/ContasReceberFiltros';
+import { ContasReceberTabela } from '../components/financeiro/ContasReceberTabela';
+import { ContasReceberBaixaModal } from '../components/financeiro/ContasReceberBaixaModal';
+import { ContasReceberDetalhesModal } from '../components/financeiro/ContasReceberDetalhesModal';
+
+/**
+ * Contas a Receber — só a moldura: o estado vem de `useContasReceber` e cada pedaço de UI é
+ * um componente em `components/financeiro/`.
+ *
+ * `getStatusBadge` fica aqui, e não no hook, porque é o único trecho daquele corpo que
+ * devolve JSX; as duas fatias que o usam (tabela e detalhes) o recebem por prop, para não
+ * virarem duas cópias da mesma regra de cor.
+ */
 export const ContasReceberPage: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { state } = useAppContext();
-  const { confirm } = useConfirm();
-
-  const [parcelas, setParcelas] = useState<ParcelaReceber[]>([]);
-  const [receitas, setReceitas] = useState<Receita[]>([]);
-  const [associados, setAssociados] = useState<Associado[]>([]);
-  const [empresaData, setEmpresaData] = useState<Empresa | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [showReciboModal, setShowReciboModal] = useState(false);
-  const [reciboModalData, setReciboModalData] = useState<ReciboDados | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [contaContabilFilter, setContaContabilFilter] = useState('');
-
-  // Identifica o devedor/associado e recupera seu telefone de contato cadastrado
-  const getDevedorContato = useCallback((parcela: ParcelaReceber) => {
-    const recPai = receitas.find(r => r.id === parcela.receita_id);
-
-    let assoc: Associado | undefined;
-
-    // 1. Pelo associado_id na receita pai
-    if (recPai?.associado_id) {
-      assoc = associados.find(a => a.id === recPai.associado_id);
-    }
-
-    // 2. Pelo associado_id direto na parcela se existir
-    if (!assoc && (parcela as any)?.associado_id) {
-      assoc = associados.find(a => a.id === (parcela as any).associado_id);
-    }
-
-    // 3. Pelo CPF do devedor / associado
-    if (!assoc) {
-      const rawCpf = (parcela.devedor_cpf_cnpj || recPai?.associado_cpf || recPai?.cliente_cpf_cnpj || '').replace(/\D/g, '');
-      if (rawCpf && rawCpf.length === 11) {
-        assoc = associados.find(a => (a.cpf || '').replace(/\D/g, '') === rawCpf);
-      }
-    }
-
-    // 4. Pelo Nome exato ou aproximado do devedor / associado
-    if (!assoc) {
-      const rawNome = (parcela.devedor_nome || recPai?.associado_nome || recPai?.cliente_nome || '').trim().toLowerCase();
-      if (rawNome) {
-        assoc = associados.find(a => (a.nome || '').trim().toLowerCase() === rawNome);
-      }
-    }
-
-    const telefone = assoc?.telefone || 
-                     (assoc as any)?.celular_whatsapp || 
-                     (assoc as any)?.celular || 
-                     (assoc as any)?.whatsapp || 
-                     recPai?.cliente_telefone || 
-                     '';
-
-    const nome = assoc?.nome || 
-                 recPai?.associado_nome || 
-                 recPai?.cliente_nome || 
-                 parcela.devedor_nome || 
-                 'Cliente';
-
-    return {
-      associado: assoc,
-      telefone: telefone ? String(telefone).trim() : '',
-      nome,
-      receitaPai: recPai
-    };
-  }, [receitas, associados]);
-
-  // Envia mensagem de cobrança personalizada utilizando o telefone do cadastro
-  const handleWhatsAppCobrança = async (parcela: ParcelaReceber) => {
-    const { telefone: telefoneCadastrado, nome: nomeCliente } = getDevedorContato(parcela);
-    
-    const msg = await generateCobrançaTemplate(
-      nomeCliente, 
-      parcela.valor, 
-      formatLocalDate(parcela.data_vencimento),
-      {
-        empresa: empresaData?.nome_fantasia || 'ERAS PAX',
-        descricao: parcela.descricao
-      }
-    );
-
-    let phone = telefoneCadastrado;
-
-    // Se não tiver telefone no cadastro, solicita confirmação/digitação como fallback
-    if (!phone) {
-      const promptPhone = window.prompt(
-        `O associado/devedor "${nomeCliente}" não possui telefone cadastrado.\n\nDigite o número de WhatsApp com DDD para enviar a cobrança:`, 
-        ""
-      );
-      if (!promptPhone) return;
-      phone = promptPhone;
-    }
-
-    const success = sendWhatsAppMessage(phone, msg);
-    if (!success) {
-      const phoneCorrection = window.prompt(
-        `O número "${phone}" parece inválido.\nPor favor, confirme ou digite o número correto de WhatsApp com DDD:`,
-        phone
-      );
-      if (phoneCorrection) {
-        const retrySuccess = sendWhatsAppMessage(phoneCorrection, msg);
-        if (!retrySuccess) {
-          toast.error("Número de telefone inválido.");
-        } else {
-          toast.success(`WhatsApp aberto com mensagem de cobrança para ${nomeCliente}!`);
-        }
-      }
-    } else {
-      toast.success(`WhatsApp aberto com mensagem de cobrança para ${nomeCliente}!`);
-    }
-  };
-
-  useEffect(() => {
-    if (parcelas.length > 0 && location.state?.openDetails) {
-      const p = parcelas.find((x: any) => x.id === location.state.openDetails);
-      if (p) {
-        setParcelaDetalhes(p);
-        setShowDetalhesModal(true);
-        navigate(location.pathname, { replace: true, state: {} });
-      }
-    }
-  }, [parcelas, location.state, navigate, location.pathname]);
-
-  const { visibleColumns, isVisible, setVisibleColumns } = useColumnVisibility(['devedor', 'descricao', 'vencimento', 'valor', 'status', 'acoes']);
-  const columns = [
-    { id: 'devedor', label: 'Devedor' },
-    { id: 'descricao', label: 'Descrição' },
-    { id: 'vencimento', label: 'Vencimento' },
-    { id: 'valor', label: 'Valor' },
-    { id: 'status', label: 'Status' },
-    { id: 'acoes', label: 'Ações' }
-  ];
-  const [statusFilter, setStatusFilter] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [dataInicial, setDataInicial] = useState('');
-  const [dataFinal, setDataFinal] = useState('');
-  const [formaPagamentoFilter, setFormaPagamentoFilter] = useState('');
-  const [sortField, setSortField] = useState<'devedor' | 'vencimento' | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-
-  // Modal de Baixa/Recebimento
-  const [showBaixaModal, setShowBaixaModal] = useState(false);
-  const [parcelaSelecionada, setParcelaSelecionada] = useState<ParcelaReceber | null>(null);
-  const [dataRecebimento, setDataRecebimento] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [valorRecebido, setValorRecebido] = useState<number>(0);
-  const [formaPagamentoEfetiva, setFormaPagamentoEfetiva] = useState<string>('pix');
-  const [observacaoRecebimento, setObservacaoRecebimento] = useState<string>('');
-  const [contasBancarias, setContasBancarias] = useState<ContaBancaria[]>([]);
-  const [contaBancariaId, setContaBancariaId] = useState<string>('');
-
-  // Verificação e fluxo do Lote de Caixa
-  const [modalStage, setModalStage] = useState<'form' | 'confirmacao' | 'bloqueio'>('form');
-  const [loteAberto, setLoteAberto] = useState<LoteCaixa | null>(null);
-  const [checkingLote, setCheckingLote] = useState(false);
-  const [submittingBaixa, setSubmittingBaixa] = useState(false);
-
-  // Modal de Detalhes
-  const [showDetalhesModal, setShowDetalhesModal] = useState(false);
-  const [parcelaDetalhes, setParcelaDetalhes] = useState<ParcelaReceber | null>(null);
-  const [receitaPai, setReceitaPai] = useState<Receita | null>(null);
-  const [showRelatorioModal, setShowRelatorioModal] = useState(false);
-  const [showMapaCalorModal, setShowMapaCalorModal] = useState(false);
-  /**
-   * Qual relatório gerar — a escolha é do operador, e por isso é uma pergunta explícita.
-   *
-   * Os dois respondem a perguntas diferentes sobre os MESMOS filtros: o tradicional lista
-   * as parcelas em ordem de vencimento (o que o financeiro confere), o mapa de zonas diz
-   * onde está concentrado o valor a receber (o que o cobrador usa para montar a rota).
-   * Trocar um pelo outro tiraria de alguém o relatório que ele já usa.
-   */
-  const [showEscolhaRelatorio, setShowEscolhaRelatorio] = useState(false);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      if (state.empresaSelecionada) {
-        const [contas, emp, assocs] = await Promise.all([
-          getContasBancariasAtivas(state.empresaSelecionada, state.isOnline),
-          getEmpresaById(state.empresaSelecionada, state.isOnline),
-          getAssociados(state.isOnline, state.empresaSelecionada)
-        ]);
-        setContasBancarias(contas);
-        if (emp) setEmpresaData(emp);
-        if (assocs) setAssociados(assocs);
-      } else {
-        // Sem empresa selecionada, 'all' desligava o filtro de tenant e trazia
-        // associados de todas as empresas. Mesmo tratamento das demais telas
-        // (ver ContasReceberFormPage): cai no tenant padrão, não em tudo.
-        const assocs = await getAssociados(state.isOnline, 'empresa_padrao');
-        if (assocs) setAssociados(assocs);
-      }
-      const [dataParcelas, dataReceitas] = await Promise.all([
-        getParcelasReceber(state.isOnline, state.empresaSelecionada || 'all'),
-        getReceitas(state.isOnline, state.empresaSelecionada || 'all')
-      ]);
-      setParcelas(dataParcelas);
-      setReceitas(dataReceitas);
-    } catch (error) {
-      console.error(error);
-      toast.error('Erro ao carregar parcelas a receber');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [state.isOnline, state.empresaSelecionada]);
-
-  // Conta desativada continua na lista de propósito: um lançamento antigo pode apontar para
-  // ela, e sem a opção no filtro ele viraria infiltrável. Receita não tem centro de custo —
-  // esse campo é só de despesa.
-  const { contas: contasContabeis } = usePlanoContabil();
-  const contasReceita = useMemo(
-    () => contasContabeis.filter((c) => c.tipo === 'analitica' && c.natureza === 'receita'),
-    [contasContabeis],
-  );
-
-  // A parcela não carrega a classificação — quem carrega é a receita.
-  const indiceReceitas = useMemo(() => indicePorLancamento(receitas), [receitas]);
-
-  const filteredParcelas = useMemo(() => {
-    return parcelas.filter(p => {
-      const matchesSearch = (p.devedor_nome || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (p.descricao || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (p.devedor_cpf_cnpj || '').includes(searchTerm);
-      
-      let matchesStatus = true;
-      if (statusFilter === 'pendente') {
-        matchesStatus = p.status === 'pendente';
-      } else if (statusFilter === 'vencido') {
-        matchesStatus = p.status === 'pendente' && isDateBeforeToday(p.data_vencimento);
-      } else if (statusFilter === 'vence_hoje') {
-        matchesStatus = p.status === 'pendente' && isDateToday(p.data_vencimento);
-      } else if (statusFilter === 'a_vencer') {
-        matchesStatus = p.status === 'pendente' && !isDateBeforeToday(p.data_vencimento) && !isDateToday(p.data_vencimento);
-      } else if (statusFilter === 'recebido' || statusFilter === 'pago') {
-        matchesStatus = p.status === 'recebido' || p.status === 'pago';
-      } else if (statusFilter === 'cancelado') {
-        matchesStatus = p.status === 'cancelado';
-      } else if (statusFilter) {
-        matchesStatus = p.status === statusFilter;
-      }
-
-      const matchesForma = formaPagamentoFilter ? p.forma_pagamento === formaPagamentoFilter : true;
-      
-      let matchesData = true;
-      if (dataInicial || dataFinal) {
-        const pDate = parseLocalDate(p.data_vencimento);
-        if (pDate) {
-          pDate.setHours(0, 0, 0, 0);
-          if (dataInicial) {
-            const dInit = parseLocalDate(dataInicial);
-            if (dInit) {
-              dInit.setHours(0, 0, 0, 0);
-              if (dInit > pDate) matchesData = false;
-            }
-          }
-          if (dataFinal) {
-            const dEnd = parseLocalDate(dataFinal);
-            if (dEnd) {
-              dEnd.setHours(23, 59, 59, 999);
-              if (dEnd < pDate) matchesData = false;
-            }
-          }
-        }
-      }
-      
-      const matchesClassificacao = parcelaCasaClassificacao(p.receita_id, indiceReceitas, {
-        contaContabilId: contaContabilFilter,
-      });
-
-      return matchesSearch && matchesStatus && matchesForma && matchesData && matchesClassificacao;
-    });
-  }, [parcelas, searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal,
-      indiceReceitas, contaContabilFilter]);
-
-  const sortedParcelas = useMemo(() => {
-    if (!sortField) return filteredParcelas;
-    return [...filteredParcelas].sort((a, b) => {
-      if (sortField === 'devedor') {
-        const nameA = a.devedor_nome || '';
-        const nameB = b.devedor_nome || '';
-        return sortDirection === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
-      }
-      if (sortField === 'vencimento') {
-        const dateA = parseLocalDate(a.data_vencimento)?.getTime() || 0;
-        const dateB = parseLocalDate(b.data_vencimento)?.getTime() || 0;
-        return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
-      }
-      return 0;
-    });
-  }, [filteredParcelas, sortField, sortDirection]);
-
-  const openBaixaModal = (parcela: ParcelaReceber) => {
-    setParcelaSelecionada(parcela);
-    setDataRecebimento(format(new Date(), 'yyyy-MM-dd'));
-    setValorRecebido(parcela.valor);
-    setFormaPagamentoEfetiva(parcela.forma_pagamento || 'pix');
-    setContaBancariaId(parcela.conta_bancaria_id || (contasBancarias.length > 0 ? contasBancarias[0].id : ''));
-    setObservacaoRecebimento('');
-    setLoteAberto(null);
-    setModalStage('form');
-    setShowBaixaModal(true);
-  };
-
-  const handleBaixa = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!parcelaSelecionada) return;
-
-    // `getLotesCaixa` não filtra quando recebe `'all'`: sem empresa resolvida, o
-    // super_admin receberia o lote aberto de **outra** empresa e a movimentação cairia no
-    // caixa dela. E `'tenant-default'` carimbaria um tenant que não existe.
-    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
-    if (!tenantId) {
-      toast.error(MENSAGEM_TENANT_INDEFINIDO);
-      return;
-    }
-
-    setCheckingLote(true);
-    try {
-      const activeLote = await getLoteAbertoAtivo(state.isOnline, tenantId);
-      if (!activeLote) {
-        setLoteAberto(null);
-        setModalStage('bloqueio');
-      } else {
-        setLoteAberto(activeLote);
-        setModalStage('confirmacao');
-      }
-    } catch (err) {
-      console.error('Erro ao verificar lote de caixa:', err);
-      toast.error('Erro ao verificar status do Lote de Caixa');
-    } finally {
-      setCheckingLote(false);
-    }
-  };
-
-  const handleEfetivarRecebimento = async () => {
-    if (!state.isOnline) {
-      toast.error('Baixa de recebimento bloqueada no Modo de Visualização (Offline).');
-      return;
-    }
-    if (!parcelaSelecionada || !loteAberto) return;
-
-    const tenantId = tenantDeEscrita(state.empresaSelecionada, state.user?.tenant_id);
-    if (!tenantId) {
-      toast.error(MENSAGEM_TENANT_INDEFINIDO);
-      return;
-    }
-    // Uma data só para a baixa, a movimentação e o recibo — recalcular em cada ponto daria
-    // instantes diferentes perto da meia-noite.
-    const liquidacaoISO = dataRecebimento
-      ? new Date(dataRecebimento + 'T12:00:00').toISOString()
-      : new Date().toISOString();
-    const valorEfetivo = Number(valorRecebido) || parcelaSelecionada.valor;
-
-    setSubmittingBaixa(true);
-    try {
-      await registrarRecebimento(state.isOnline, parcelaSelecionada.id, {
-        data_recebimento: liquidacaoISO,
-        valor_recebido: valorEfetivo,
-        forma_pagamento_efetivo: formaPagamentoEfetiva,
-        conta_bancaria_id: formaPagamentoEfetiva !== 'dinheiro' ? contaBancariaId : null,
-        recebido_por: state.user?.nome || 'Sistema',
-        observacao: observacaoRecebimento
-      });
-
-      // Registra a movimentação financeira diretamente no Lote de Caixa Aberto.
-      // A baixa acima já valeu: uma recusa aqui não a desfaz, e o aviso diz o que faltou.
-      let caixaLancado = true;
-      try {
-        await registrarMovimentacao(state.isOnline, {
-          tenant_id: tenantId,
-          lote_id: loteAberto.id,
-          tipo: 'entrada',
-          origem: 'contas_receber',
-          categoria: 'Receita / Mensalidade',
-          descricao: `Recebimento: ${parcelaSelecionada.devedor_nome} - ${parcelaSelecionada.descricao}`,
-          valor: valorEfetivo,
-          forma_pagamento: formaPagamentoEfetiva as any,
-          data_movimentacao: liquidacaoISO,
-          referencia_id: parcelaSelecionada.id,
-          documento_ref: `Parc. ${parcelaSelecionada.numero_parcela}/${parcelaSelecionada.total_parcelas || 1}`,
-          operador_nome: state.user?.nome || loteAberto.operador_nome || 'Sistema',
-          observacao: observacaoRecebimento
-        });
-      } catch (errCaixa: any) {
-        caixaLancado = false;
-        console.error('Movimentação de caixa recusada após a baixa da parcela:', errCaixa);
-        toast.error(avisoLiquidacaoSemCaixa('recebimento', errCaixa?.message), { duration: 12000 });
-      }
-
-      if (caixaLancado) {
-        toast.success(`Recebimento registrado com sucesso no Lote ${loteAberto.codigo_lote}!`);
-      }
-      // O comprovante abre sozinho: quem acabou de receber precisa entregá-lo na hora, e
-      // depender de o operador achar a linha e clicar em "Imprimir Recibo" é como um
-      // recebimento termina sem documento nenhum.
-      const receitaPaiDaParcela = receitas.find((r) => r.id === parcelaSelecionada.receita_id);
-      setReciboModalData(
-        montarReciboDeRecebimento(
-          parcelaSelecionada,
-          {
-            dataLiquidacaoISO: liquidacaoISO,
-            valorRecebido: valorEfetivo,
-            formaPagamento: formaPagamentoEfetiva,
-            operadorNome: state.user?.nome,
-            observacao: observacaoRecebimento,
-          },
-          {
-            nomeFallback: receitaPaiDaParcela?.associado_nome || receitaPaiDaParcela?.cliente_nome,
-            documentoFallback: receitaPaiDaParcela?.associado_cpf || receitaPaiDaParcela?.cliente_cpf_cnpj,
-            categoriaFallback: receitaPaiDaParcela?.categoria,
-            planoFallback: receitaPaiDaParcela?.associado_plano,
-          },
-        ),
-      );
-      setShowReciboModal(true);
-      setShowBaixaModal(false);
-      loadData();
-    } catch (err: any) {
-      console.error('Erro ao efetivar recebimento:', err);
-      toast.error(err?.message || 'Erro ao efetivar recebimento');
-    } finally {
-      setSubmittingBaixa(false);
-    }
-  };
-
-  const openDetalhes = async (parcela: ParcelaReceber) => {
-    setParcelaDetalhes(parcela);
-    setShowDetalhesModal(true);
-    if (parcela.receita_id) {
-      const parent = await getReceitaById(state.isOnline, parcela.receita_id);
-      setReceitaPai(parent);
-    } else {
-      setReceitaPai(null);
-    }
-  };
-
-  const handleExcluirParcela = (parcela: ParcelaReceber) => {
-    if (!canDelete(state.user, state.isOnline)) {
-      toast.error(
-        !state.isOnline
-          ? 'Exclusão bloqueada no Modo de Visualização (Offline).'
-          : 'Permissão negada. Somente usuários Administradores podem excluir registros no sistema.'
-      );
-      return;
-    }
-
-    confirm({
-      title: 'Excluir Parcela',
-      message: `Deseja realmente excluir a parcela ${parcela.numero_parcela}/${parcela.total_parcelas} de R$ ${parcela.valor.toFixed(2)} (${parcela.devedor_nome})?`,
-      confirmText: 'Excluir Parcela',
-      cancelText: 'Cancelar',
-      danger: true,
-      onConfirm: async () => {
-        try {
-          await excluirParcelaReceber(state.isOnline, parcela.id);
-          setParcelas(prev => prev.filter(p => p.id !== parcela.id));
-          toast.success('Parcela excluída com sucesso!');
-          loadData();
-        } catch (e) {
-          const detalhe = e instanceof Error ? e.message : '';
-          toast.error(detalhe || 'Erro ao excluir parcela');
-        }
-      }
-    });
-  };
-
-  const handleExcluirReceitaCompleta = (receitaId: string, descricao: string) => {
-    if (!canDelete(state.user, state.isOnline)) {
-      toast.error(
-        !state.isOnline
-          ? 'Exclusão bloqueada no Modo de Visualização (Offline).'
-          : 'Permissão negada. Somente usuários Administradores podem excluir registros no sistema.'
-      );
-      return;
-    }
-
-    confirm({
-      title: 'Excluir Receita Inteira',
-      message: `Atenção: Esta ação excluirá permanentemente a receita "${descricao}" e TODAS as suas parcelas vinculadas. Deseja continuar?`,
-      confirmText: 'Excluir Tudo',
-      cancelText: 'Cancelar',
-      danger: true,
-      onConfirm: async () => {
-        try {
-          await excluirReceita(state.isOnline, receitaId);
-          setParcelas(prev => prev.filter(p => p.receita_id !== receitaId));
-          toast.success('Receita e parcelas excluídas com sucesso!');
-          if (showDetalhesModal) setShowDetalhesModal(false);
-          loadData();
-        } catch (e) {
-          toast.error('Erro ao excluir receita');
-        }
-      }
-    });
-  };
+  const {
+    navigate,
+    state,
+    parcelas,
+    receitas,
+    associados,
+    empresaData,
+    loading,
+    showReciboModal,
+    setShowReciboModal,
+    reciboModalData,
+    searchTerm,
+    setSearchTerm,
+    contaContabilFilter,
+    setContaContabilFilter,
+    getDevedorContato,
+    handleWhatsAppCobrança,
+    isVisible,
+    statusFilter,
+    setStatusFilter,
+    showFilters,
+    setShowFilters,
+    dataInicial,
+    setDataInicial,
+    dataFinal,
+    setDataFinal,
+    formaPagamentoFilter,
+    setFormaPagamentoFilter,
+    sortField,
+    setSortField,
+    sortDirection,
+    setSortDirection,
+    showBaixaModal,
+    setShowBaixaModal,
+    parcelaSelecionada,
+    dataRecebimento,
+    setDataRecebimento,
+    valorRecebido,
+    setValorRecebido,
+    formaPagamentoEfetiva,
+    setFormaPagamentoEfetiva,
+    observacaoRecebimento,
+    setObservacaoRecebimento,
+    contasBancarias,
+    contaBancariaId,
+    setContaBancariaId,
+    modalStage,
+    setModalStage,
+    loteAberto,
+    checkingLote,
+    submittingBaixa,
+    showDetalhesModal,
+    setShowDetalhesModal,
+    parcelaDetalhes,
+    receitaPai,
+    showRelatorioModal,
+    setShowRelatorioModal,
+    showMapaCalorModal,
+    setShowMapaCalorModal,
+    showEscolhaRelatorio,
+    setShowEscolhaRelatorio,
+    contasReceita,
+    sortedParcelas,
+    openBaixaModal,
+    handleBaixa,
+    handleEfetivarRecebimento,
+    openDetalhes,
+    handleExcluirParcela,
+    handleExcluirReceitaCompleta,
+    handleImprimirRecibo,
+  } = useContasReceber();
 
   const getStatusBadge = (status: string, vencimento: string) => {
     if (status === 'recebido' || status === 'pago') return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-500">Recebido</span>;
@@ -569,108 +107,17 @@ export const ContasReceberPage: React.FC = () => {
     return <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500">Pendente</span>;
   };
 
-  // Reimpressão do comprovante de uma parcela já recebida. Mesma função pura da baixa —
-  // as duas telas montavam este objeto à mão, com fallbacks diferentes entre si.
-  const handleImprimirRecibo = (parcela: ParcelaReceber) => {
-    const receitaPai = receitas.find(r => r.id === parcela.receita_id);
-    setReciboModalData(
-      montarReciboDeRecebimento(
-        parcela,
-        {},
-        {
-          nomeFallback: receitaPai?.associado_nome || receitaPai?.cliente_nome,
-          documentoFallback: receitaPai?.associado_cpf || receitaPai?.cliente_cpf_cnpj,
-          categoriaFallback: receitaPai?.categoria,
-          planoFallback: receitaPai?.associado_plano,
-          operadorFallback: state.user?.nome,
-        },
-      ),
-    );
-    setShowReciboModal(true);
-  };
-
   return (
     <>
     <div className={`p-6 max-w-7xl mx-auto flex flex-col h-full overflow-hidden`}>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 print:hidden">
-        <div>
-          <h1 className="text-2xl font-bold text-text-base">Contas a Receber</h1>
-          <p className="text-text-subtle mt-1">Gestão de recebimentos e mensalidades</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowEscolhaRelatorio((aberto) => !aberto)}
-              className="flex items-center gap-2 px-4 py-2 bg-bg-surface border border-border-default text-text-subtle text-sm font-semibold rounded-xl hover:text-text-base hover:bg-bg-hover transition-colors shadow-sm cursor-pointer"
-              title="Escolher e gerar um relatório com os filtros aplicados"
-            >
-              <Printer className="w-4 h-4 text-blue-500" />
-              <span>Relatórios</span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${showEscolhaRelatorio ? 'rotate-180' : ''}`} />
-            </button>
-
-            {showEscolhaRelatorio && (
-              <>
-                {/* Fecha ao clicar fora, sem prender o menu na tela. */}
-                <button
-                  type="button"
-                  aria-label="Fechar seleção de relatório"
-                  className="fixed inset-0 z-40 cursor-default"
-                  onClick={() => setShowEscolhaRelatorio(false)}
-                />
-                <div className="absolute right-0 mt-2 w-80 z-50 bg-bg-subtle border border-border-default rounded-2xl shadow-2xl overflow-hidden">
-                  <p className="px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-wide text-text-subtle">
-                    Gerar com os filtros aplicados
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowEscolhaRelatorio(false);
-                      setShowRelatorioModal(true);
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-bg-hover transition-colors flex gap-3 items-start"
-                  >
-                    <FileText className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                    <span>
-                      <span className="block text-sm font-semibold text-text-base">Relação de parcelas</span>
-                      <span className="block text-[11px] text-text-subtle">
-                        Lista detalhada por vencimento, com devedor, endereço e situação.
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowEscolhaRelatorio(false);
-                      setShowMapaCalorModal(true);
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-bg-hover transition-colors flex gap-3 items-start border-t border-border-default"
-                  >
-                    <MapPin className="w-4 h-4 text-[#5598e7] mt-0.5 shrink-0" />
-                    <span>
-                      <span className="block text-sm font-semibold text-text-base">Mapa de zonas de cobrança</span>
-                      <span className="block text-[11px] text-text-subtle">
-                        Municípios e bairros por concentração de valor a receber, com roteiro sugerido.
-                      </span>
-                    </span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-          <button 
-            type="button"
-            disabled={!state.isOnline}
-            onClick={() => navigate('/financeiro/contas-a-receber/nova')} 
-            title={!state.isOnline ? "Inclusão bloqueada no Modo Offline" : "Nova Receita"}
-            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-medium transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Plus className="w-5 h-5" />
-            Nova Receita
-          </button>
-        </div>
-      </div>
+      <ContasReceberCabecalho
+        navigate={navigate}
+        setShowEscolhaRelatorio={setShowEscolhaRelatorio}
+        setShowMapaCalorModal={setShowMapaCalorModal}
+        setShowRelatorioModal={setShowRelatorioModal}
+        showEscolhaRelatorio={showEscolhaRelatorio}
+        state={state}
+      />
 
       {/* PAINEL DE INDICADORES FINANCEIROS PROFISSIONAIS */}
       <IndicadoresContasReceber 
@@ -682,848 +129,86 @@ export const ContasReceberPage: React.FC = () => {
       />
 
       <div className="bg-bg-subtle border border-border-default rounded-2xl flex-1 flex flex-col overflow-hidden print:hidden">
-        <div className="p-4 border-b border-border-default">
-          <div className="p-4 border-b border-border-default">
-          <AdvancedFilterBar
-            pageKey="contas-receber"
-            showFilters={showFilters}
-            setShowFilters={setShowFilters}
-            currentFilters={{ searchTerm, statusFilter, formaPagamentoFilter, dataInicial, dataFinal, contaContabilFilter }}
-            onApplyFilters={(filters) => {
-              setSearchTerm(filters.searchTerm || '');
-              setStatusFilter(filters.statusFilter || '');
-              setFormaPagamentoFilter(filters.formaPagamentoFilter || '');
-              setDataInicial(filters.dataInicial || '');
-              setDataFinal(filters.dataFinal || '');
-              setContaContabilFilter(filters.contaContabilFilter || '');
-            }}
-            onClearFilters={() => {
-              setSearchTerm('');
-              setStatusFilter('');
-              setFormaPagamentoFilter('');
-              setDataInicial('');
-              setDataFinal('');
-              setContaContabilFilter('');
-            }}
-          >
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-subtle">Busca Rápida</label>
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle" />
-                <input
-                  type="text"
-                  placeholder="Nome, documento ou descrição..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
-                />
-              </div>
-            </div>
-            
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-subtle">Status</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
-              >
-                <option value="">Todos os Status</option>
-                <option value="pendente">Pendente</option>
-                <option value="recebido">Recebido</option>
-                <option value="cancelado">Cancelado</option>
-              </select>
-            </div>
-            
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-subtle">Forma de Recebimento</label>
-              <select
-                value={formaPagamentoFilter}
-                onChange={(e) => setFormaPagamentoFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
-              >
-                <option value="">Todas</option>
-                <option value="pix">PIX</option>                <option value="dinheiro">Dinheiro</option>                <option value="cartao_credito">Cartão de Crédito</option>                <option value="cartao_debito">Cartão de Débito</option>                <option value="boleto">Boleto</option>                <option value="transferencia">Transferência</option>              </select>
-            </div>
-            
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-subtle">Conta Contábil</label>
-              <select
-                value={contaContabilFilter}
-                onChange={(e) => setContaContabilFilter(e.target.value)}
-                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
-              >
-                <option value="">Todas as Contas</option>
-                {contasReceita.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.codigo} — {c.nome}{c.ativo ? '' : ' (desativada)'}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <ContasReceberFiltros
+          contaContabilFilter={contaContabilFilter}
+          contasReceita={contasReceita}
+          dataFinal={dataFinal}
+          dataInicial={dataInicial}
+          formaPagamentoFilter={formaPagamentoFilter}
+          searchTerm={searchTerm}
+          setContaContabilFilter={setContaContabilFilter}
+          setDataFinal={setDataFinal}
+          setDataInicial={setDataInicial}
+          setFormaPagamentoFilter={setFormaPagamentoFilter}
+          setSearchTerm={setSearchTerm}
+          setShowFilters={setShowFilters}
+          setStatusFilter={setStatusFilter}
+          showFilters={showFilters}
+          statusFilter={statusFilter}
+        />
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-subtle">Período Vencimento (Inicial)</label>
-              <input
-                type="date"
-                value={dataInicial}
-                onChange={(e) => setDataInicial(e.target.value)}
-                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
-              />
-            </div>
-            
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-subtle">Período Vencimento (Final)</label>
-              <input
-                type="date"
-                value={dataFinal}
-                onChange={(e) => setDataFinal(e.target.value)}
-                className="w-full px-4 py-2 bg-bg-surface border border-border-default rounded-lg text-text-base focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6]"
-              />
-            </div>
-          </AdvancedFilterBar>
-        </div>
-        </div>
-
-        <div className="flex-1 overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-bg-surface border-b border-border-default text-xs uppercase tracking-wider text-text-subtle font-semibold">
-                <th 
-                  className="px-6 py-4 cursor-pointer hover:bg-bg-hover transition-colors"
-                  onClick={() => {
-                    if (sortField === 'devedor') {
-                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                    } else {
-                      setSortField('devedor');
-                      setSortDirection('asc');
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    Devedor
-                    {sortField === 'devedor' && (
-                      sortDirection === 'asc' ? <ChevronUp className="w-4 h-4 text-blue-400" /> : <ChevronDown className="w-4 h-4 text-blue-400" />
-                    )}
-                  </div>
-                </th>
-                {isVisible('descricao') && <th className="px-6 py-4">Descrição</th>}
-                <th 
-                  className="px-6 py-4 cursor-pointer hover:bg-bg-hover transition-colors"
-                  onClick={() => {
-                    if (sortField === 'vencimento') {
-                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                    } else {
-                      setSortField('vencimento');
-                      setSortDirection('asc');
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    Vencimento
-                    {sortField === 'vencimento' && (
-                      sortDirection === 'asc' ? <ChevronUp className="w-4 h-4 text-blue-400" /> : <ChevronDown className="w-4 h-4 text-blue-400" />
-                    )}
-                  </div>
-                </th>
-                {isVisible('valor') && <th className="px-6 py-4 text-right">Valor</th>}
-                {isVisible('status') && <th className="px-6 py-4">Status</th>}
-                {isVisible('acoes') && <th className="px-6 py-4 text-center">Ações</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#475569]">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-text-subtle">
-                    <div className="w-8 h-8 border-2 border-[#3B82F6] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    Carregando parcelas...
-                  </td>
-                </tr>
-              ) : sortedParcelas.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-text-subtle">
-                    Nenhuma parcela encontrada.
-                  </td>
-                </tr>
-              ) : (
-                sortedParcelas.map((parcela) => (
-                  <tr key={parcela.id} className="hover:bg-[#1A1D36] transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-text-base">{parcela.devedor_nome || 'Não informado'}</div>
-                      <div className="text-sm text-text-subtle">{(parcela.tipo_devedor || 'associado').replace('_', ' ').toUpperCase()}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-text-base">{parcela.descricao}</div>
-                      <div className="text-sm text-text-subtle">Parc. {parcela.numero_parcela}/{parcela.total_parcelas || 1}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {formatLocalDate(parcela.data_vencimento)}
-                    </td>
-                    <td className="px-6 py-4 text-right font-medium text-text-base">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela.valor)}
-                    </td>
-                    <td className="px-6 py-4">
-                      {getStatusBadge(parcela.status, parcela.data_vencimento)}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        
-                        {/* WhatsApp Cobrança */}
-                        <button
-                          type="button"
-                          onClick={() => handleWhatsAppCobrança(parcela)}
-                          title={
-                            (() => {
-                              const contato = getDevedorContato(parcela);
-                              return contato.telefone 
-                                ? `Enviar Cobrança via WhatsApp (${contato.telefone})` 
-                                : 'Enviar Cobrança via WhatsApp (Sem telefone cadastrado)';
-                            })()
-                          }
-                          className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 transition-colors"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </button>
-                        
-                        {/* Ver Detalhes */}
-                        <button
-                          type="button"
-                          onClick={() => openDetalhes(parcela)}
-                          title="Ver Detalhes"
-                          className="p-1.5 rounded-lg bg-bg-surface hover:bg-bg-hover text-text-subtle hover:text-text-base border border-border-default transition-colors"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-
-                        {/* Parcela liquidada não mostra editar nem excluir. Antes os
-                            dois ficavam `disabled` — e só olhavam 'recebido', então uma
-                            parcela 'pago' seguia editável e excluível aqui. */}
-                        {!parcelaLiquidada(parcela.status) && (
-                          <>
-                            {/* Editar */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (!canEditFinanceiro(state.user, state.isOnline)) {
-                                  alertPermissionRestriction('Financeiro (Contas a Receber)', 'editar parcelas ou receitas existentes');
-                                  return;
-                                }
-                                navigate(`/financeiro/contas-a-receber/${parcela.receita_id || parcela.id}/editar?parcela=${parcela.id}`);
-                              }}
-                              title="Editar Receita"
-                              className="p-1.5 rounded-lg transition-colors bg-blue-500/10 hover:bg-blue-500/20 text-blue-400"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-
-                            {/* Excluir Parcela */}
-                            <button
-                              type="button"
-                              onClick={() => handleExcluirParcela(parcela)}
-                              title="Excluir Parcela"
-                              className="p-1.5 rounded-lg transition-colors bg-rose-500/10 hover:bg-rose-500/20 text-rose-400"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                        {parcelaLiquidada(parcela.status) && (
-                          <span title={MENSAGEM_PARCELA_LIQUIDADA} className="p-1.5 text-text-subtle/60">
-                            <Lock className="w-4 h-4" />
-                          </span>
-                        )}
-
-                        {/* Botão Receber */}
-                        {(parcela.status === 'pendente' || parcela.status === 'atrasado') && (
-                          <button
-                            type="button"
-                            onClick={() => openBaixaModal(parcela)}
-                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors ml-1"
-                          >
-                            <DollarSign className="w-3.5 h-3.5" />
-                            Receber
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ContasReceberTabela
+          getDevedorContato={getDevedorContato}
+          getStatusBadge={getStatusBadge}
+          handleExcluirParcela={handleExcluirParcela}
+          handleWhatsAppCobrança={handleWhatsAppCobrança}
+          isVisible={isVisible}
+          loading={loading}
+          navigate={navigate}
+          openBaixaModal={openBaixaModal}
+          openDetalhes={openDetalhes}
+          setSortDirection={setSortDirection}
+          setSortField={setSortField}
+          sortDirection={sortDirection}
+          sortField={sortField}
+          sortedParcelas={sortedParcelas}
+          state={state}
+        />
       </div>
     </div>
 
       {/* MODAL DE BAIXA / RECEBIMENTO */}
-      {showBaixaModal && parcelaSelecionada && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-bg-subtle border border-border-default rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            
-            {/* ETAPA 1: FORMULÁRIO DE RECEBIMENTO */}
-            {modalStage === 'form' && (
-              <>
-                <div className="flex items-center justify-between p-6 border-b border-border-default">
-                  <h3 className="text-xl font-bold text-text-base flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-emerald-500" />
-                    Registrar Recebimento
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowBaixaModal(false)}
-                    className="text-text-subtle hover:text-text-base transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                
-                <form onSubmit={handleBaixa} className="p-6 space-y-4">
-                  <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-1">
-                    <p className="text-xs text-text-subtle uppercase tracking-wider">Parcela {parcelaSelecionada.numero_parcela}/{parcelaSelecionada.total_parcelas || 1}</p>
-                    <p className="text-lg font-bold text-text-base">{parcelaSelecionada.descricao}</p>
-                    <p className="text-sm text-text-subtle">Devedor: <span className="text-text-base font-medium">{parcelaSelecionada.devedor_nome}</span></p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-text-subtle mb-1">Data do Recebimento *</label>
-                    <input
-                      type="date"
-                      value={dataRecebimento}
-                      onChange={(e) => setDataRecebimento(e.target.value)}
-                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-text-subtle mb-1">Valor Recebido (R$) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={valorRecebido}
-                      onChange={(e) => setValorRecebido(Number(e.target.value))}
-                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none font-bold"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-text-subtle mb-1">Forma de Pagamento Efetiva *</label>
-                    <select
-                      value={formaPagamentoEfetiva}
-                      onChange={(e) => setFormaPagamentoEfetiva(e.target.value)}
-                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
-                    >
-                      <option value="pix">PIX</option>
-                      <option value="boleto">Boleto</option>
-                      <option value="cartao_credito">Cartão de Crédito</option>
-                      <option value="cartao_debito">Cartão de Débito</option>
-                      <option value="transferencia">Transferência</option>
-                      <option value="dinheiro">Dinheiro</option>
-                      <option value="cheque">Cheque</option>
-                      <option value="outro">Outro</option>
-                    </select>
-                  </div>
-
-                  {formaPagamentoEfetiva !== 'dinheiro' && (
-                  <div>
-                    <label className="block text-sm font-medium text-text-subtle mb-1">Conta Bancária Referencial *</label>
-                    <select
-                      value={contaBancariaId}
-                      onChange={(e) => setContaBancariaId(e.target.value)}
-                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none"
-                    >
-                      {contasBancarias.map(conta => (
-                        <option key={conta.id} value={conta.id}>{conta.nome} ({conta.banco})</option>
-                      ))}
-                    </select>
-                  </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-text-subtle mb-1">Observações do Recebimento</label>
-                    <textarea
-                      rows={2}
-                      value={observacaoRecebimento}
-                      onChange={(e) => setObservacaoRecebimento(e.target.value)}
-                      placeholder="Ex: Recebido em dinheiro no balcão"
-                      className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2.5 text-text-base focus:border-[#3B82F6] outline-none text-sm"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-4 border-t border-border-default">
-                    <button
-                      type="button"
-                      onClick={() => setShowBaixaModal(false)}
-                      className="px-5 py-2.5 rounded-xl text-text-muted hover:text-text-base hover:bg-bg-hover transition-colors font-medium"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={checkingLote}
-                      className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-medium transition-colors shadow-lg shadow-emerald-500/20 flex items-center gap-2"
-                    >
-                      {checkingLote ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          Verificando Caixa...
-                        </>
-                      ) : (
-                        'Confirmar Recebimento'
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </>
-            )}
-
-            {/* ETAPA 2: TELA DE BLOQUEIO (SEM LOTE DE CAIXA ABERTO) */}
-            {modalStage === 'bloqueio' && (
-              <div className="p-6 space-y-6">
-                <div className="flex items-start justify-between border-b border-border-default pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 shrink-0">
-                      <Lock className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-text-base">Operação Bloqueada</h3>
-                      <p className="text-xs text-rose-400 font-semibold">Nenhum Lote de Caixa Aberto Encontrado</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowBaixaModal(false)}
-                    className="text-text-subtle hover:text-text-base transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl space-y-2">
-                    <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
-                      <AlertTriangle className="w-5 h-5 shrink-0" />
-                      Não é possível registrar o recebimento
-                    </div>
-                    <p className="text-sm text-text-subtle leading-relaxed">
-                      Para efetivar este registro de recebimento, o sistema exige que exista um <strong>Lote de Caixa aberto</strong> ativo para receber a movimentação financeira.
-                    </p>
-                  </div>
-
-                  <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-2">
-                    <p className="text-sm font-semibold text-text-base flex items-center gap-2">
-                      <Wallet className="w-4 h-4 text-[#3B82F6]" />
-                      Orientação ao Usuário:
-                    </p>
-                    <p className="text-xs text-text-subtle leading-relaxed">
-                      Por favor, acesse o módulo de <strong>Caixas / Lotes</strong> e realize a abertura de um novo lote de caixa antes de realizar este recebimento.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-default">
-                  <button
-                    type="button"
-                    onClick={() => setModalStage('form')}
-                    className="px-5 py-2.5 rounded-xl text-text-muted hover:text-text-base hover:bg-bg-hover transition-colors font-medium text-sm"
-                  >
-                    Voltar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowBaixaModal(false);
-                      navigate('/financeiro/caixas');
-                    }}
-                    className="px-5 py-2.5 rounded-xl bg-[#3B82F6] hover:bg-blue-600 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-500/20 flex items-center gap-2"
-                  >
-                    <Wallet className="w-4 h-4" />
-                    Abrir Lote de Caixa
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ETAPA 3: TELA DE CONFIRMAÇÃO DE REGISTRO NO LOTE */}
-            {modalStage === 'confirmacao' && loteAberto && (
-              <div className="p-6 space-y-5">
-                <div className="flex items-center justify-between border-b border-border-default pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
-                      <CheckCircle2 className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-text-base">Confirmação de Registro no Lote</h3>
-                      <p className="text-xs text-text-subtle">Confira as informações do Lote de Caixa antes de efetivar</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowBaixaModal(false)}
-                    className="text-text-subtle hover:text-text-base transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* INFO DO LOTE DE CAIXA */}
-                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1.5">
-                      <Wallet className="w-4 h-4" /> Lote de Caixa Destino
-                    </span>
-                    <span className="px-2.5 py-1 text-xs font-bold bg-emerald-500/20 text-emerald-300 rounded-lg border border-emerald-500/30">
-                      {loteAberto.codigo_lote}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-xs text-text-subtle pt-2 border-t border-emerald-500/20">
-                    <div>
-                      <span className="block text-text-muted">Terminal / Caixa:</span>
-                      <strong className="text-text-base font-semibold">{loteAberto.terminal_caixa}</strong>
-                    </div>
-                    <div>
-                      <span className="block text-text-muted">Operador Responsável:</span>
-                      <strong className="text-text-base font-semibold">{loteAberto.operador_nome}</strong>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="block text-text-muted">Data/Hora de Abertura:</span>
-                      <strong className="text-text-base font-semibold">
-                        {format(new Date(loteAberto.data_abertura), "dd/MM/yyyy 'às' HH:mm")}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
-
-                {/* RESUMO DA TRANSAÇÃO */}
-                <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-2.5 text-sm">
-                  <p className="text-xs text-text-subtle uppercase tracking-wider font-semibold">Resumo do Recebimento</p>
-                  
-                  <div className="flex justify-between items-center py-1 border-b border-border-default">
-                    <span className="text-text-subtle text-xs">Devedor:</span>
-                    <span className="font-semibold text-text-base text-xs">{parcelaSelecionada.devedor_nome}</span>
-                  </div>
-
-                  <div className="flex justify-between items-center py-1 border-b border-border-default">
-                    <span className="text-text-subtle text-xs">Descrição / Parcela:</span>
-                    <span className="font-medium text-text-base text-xs">
-                      {parcelaSelecionada.descricao} ({parcelaSelecionada.numero_parcela}/{parcelaSelecionada.total_parcelas || 1})
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center py-1 border-b border-border-default">
-                    <span className="text-text-subtle text-xs">Forma de Pagamento:</span>
-                    <span className="uppercase font-bold text-xs text-[#3B82F6] bg-blue-500/10 px-2 py-0.5 rounded">
-                      {formaPagamentoEfetiva}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center pt-2">
-                    <span className="text-text-subtle font-medium text-sm">Valor a Efetivar:</span>
-                    <span className="text-xl font-bold text-emerald-400">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorRecebido)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-default">
-                  <button
-                    type="button"
-                    onClick={() => setModalStage('form')}
-                    className="px-5 py-2.5 rounded-xl text-text-muted hover:text-text-base hover:bg-bg-hover transition-colors font-medium text-sm"
-                  >
-                    Ajustar Dados
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleEfetivarRecebimento}
-                    disabled={submittingBaixa}
-                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-medium text-sm transition-colors shadow-lg shadow-emerald-500/20 flex items-center gap-2"
-                  >
-                    {submittingBaixa ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Efetivando...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        Confirmar e Registrar no Lote
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
+      <ContasReceberBaixaModal
+        checkingLote={checkingLote}
+        contaBancariaId={contaBancariaId}
+        contasBancarias={contasBancarias}
+        dataRecebimento={dataRecebimento}
+        formaPagamentoEfetiva={formaPagamentoEfetiva}
+        handleBaixa={handleBaixa}
+        handleEfetivarRecebimento={handleEfetivarRecebimento}
+        loteAberto={loteAberto}
+        modalStage={modalStage}
+        navigate={navigate}
+        observacaoRecebimento={observacaoRecebimento}
+        parcelaSelecionada={parcelaSelecionada}
+        setContaBancariaId={setContaBancariaId}
+        setDataRecebimento={setDataRecebimento}
+        setFormaPagamentoEfetiva={setFormaPagamentoEfetiva}
+        setModalStage={setModalStage}
+        setObservacaoRecebimento={setObservacaoRecebimento}
+        setShowBaixaModal={setShowBaixaModal}
+        setValorRecebido={setValorRecebido}
+        showBaixaModal={showBaixaModal}
+        submittingBaixa={submittingBaixa}
+        valorRecebido={valorRecebido}
+      />
 
       {/* MODAL DE DETALHES DO REGISTRO */}
-      {showDetalhesModal && parcelaDetalhes && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm print:static print:bg-transparent print:p-0 print:block">
-          <div className="bg-bg-subtle border border-border-default rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] print:max-w-none print:max-h-none print:border-none print:shadow-none print:rounded-none print:bg-transparent">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-border-default bg-bg-surface/50 print:hidden">
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-xl bg-blue-500/10 text-blue-400">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-text-base">Detalhes da Contas a Receber</h3>
-                  <p className="text-sm text-text-subtle">Parcela {parcelaDetalhes.numero_parcela} de {parcelaDetalhes.total_parcelas || 1}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDetalhesModal(false)}
-                className="p-2 rounded-xl text-text-subtle hover:text-text-base hover:bg-bg-hover transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Content Body */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 print:hidden">
-              
-              {/* Devedor Info */}
-              <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-3">
-                <div className="flex items-center gap-2 text-text-subtle text-xs font-semibold uppercase tracking-wider border-b border-border-default pb-2">
-                  <User className="w-4 h-4 text-blue-400" />
-                  Informações do Devedor
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-text-subtle block">Nome / Razão Social</span>
-                    <span className="font-semibold text-text-base">{parcelaDetalhes.devedor_nome || 'Não informado'}</span>
-                  </div>
-                  <div>
-                    <span className="text-text-subtle block">CPF / CNPJ</span>
-                    <span className="font-semibold text-text-base">{parcelaDetalhes.devedor_cpf_cnpj || 'Não informado'}</span>
-                  </div>
-                  <div>
-                    <span className="text-text-subtle block">Tipo de Devedor</span>
-                    <span className="font-semibold text-text-base capitalize">{(parcelaDetalhes.tipo_devedor || 'associado').replace('_', ' ')}</span>
-                  </div>
-                  <div>
-                    <span className="text-text-subtle block">Telefone / WhatsApp</span>
-                    <span className="font-semibold text-text-base">
-                      {(() => {
-                        const contato = getDevedorContato(parcelaDetalhes);
-                        return contato.telefone ? (
-                          <span className="font-mono text-emerald-500 font-medium">{contato.telefone}</span>
-                        ) : (
-                          <span className="text-text-subtle italic text-xs">Não cadastrado</span>
-                        );
-                      })()}
-                    </span>
-                  </div>
-                  {receitaPai?.associado_plano && (
-                    <div className="md:col-span-2">
-                      <span className="text-text-subtle block">Plano do Associado</span>
-                      <span className="font-semibold text-emerald-400">{receitaPai.associado_plano}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Parcela & Receita Info */}
-              <div className="bg-bg-surface p-4 rounded-xl border border-border-default space-y-3">
-                <div className="flex items-center gap-2 text-text-subtle text-xs font-semibold uppercase tracking-wider border-b border-border-default pb-2">
-                  <CreditCard className="w-4 h-4 text-emerald-400" />
-                  Dados da Parcela & Cobrança
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-text-subtle block">Descrição</span>
-                    <span className="font-semibold text-text-base">{parcelaDetalhes.descricao}</span>
-                  </div>
-                  <div>
-                    <span className="text-text-subtle block">Categoria</span>
-                    <span className="font-semibold text-text-base capitalize">{receitaPai?.categoria || 'Não informada'}</span>
-                  </div>
-                  <div>
-                    <span className="text-text-subtle block">Valor da Parcela</span>
-                    <span className="text-lg font-bold text-emerald-400">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcelaDetalhes.valor)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-text-subtle block">Status</span>
-                    <div className="mt-1">{getStatusBadge(parcelaDetalhes.status, parcelaDetalhes.data_vencimento)}</div>
-                  </div>
-                  <div>
-                    <span className="text-text-subtle block">Data de Vencimento</span>
-                    <span className="font-semibold text-text-base">
-                      {formatLocalDate(parcelaDetalhes.data_vencimento)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-text-subtle block">Forma de Pagamento Prevista</span>
-                    <span className="font-semibold text-text-base uppercase">{parcelaDetalhes.forma_pagamento || 'pix'}</span>
-                  </div>
-                  {receitaPai && (
-                    <div>
-                      <span className="text-text-subtle block">Valor Total da Receita</span>
-                      <span className="font-semibold text-text-base">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(receitaPai.valor_total)} ({receitaPai.qtd_parcelas}x)
-                      </span>
-                    </div>
-                  )}
-                  {receitaPai?.data_emissao && (
-                    <div>
-                      <span className="text-text-subtle block">Data de Emissão</span>
-                      <span className="font-semibold text-text-base">
-                        {formatLocalDate(receitaPai.data_emissao)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Status do Recebimento (Se Recebido) */}
-              {parcelaDetalhes.status === 'recebido' && (
-                <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20 space-y-3">
-                  <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold uppercase tracking-wider border-b border-emerald-500/20 pb-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Informações do Recebimento Efetivado
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-text-subtle block">Data do Recebimento</span>
-                      <span className="font-semibold text-text-base">
-                        {formatLocalDateTime(parcelaDetalhes.data_recebimento)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-text-subtle block">Valor Recebido</span>
-                      <span className="font-bold text-emerald-400">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcelaDetalhes.valor_recebido || parcelaDetalhes.valor)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-text-subtle block">Forma Efetiva</span>
-                      <span className="font-semibold text-text-base uppercase">{parcelaDetalhes.forma_pagamento_efetivo || 'pix'}</span>
-                    </div>
-                    <div>
-                      <span className="text-text-subtle block">Recebido Por</span>
-                      <span className="font-semibold text-text-base">{parcelaDetalhes.recebido_por || 'Sistema'}</span>
-                    </div>
-                    {parcelaDetalhes.observacao_recebimento && (
-                      <div className="md:col-span-2">
-                        <span className="text-text-subtle block">Observação do Recebimento</span>
-                        <span className="font-medium text-text-base">{parcelaDetalhes.observacao_recebimento}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Observações da receita */}
-              {receitaPai?.observacoes && (
-                <div className="bg-bg-surface p-4 rounded-xl border border-border-default">
-                  <span className="text-text-subtle text-xs font-semibold uppercase tracking-wider block mb-1">Observações da Receita</span>
-                  <p className="text-sm text-text-base">{receitaPai.observacoes}</p>
-                </div>
-              )}
-
-            </div>
-
-            {/* Modal Footer Actions */}
-            <div className="p-6 border-t border-border-default bg-bg-surface/50 flex flex-wrap items-center justify-between gap-3 print:hidden">
-              <div className="flex items-center gap-2">
-                {!parcelaLiquidada(parcelaDetalhes.status) && (
-                  <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!canEditFinanceiro(state.user, state.isOnline)) {
-                      alertPermissionRestriction('Financeiro (Contas a Receber)', 'editar receitas ou parcelas existentes');
-                      return;
-                    }
-                    setShowDetalhesModal(false);
-                    navigate(`/financeiro/contas-a-receber/${parcelaDetalhes.receita_id || parcelaDetalhes.id}/editar?parcela=${parcelaDetalhes.id}`);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors bg-blue-500/10 hover:bg-blue-500/20 text-blue-400"
-                >
-                  <Pencil className="w-4 h-4" />
-                  Editar Receita
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (parcelaDetalhes.receita_id) {
-                      handleExcluirReceitaCompleta(parcelaDetalhes.receita_id, parcelaDetalhes.descricao || '');
-                    } else {
-                      handleExcluirParcela(parcelaDetalhes);
-                      setShowDetalhesModal(false);
-                    }
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-colors bg-rose-500/10 hover:bg-rose-500/20 text-rose-400"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Excluir Receita
-                </button>
-                  </>
-                )}
-                {parcelaLiquidada(parcelaDetalhes.status) && (
-                  <p className="text-xs text-text-subtle flex items-center gap-2">
-                    <Lock className="w-4 h-4 shrink-0" />
-                    {MENSAGEM_PARCELA_LIQUIDADA}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {parcelaDetalhes.status !== 'recebido' && parcelaDetalhes.status !== 'cancelado' && (
-                  <button
-                    type="button"
-                    onClick={() => handleWhatsAppCobrança(parcelaDetalhes)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 font-medium text-sm transition-colors"
-                    title="Enviar Cobrança via WhatsApp"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span>WhatsApp</span>
-                  </button>
-                )}
-                {(parcelaDetalhes.status === 'pendente' || parcelaDetalhes.status === 'atrasado') && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDetalhesModal(false);
-                      openBaixaModal(parcelaDetalhes);
-                    }}
-                    className="flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm transition-colors"
-                  >
-                    <DollarSign className="w-4 h-4" />
-                    Receber
-                  </button>
-                )}
-                {parcelaDetalhes.status === 'recebido' && (
-                  <button
-                    type="button"
-                    onClick={() => handleImprimirRecibo(parcelaDetalhes)}
-                    className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-500/20"
-                  >
-                    <Printer className="w-4 h-4" />
-                    Imprimir Recibo
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowDetalhesModal(false)}
-                  className="px-5 py-2 rounded-xl bg-bg-surface border border-border-default text-text-muted hover:text-text-base transition-colors font-medium text-sm"
-                >
-                  Fechar
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
+      <ContasReceberDetalhesModal
+        getDevedorContato={getDevedorContato}
+        getStatusBadge={getStatusBadge}
+        handleExcluirParcela={handleExcluirParcela}
+        handleExcluirReceitaCompleta={handleExcluirReceitaCompleta}
+        handleImprimirRecibo={handleImprimirRecibo}
+        handleWhatsAppCobrança={handleWhatsAppCobrança}
+        navigate={navigate}
+        openBaixaModal={openBaixaModal}
+        parcelaDetalhes={parcelaDetalhes}
+        receitaPai={receitaPai}
+        setShowDetalhesModal={setShowDetalhesModal}
+        showDetalhesModal={showDetalhesModal}
+        state={state}
+      />
 
       {/* MODAL DE RELATÓRIO PROFISSIONAL (PREVIEW / VISUALIZADOR) */}
       <RelatorioMapaCalorModal
@@ -1571,4 +256,3 @@ export const ContasReceberPage: React.FC = () => {
     </>
   );
 };
-
