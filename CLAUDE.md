@@ -2328,16 +2328,18 @@ cegas num arquivo sem cobertura de teste.
 
 ## "God components" conhecidos
 
-**Estado medido em 21/09/2026** — a lista abaixo já esteve desatualizada em dois dos quatro
+**Estado medido em 22/09/2026** — a lista abaixo já esteve desatualizada em dois dos quatro
 nomes, e o número é o que decide, não a memória:
 
 | Arquivo | Linhas hoje | Situação |
 |---|---|---|
-| `components/associados/AssociadoFormModal.tsx` | 2009 | **o maior do projeto, e nunca esteve nesta lista** |
 | `services/financeiroService.ts` | 1913 | não decomposto **de propósito** — ver a nota abaixo |
-| `components/documentos/VisualizadorDocumentoPadraoModal.tsx` | 1912 | nunca esteve na lista |
-| `pages/ContasReceberPage.tsx` | 1574 | nunca esteve na lista |
+| `components/documentos/VisualizadorDocumentoPadraoModal.tsx` | 1912 | **o maior do projeto hoje**, nunca decomposto |
+| `pages/ContasReceberPage.tsx` | 1574 | nunca decomposto |
+| `pages/RequisicoesPage.tsx` | 1522 | nunca decomposto |
+| `components/associados/CarteirinhaAssociadoModal.tsx` | 1520 | nunca decomposto |
 | `components/associados/AssociadoMensalidadesTab.tsx` | 957 | já decomposto |
+| `components/associados/AssociadoFormModal.tsx` | **496** | decomposto em 22/09 — era 2009, ver a seção própria abaixo |
 | `pages/Configuracoes.tsx` | 191 | já decomposto (`components/configuracoes/`) |
 | `pages/Auditoria.tsx` | **87** | decomposto em 21/09 — ver a seção própria abaixo |
 
@@ -2411,12 +2413,13 @@ decomposição de JSX/estrutura visual que a rodada anterior tinha deixado pende
   componentes abaixo, sem lógica própria.
 - `hooks/useAssociadosState.ts`: 640 linhas — concentra o estado (filtros, ordenação, seleção,
   modais) e as chamadas a `usePlanosPax`/serviços que antes viviam dentro da página.
-- `components/associados/`: 19 componentes dedicados (~9.990 linhas somadas) — tabelas
+- `components/associados/`: 30 componentes dedicados (~12.400 linhas somadas) — tabelas
   (`AssociadosListTable.tsx`, `AssociadosListGrid.tsx`), modais (`AssociadoFormModal.tsx`,
   `AssociadoDetailsModal.tsx`, `DependenteFormModal.tsx`, `ParcelaRecebimentoModal.tsx`,
   `CarteirinhaAssociadoModal.tsx`...), abas (`AssociadoAtendimentosTab.tsx`,
   `AssociadoRequisicoesTab.tsx`, `AssociadoResumoFinanceiroTab.tsx`,
-  `AssociadoMensalidadesTab.tsx`) e utilitários de tela (`AssociadosToolbar.tsx`,
+  `AssociadoMensalidadesTab.tsx`), as sete peças do formulário (ver a seção da decomposição
+  de `AssociadoFormModal.tsx`) e utilitários de tela (`AssociadosToolbar.tsx`,
   `RegrasCalculoInfo.tsx`, `RelatorioAssociadosModal.tsx`).
 
 Ao mexer em telas de associados, a lógica de estado agora mora em `useAssociadosState.ts`, e cada
@@ -2504,7 +2507,84 @@ carregado só quando alguém exporta.
    redigitação; o `tsc` apontou os identificadores que viraram props. Redigitar JSX é onde um
    `className` se perde sem ninguém ver.
 4. **Deixe o compilador achar a fronteira**: extraia, compile, e a lista de "cannot find name" é
-   exatamente a lista de props.
+   a lista de props — **mas não a de imports**. Ver a ressalva do `Lock` na seção seguinte.
+
+### AssociadoFormModal.tsx: 2009 → 496 linhas, e o que o método precisou aprender
+
+Fechado em 22/09/2026, seguindo o roteiro acima — que saiu dele com duas correções. O maior
+arquivo do projeto virou sete componentes, e a página-mãe só monta.
+
+| Onde foi parar | Linhas | O que guarda |
+|---|---|---|
+| `AssociadoFormModal.tsx` | 496 | modal, cabeçalho, `<form>` e os modais auxiliares |
+| `AssociadoDadosPrincipaisTab.tsx` | 528 | a aba e suas cinco sub-abas |
+| `AssociadoContratosTab.tsx` | 335 | tipo de pessoa, contrato ativo, histórico |
+| `AssociadoDocumentosTab.tsx` | 232 | upload, anexos, gerador do contrato |
+| `AssociadoDependentesTab.tsx` | 230 | contagem de vidas e os cards |
+| `AssociadoAbasLaterais.tsx` | 140 | as oito abas do modo de edição |
+| `AssociadoFormRodape.tsx` | 104 | os dois rodapés (edição × cadastro) |
+| `AssociadoEtapasCadastro.tsx` | 89 | o stepper de cinco etapas |
+
+#### A linha de base: `e2e/editar-associado.spec.ts`, escrito contra o monolito
+
+`cadastrar-associado.spec.ts` cobria só o **cadastro novo** — formulário vazio, três das oito
+abas. O que uma decomposição mexe é o outro caminho, então os 5 casos novos são de **edição**:
+o cabeçalho de identidade em todas as abas, as cinco sub-abas com valor gravado dentro, a
+lista de dependentes com a contagem de vidas, o widget do contrato ativo, e o payload do save.
+
+A linha de base foi conferida por mutação:
+
+| Mutação no monolito | Resultado |
+| --- | --- |
+| remover `AssociadoResumoCabecalho` do render | reprova 1 |
+| a seção Endereço passa a usar a condição da de Contato | reprova 1 |
+| a contagem de vidas esquece o titular (`1 +`) | reprova 1 |
+| o widget do contrato perde `plano_nome` | **no-op** — ver abaixo |
+| o campo de telefone não propaga a alteração | reprova 1 |
+
+**A quarta é o achado de método, e é a armadilha que este arquivo já registra em outras
+palavras**: a asserção era `toContainText('Plano Individual')` no modal inteiro, e o
+**cabeçalho de identidade imprime o mesmo nome em todas as abas**. O teste passava com o
+widget exibindo "Nenhum Plano Selecionado". Ao afirmar que algo apareceu, pergunte **de onde
+aquele texto veio** — numa tela com cabeçalho persistente, o mesmo texto existe em dois
+lugares e o errado não prova nada. Escopado (`not.toContainText('Nenhum Plano Selecionado')`
+mais o valor, que só existem no widget), a mutação reprova.
+
+#### Duas correções ao roteiro, as duas achadas por um `assert` que falhou
+
+- **A lista de "cannot find name" NÃO é a lista de imports.** `Lock` (ícone do `lucide-react`)
+  não aparece nela: ele colide com o **`Lock` da Web Locks API**, um global do DOM, então o
+  `tsc` aceita calado e o ícone vira outra coisa em runtime — sem erro, sem aviso. O
+  classificador passou a tirar os imports de **quem o bloco de fato usa**, cruzado com o que o
+  monolito importava; os que sobram caem depois, no `eslint`. Para as **props** a lista do
+  compilador continua exata, porque um nome de prop não tem homônimo global.
+- **Uma prop que sofre `.map` precisa ser `any[]`, não `any`.** `.map` sobre `any` devolve
+  `any` e deixa o callback sem tipo contextual, o que é `TS7006` com `noImplicitAny`.
+
+#### O que a conferência provou, e por que ela foi mecânica
+
+As sete fatias foram comparadas **linha a linha** com o recorte original, ignorando só
+indentação: 1472 linhas idênticas, zero divergências — conferido de novo **depois** de
+acrescentar os comentários de documentação, porque é aí que uma edição descuidada entra. Ler o
+diff a olho não responde essa pergunta num arquivo de 2000 linhas; um script responde.
+
+O `eslint` do conjunto fechou em **0 erros**, e o parent saiu de 64 para **22 avisos** — a
+limpeza de props destrinchadas que ficaram sem uso foi guiada pela própria saída do `eslint`,
+não escolhida a dedo. Medir o **antes** é o que separou "limpei o que eu mesmo introduzi" de
+"limpei dívida alheia por engano": sem a linha de base de 64, os 91 avisos do meio do caminho
+não diriam nada.
+
+#### O que o e2e descobriu sobre a semente, e não é defeito da tela
+
+**Toda troca de aba passa por `executarValidacaoOuAlertar()`**, e os associados de
+`seed-homologacao.sql` **não validam**: o CPF não fecha o dígito verificador (decisão
+deliberada, registrada na seção da semente) e `data_adesao` não é semeada. Um teste que só
+abrisse o cadastro ficaria preso na primeira aba — e passaria a afirmar coisas sobre a tela
+errada. Daí `destravarNavegacao`, que preenche os dois como o operador faria.
+
+E o save vai além: `handleSave` recusa o cadastro quando **qualquer dependente** tem CPF
+inválido. Por isso o teste de payload usa JOÃO, que não tem dependentes; salvar MARIA exigiria
+corrigir três documentos para exercitar um campo.
 
 ## Modal dentro de `<form>`: botão sem `type` é `submit`, e isso salva a tela de fora
 
@@ -3446,11 +3526,13 @@ consulta e podar com a leitura falhada) reprovam a suíte, cada uma no teste cor
 
 ### Os três fluxos críticos, no navegador (Playwright)
 
-Fechado em 21/09/2026, e depois estendido com a **Ata de Ocorrências** (`auditoria.spec.ts`),
-escrita como linha de base antes da decomposição daquela tela — ver "Auditoria.tsx: a
-decomposição com rede de segurança". `e2e/` cobre **cadastrar associado com plano**, **receber uma parcela** e
-**emitir uma guia** de ponta a ponta — os três que este arquivo listava como bloqueados "por
-falta de UI logada", e que a criação do projeto de homologação existia para destravar.
+Fechado em 21/09/2026, e depois estendido duas vezes, sempre pelo mesmo motivo: **linha de
+base antes de decompor** — a **Ata de Ocorrências** (`auditoria.spec.ts`, 5 casos) e o
+**formulário de associado em modo de edição** (`editar-associado.spec.ts`, 5 casos). `e2e/`
+cobre **cadastrar associado com plano**, **receber uma parcela** e **emitir uma guia** de
+ponta a ponta — os três que este arquivo listava como bloqueados "por falta de UI logada", e
+que a criação do projeto de homologação existia para destravar —, mais os dois acima. São
+**20 casos** em 5 arquivos.
 
 **A rede deste ambiente bloqueia `*.supabase.co`** (CONNECT 403 no proxy de saída, produção e
 homologação igualmente) e não há daemon Docker. Então a suíte roda contra **dois alvos**, e o
