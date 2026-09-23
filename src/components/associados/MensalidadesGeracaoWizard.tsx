@@ -13,6 +13,7 @@ import { useSeletorPlanoPax } from '../../hooks/useSeletorPlanoPax';
 import { formatLocalDate } from '../../utils/dateUtils';
 import { registrarAuditoria } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatters';
+import { baseDaParcela, valorManualDaParcela } from '../../utils/valorParcelaManual';
 import {
   ultrapassaLimiteColetivo,
   calcularValorMensalidadeBase,
@@ -33,7 +34,6 @@ export const MensalidadesGeracaoWizard = ({
 }) => {
   const toast = useToast();
   const { state } = useAppContext();
-  const isAdminOrSuperAdmin = state.user?.nivel === 'super_admin' || state.user?.nivel === 'admin';
   const { selecionarPlano, planoSelecionado } = useSeletorPlanoPax();
   const [dataInicio, setDataInicio] = useState<string>(defaultDataInicio || format(new Date(), 'yyyy-MM-dd'));
   const [qtdParcelas, setQtdParcelas] = useState<number>(12);
@@ -70,9 +70,7 @@ export const MensalidadesGeracaoWizard = ({
     if (!planoSelecionado) return;
 
     const adesao = planoSelecionado.taxa_adesao || 0;
-    const baseParcela = (isAdminOrSuperAdmin && valorParcelaManual !== '' && !isNaN(Number(valorParcelaManual)) && Number(valorParcelaManual) >= 0)
-      ? Number(valorParcelaManual)
-      : valorMensalidadeBase;
+    const baseParcela = baseDaParcela(valorParcelaManual, valorMensalidadeBase);
 
     setParcelas(gerarProjecaoParcelas({
       dataInicioISO: dataInicio,
@@ -83,7 +81,7 @@ export const MensalidadesGeracaoWizard = ({
       planoNome: planoSelecionado.nome,
       formatarData: (d: Date | number) => format(d, 'yyyy-MM-dd'),
     }));
-  }, [planoSelecionado, dataInicio, qtdParcelas, diaVencimento, valorMensalidadeBase, valorParcelaManual, isAdminOrSuperAdmin]);
+  }, [planoSelecionado, dataInicio, qtdParcelas, diaVencimento, valorMensalidadeBase, valorParcelaManual]);
 
   useEffect(() => {
     gerarProjecao();
@@ -153,6 +151,10 @@ export const MensalidadesGeracaoWizard = ({
         associado_id: associado.id,
         qtd_parcelas: parcelasGeradas.length,
         valor_total: totalReceita,
+        // O campo de valor manual deixou de ser só do admin, então quem lê a Ata de Ocorrências
+        // precisa conseguir distinguir a mensalidade calculada pelo plano da que alguém digitou.
+        // Mesma chave e mesmo significado do `NOVO_CONTRATO_GERADO`.
+        manual_override: valorManualDaParcela(valorParcelaManual) !== null,
         online: state.isOnline
       });
 
@@ -255,7 +257,7 @@ export const MensalidadesGeracaoWizard = ({
             </div>
           )}
 
-          <div className={`grid grid-cols-1 ${isAdminOrSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-medium text-text-subtle mb-1">Data Base / Início</label>
               <input
@@ -277,39 +279,40 @@ export const MensalidadesGeracaoWizard = ({
                 className="w-full bg-bg-surface border border-border-default rounded-xl px-4 py-2 text-text-base text-sm focus:border-[#3B82F6] outline-none"
               />
             </div>
-            {isAdminOrSuperAdmin && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-text-subtle flex items-center gap-1.5">
-                    <span>Valor Parcela (R$)</span>
-                    <span className="text-[10px] px-1.5 py-0.2 bg-amber-500/10 text-amber-500 font-bold rounded border border-amber-500/20">Admin</span>
-                  </label>
-                  {valorParcelaManual !== '' && (
-                    <button
-                      type="button"
-                      onClick={() => setValorParcelaManual('')}
-                      className="text-[10px] text-[#3B82F6] hover:underline"
-                      title="Restaurar cálculo automático"
-                    >
-                      Restaurar
-                    </button>
-                  )}
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder={`Auto (R$ ${valorMensalidadeBase.toFixed(2).replace('.', ',')})`}
-                  value={valorParcelaManual}
-                  onChange={e => setValorParcelaManual(e.target.value)}
-                  className={`w-full bg-bg-surface border rounded-xl px-4 py-2 text-text-base text-sm outline-none transition-all ${
-                    valorParcelaManual !== '' 
-                      ? 'border-amber-500 ring-1 ring-amber-500/30' 
-                      : 'border-border-default focus:border-[#3B82F6]'
-                  }`}
-                />
+            {/*
+              Campo aberto a qualquer nível desde 23/09/2026. A etiqueta "Admin" que ficava aqui
+              descrevia uma trava que não travava nada: a prévia logo abaixo sempre deixou
+              qualquer operador editar o valor de cada parcela, uma a uma, e é a prévia que é
+              gravada. Ver `utils/valorParcelaManual.ts`.
+            */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-text-subtle">Valor Parcela (R$)</label>
+                {valorParcelaManual !== '' && (
+                  <button
+                    type="button"
+                    onClick={() => setValorParcelaManual('')}
+                    className="text-[10px] text-[#3B82F6] hover:underline"
+                    title="Restaurar cálculo automático"
+                  >
+                    Restaurar
+                  </button>
+                )}
               </div>
-            )}
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder={`Auto (R$ ${valorMensalidadeBase.toFixed(2).replace('.', ',')})`}
+                value={valorParcelaManual}
+                onChange={e => setValorParcelaManual(e.target.value)}
+                className={`w-full bg-bg-surface border rounded-xl px-4 py-2 text-text-base text-sm outline-none transition-all ${
+                  valorParcelaManual !== ''
+                    ? 'border-amber-500 ring-1 ring-amber-500/30'
+                    : 'border-border-default focus:border-[#3B82F6]'
+                }`}
+              />
+            </div>
             <div>
               <label className="block text-xs font-medium text-text-subtle mb-1">Dia de Vencimento</label>
               <input
@@ -346,6 +349,11 @@ export const MensalidadesGeracaoWizard = ({
                         type="number"
                         min="0"
                         step="0.01"
+                        // Este campo nunca teve rótulo nenhum — nem `<label>`, nem `title`. Ele
+                        // é a lista que de fato é gravada, e sempre foi editável por qualquer
+                        // nível, então dizer de qual parcela ele é vale para quem usa leitor de
+                        // tela e para quem o procura por teste.
+                        aria-label={`Valor da parcela ${p.numero_parcela}`}
                         className="w-24 bg-bg-subtle border border-border-default rounded px-2 py-1 text-right focus:border-[#3B82F6] text-text-base font-bold text-xs"
                         value={p.valor || ''}
                         onChange={(e) => {
