@@ -52,7 +52,16 @@ on conflict (provider, provider_id) do nothing;
 
 -- O gerente tem SO o modulo de associados: é o caso que a RLS por modulo
 -- (migration 20260919001244) precisa distinguir, e o que quase quebrou em producao.
-update public.users set modulos_permitidos = array['associados','atendimentos']
+--
+-- Os ids de SUBMODULO nao sao enfeite: `hasModuleAccess` exige o submodulo explicito para
+-- liberar uma ROTA ("o fato de o modulo pai estar presente NAO concede acesso a submodulos
+-- nao marcados"), entao com so os dois ids de modulo o gerente batia em "Acesso Restrito ao
+-- Modulo" em /associados — ou seja, a semente descrevia um gerente que nao abria tela
+-- nenhuma. O id do pai fica porque e ele que `tem_modulo()` le nas policies de escrita.
+update public.users set modulos_permitidos = array[
+   'associados','atendimentos',
+   'associados_lista','associados_atendimentos','associados_contratos','associados_requisicoes'
+ ]
  where id = 'aaaaaaaa-0000-4000-8000-000000000003';
 update public.users set modulos_permitidos = array['associados','financeiro']
  where id = 'aaaaaaaa-0000-4000-8000-000000000004';

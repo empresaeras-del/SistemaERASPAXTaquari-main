@@ -2935,6 +2935,62 @@ condicional no componente, e um hook ali quebraria a ordem dos hooks entre rende
 `react-hooks/rules-of-hooks` do eslint pega — foi assim que a primeira versão foi corrigida antes
 do commit).
 
+### O campo "Valor Parcela (R$)" era uma trava que não travava nada
+
+Pedido de 23/09/2026: qualquer nível deve poder digitar o valor manual da parcela na geração de
+mensalidades, no cadastro novo e na edição. Ele estava atrás de `isAdminOrSuperAdmin` nos dois
+wizards que geram mensalidade — `MensalidadesGeracaoWizard` (aba Mensalidades, edição) e
+`NovoContratoWizard` (cadastro novo e tela de Contratos) —, com a etiqueta "Admin" ao lado do
+rótulo.
+
+**Ela não protegia o que parecia proteger, e é isso que decidiu o formato da mudança.** Levantado
+antes de mexer:
+
+- **A prévia logo abaixo do campo sempre foi editável por qualquer nível.** Ela é uma lista de
+  `<input type="number">`, um por parcela, e é **ela** que é gravada — `confirmarGeracao` lê
+  `parcelas`, não o campo. Quem não era admin chegava exatamente ao mesmo resultado digitando 12
+  valores em vez de 1. O que o campo escondido produzia não era controle, era trabalho.
+- **Abrir a geração nunca dependeu do nível.** O botão "Gerar Mensalidades" do organograma só
+  checa `cadastroForaDeCirculacao`; a guarda de nível dessa aba (`isAdmin`) vale para editar
+  receita e parcela **já gravadas**, que é outra coisa, e ficou como está.
+
+Quatro decisões valem como regra:
+
+- **O predicado foi para `utils/valorParcelaManual.ts`, puro e testado.** Ele estava escrito
+  **três** vezes entre os dois arquivos — a projeção de cada um mais o `manual_override` da
+  auditoria do contrato —, e as três já não eram idênticas. Predicado repetido em dois lugares só
+  é corrigido uma vez.
+- **A etiqueta "Admin" saiu junto com a trava.** Um rótulo que anuncia uma restrição que não
+  existe mais é a tela mentindo sobre quem pode usar o campo — e há teste exigindo que ela não
+  volte.
+- **Tirar o controle obriga a registrar o uso.** `MENSALIDADES_GERADAS` ganhou
+  `manual_override`, a mesma chave e o mesmo significado que `NOVO_CONTRATO_GERADO` já tinha:
+  sem ela a Ata de Ocorrências não distingue a mensalidade calculada pelo plano da que alguém
+  digitou, e essa distinção passou a ser alcançável por mais gente.
+- **Zero é valor, branco é ausência.** `valorManualDaParcela` aceita `0` (mensalidade de
+  cortesia), recusa negativo (viraria receita negativa no caixa) e trata espaço em branco como
+  campo vazio — `Number('  ')` é `0`, e sem o `trim` um branco geraria 12 parcelas de R$ 0,00.
+
+**O e2e é com um GERENTE, não com o admin** (`e2e/valor-manual-parcela.spec.ts`, 3 casos): um
+teste feito com admin passaria antes e depois e não mediria nada. Quatro mutações, quatro
+reprovações — esconder o campo em cada um dos dois wizards, e fazer `baseDaParcela` ignorar o
+valor digitado em cada um dos dois caminhos. A asserção forte é sobre o **payload**: o gerente
+digita R$ 250,00 no cadastro novo e as parcelas chegam ao servidor com esse valor (a primeira com
+a taxa de adesão somada por cima, porque o campo troca a **base** da parcela, não o total do
+contrato).
+
+**A semente descrevia um gerente que não abria tela nenhuma.** `hasModuleAccess` exige o id do
+**submódulo** para liberar uma rota — "o fato de o módulo pai estar presente NÃO concede acesso a
+submódulos não marcados" —, e o gerente da semente tinha só `['associados','atendimentos']`, os
+ids dos **pais**. Ele batia em "Acesso Restrito ao Módulo" em `/associados`. É a terceira vez que
+uma semente incompleta aparece neste arquivo, e a primeira em que ela descreve um **usuário** em
+vez de uma tabela: nenhum spec acusou porque nenhum logava como gerente. Corrigido nos dois
+arquivos (`supabase/seed-homologacao.sql` e `e2e/apoio/dadosDeHomologacao.ts`), mantendo os ids
+dos pais — é neles que `tem_modulo()` se apoia nas policies de escrita.
+
+De passagem, os campos da prévia ganharam `aria-label` (`Valor da parcela N`). Eles nunca tiveram
+rótulo nenhum, nem `<label>` nem `title`, e são a lista que de fato é gravada.
+
 ## Menu lateral (`components/layout/Sidebar.tsx`)
 
 O menu passou por um redesenho em três entregas (setembro/2026). Nenhuma funcionalidade mudou —
@@ -3817,7 +3873,7 @@ base antes de decompor** — a **Ata de Ocorrências** (`auditoria.spec.ts`, 5 c
 cobre **cadastrar associado com plano**, **receber uma parcela** e **emitir uma guia** de
 ponta a ponta — os três que este arquivo listava como bloqueados "por falta de UI logada", e
 que a criação do projeto de homologação existia para destravar —, mais os cinco acima. São
-**40 casos** em 9 arquivos.
+**43 casos** em 10 arquivos.
 
 **A semente dos dois alvos é cópia deliberada, e já esteve incompleta duas vezes**: até
 22/09/2026 a receita da Maria e as 12 parcelas dela existiam só no `.sql`, e os dois

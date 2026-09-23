@@ -6,6 +6,7 @@ import { getAssociados, saveAssociado, Associado } from '../../services/associad
 import { associadoSelecionavel } from '../../utils/selecaoCadastro';
 import { idadeEmAnos } from '../../utils/resumoAssociado';
 import { gerarProjecaoParcelas } from '../../utils/mensalidadesAssociadoHelpers';
+import { baseDaParcela, valorManualDaParcela } from '../../utils/valorParcelaManual';
 import { salvarReceita } from '../../services/financeiroService';
 import { resolverContaLancamento } from '../../services/planoContabilService';
 import { CODIGO_CONTA_MENSALIDADE } from '../../config/planoContabilPadrao.config';
@@ -110,9 +111,6 @@ export const NovoContratoWizard: React.FC<{
     };
   };
 
-  // Permissões
-  const isAdminOrSuperAdmin = state.user?.nivel === 'super_admin' || state.user?.nivel === 'admin';
-
   // Mensalidades
   const [dataInicio, setDataInicio] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [qtdParcelas, setQtdParcelas] = useState<number>(12);
@@ -161,17 +159,10 @@ export const NovoContratoWizard: React.FC<{
     return calcularValor(planoSelecionado, nVidas, depsIds, valorExtra).total;
   }, [planoSelecionado, selectedAssociado, calcularValor, valorExtra]);
 
-  const valorBaseParcela = useMemo(() => {
-    if (
-      isAdminOrSuperAdmin &&
-      valorParcelaManual !== '' &&
-      !isNaN(Number(valorParcelaManual)) &&
-      Number(valorParcelaManual) >= 0
-    ) {
-      return Number(valorParcelaManual);
-    }
-    return valorPlano;
-  }, [isAdminOrSuperAdmin, valorParcelaManual, valorPlano]);
+  const valorBaseParcela = useMemo(
+    () => baseDaParcela(valorParcelaManual, valorPlano),
+    [valorParcelaManual, valorPlano],
+  );
 
   // Esta projeção estava escrita à mão aqui, idêntica à de `mensalidadesAssociadoHelpers`
   // — que já era testada e já era usada pelo wizard de mensalidades avulso. Duas cópias da
@@ -291,8 +282,7 @@ export const NovoContratoWizard: React.FC<{
         numero_contrato: numeroContrato,
         receita_mestre_id: mestreId,
         valor: valorFinalPlano,
-        manual_override:
-          isAdminOrSuperAdmin && valorParcelaManual !== '' && Number(valorParcelaManual) >= 0,
+        manual_override: valorManualDaParcela(valorParcelaManual) !== null,
       });
 
       onSuccess();
@@ -575,9 +565,7 @@ export const NovoContratoWizard: React.FC<{
                 </div>
               )}
 
-              <div
-                className={`grid grid-cols-1 ${isAdminOrSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'} gap-4`}
-              >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-1">
                   <label className="text-sm font-semibold text-text-subtle">Mês de Início</label>
                   <input
@@ -598,46 +586,46 @@ export const NovoContratoWizard: React.FC<{
                     className="w-full p-2.5 bg-bg-subtle border border-border-default rounded-lg text-text-base focus:border-[#3B82F6] focus:outline-none"
                   />
                 </div>
-                {isAdminOrSuperAdmin && (
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-semibold text-text-subtle flex items-center gap-1.5">
-                        <span>Valor Parcela (R$)</span>
-                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/10 text-amber-500 font-bold rounded border border-amber-500/20">
-                          Admin
-                        </span>
-                      </label>
-                      {valorParcelaManual !== '' && (
-                        <button
-                          type="button"
-                          onClick={() => setValorParcelaManual('')}
-                          className="text-[11px] text-[#3B82F6] hover:underline"
-                          title="Restaurar cálculo automático"
-                        >
-                          Restaurar auto
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder={`Auto (R$ ${valorPlano.toFixed(2).replace('.', ',')})`}
-                      value={valorParcelaManual}
-                      onChange={(e) => setValorParcelaManual(e.target.value)}
-                      className={`w-full p-2.5 bg-bg-subtle border rounded-lg text-text-base focus:outline-none transition-all ${
-                        valorParcelaManual !== ''
-                          ? 'border-amber-500 ring-1 ring-amber-500/30'
-                          : 'border-border-default focus:border-[#3B82F6]'
-                      }`}
-                    />
-                    <span className="text-[11px] text-text-muted block truncate">
-                      {valorParcelaManual !== ''
-                        ? 'Valor manual por parcela'
-                        : `Automático: R$ ${valorPlano.toFixed(2).replace('.', ',')}`}
-                    </span>
+                {/*
+                  Campo aberto a qualquer nível desde 23/09/2026, junto com o do wizard da aba
+                  Mensalidades — os dois são o mesmo campo em dois caminhos (cadastro novo e
+                  edição). Ver `utils/valorParcelaManual.ts`.
+                */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-text-subtle">
+                      Valor Parcela (R$)
+                    </label>
+                    {valorParcelaManual !== '' && (
+                      <button
+                        type="button"
+                        onClick={() => setValorParcelaManual('')}
+                        className="text-[11px] text-[#3B82F6] hover:underline"
+                        title="Restaurar cálculo automático"
+                      >
+                        Restaurar auto
+                      </button>
+                    )}
                   </div>
-                )}
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder={`Auto (R$ ${valorPlano.toFixed(2).replace('.', ',')})`}
+                    value={valorParcelaManual}
+                    onChange={(e) => setValorParcelaManual(e.target.value)}
+                    className={`w-full p-2.5 bg-bg-subtle border rounded-lg text-text-base focus:outline-none transition-all ${
+                      valorParcelaManual !== ''
+                        ? 'border-amber-500 ring-1 ring-amber-500/30'
+                        : 'border-border-default focus:border-[#3B82F6]'
+                    }`}
+                  />
+                  <span className="text-[11px] text-text-muted block truncate">
+                    {valorParcelaManual !== ''
+                      ? 'Valor manual por parcela'
+                      : `Automático: R$ ${valorPlano.toFixed(2).replace('.', ',')}`}
+                  </span>
+                </div>
                 <div className="space-y-1">
                   <label className="text-sm font-semibold text-text-subtle">
                     Dia do Vencimento

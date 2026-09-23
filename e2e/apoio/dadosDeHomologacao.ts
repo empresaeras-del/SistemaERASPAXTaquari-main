@@ -304,7 +304,12 @@ export const montarBancoDeHomologacao = (): Banco => {
   banco.set('users', [
     { id: 'aaaaaaaa-0000-4000-8000-000000000002', nome: 'ADMIN PAX', email: USUARIOS.admin.email, nivel: 'admin', tenant_id: EMPRESA_PAX, modulos_permitidos: ['*'], status: 'ativo' },
     { id: 'aaaaaaaa-0000-4000-8000-000000000001', nome: 'SUPER ADMIN HOMOLOGACAO', email: USUARIOS.superAdmin.email, nivel: 'super_admin', tenant_id: 'default', modulos_permitidos: ['*'], status: 'ativo' },
-    { id: 'aaaaaaaa-0000-4000-8000-000000000003', nome: 'GERENTE PAX', email: USUARIOS.gerente.email, nivel: 'gerente', tenant_id: EMPRESA_PAX, modulos_permitidos: ['associados', 'atendimentos'], status: 'ativo' },
+    // Os ids de SUBMÓDULO são o que libera a ROTA: `hasModuleAccess` exige o submódulo
+    // explícito, e o módulo pai sozinho não concede nada. Com só `['associados','atendimentos']`
+    // — como esta linha esteve até 23/09/2026, copiando o `.sql` — o gerente batia em "Acesso
+    // Restrito ao Módulo" em /associados. O id do pai fica porque é ele que `tem_modulo()` lê
+    // nas policies de escrita.
+    { id: 'aaaaaaaa-0000-4000-8000-000000000003', nome: 'GERENTE PAX', email: USUARIOS.gerente.email, nivel: 'gerente', tenant_id: EMPRESA_PAX, modulos_permitidos: ['associados', 'atendimentos', 'associados_lista', 'associados_atendimentos', 'associados_contratos', 'associados_requisicoes'], status: 'ativo' },
   ]);
 
   banco.set('tenants', [
