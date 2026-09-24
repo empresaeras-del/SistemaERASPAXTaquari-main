@@ -63,7 +63,13 @@ update public.users set modulos_permitidos = array[
    'associados_lista','associados_atendimentos','associados_contratos','associados_requisicoes'
  ]
  where id = 'aaaaaaaa-0000-4000-8000-000000000003';
-update public.users set modulos_permitidos = array['associados','financeiro']
+-- O funcionario tinha o mesmo defeito do gerente, pelo mesmo motivo: so os ids dos PAIS.
+-- Ele e o nivel mais baixo do sistema, entao e com ele que se prova "vale para todos".
+update public.users set modulos_permitidos = array[
+   'associados','financeiro',
+   'associados_lista','associados_atendimentos','associados_contratos','associados_requisicoes',
+   'financeiro_receber','financeiro_pagar'
+ ]
  where id = 'aaaaaaaa-0000-4000-8000-000000000004';
 
 -- ---------------------------------------------------------------- planos PAX

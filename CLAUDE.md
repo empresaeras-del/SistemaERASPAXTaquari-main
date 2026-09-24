@@ -2971,13 +2971,15 @@ Quatro decisões valem como regra:
   cortesia), recusa negativo (viraria receita negativa no caixa) e trata espaço em branco como
   campo vazio — `Number('  ')` é `0`, e sem o `trim` um branco geraria 12 parcelas de R$ 0,00.
 
-**O e2e é com um GERENTE, não com o admin** (`e2e/valor-manual-parcela.spec.ts`, 3 casos): um
-teste feito com admin passaria antes e depois e não mediria nada. Quatro mutações, quatro
-reprovações — esconder o campo em cada um dos dois wizards, e fazer `baseDaParcela` ignorar o
-valor digitado em cada um dos dois caminhos. A asserção forte é sobre o **payload**: o gerente
-digita R$ 250,00 no cadastro novo e as parcelas chegam ao servidor com esse valor (a primeira com
-a taxa de adesão somada por cima, porque o campo troca a **base** da parcela, não o total do
-contrato).
+**O e2e é com os níveis ABAIXO de admin** (`e2e/valor-manual-parcela.spec.ts`, 4 casos): um
+teste feito com admin passaria antes e depois e não mediria nada. O caminho do cadastro novo roda
+duas vezes, para **gerente e funcionário** — o funcionário é o nível mais baixo, e um teste só com
+o gerente não prova "vale para todos os tipos de usuário". Cinco mutações, cinco reprovações —
+esconder o campo em cada um dos dois wizards (a do assistente de contrato conferida também contra
+o caso do funcionário), e fazer `baseDaParcela` ignorar o valor digitado em cada um dos dois
+caminhos. A asserção forte é sobre o **payload**: cada nível digita R$ 250,00 no cadastro novo e
+as parcelas chegam ao servidor com esse valor (a primeira com a taxa de adesão somada por cima,
+porque o campo troca a **base** da parcela, não o total do contrato).
 
 **A semente descrevia um gerente que não abria tela nenhuma.** `hasModuleAccess` exige o id do
 **submódulo** para liberar uma rota — "o fato de o módulo pai estar presente NÃO concede acesso a
@@ -2987,6 +2989,14 @@ uma semente incompleta aparece neste arquivo, e a primeira em que ela descreve u
 vez de uma tabela: nenhum spec acusou porque nenhum logava como gerente. Corrigido nos dois
 arquivos (`supabase/seed-homologacao.sql` e `e2e/apoio/dadosDeHomologacao.ts`), mantendo os ids
 dos pais — é neles que `tem_modulo()` se apoia nas policies de escrita.
+
+**E o funcionário tinha o mesmo defeito, mais uma ausência** (24/09/2026, ao conferir o pedido
+para *todos* os níveis): ele existia só no `.sql`, com os ids dos pais, e **nunca esteve no
+dublê** — a quarta ocorrência da cópia incompleta entre os dois alvos. Sem ele, "vale para
+qualquer nível" estava provado só até o gerente. Entrou nos dois arquivos, com os submódulos, e o
+caso do cadastro novo passou a rodar para os dois níveis. **Ao testar uma regra que vale "para
+todos", exercite o nível mais BAIXO** — é o único que prova a afirmação; qualquer nível
+intermediário deixa a pergunta pela metade.
 
 De passagem, os campos da prévia ganharam `aria-label` (`Valor da parcela N`). Eles nunca tiveram
 rótulo nenhum, nem `<label>` nem `title`, e são a lista que de fato é gravada.
@@ -3873,7 +3883,7 @@ base antes de decompor** — a **Ata de Ocorrências** (`auditoria.spec.ts`, 5 c
 cobre **cadastrar associado com plano**, **receber uma parcela** e **emitir uma guia** de
 ponta a ponta — os três que este arquivo listava como bloqueados "por falta de UI logada", e
 que a criação do projeto de homologação existia para destravar —, mais os cinco acima. São
-**43 casos** em 10 arquivos.
+**44 casos** em 10 arquivos.
 
 **A semente dos dois alvos é cópia deliberada, e já esteve incompleta duas vezes**: até
 22/09/2026 a receita da Maria e as 12 parcelas dela existiam só no `.sql`, e os dois

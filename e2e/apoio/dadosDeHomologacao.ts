@@ -13,6 +13,7 @@ export const USUARIOS = {
   admin: { email: 'admin.pax@homologacao.local', senha: 'homologacao123' },
   superAdmin: { email: 'super@homologacao.local', senha: 'homologacao123' },
   gerente: { email: 'gerente.pax@homologacao.local', senha: 'homologacao123' },
+  funcionario: { email: 'func.pax@homologacao.local', senha: 'homologacao123' },
 } as const;
 
 export const PLANO_INDIVIDUAL = 'bbbbbbbb-0000-4000-8000-000000000001';
@@ -299,6 +300,7 @@ export const montarBancoDeHomologacao = (): Banco => {
     { id: 'aaaaaaaa-0000-4000-8000-000000000002', email: USUARIOS.admin.email, password: USUARIOS.admin.senha, nome: 'ADMIN PAX', nivel: 'admin', tenant_id: EMPRESA_PAX },
     { id: 'aaaaaaaa-0000-4000-8000-000000000001', email: USUARIOS.superAdmin.email, password: USUARIOS.superAdmin.senha, nome: 'SUPER ADMIN HOMOLOGACAO', nivel: 'super_admin', tenant_id: 'default' },
     { id: 'aaaaaaaa-0000-4000-8000-000000000003', email: USUARIOS.gerente.email, password: USUARIOS.gerente.senha, nome: 'GERENTE PAX', nivel: 'gerente', tenant_id: EMPRESA_PAX },
+    { id: 'aaaaaaaa-0000-4000-8000-000000000004', email: USUARIOS.funcionario.email, password: USUARIOS.funcionario.senha, nome: 'FUNCIONARIO PAX', nivel: 'funcionario', tenant_id: EMPRESA_PAX },
   ]);
 
   banco.set('users', [
@@ -310,6 +312,10 @@ export const montarBancoDeHomologacao = (): Banco => {
     // Restrito ao Módulo" em /associados. O id do pai fica porque é ele que `tem_modulo()` lê
     // nas policies de escrita.
     { id: 'aaaaaaaa-0000-4000-8000-000000000003', nome: 'GERENTE PAX', email: USUARIOS.gerente.email, nivel: 'gerente', tenant_id: EMPRESA_PAX, modulos_permitidos: ['associados', 'atendimentos', 'associados_lista', 'associados_atendimentos', 'associados_contratos', 'associados_requisicoes'], status: 'ativo' },
+    // O funcionário é o nível mais baixo do sistema — é com ele que se prova "vale para
+    // todos", e não com o gerente. Ele estava só no `.sql` e com o mesmo defeito de
+    // submódulo do gerente; entrou aqui junto com a correção, nos dois arquivos.
+    { id: 'aaaaaaaa-0000-4000-8000-000000000004', nome: 'FUNCIONARIO PAX', email: USUARIOS.funcionario.email, nivel: 'funcionario', tenant_id: EMPRESA_PAX, modulos_permitidos: ['associados', 'financeiro', 'associados_lista', 'associados_atendimentos', 'associados_contratos', 'associados_requisicoes', 'financeiro_receber', 'financeiro_pagar'], status: 'ativo' },
   ]);
 
   banco.set('tenants', [
