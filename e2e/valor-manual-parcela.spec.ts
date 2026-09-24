@@ -88,56 +88,73 @@ test('gerente digita o valor da parcela na aba Mensalidades', async ({ sessao: {
   await expect(segundaParcela).not.toHaveValue('200', { timeout: 10_000 });
 });
 
-test('gerente digita o valor da parcela no cadastro novo, e ele chega ao servidor', async ({
-  sessao: { page, servidor },
-}) => {
-  const nome = `TESTE VALOR MANUAL ${marcaDaRodada()}`;
+/**
+ * O caminho do CADASTRO NOVO: associado novo → etapa Contrato → "Cadastrar Novo Contrato" →
+ * "Prévia das Mensalidades", que é onde o `NovoContratoWizard` mostra o campo.
+ *
+ * Roda para os dois níveis abaixo de admin. **Um teste feito só com o gerente não prova "todos
+ * os tipos de usuário"** — o funcionário é o nível mais baixo e é o que o pedido nomeia.
+ */
+for (const [rotulo, usuario] of [
+  ['gerente', USUARIOS.gerente],
+  ['funcionário', USUARIOS.funcionario],
+] as const) {
+  test(`${rotulo} digita o valor da parcela no cadastro novo, e ele chega ao servidor`, async ({
+    sessao: { page, servidor },
+  }) => {
+    const nome = `TESTE VALOR MANUAL ${rotulo.toUpperCase()} ${marcaDaRodada()}`;
 
-  await entrar(page, USUARIOS.gerente);
-  await irPara(page, '/associados');
+    await entrar(page, usuario);
+    await irPara(page, '/associados');
 
-  // O outro caminho: o assistente de contrato, que é por onde o CADASTRO NOVO gera as
-  // mensalidades. O campo é o mesmo e estava atrás do mesmo `isAdminOrSuperAdmin`.
-  await abrirNovoAssociado(page);
-  await preencherDadosBasicos(page, { nome, cpf: cpfValido() });
-  await avancarEtapa(page); // Dados Básicos -> Dependentes
-  await avancarEtapa(page); // Dependentes -> Contrato
+    await abrirNovoAssociado(page);
+    await preencherDadosBasicos(page, { nome, cpf: cpfValido() });
+    await avancarEtapa(page); // Dados Básicos -> Dependentes
+    await avancarEtapa(page); // Dependentes -> Contrato
 
-  await page.getByText('Editar', { exact: true }).click();
-  await page.getByRole('button', { name: 'Cadastrar Novo Contrato' }).click();
-  await page
-    .locator('select:visible:has(option:text-is("Plano Individual"))')
-    .selectOption({ label: 'Plano Individual' });
-  await page.getByRole('button', { name: 'Avançar' }).click();
-  await expect(page.getByText(/Prévia das Mensalidades/i)).toBeVisible();
+    await page.getByText('Editar', { exact: true }).click();
+    await page.getByRole('button', { name: 'Cadastrar Novo Contrato' }).click();
+    await page
+      .locator('select:visible:has(option:text-is("Plano Individual"))')
+      .selectOption({ label: 'Plano Individual' });
+    await page.getByRole('button', { name: 'Avançar' }).click();
+    await expect(page.getByText(/Prévia das Mensalidades/i)).toBeVisible();
 
-  const campo = page.locator('input[placeholder^="Auto (R$"]');
-  await expect(campo).toBeVisible();
-  await expect(campo).toBeEditable();
-  await expect(page.getByText('Automático: R$')).toBeVisible();
+    // 1. O campo existe e é editável para este nível.
+    const campo = page.locator('input[placeholder^="Auto (R$"]');
+    await expect(campo).toBeVisible();
+    await expect(campo).toBeEditable();
+    await expect(page.getByText('Automático: R$')).toBeVisible();
 
-  await campo.fill('250');
-  await expect(page.getByText('Valor manual por parcela')).toBeVisible();
+    // 2. A etiqueta "Admin" não voltou.
+    await expect(page.getByText('Valor Parcela (R$)')).toBeVisible();
+    await expect(
+      page.getByText('Valor Parcela (R$)').locator('..').getByText('Admin'),
+    ).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Avançar' }).click();
-  await page.getByRole('button', { name: 'Confirmar e Gerar Mensalidades' }).click();
-  await expect(page.locator('.fixed.inset-0')).toHaveCount(0, { timeout: 30_000 });
+    await campo.fill('250');
+    await expect(page.getByText('Valor manual por parcela')).toBeVisible();
 
-  test.skip(!contraODuble, 'as asserções de payload só valem contra o dublê');
+    await page.getByRole('button', { name: 'Avançar' }).click();
+    await page.getByRole('button', { name: 'Confirmar e Gerar Mensalidades' }).click();
+    await expect(page.locator('.fixed.inset-0')).toHaveCount(0, { timeout: 30_000 });
 
-  /**
-   * A asserção que importa é sobre o que SAIU, não sobre o que a tela mostrou: a permissão só
-   * vira efeito quando o valor digitado por um gerente chega gravado. Com o predicado antigo o
-   * campo nem apareceria — e, se aparecesse sem o segundo `isAdminOrSuperAdmin` cair junto, as
-   * parcelas sairiam com os R$ 60,00 do plano e a tela não diria nada.
-   */
-  const parcelas = servidor!.linhas('parcelas_receber').filter((p) => p.devedor_nome === nome);
-  expect(parcelas.length, 'nenhuma parcela foi gravada para o associado novo').toBeGreaterThan(0);
+    test.skip(!contraODuble, 'as asserções de payload só valem contra o dublê');
 
-  const porNumero = (n: number) => parcelas.find((p) => p.numero_parcela === n);
-  expect(porNumero(2)!.valor).toBe(250); // o valor digitado, não os R$ 60,00 do plano
-  expect(porNumero(1)!.valor).toBe(300); // a primeira soma a taxa de adesão (R$ 50,00)
-});
+    /**
+     * A asserção que importa é sobre o que SAIU, não sobre o que a tela mostrou: a permissão só
+     * vira efeito quando o valor digitado chega gravado. Com o predicado antigo o campo nem
+     * apareceria — e, se aparecesse sem o segundo `isAdminOrSuperAdmin` cair junto, as parcelas
+     * sairiam com os R$ 60,00 do plano e a tela não diria nada.
+     */
+    const parcelas = servidor!.linhas('parcelas_receber').filter((p) => p.devedor_nome === nome);
+    expect(parcelas.length, 'nenhuma parcela foi gravada para o associado novo').toBeGreaterThan(0);
+
+    const porNumero = (n: number) => parcelas.find((p) => p.numero_parcela === n);
+    expect(porNumero(2)!.valor).toBe(250); // o valor digitado, não os R$ 60,00 do plano
+    expect(porNumero(1)!.valor).toBe(300); // a primeira soma a taxa de adesão (R$ 50,00)
+  });
+}
 
 test('admin continua com o campo, agora sem a etiqueta que virou mentira', async ({
   sessao: { page },
