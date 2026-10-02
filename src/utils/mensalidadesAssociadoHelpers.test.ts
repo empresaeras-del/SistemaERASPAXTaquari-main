@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  ultrapassaLimiteColetivo,
   calcularValorMensalidadeBase,
   descricaoCalculoMensalidade,
   gerarProjecaoParcelas,
@@ -11,28 +10,6 @@ import {
   ordenarParcelasPorVencimento,
 } from './mensalidadesAssociadoHelpers';
 import { Receita, ParcelaReceber } from '../services/financeiroService';
-
-describe('ultrapassaLimiteColetivo', () => {
-  it('retorna false quando não há plano', () => {
-    expect(ultrapassaLimiteColetivo(null, 10)).toBe(false);
-  });
-
-  it('retorna false para plano individual, mesmo com muitas vidas', () => {
-    expect(ultrapassaLimiteColetivo({ tipo_plano: 'individual', limite_vidas: 2 }, 10)).toBe(false);
-  });
-
-  it('retorna true quando vidas excedem o limite do plano coletivo', () => {
-    expect(ultrapassaLimiteColetivo({ tipo_plano: 'coletivo', limite_vidas: 5 }, 6)).toBe(true);
-  });
-
-  it('retorna false quando vidas estão dentro do limite do plano coletivo', () => {
-    expect(ultrapassaLimiteColetivo({ tipo_plano: 'coletivo', limite_vidas: 5 }, 5)).toBe(false);
-  });
-
-  it('usa 999 como limite padrão quando o plano coletivo não define limite_vidas', () => {
-    expect(ultrapassaLimiteColetivo({ tipo_plano: 'coletivo', limite_vidas: undefined }, 500)).toBe(false);
-  });
-});
 
 describe('calcularValorMensalidadeBase', () => {
   it('retorna 0 quando não há plano', () => {

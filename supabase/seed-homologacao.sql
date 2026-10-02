@@ -79,6 +79,16 @@ insert into public.planos_pax (id, tenant_id, codigo, nome, tipo_plano, valor_me
   ('bbbbbbbb-0000-4000-8000-000000000003', '22222222-2222-4222-8222-222222222222', 'FUN-BAS',  'Plano Basico Funeraria','individual', 45.00,   0.00, 'fixo',     true)
 on conflict (id) do nothing;
 
+-- O unico plano COLETIVO da semente, acrescentado em 02/10/2026: sem ele nao ha como
+-- exercitar a regra de limite de vidas, que so existe em plano coletivo. `limite_vidas`
+-- e `minimo_vidas_calculo` ficam em `insert` proprio porque nao existem nas 3 linhas acima.
+insert into public.planos_pax (
+  id, tenant_id, codigo, nome, tipo_plano, valor_mensalidade, taxa_adesao, regra_calculo,
+  limite_vidas, minimo_vidas_calculo, ativo
+) values
+  ('bbbbbbbb-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111', 'PAX-COL', 'Plano Coletivo', 'coletivo', 30.00, 0.00, 'fixo', 2, 1, true)
+on conflict (id) do nothing;
+
 -- ---------------------------------------------------------------- conta bancaria
 insert into public.contas_bancarias (id, tenant_id, nome, banco, agencia, conta, tipo, status) values
   ('cccccccc-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'Conta Principal', 'Sicoob', '3021', '12345-6', 'corrente', 'ativo')
@@ -118,7 +128,13 @@ insert into public.associados (
   ('a5500000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'EMPRESA CONVENIADA - TITULAR PJ', '000.000.000-03', null, '1980-06-01', 'M', '(67) 99999-0003', 'pj@exemplo.local',
    'RUA COMERCIAL', '77', 'CENTRO', 'COXIM', '79400-000', 'MS', 'PJ', 'bbbbbbbb-0000-4000-8000-000000000001', 'Plano Individual', 'CTR-HML00003', 1, 60.00, current_date - 30, 'ativo'),
   ('a5500000-0000-4000-8000-000000000004', '22222222-2222-4222-8222-222222222222', 'ANA PAULA MENDES',         '000.000.000-04', null, '1990-01-20', 'F', '(67) 98888-0001', 'ana@exemplo.local',
-   'RUA SETE', '12', 'VILA NOVA', 'RIO VERDE', '79400-200', 'MS', 'PF', 'bbbbbbbb-0000-4000-8000-000000000003', 'Plano Basico Funeraria', 'CTR-HML00004', 1, 45.00, current_date - 15, 'ativo')
+   'RUA SETE', '12', 'VILA NOVA', 'RIO VERDE', '79400-200', 'MS', 'PF', 'bbbbbbbb-0000-4000-8000-000000000003', 'Plano Basico Funeraria', 'CTR-HML00004', 1, 45.00, current_date - 15, 'ativo'),
+  -- Titular + 2 dependentes = 3 vidas num plano de limite 2: o caso que a producao tem em
+  -- 11 dos 16 associados coletivos ativos, e que antes de 02/10/2026 caia no aviso permanente
+  -- de excesso e na trava da geracao de mensalidades. Os dois ajustes novos nascem NULL de
+  -- proposito -- e o teste que os preenche, partindo do estado em que a producao esta.
+  ('a5500000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'ANTONIO COLETIVO DOS SANTOS', '000.000.000-05', '3334445', '1970-06-20', 'M', '(67) 99999-0005', 'antonio@exemplo.local',
+   'RUA DOS COLETIVOS', '77', 'CENTRO', 'COXIM', '79400-000', 'MS', 'PF', 'bbbbbbbb-0000-4000-8000-000000000004', 'Plano Coletivo', 'CTR-HML00005', 3, 30.00, current_date - 60, 'ativo')
 on conflict (id) do nothing;
 
 update public.associados set fornecedor_id = 'dddddddd-0000-4000-8000-000000000001'
@@ -126,14 +142,21 @@ update public.associados set fornecedor_id = 'dddddddd-0000-4000-8000-0000000000
 
 insert into public.dependentes (id, associado_id, tenant_id, nome, cpf, data_nascimento, parentesco, status) values
   ('de900000-0000-4000-8000-000000000001', 'a5500000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'PEDRO DA SILVA',   '000.000.000-11', '2005-08-09', 'FILHO',  'ativo'),
-  ('de900000-0000-4000-8000-000000000002', 'a5500000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'CARLOS DA SILVA',  '000.000.000-12', '1970-02-14', 'CONJUGE','ativo')
+  ('de900000-0000-4000-8000-000000000002', 'a5500000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'CARLOS DA SILVA',  '000.000.000-12', '1970-02-14', 'CONJUGE','ativo'),
+  -- Os dois do ANTONIO ficam SEM cpf, de proposito: `handleSave` recusa o cadastro inteiro
+  -- quando qualquer dependente tem CPF preenchido e invalido, e os CPFs desta semente nao
+  -- fecham o digito verificador (decisao deliberada, registrada no CLAUDE.md). Sem CPF o
+  -- guard nao dispara, e eh isso que torna o caminho de SALVAR exercitavel neste associado.
+  ('de900000-0000-4000-8000-000000000011', 'a5500000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'BENEDITA COLETIVO', null, '1972-02-02', 'CONJUGE','ativo'),
+  ('de900000-0000-4000-8000-000000000012', 'a5500000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'CARLA COLETIVO',    null, '2008-09-09', 'FILHO',  'ativo')
 on conflict (id) do nothing;
 
 insert into public.contratos (id, tenant_id, associado_id, plano_pax_id, numero_contrato, data_inicio, valor_mensalidade, taxa_adesao, status) values
   ('c0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'a5500000-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000002', 'CTR-HML00001', current_date - 180, 100.00, 80.00, 'ativo'),
   ('c0000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'a5500000-0000-4000-8000-000000000002', 'bbbbbbbb-0000-4000-8000-000000000001', 'CTR-HML00002', current_date - 90,  60.00,  50.00, 'ativo'),
   ('c0000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'a5500000-0000-4000-8000-000000000003', 'bbbbbbbb-0000-4000-8000-000000000001', 'CTR-HML00003', current_date - 30,  60.00,   0.00, 'ativo'),
-  ('c0000000-0000-4000-8000-000000000004', '22222222-2222-4222-8222-222222222222', 'a5500000-0000-4000-8000-000000000004', 'bbbbbbbb-0000-4000-8000-000000000003', 'CTR-HML00004', current_date - 15,  45.00,   0.00, 'ativo')
+  ('c0000000-0000-4000-8000-000000000004', '22222222-2222-4222-8222-222222222222', 'a5500000-0000-4000-8000-000000000004', 'bbbbbbbb-0000-4000-8000-000000000003', 'CTR-HML00004', current_date - 15,  45.00,   0.00, 'ativo'),
+  ('c0000000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'a5500000-0000-4000-8000-000000000005', 'bbbbbbbb-0000-4000-8000-000000000004', 'CTR-HML00005', current_date - 60,  30.00,   0.00, 'ativo')
 on conflict (id) do nothing;
 
 -- ------------------------------------------------- categorias de fornecedor

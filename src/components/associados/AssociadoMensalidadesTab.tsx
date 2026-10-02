@@ -29,7 +29,6 @@ import {
 import { registrarAuditoria } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatters';
 import {
-  ultrapassaLimiteColetivo,
   calcularValorMensalidadeBase,
   descricaoCalculoMensalidade,
   gerarProjecaoParcelas,

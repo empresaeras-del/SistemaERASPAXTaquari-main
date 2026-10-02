@@ -7,6 +7,7 @@ import { associadoSelecionavel } from '../../utils/selecaoCadastro';
 import { idadeEmAnos } from '../../utils/resumoAssociado';
 import { gerarProjecaoParcelas } from '../../utils/mensalidadesAssociadoHelpers';
 import { baseDaParcela, valorManualDaParcela } from '../../utils/valorParcelaManual';
+import { excedeLimiteDeVidas, mensalidadeDoAssociado } from '../../utils/limiteVidasColetivo';
 import { salvarReceita } from '../../services/financeiroService';
 import { resolverContaLancamento } from '../../services/planoContabilService';
 import { CODIGO_CONTA_MENSALIDADE } from '../../config/planoContabilPadrao.config';
@@ -140,15 +141,17 @@ export const NovoContratoWizard: React.FC<{
     return (planosCompletos || []).find((p) => p.id === planoId);
   }, [planosCompletos, planoId]);
 
-  const ultrapassouLimiteColetivo = useMemo(() => {
-    if (!planoSelecionado || !selectedAssociado) return false;
-    const nVidas = 1 + (selectedAssociado.dependentes?.length || 0);
-    if (planoSelecionado.tipo_plano === 'coletivo') {
-      const limite = planoSelecionado.limite_vidas || 999;
-      return nVidas > limite;
-    }
-    return false;
-  }, [planoSelecionado, selectedAssociado]);
+  // O limite que vale para este associado — o personalizado do cadastro antes do do plano.
+  // Esta checagem era escrita à mão aqui, com o `|| 999` que `limiteDeVidasEfetivo` substitui.
+  const ultrapassouLimiteColetivo = useMemo(
+    () =>
+      excedeLimiteDeVidas(
+        planoSelecionado,
+        selectedAssociado,
+        1 + (selectedAssociado?.dependentes?.length || 0),
+      ),
+    [planoSelecionado, selectedAssociado],
+  );
 
   const valorPlano = useMemo(() => {
     if (!planoSelecionado || !selectedAssociado) return 0;
@@ -159,9 +162,15 @@ export const NovoContratoWizard: React.FC<{
     return calcularValor(planoSelecionado, nVidas, depsIds, valorExtra).total;
   }, [planoSelecionado, selectedAssociado, calcularValor, valorExtra]);
 
+  /**
+   * A base da parcela em três degraus, do mais específico para o mais geral: o valor digitado
+   * agora neste assistente, depois o valor exclusivo acordado no cadastro do associado, e por
+   * fim o cálculo do plano. Sem o degrau do meio, abrir um contrato novo para quem já tem
+   * acordo recomeçaria do valor do plano e perderia o que foi negociado.
+   */
   const valorBaseParcela = useMemo(
-    () => baseDaParcela(valorParcelaManual, valorPlano),
-    [valorParcelaManual, valorPlano],
+    () => baseDaParcela(valorParcelaManual, mensalidadeDoAssociado(selectedAssociado, valorPlano)),
+    [valorParcelaManual, selectedAssociado, valorPlano],
   );
 
   // Esta projeção estava escrita à mão aqui, idêntica à de `mensalidadesAssociadoHelpers`

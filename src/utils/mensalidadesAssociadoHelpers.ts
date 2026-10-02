@@ -8,18 +8,15 @@ import { PlanoPax } from '../types/planosPax';
  * isoladamente sem montar o componente. Ver CLAUDE.md, seção "God components".
  */
 
-/** Verifica se a quantidade de vidas cadastradas excede o limite de um plano coletivo. */
-export const ultrapassaLimiteColetivo = (
-  plano: Pick<PlanoPax, 'tipo_plano' | 'limite_vidas'> | null | undefined,
-  vidasCadastradas: number
-): boolean => {
-  if (!plano) return false;
-  if (plano.tipo_plano === 'coletivo') {
-    const limite = plano.limite_vidas || 999;
-    return vidasCadastradas > limite;
-  }
-  return false;
-};
+/**
+ * `ultrapassaLimiteColetivo` saiu daqui em 02/10/2026, substituída por
+ * `excedeLimiteDeVidas` em `utils/limiteVidasColetivo.ts`. O motivo não é organização: a
+ * antiga só olhava o limite do PLANO e ignorava o limite personalizado do associado, então um
+ * chamador novo que a usasse voltaria a acusar excesso em quem tem acordo — em silêncio. Duas
+ * funções para a mesma pergunta só são corrigidas uma vez.
+ *
+ * O único chamador que restava era um import morto em `AssociadoMensalidadesTab`.
+ */
 
 /**
  * Calcula o valor-base da mensalidade: em planos individuais, multiplica o

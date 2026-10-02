@@ -11,6 +11,7 @@ import {
   montarHistoricoImpeditivo,
 } from '../utils/historicoAssociado';
 import { vinculoEmpresaParaGravacao } from '../utils/empresaVinculada';
+import { ajustesParaGravacao } from '../utils/limiteVidasColetivo';
 import { statusDoContratoParaAssociado } from '../utils/statusContrato';
 
 export interface Associado {
@@ -53,6 +54,13 @@ export interface Associado {
   plano_nome?: string;
   documentos?: DocumentoAssociado[];
   valor_plano?: number;
+  /**
+   * Ajustes acordados SÓ para este associado, sem alterar o plano — ver
+   * `utils/limiteVidasColetivo.ts`. Quem manda na mensalidade é
+   * `valor_mensalidade_exclusivo`; `valor_plano` acima é o snapshot do resultado.
+   */
+  limite_vidas_personalizado?: number | null;
+  valor_mensalidade_exclusivo?: number | null;
   assinatura_base64?: string;
   historico_contratos?: { id: string; plano: string; valor: number; data_inicio: string; data_fim?: string }[];
   status: 'ativo' | 'inativo' | 'inadimplente' | 'encerrado';
@@ -297,9 +305,26 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
     ? String(rest.data_adesao).split('T')[0] 
     : new Date().toISOString().split('T')[0];
 
-  const valorPlano = (rest.valor_plano !== undefined && rest.valor_plano !== null && !isNaN(Number(rest.valor_plano)))
+  const valorPlanoInformado = (rest.valor_plano !== undefined && rest.valor_plano !== null && !isNaN(Number(rest.valor_plano)))
     ? Number(rest.valor_plano)
     : null;
+
+  /**
+   * Os ajustes por associado, normalizados no funil — não em cada tela que grava. São três
+   * caminhos (formulário, wizard de contrato, reativação) e o próximo entra coberto sem
+   * precisar lembrar, como `registrarAuditoria` já faz com o enxugamento de `detalhes`.
+   */
+  const ajustes = ajustesParaGravacao(rest);
+
+  /**
+   * `valor_plano` é o SNAPSHOT do que vale: com valor exclusivo acordado, ele passa a ser o
+   * exclusivo. Isso é o que impede as duas colunas de divergirem — e elas JÁ divergiam em
+   * produção antes desta mudança: dois associados tinham `valor_plano` igual ao do plano
+   * (R$ 16 e R$ 21) enquanto as parcelas cobravam R$ 74 e R$ 84, e era o `valor_plano` que
+   * alimentava a ficha impressa, a tag `{{valor_mensalidade}}` do contrato e o ticket médio
+   * do dashboard. Ver CLAUDE.md, "qual dos dois manda".
+   */
+  const valorPlano = ajustes.valor_mensalidade_exclusivo ?? valorPlanoInformado;
 
   const nVidas = Number(rest.n_vidas) || (1 + (Array.isArray(dependentes) ? dependentes.length : 0));
 
@@ -313,6 +338,8 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
     data_adesao: dataAdesao,
     valor_plano: valorPlano ?? undefined,
     n_vidas: nVidas,
+    limite_vidas_personalizado: ajustes.limite_vidas_personalizado,
+    valor_mensalidade_exclusivo: ajustes.valor_mensalidade_exclusivo,
     // Normaliza também a cópia local: cache e servidor divergindo aqui faria o filtro por empresa
     // dar respostas diferentes conforme a busca remota tivesse funcionado ou não.
     fornecedor_id: vinculoEmpresaParaGravacao(rest.tipo_pessoa, rest.fornecedor_id) ?? undefined,
@@ -413,6 +440,11 @@ export const saveAssociado = async (associado: Associado, isOnline: boolean): Pr
         numero_contrato: rest.numero_contrato || null,
         n_vidas: nVidas,
         valor_plano: valorPlano,
+        // Desestruturar um campo para fora do payload "porque a coluna não existe" é perda de
+        // dado agendada — a lição que o `fornecedor_id` do associado PJ deixou. As duas colunas
+        // existem desde a migration 20261002181122 e viajam explicitamente.
+        limite_vidas_personalizado: ajustes.limite_vidas_personalizado,
+        valor_mensalidade_exclusivo: ajustes.valor_mensalidade_exclusivo,
         data_adesao: dataAdesao,
         assinatura_base64: rest.assinatura_base64 || null,
         documentos: Array.isArray(rest.documentos) ? rest.documentos : [],

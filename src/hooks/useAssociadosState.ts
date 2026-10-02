@@ -26,6 +26,7 @@ import { DependenteFormModal } from "../components/associados/DependenteFormModa
 import { BotaoSalvar } from "../components/common/BotaoSalvar";
 import { AlertaAlteracoesPendentes } from "../components/common/AlertaAlteracoesPendentes";
 import { usePlanosPax } from "../hooks/usePlanosPax";
+import { mensalidadeDoAssociado, limiteDeVidasEfetivo, limiteEhPersonalizado } from '../utils/limiteVidasColetivo';
 import { useColumnVisibility } from "../hooks/useColumnVisibility";
 import { ColumnVisibilityToggle } from "../components/ColumnVisibilityToggle";
 import { useFornecedores } from "../hooks/useFornecedores";
@@ -186,18 +187,56 @@ export function useAssociadosState() {
 
 
 
-  const valorPlanoAtivo = React.useMemo(() => {
+  /**
+   * O que o PLANO calcula para este associado, sem nenhum ajuste — é o número que o campo de
+   * valor exclusivo mostra como "Auto (R$ ...)" e o que vale quando não há acordo.
+   */
+  const valorCalculadoDoPlano = React.useMemo(() => {
     if (!editingAssociado?.plano_pax_id) return editingAssociado?.valor_plano || 0;
-    
+
     // Check if we should calculate
     const planoCompleto = planosCompletos.find(p => p.id === editingAssociado.plano_pax_id);
     if (!planoCompleto) return editingAssociado?.valor_plano || 0;
-    
+
     const { nVidas, idadesDependentes } = calcularNVidasEIdades(editingAssociado.dependentes);
 
     const result = calcularValor(planoCompleto, nVidas, idadesDependentes);
     return result.total;
   }, [editingAssociado, planosCompletos, calcularValor]);
+
+  /**
+   * A mensalidade que de fato vale: o valor exclusivo acordado com este associado quando
+   * existe, senão o cálculo do plano.
+   *
+   * **Este é o funil, e por isso o override mora aqui.** `valorPlanoAtivo` alimenta o "Valor
+   * Mensal" da aba de contratos, o histórico e o `ContratoDocumentosGenerator` — ou seja, o
+   * contrato IMPRESSO. Antes desta mudança ele recalculava do plano e ignorava o acordo, então
+   * o documento entregue à família podia afirmar um valor diferente do que ela paga.
+   */
+  const valorPlanoAtivo = React.useMemo(
+    () => mensalidadeDoAssociado(editingAssociado, valorCalculadoDoPlano),
+    [editingAssociado, valorCalculadoDoPlano],
+  );
+
+  /**
+   * O limite de vidas que vale para este associado, já com o personalizado aplicado — e se ele
+   * está em uso. A tela mostra os dois para o operador saber de onde o número veio: sem isso,
+   * "limite 7" num plano de limite 2 pareceria defeito.
+   */
+  const planoDoAssociadoEmEdicao = React.useMemo(
+    () => planosCompletos.find(p => p.id === editingAssociado?.plano_pax_id),
+    [planosCompletos, editingAssociado?.plano_pax_id],
+  );
+
+  const limiteVidasEfetivo = React.useMemo(
+    () => limiteDeVidasEfetivo(planoDoAssociadoEmEdicao, editingAssociado),
+    [planoDoAssociadoEmEdicao, editingAssociado],
+  );
+
+  const limiteVidasPersonalizadoEmUso = React.useMemo(
+    () => limiteEhPersonalizado(planoDoAssociadoEmEdicao, editingAssociado),
+    [planoDoAssociadoEmEdicao, editingAssociado],
+  );
 
   const todosDependentes = React.useMemo(() => extrairTodosDependentes(associados), [associados]);
 
@@ -752,6 +791,9 @@ export function useAssociadosState() {
     novoPlanoSelecionado, setNovoPlanoSelecionado,
     parcelasAbertasMap, setParcelasAbertasMap,
     valorPlanoAtivo,
+    valorCalculadoDoPlano,
+    limiteVidasEfetivo,
+    limiteVidasPersonalizadoEmUso,
     todosDependentes,
     dependentesFiltrados,
     loadData,

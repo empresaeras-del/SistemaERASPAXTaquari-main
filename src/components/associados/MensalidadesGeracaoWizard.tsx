@@ -15,11 +15,17 @@ import { registrarAuditoria } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatters';
 import { baseDaParcela, valorManualDaParcela } from '../../utils/valorParcelaManual';
 import {
-  ultrapassaLimiteColetivo,
   calcularValorMensalidadeBase,
   descricaoCalculoMensalidade,
   gerarProjecaoParcelas,
 } from '../../utils/mensalidadesAssociadoHelpers';
+import {
+  excedeLimiteDeVidas,
+  limiteDeVidasEfetivo,
+  mensalidadeDoAssociado,
+  origemDaMensalidade,
+  temValorExclusivo,
+} from '../../utils/limiteVidasColetivo';
 
 export const MensalidadesGeracaoWizard = ({
   associado,
@@ -51,19 +57,44 @@ export const MensalidadesGeracaoWizard = ({
 
   const vidasCadastradas = associado.n_vidas || 1;
 
-  const ultrapassouLimiteColetivo = useMemo(
-    () => ultrapassaLimiteColetivo(planoSelecionado, vidasCadastradas),
-    [planoSelecionado, vidasCadastradas]
+  /**
+   * O limite que vale para ESTE associado — o personalizado do cadastro quando existe, senão
+   * o do plano. Era aqui que 11 dos 16 associados ativos caíam permanentemente no aviso de
+   * excesso, porque os três planos coletivos declaram limite 2.
+   */
+  const excedeLimite = useMemo(
+    () => excedeLimiteDeVidas(planoSelecionado, associado, vidasCadastradas),
+    [planoSelecionado, associado, vidasCadastradas]
   );
 
-  const valorMensalidadeBase = useMemo(
+  const limiteQueVale = useMemo(
+    () => limiteDeVidasEfetivo(planoSelecionado, associado),
+    [planoSelecionado, associado]
+  );
+
+  /** O que o plano calcula, antes de qualquer acordo — é o que o campo mostra como "Auto". */
+  const valorCalculadoDoPlano = useMemo(
     () => calcularValorMensalidadeBase(planoSelecionado, vidasCadastradas, valorExtra),
     [planoSelecionado, vidasCadastradas, valorExtra]
   );
 
+  /**
+   * A mensalidade que de fato vale: o valor exclusivo do associado vence o cálculo do plano.
+   *
+   * Antes desta mudança o wizard recalculava sempre do plano e **ignorava** o valor já
+   * acordado e gravado no cadastro — então quem tinha acordo de R$ 63,00 via R$ 21,00 aqui e
+   * precisava redigitar a diferença a cada geração.
+   */
+  const valorMensalidadeBase = useMemo(
+    () => mensalidadeDoAssociado(associado, valorCalculadoDoPlano),
+    [associado, valorCalculadoDoPlano]
+  );
+
+  const usaValorExclusivo = temValorExclusivo(associado);
+
   const descricaoCalculo = useMemo(
-    () => descricaoCalculoMensalidade(planoSelecionado, vidasCadastradas, valorExtra),
-    [planoSelecionado, vidasCadastradas, valorExtra]
+    () => origemDaMensalidade(associado, descricaoCalculoMensalidade(planoSelecionado, vidasCadastradas, valorExtra)),
+    [associado, planoSelecionado, vidasCadastradas, valorExtra]
   );
 
   const gerarProjecao = useCallback(() => {
@@ -155,6 +186,16 @@ export const MensalidadesGeracaoWizard = ({
         // precisa conseguir distinguir a mensalidade calculada pelo plano da que alguém digitou.
         // Mesma chave e mesmo significado do `NOVO_CONTRATO_GERADO`.
         manual_override: valorManualDaParcela(valorParcelaManual) !== null,
+        /**
+         * Tirar um controle obriga a registrar o uso — a mesma razão pela qual
+         * `manual_override` entrou aqui em 23/09. A trava por excesso de vidas deixou de
+         * existir, então quem lê a Ata de Ocorrências precisa poder distinguir a mensalidade
+         * calculada pelo plano da que saiu de um acordo, e ver as vidas que ela cobre.
+         */
+        valor_exclusivo_associado: usaValorExclusivo,
+        vidas_cobertas: vidasCadastradas,
+        limite_vidas_aplicado: limiteQueVale,
+        excede_limite_de_vidas: excedeLimite,
         online: state.isOnline
       });
 
@@ -233,27 +274,48 @@ export const MensalidadesGeracaoWizard = ({
             </div>
           </div>
 
-          {ultrapassouLimiteColetivo && (
+          {/*
+            **Informativo, nunca trava** (decisão de 02/10/2026). A versão anterior
+            desabilitava "Confirmar e Lançar" até que um valor extra fosse digitado — e isso
+            valia para 11 dos 16 associados ativos, porque os três planos coletivos declaram
+            limite 2 e a base real tem famílias de até 7 vidas. Uma trava que dispara no
+            caminho mais comum obstrui a operação em vez de proteger algo, e era contornável
+            digitando qualquer número.
+
+            O campo de valor extra sai de cena quando há valor exclusivo acordado: ele soma
+            sobre o cálculo do plano, e com o exclusivo o cálculo não é usado. Deixá-lo
+            visível ali faria o operador digitar um número que não tem efeito nenhum.
+          */}
+          {excedeLimite && (
             <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl flex flex-col gap-2">
               <div className="flex items-center gap-2 text-amber-500 font-bold text-sm">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>Atenção: Limite de Vidas Excedido</span>
+                <span>Vidas acima do limite</span>
               </div>
               <p className="text-xs text-text-subtle">
-                A quantidade de vidas cadastradas ({vidasCadastradas}) é superior ao máximo permitido ({planoSelecionado?.limite_vidas}) para este plano coletivo.
+                São {vidasCadastradas} vidas cadastradas e o limite que vale para este associado
+                é {limiteQueVale}. Isto não bloqueia a geração — ajuste o limite ou o valor
+                exclusivo na aba <strong>Contratos</strong> do cadastro se houver acordo.
               </p>
-              <div>
-                <label className="block text-xs font-medium text-text-subtle mb-1">Valor Extra a Cobrar (R$)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={valorExtra || ''}
-                  onChange={e => setValorExtra(parseFloat(e.target.value) || 0)}
-                  className="w-full max-w-[200px] bg-bg-surface border border-border-default rounded-xl px-4 py-2 text-text-base focus:border-[#3B82F6] transition-all text-sm font-bold"
-                  placeholder="0.00"
-                />
-              </div>
+              {!usaValorExclusivo && (
+                <div>
+                  <label className="block text-xs font-medium text-text-subtle mb-1">
+                    Valor Extra a Cobrar (R$) — só nestas parcelas
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={valorExtra || ''}
+                    onChange={e => setValorExtra(parseFloat(e.target.value) || 0)}
+                    className="w-full max-w-[200px] bg-bg-surface border border-border-default rounded-xl px-4 py-2 text-text-base focus:border-[#3B82F6] transition-all text-sm font-bold"
+                    placeholder="0.00"
+                  />
+                  <p className="text-[11px] text-text-muted mt-1">
+                    Para um acordo permanente, use o valor exclusivo no cadastro.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -384,7 +446,8 @@ export const MensalidadesGeracaoWizard = ({
                   <button
                     type="button"
                     onClick={confirmarGeracao}
-                    disabled={loading || (ultrapassouLimiteColetivo && (!valorExtra || valorExtra <= 0))}
+                    // Só o `loading`: exceder o limite deixou de travar a geração.
+                    disabled={loading}
                     className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/25"
                   >
                     {loading ? 'Gerando...' : 'Confirmar e Lançar'}

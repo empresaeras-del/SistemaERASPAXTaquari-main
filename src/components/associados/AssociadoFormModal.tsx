@@ -69,7 +69,7 @@ export const AssociadoFormModal = (props: any) => {
     buscaDependentes, setBuscaDependentes, showModificarPlanoModal, setShowModificarPlanoModal,
     showNovoContrato, setShowNovoContrato, modificarPlanoStep, setModificarPlanoStep,
     justificativaModificacao, setJustificativaModificacao, novoPlanoSelecionado, setNovoPlanoSelecionado,
-    valorPlanoAtivo, dependentesFiltrados,
+    valorPlanoAtivo, valorCalculadoDoPlano, limiteVidasEfetivo, limiteVidasPersonalizadoEmUso, dependentesFiltrados,
     loadData, fieldErrors, buscandoCep, buscarCepViaCep,
     executarValidacaoOuAlertar, handleFieldChange, handleOpenModal, handleCloseModal,
     handleSave, handleExcluirDependente, handleExportDependentesPDF,
@@ -164,7 +164,7 @@ export const AssociadoFormModal = (props: any) => {
                   ) : activeTab === "dependentes" ? (
                     <AssociadoDependentesTab bloqueadoPorInatividade={bloqueadoPorInatividade} buscaDependenteInterno={buscaDependenteInterno} editingAssociado={editingAssociado} handleExcluirDependente={handleExcluirDependente} setBuscaDependenteInterno={setBuscaDependenteInterno} setDependenteEmEdicao={setDependenteEmEdicao} setDependenteFormModalOpen={setDependenteFormModalOpen} state={state} />
                   ) : activeTab === "contratos" ? (
-                    <AssociadoContratosTab bloqueadoPorInatividade={bloqueadoPorInatividade} editingAssociado={editingAssociado} empresasConveniadas={empresasConveniadas} planos={planos} selectedContratoId={selectedContratoId} setEditingAssociado={setEditingAssociado} setJustificativaModificacao={setJustificativaModificacao} setModificarPlanoStep={setModificarPlanoStep} setNovoPlanoSelecionado={setNovoPlanoSelecionado} setSelectedContratoId={setSelectedContratoId} setShowModificarPlanoModal={setShowModificarPlanoModal} setShowNovoContrato={setShowNovoContrato} valorPlanoAtivo={valorPlanoAtivo} />
+                    <AssociadoContratosTab bloqueadoPorInatividade={bloqueadoPorInatividade} editingAssociado={editingAssociado} empresasConveniadas={empresasConveniadas} planos={planos} selectedContratoId={selectedContratoId} setEditingAssociado={setEditingAssociado} setJustificativaModificacao={setJustificativaModificacao} setModificarPlanoStep={setModificarPlanoStep} setNovoPlanoSelecionado={setNovoPlanoSelecionado} setSelectedContratoId={setSelectedContratoId} setShowModificarPlanoModal={setShowModificarPlanoModal} setShowNovoContrato={setShowNovoContrato} valorPlanoAtivo={valorPlanoAtivo} valorCalculadoDoPlano={valorCalculadoDoPlano} limiteVidasEfetivo={limiteVidasEfetivo} limiteVidasPersonalizadoEmUso={limiteVidasPersonalizadoEmUso} />
                   ) : activeTab === "mensalidades" ? (
                     <AssociadoMensalidadesTab associado={editingAssociado} onSuccess={!isEditingMode ? () => setActiveTab("documentos") : undefined} />
                   ) : activeTab === "requisicoes" ? (

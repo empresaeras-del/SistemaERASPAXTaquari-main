@@ -36,6 +36,7 @@ import {
 } from '../../utils/reativacaoAssociado';
 import { DependenteFormModal } from './DependenteFormModal';
 import { formatCurrency } from '../../utils/formatters';
+import { excedeLimiteDeVidas } from '../../utils/limiteVidasColetivo';
 import { formatarDocumento, idadeEmAnos } from '../../utils/resumoAssociado';
 import { DocumentoPadrao } from '../../types/documentos';
 import { VisualizadorDocumentoPadraoModal } from '../documentos/VisualizadorDocumentoPadraoModal';
@@ -212,10 +213,12 @@ export const ReativacaoAssociadoWizard: React.FC<Props> = ({ associado, onClose,
     return isNaN(n) || n < 0 ? 0 : n;
   }, [taxaAdesao]);
 
-  const ultrapassaLimite = useMemo(() => {
-    if (!planoSelecionado || planoSelecionado.tipo_plano !== 'coletivo') return false;
-    return nVidas > (planoSelecionado.limite_vidas || 999);
-  }, [planoSelecionado, nVidas]);
+  // O limite personalizado do associado vale aqui também: quem está sendo reativado é o mesmo
+  // cadastro, com o mesmo acordo de vidas que já estava gravado.
+  const ultrapassaLimite = useMemo(
+    () => excedeLimiteDeVidas(planoSelecionado, associado, nVidas),
+    [planoSelecionado, associado, nVidas],
+  );
 
   const parcelas = useMemo(() => {
     if (!planoSelecionado) return [];
