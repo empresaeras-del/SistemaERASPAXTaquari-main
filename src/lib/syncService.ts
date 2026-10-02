@@ -3,6 +3,7 @@ import { getFromIDB, saveToIDB, deleteFromIDB, getAllFromIDB } from './idb';
 import { generateUUID } from '../utils/uuid';
 import { tenantDeEscrita, MENSAGEM_TENANT_INDEFINIDO } from '../utils/tenant';
 import { vinculoEmpresaParaGravacao } from '../utils/empresaVinculada';
+import { ajustesParaGravacao } from '../utils/limiteVidasColetivo';
 
 export interface SyncTask {
   id: string;
@@ -169,7 +170,11 @@ export const processSyncQueue = async (isOnline: boolean) => {
             const planoPaxId = assocClean.plano_pax_id && UUID_REGEX.test(assocClean.plano_pax_id) ? assocClean.plano_pax_id : null;
             const dataNascimento = (assocClean.data_nascimento && String(assocClean.data_nascimento).trim() !== '') ? String(assocClean.data_nascimento).split('T')[0] : null;
             const dataAdesao = (assocClean.data_adesao && String(assocClean.data_adesao).trim() !== '') ? String(assocClean.data_adesao).split('T')[0] : new Date().toISOString().split('T')[0];
-            const valorPlano = (assocClean.valor_plano !== undefined && assocClean.valor_plano !== null && !isNaN(Number(assocClean.valor_plano))) ? Number(assocClean.valor_plano) : null;
+            const valorPlanoInformado = (assocClean.valor_plano !== undefined && assocClean.valor_plano !== null && !isNaN(Number(assocClean.valor_plano))) ? Number(assocClean.valor_plano) : null;
+            // Os mesmos ajustes do caminho online, pela mesma função: a fila não pode gravar
+            // uma regra diferente da que a tela gravou.
+            const ajustes = ajustesParaGravacao(assocClean);
+            const valorPlano = ajustes.valor_mensalidade_exclusivo ?? valorPlanoInformado;
             const nVidas = Number(assocClean.n_vidas) || (1 + (Array.isArray(dependentes) ? dependentes.length : 0));
 
             payload = {
@@ -186,6 +191,8 @@ export const processSyncQueue = async (isOnline: boolean) => {
               data_adesao: dataAdesao,
               valor_plano: valorPlano,
               n_vidas: nVidas,
+              limite_vidas_personalizado: ajustes.limite_vidas_personalizado,
+              valor_mensalidade_exclusivo: ajustes.valor_mensalidade_exclusivo,
               documentos: Array.isArray(assocClean.documentos) ? assocClean.documentos : [],
               historico_contratos: Array.isArray(assocClean.historico_contratos) ? assocClean.historico_contratos : []
             };

@@ -2,6 +2,7 @@ import React from 'react';
 import { Associado } from '../../services/associadosService';
 import { formatDateSafe } from '../../utils/dateUtils';
 import { CATEGORIA_EMPRESA_CONVENIADA, nomeDaEmpresa } from '../../utils/empresaVinculada';
+import { excedeLimiteDeVidas, temValorExclusivo } from '../../utils/limiteVidasColetivo';
 import { Edit2, Lock, Plus, Search } from 'lucide-react';
 
 interface Props {
@@ -18,6 +19,9 @@ interface Props {
   setShowModificarPlanoModal: any;
   setShowNovoContrato: any;
   valorPlanoAtivo: any;
+  valorCalculadoDoPlano: number;
+  limiteVidasEfetivo: number | null;
+  limiteVidasPersonalizadoEmUso: boolean;
 }
 
 /**
@@ -32,7 +36,28 @@ interface Props {
  * inclui a empresa já gravada mesmo desativada — senão abrir para editar perderia a seleção
  * e o save gravaria o vínculo vazio.
  */
-export const AssociadoContratosTab: React.FC<Props> = ({ bloqueadoPorInatividade, editingAssociado, empresasConveniadas, planos, selectedContratoId, setEditingAssociado, setJustificativaModificacao, setModificarPlanoStep, setNovoPlanoSelecionado, setSelectedContratoId, setShowModificarPlanoModal, setShowNovoContrato, valorPlanoAtivo }) => {
+export const AssociadoContratosTab: React.FC<Props> = ({ bloqueadoPorInatividade, editingAssociado, empresasConveniadas, planos, selectedContratoId, setEditingAssociado, setJustificativaModificacao, setModificarPlanoStep, setNovoPlanoSelecionado, setSelectedContratoId, setShowModificarPlanoModal, setShowNovoContrato, valorPlanoAtivo, valorCalculadoDoPlano, limiteVidasEfetivo, limiteVidasPersonalizadoEmUso }) => {
+  /**
+   * O que esta aba precisa saber de um plano — e só isso. A prop `planos` é `any` (dívida
+   * anterior deste arquivo, igual às outras doze), e `.find` sobre `any` deixa o callback sem
+   * tipo contextual: um `(p: any) =>` seria mais um `any` acrescentado em vez de aproveitado.
+   * Declarar a fatia aqui estreita o tipo onde o domínio vale e não mexe no contrato da prop.
+   */
+  const listaDePlanos = (planos || []) as Array<{
+    id?: string;
+    nome?: string;
+    tipo_plano?: string;
+    limite_vidas?: number | null;
+  }>;
+  const planoDoAssociado = listaDePlanos.find((p) => p.id === editingAssociado.plano_pax_id);
+  const ehPlanoColetivo = planoDoAssociado?.tipo_plano === 'coletivo';
+  const valorExclusivoEmUso = temValorExclusivo(editingAssociado);
+  const excedeLimite = excedeLimiteDeVidas(
+    planoDoAssociado,
+    editingAssociado,
+    1 + (editingAssociado.dependentes?.length || 0),
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between border-b border-border-default pb-4">
@@ -224,6 +249,134 @@ export const AssociadoContratosTab: React.FC<Props> = ({ bloqueadoPorInatividade
               className="w-full px-4 py-2.5 bg-bg-surface border border-border-default rounded-xl text-text-subtle cursor-not-allowed focus:outline-none transition-all"
             />
             <p className="text-xs text-text-subtle mt-1">Calculado automaticamente (Titular + Dependentes)</p>
+          </div>
+
+          {/*
+            Ajustes acordados SÓ com este associado. O plano não é alterado — ele continua
+            servindo todos os outros, e era isso que travava a operação antes: os três planos
+            coletivos tinham limite 2 e 11 dos 16 ativos excediam, então o aviso de excesso era
+            permanente e a trava da geração de mensalidades valia para a maioria da base.
+            A resolução mora em `utils/limiteVidasColetivo.ts`, nunca aqui.
+          */}
+          <div className="p-4 bg-bg-surface border border-border-default rounded-xl mt-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h5 className="text-sm font-semibold text-text-subtle">Ajustes deste Associado</h5>
+              {(limiteVidasPersonalizadoEmUso || valorExclusivoEmUso) && (
+                <span className="text-[10px] px-1.5 py-0.5 bg-[#3B82F6]/10 text-[#3B82F6] font-bold rounded border border-[#3B82F6]/20 shrink-0">
+                  PERSONALIZADO
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-text-subtle">
+              Valem apenas para este cadastro e não alteram o plano
+              {planoDoAssociado?.nome ? ` ${planoDoAssociado.nome}` : ''}.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* O limite só existe em plano coletivo: no individual o preço escala com as
+                  vidas e não há teto para personalizar. */}
+              {ehPlanoColetivo && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-text-subtle">
+                      Limite de Vidas
+                    </label>
+                    {limiteVidasPersonalizadoEmUso && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingAssociado({ ...editingAssociado, limite_vidas_personalizado: null })}
+                        className="text-[10px] text-[#3B82F6] hover:underline"
+                        title="Voltar ao limite do plano"
+                      >
+                        Restaurar
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    disabled={bloqueadoPorInatividade}
+                    aria-label="Limite de vidas personalizado"
+                    placeholder={`Padrão do plano (${planoDoAssociado?.limite_vidas ?? 'sem limite'})`}
+                    value={editingAssociado.limite_vidas_personalizado ?? ''}
+                    onChange={(e) => setEditingAssociado({
+                      ...editingAssociado,
+                      // `''` vira null, não 0: numa coluna numérica o vazio seria 22P02, e um
+                      // zero gravado esconderia TODAS as vidas atrás do aviso de excesso.
+                      limite_vidas_personalizado: e.target.value === '' ? null : Number(e.target.value),
+                    })}
+                    className={`w-full bg-bg-base border rounded-xl px-4 py-2.5 text-sm text-text-base outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      limiteVidasPersonalizadoEmUso
+                        ? 'border-[#3B82F6] ring-1 ring-[#3B82F6]/30'
+                        : 'border-border-default focus:border-[#3B82F6]'
+                    }`}
+                  />
+                  <p className="text-[11px] text-text-muted mt-1">
+                    Vale {limiteVidasEfetivo ?? 'sem limite'} {limiteVidasEfetivo === 1 ? 'vida' : 'vidas'}
+                    {limiteVidasPersonalizadoEmUso ? ' (acordo deste associado)' : ' (do plano)'}
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-text-subtle">
+                    Valor Mensal Exclusivo (R$)
+                  </label>
+                  {valorExclusivoEmUso && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingAssociado({ ...editingAssociado, valor_mensalidade_exclusivo: null })}
+                      className="text-[10px] text-[#3B82F6] hover:underline"
+                      title="Voltar ao cálculo do plano"
+                    >
+                      Restaurar
+                    </button>
+                  )}
+                </div>
+                {/*
+                  O placeholder NÃO começa com "Auto (R$": esse é o do campo "Valor Parcela"
+                  do `NovoContratoWizard`, que é montado como irmão desta aba — a aba fica
+                  atrás do assistente, então os dois ficam no DOM ao mesmo tempo e um seletor
+                  por prefixo de placeholder passaria a casar dois campos.
+                */}
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  disabled={bloqueadoPorInatividade}
+                  aria-label="Valor mensal exclusivo"
+                  placeholder={`Igual ao plano (R$ ${Number(valorCalculadoDoPlano || 0).toFixed(2).replace('.', ',')})`}
+                  value={editingAssociado.valor_mensalidade_exclusivo ?? ''}
+                  onChange={(e) => setEditingAssociado({
+                    ...editingAssociado,
+                    valor_mensalidade_exclusivo: e.target.value === '' ? null : Number(e.target.value),
+                  })}
+                  className={`w-full bg-bg-base border rounded-xl px-4 py-2.5 text-sm text-text-base outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    valorExclusivoEmUso
+                      ? 'border-[#3B82F6] ring-1 ring-[#3B82F6]/30'
+                      : 'border-border-default focus:border-[#3B82F6]'
+                  }`}
+                />
+                <p className="text-[11px] text-text-muted mt-1">
+                  {valorExclusivoEmUso
+                    ? 'Substitui o cálculo do plano nas mensalidades e no contrato'
+                    : `Calculado pelo plano: R$ ${Number(valorCalculadoDoPlano || 0).toFixed(2).replace('.', ',')}`}
+                </p>
+              </div>
+            </div>
+
+            {/* Informativo, nunca trava — a decisão de 02/10/2026. Com 11 de 16 ativos
+                excedendo, bloquear aqui obstrui a operação normal em vez de proteger algo. */}
+            {excedeLimite && (
+              <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl text-xs text-text-subtle">
+                <strong className="text-amber-500">Vidas acima do limite.</strong>{' '}
+                São {1 + (editingAssociado.dependentes?.length || 0)} vidas e o limite que vale é{' '}
+                {limiteVidasEfetivo}. Ajuste o limite acima se houver acordo, ou o valor exclusivo
+                se a cobrança for diferenciada — nenhuma operação fica bloqueada por isto.
+              </div>
+            )}
           </div>
 
           <div className="p-4 bg-bg-surface border border-border-default rounded-xl mt-4">

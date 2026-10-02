@@ -3001,6 +3001,123 @@ intermediário deixa a pergunta pela metade.
 De passagem, os campos da prévia ganharam `aria-label` (`Valor da parcela N`). Eles nunca tiveram
 rótulo nenhum, nem `<label>` nem `title`, e são a lista que de fato é gravada.
 
+## Limite de vidas e valor exclusivo por associado — a medição desmontou a regra
+
+Pedido de 02/10/2026: analisar o limite máximo dos planos coletivos e permitir ajuste manual,
+tanto do limite quanto do valor, **sem alterar o plano selecionado**. Migration
+`20261002181122`: `associados.limite_vidas_personalizado` (integer) e
+`associados.valor_mensalidade_exclusivo` (numeric(12,2)), as duas nullable e com `CHECK`
+(`>= 1` e `>= 0`).
+
+**A medição veio antes do código e mudou o que havia para fazer.** Os três planos coletivos
+declaram `limite_vidas = 2`, e **11 dos 16 associados coletivos ativos excedem**, chegando a 7
+vidas. Ou seja: o aviso "Limite de Vidas Excedido" e a trava que desabilitava "Confirmar e
+Lançar" **eram o estado normal da base, não a exceção** — e a trava era contornável digitando
+qualquer número no campo "valor extra". Uma regra que dispara para quase todo mundo não
+descreve o negócio; o acordo real é por família. Daí a decisão (do usuário) de **só avisar,
+nunca travar**.
+
+E o valor exclusivo **já existia de fato, sem campo próprio**: 16 dos 18 associados coletivos
+tinham `valor_plano` diferente do valor do plano, em números que não seguem fórmula nenhuma
+(R$ 40, 42, 61, 63, 64, 70, 76, 84, 85, 89…). Era digitação caso a caso no wizard de contrato
+e no campo por parcela da prévia. O que faltava não era a capacidade — era o lugar onde o
+acordo fica **declarado** e sobrevive à próxima geração de mensalidades.
+
+Cinco decisões valem como regra:
+
+- **Quem manda é a coluna de exceção; `valor_plano` é o snapshot do resultado.** É o mesmo par
+  de `categoria` ao lado de `conta_contabil_id`, e a seção das categorias de fornecedor já fixa
+  a regra: *ao acrescentar uma coluna ao lado de outra que guarda o mesmo dado, escreva qual
+  das duas manda*. Aqui `valor_plano` é lido pela ficha impressa, por `{{valor_mensalidade}}` e
+  pelo ticket médio do dashboard, então ele recebe o resultado — mas nunca é a fonte.
+- **Reaproveitar `valor_plano` como se ele FOSSE o exclusivo seria errado, e o caso que prova
+  isso já está em produção.** Em plano **individual** o preço escala com as vidas (R$ 20 × 3 =
+  60); tratar o número gravado como exclusivo **congelaria o preço em silêncio** ao incluir um
+  dependente. A presença da coluna nova é o que declara "este associado tem valor negociado"; a
+  ausência devolve o cálculo do plano. Há teste travando exatamente esse caso.
+- **O limite personalizado vale mesmo quando é MENOR que o do plano.** Ele é o acordo, não um
+  bônus. E em plano individual ele não existe: não há teto para personalizar, e um campo ali
+  convidaria a acordar um número que o cálculo ignora.
+- **Zero é valor, branco é ausência** — mensalidade de cortesia é um acordo legítimo, e um
+  `||` encadeado trataria `0` como campo vazio. Mesma escolha de `utils/valorParcelaManual.ts`.
+- **Apagar o campo grava `null`, nunca `undefined`.** `JSON.stringify` descarta chave
+  `undefined`, então o `upsert` chegaria sem a coluna e o acordo velho continuaria valendo — o
+  operador limparia o campo, salvaria, veria "sucesso" e os R$ 75 seguiriam no banco. É a
+  armadilha que este arquivo já registra nos dados do responsável e no vínculo da conveniada,
+  e aqui ela tem caso de e2e próprio.
+
+`utils/limiteVidasColetivo.ts` é puro, com 21 testes, e é a **única** fonte das duas regras.
+`ultrapassaLimiteColetivo` (em `mensalidadesAssociadoHelpers.ts`) foi **removida**, não deixada
+ao lado: ela só sabia ler o limite do plano, então continuaria sinalizando excesso para quem
+tem acordo. Predicado repetido em dois lugares só é corrigido uma vez.
+
+O funil do valor é `useAssociadosState`: `valorCalculadoDoPlano` guarda o cálculo e
+`valorPlanoAtivo` passa a ser `mensalidadeDoAssociado(associado, valorCalculadoDoPlano)`. Isso
+importa porque `valorPlanoAtivo` alimenta a aba Contratos, o card de histórico **e** o
+`ContratoDocumentosGenerator` — o contrato impresso. Resolver em cada tela faria o documento
+discordar da tela na primeira delas que esquecesse.
+
+`PlanoParaLimite` aceita `limite_vidas?: number | null` em vez de `Pick<PlanoPax, …>`, porque
+**a coluna é nullable de propósito** ("NULL se individual", no `CREATE TABLE`) e `PlanoPax`
+declara só `number | undefined`. Exigir o tipo estreito obrigaria cada chamador que lê o plano
+do banco a converter `null` em `undefined` — e a conversão é onde o caso do plano individual se
+perde.
+
+### O que o e2e precisou antes de existir, e as duas armadilhas da linha de base
+
+`e2e/limite-e-valor-exclusivo.spec.ts` (6 casos) sobe a suíte para **50 casos em 11 arquivos**.
+Ele não existia por um motivo simples: **a semente não tinha nenhum plano coletivo** — os três
+eram `individual`, onde limite não existe —, então a regra nunca esteve sob teste. Entraram nos
+**dois** alvos, na mesma tarefa: o plano `PAX-COL` (coletivo, R$ 30, limite 2) e
+`ANTONIO COLETIVO DOS SANTOS` com 2 dependentes, isto é 3 vidas contra limite 2 — o estado em
+que 11 dos 16 ativos da produção estão.
+
+Duas coisas do método valem para a próxima semente:
+
+- **Os dependentes dele ficam SEM cpf, e isso é requisito, não descuido.** `handleSave` recusa o
+  cadastro inteiro quando qualquer dependente tem CPF preenchido e inválido, e os CPFs desta
+  semente não fecham o dígito verificador de propósito. Com CPF, os quatro casos que **gravam**
+  travavam no save. Sem CPF o guard não dispara — é o que torna o caminho de escrita
+  exercitável sem fabricar documento que pareça real.
+- **O aninhamento quebrou um seletor de outro spec, e o `tsc` não pega isso.** O campo novo
+  nasceu com `placeholder="Auto (R$ …)"`, o mesmo prefixo do "Valor Parcela" do
+  `NovoContratoWizard` — que é montado como **irmão** da aba Contratos, com a aba ainda no DOM
+  por baixo. O `input[placeholder^="Auto (R$"]` de `valor-manual-parcela.spec.ts` passaria a
+  casar dois campos e a suíte cairia em strict mode. Virou `Igual ao plano (R$ …)`, e os dois
+  campos ganharam `aria-label`. **Antes de escolher um placeholder, pergunte quem mais está
+  montado ao mesmo tempo.**
+
+E duas asserções minhas passavam sem provar nada, as duas pela mesma razão:
+
+- `R$ 75,00` existe em **dois** lugares do card, ambos alimentados pelo mesmo `valorPlanoAtivo`
+  — um `getByText` solto no modal não diz qual apareceu. Escopado ao campo "Valor Mensal".
+- `toHaveText('R$ 75,00')` com espaço comum **nunca casa** o que `formatCurrency` imprime:
+  `Intl.NumberFormat` separa o `R$` do número com um espaço **não separável** (U+00A0). A
+  asserção passou a ser sobre o número.
+
+**Oito mutações, oito reprovações** — voltar a travar a geração, ignorar o limite
+personalizado, apagar o selo `PERSONALIZADO`, ignorar o valor exclusivo na mensalidade, gravar
+`undefined` em vez de `null`, tratar zero como vazio, mostrar o campo de limite em plano
+individual, e deixar `valor_plano` sem o exclusivo no ponto de escrita.
+
+**Uma delas reportou "passou" e era eu**: o `-g` do Playwright foi escrito sem o acento de
+"não bloqueia", casou **zero** testes, e "nenhum teste falhou" quase virou a conclusão "a suíte
+não mede". É o mesmo erro que `caixasService.test.ts` já registra, numa forma nova. **Antes de
+concluir que uma mutação é no-op, confirme quantos testes rodaram** — o script passou a abortar
+quando o filtro não casa nada.
+
+### As duas linhas da produção que ficaram como estão
+
+A varredura achou dois associados cujas duas fontes **já discordam**: ADAIR SIQUEIRA
+(`valor_plano` R$ 16, parcelas R$ 74) e ALDECIR MORAIS DE ARRUDA (`valor_plano` R$ 21, parcelas
+R$ 84). Como `valor_plano` é o que a ficha impressa, o `{{valor_mensalidade}}` e o relatório de
+Contratos leem, nesses dois o **cadastro afirma um preço e a família paga quatro vezes isso**.
+
+**Não foram corrigidos por SQL, e a escolha foi do usuário.** Decidir qual dos dois números é o
+certo é decisão de cobrança sobre um contrato, não reparo de dado — a mesma lição do backfill da
+Ata de Ocorrências. Com o campo novo, o caminho é a tela: abrir o cadastro, informar o valor
+exclusivo acordado e salvar.
+
 ## Menu lateral (`components/layout/Sidebar.tsx`)
 
 O menu passou por um redesenho em três entregas (setembro/2026). Nenhuma funcionalidade mudou —
@@ -3882,8 +3999,10 @@ base antes de decompor** — a **Ata de Ocorrências** (`auditoria.spec.ts`, 5 c
 (`contas-pagar.spec.ts`, 8 casos). `e2e/`
 cobre **cadastrar associado com plano**, **receber uma parcela** e **emitir uma guia** de
 ponta a ponta — os três que este arquivo listava como bloqueados "por falta de UI logada", e
-que a criação do projeto de homologação existia para destravar —, mais os cinco acima. São
-**44 casos** em 10 arquivos.
+que a criação do projeto de homologação existia para destravar —, mais os cinco acima. Depois
+entraram o **valor manual da parcela** (`valor-manual-parcela.spec.ts`, 4 casos) e o **limite
+de vidas / valor exclusivo** (`limite-e-valor-exclusivo.spec.ts`, 6 casos), estes dois por
+serem regra nova e não linha de base. São **50 casos** em 11 arquivos.
 
 **A semente dos dois alvos é cópia deliberada, e já esteve incompleta duas vezes**: até
 22/09/2026 a receita da Maria e as 12 parcelas dela existiam só no `.sql`, e os dois

@@ -18,6 +18,14 @@ export const USUARIOS = {
 
 export const PLANO_INDIVIDUAL = 'bbbbbbbb-0000-4000-8000-000000000001';
 export const PLANO_FAMILIAR = 'bbbbbbbb-0000-4000-8000-000000000002';
+/**
+ * Plano COLETIVO com limite de 2 vidas — o único da semente, acrescentado em 02/10/2026.
+ * Sem ele não havia como exercitar a regra de limite máximo: os três planos anteriores são
+ * individuais, e em plano individual não existe limite (o preço escala com as vidas).
+ * Espelha a produção, onde os três planos coletivos declaram limite 2.
+ */
+export const PLANO_COLETIVO = 'bbbbbbbb-0000-4000-8000-000000000004';
+export const ASSOCIADO_COLETIVO = 'a5500000-0000-4000-8000-000000000005';
 export const CONTA_BANCARIA = 'cccccccc-0000-4000-8000-000000000001';
 export const CREDENCIADO = 'eeeeeeee-0000-4000-8000-000000000001';
 export const PROCEDIMENTO = 'ffffffff-0000-4000-8000-000000000001';
@@ -326,6 +334,7 @@ export const montarBancoDeHomologacao = (): Banco => {
   banco.set('planos_pax', [
     { id: PLANO_INDIVIDUAL, tenant_id: EMPRESA_PAX, codigo: 'PAX-IND', nome: 'Plano Individual', tipo_plano: 'individual', valor_mensalidade: 60, taxa_adesao: 50, regra_calculo: 'fixo', ativo: true },
     { id: PLANO_FAMILIAR, tenant_id: EMPRESA_PAX, codigo: 'PAX-FAM', nome: 'Plano Familiar', tipo_plano: 'individual', valor_mensalidade: 100, taxa_adesao: 80, regra_calculo: 'por_vida', ativo: true },
+    { id: PLANO_COLETIVO, tenant_id: EMPRESA_PAX, codigo: 'PAX-COL', nome: 'Plano Coletivo', tipo_plano: 'coletivo', valor_mensalidade: 30, taxa_adesao: 0, regra_calculo: 'fixo', limite_vidas: 2, minimo_vidas_calculo: 1, ativo: true },
   ]);
   banco.set('planos_pax_faixas', []);
   banco.set('planos_pax_coberturas', []);
@@ -348,15 +357,26 @@ export const montarBancoDeHomologacao = (): Banco => {
   banco.set('associados', [
     { id: ASSOCIADO_MARIA, tenant_id: EMPRESA_PAX, empresa_id: EMPRESA_PAX, nome: 'MARIA APARECIDA DA SILVA', cpf: '000.000.000-01', rg: '1234567', data_nascimento: '1975-03-12', sexo: 'F', telefone: '(67) 99999-0001', email: 'maria@exemplo.local', endereco_logradouro: 'RUA DAS FLORES', endereco_numero: '100', endereco_bairro: 'CENTRO', endereco_cidade: 'COXIM', endereco_cep: '79400-000', endereco_estado: 'MS', tipo_pessoa: 'PF', plano_pax_id: PLANO_FAMILIAR, plano_nome: 'Plano Familiar', numero_contrato: 'CTR-HML00001', n_vidas: 3, valor_plano: 100, status: 'ativo', deleted_at: null },
     { id: ASSOCIADO_JOAO, tenant_id: EMPRESA_PAX, empresa_id: EMPRESA_PAX, nome: 'JOAO BATISTA SOUZA', cpf: '000.000.000-02', rg: '7654321', data_nascimento: '1968-11-30', sexo: 'M', telefone: '(67) 99999-0002', email: 'joao@exemplo.local', endereco_logradouro: 'AVENIDA BRASIL', endereco_numero: '250', endereco_bairro: 'JARDIM SAO JOAO', endereco_cidade: 'COXIM', endereco_cep: '79400-100', endereco_estado: 'MS', tipo_pessoa: 'PF', plano_pax_id: PLANO_INDIVIDUAL, plano_nome: 'Plano Individual', numero_contrato: 'CTR-HML00002', n_vidas: 1, valor_plano: 60, status: 'ativo', deleted_at: null },
+    // Titular + 2 dependentes = 3 vidas num plano de limite 2: o caso que a produção tem em
+    // 11 dos 16 associados ativos, e que antes de 02/10/2026 caía no aviso permanente de
+    // excesso e na trava da geração de mensalidades.
+    { id: ASSOCIADO_COLETIVO, tenant_id: EMPRESA_PAX, empresa_id: EMPRESA_PAX, nome: 'ANTONIO COLETIVO DOS SANTOS', cpf: '000.000.000-05', rg: '3334445', data_nascimento: '1970-06-20', sexo: 'M', telefone: '(67) 99999-0003', email: 'antonio@exemplo.local', endereco_logradouro: 'RUA DOS COLETIVOS', endereco_numero: '77', endereco_bairro: 'CENTRO', endereco_cidade: 'COXIM', endereco_cep: '79400-000', endereco_estado: 'MS', tipo_pessoa: 'PF', plano_pax_id: PLANO_COLETIVO, plano_nome: 'Plano Coletivo', numero_contrato: 'CTR-HML00005', n_vidas: 3, valor_plano: 30, limite_vidas_personalizado: null, valor_mensalidade_exclusivo: null, status: 'ativo', deleted_at: null },
   ]);
 
   banco.set('dependentes', [
+    // Os dois SEM cpf, de proposito: `handleSave` recusa o cadastro inteiro quando qualquer
+    // dependente tem CPF preenchido e invalido, e os CPFs da semente nao fecham o digito
+    // verificador (decisao registrada no CLAUDE.md). Sem CPF o guard nao dispara — e eh o que
+    // torna o caminho de SALVAR exercitavel neste associado, que eh o que os testes medem.
+    { id: 'de900000-0000-4000-8000-000000000011', associado_id: ASSOCIADO_COLETIVO, tenant_id: EMPRESA_PAX, nome: 'BENEDITA COLETIVO', cpf: null, data_nascimento: '1972-02-02', parentesco: 'CONJUGE', status: 'ativo' },
+    { id: 'de900000-0000-4000-8000-000000000012', associado_id: ASSOCIADO_COLETIVO, tenant_id: EMPRESA_PAX, nome: 'CARLA COLETIVO', cpf: null, data_nascimento: '2008-09-09', parentesco: 'FILHO', status: 'ativo' },
     { id: 'de900000-0000-4000-8000-000000000001', associado_id: ASSOCIADO_MARIA, tenant_id: EMPRESA_PAX, nome: 'PEDRO DA SILVA', cpf: '000.000.000-11', data_nascimento: '2005-08-09', parentesco: 'FILHO', status: 'ativo' },
     { id: 'de900000-0000-4000-8000-000000000002', associado_id: ASSOCIADO_MARIA, tenant_id: EMPRESA_PAX, nome: 'CARLOS DA SILVA', cpf: '000.000.000-12', data_nascimento: '1970-02-14', parentesco: 'CONJUGE', status: 'ativo' },
   ]);
 
   banco.set('contratos', [
     { id: 'c0000000-0000-4000-8000-000000000002', tenant_id: EMPRESA_PAX, associado_id: ASSOCIADO_JOAO, plano_pax_id: PLANO_INDIVIDUAL, numero_contrato: 'CTR-HML00002', valor_mensalidade: 60, taxa_adesao: 50, status: 'ativo', deleted_at: null },
+    { id: 'c0000000-0000-4000-8000-000000000005', tenant_id: EMPRESA_PAX, associado_id: ASSOCIADO_COLETIVO, plano_pax_id: PLANO_COLETIVO, numero_contrato: 'CTR-HML00005', valor_mensalidade: 30, taxa_adesao: 0, status: 'ativo', deleted_at: null },
   ]);
 
   banco.set('receitas', [
